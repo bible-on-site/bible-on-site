@@ -216,11 +216,33 @@ describe("isRegenerableIgnored", () => {
 			"a/b/__pycache__/",
 			"tsconfig.tsbuildinfo",
 			"debug.log",
+			"web/bible-on-site/.swc/",
+			"web/bible-on-site/.playwright-report/",
+			"web/bible-on-site/monocart-report/",
+			"web/admin/.output/",
+			"app/.artifacts/",
+			"app/.nuke/temp/",
+			"app/BibleOnSite/Platforms/Windows/ExtensionPacks/",
+			"web/bible-on-site/public/generated/",
+			"app/BibleOnSite/Platforms/Android/DerivedData/",
+			"web/admin/client-catalog.generated.json",
+			"web/bible-on-site/next-env.d.ts",
+			"web/bible-on-site/src/data/db/sefaria-dump-1.tanah_view.json.br",
+			"app/BibleOnSite/Platforms/Android/AssetPacks/x/y.perushim_notes.sqlite",
 		])
 			assert.ok(isRegenerableIgnored(p), p);
 	});
 	it("rejects secrets, dumps and user files", () => {
-		for (const p of [".env", "website/.env.local", "data/mysql/dump.sql", "notes.md", ".idea/"])
+		for (const p of [
+			".env",
+			"website/.env.local",
+			"data/mysql/dump.sql",
+			"notes.md",
+			".idea/",
+			"evidence/issue-1096/shot.png",
+			"app/.nuke/parameters.json",
+			"web/admin/scripts/link-eval-report.json",
+		])
 			assert.ok(!isRegenerableIgnored(p), p);
 	});
 });
