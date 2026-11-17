@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 const API_TIMEOUT = 30000;
 const MODEL_TIMEOUT = 120000;
 const FINAL_RESERVE = 45000;
+const MODEL_CONTEXT = 16384;
+const MODEL_OUTPUT = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const loopback = (host) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
 const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
@@ -15,7 +17,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v6";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v7";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -101,7 +103,7 @@ function agentResultSchema(schema) {
 }
 
 function nativeModelMessage(body, bundle) {
-	if (body?.prompt_eval_count >= 16384)
+	if (body?.prompt_eval_count >= MODEL_CONTEXT)
 		throw new Error(
 			"Agent context reached the model window; no result was applied",
 		);
@@ -154,7 +156,27 @@ function nativeAgentSystem(bundle) {
 		"Operation guide:",
 		...bundle.operationGuide,
 		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
+		"Tool records arrays omit only records identical to their latest value already supplied in currentRecords or earlier tool messages. Reuse those earlier values; omission is never deletion. Changed records are supplied again. Text, citations, discussions and page cursors are retained in full.",
 	].join("\n");
+}
+
+/** Omit only repeated record values, never source pages or human feedback.
+ * Compare with the latest value so A -> B -> A remains an explicit update. */
+function recordDeltas(records, latest) {
+	return records.filter((record) => {
+		if (
+			!object(record) ||
+			typeof record.kind !== "string" ||
+			!(typeof record.id === "string" || typeof record.id === "number") ||
+			canonical(Object.keys(record).sort()) !== '["current","id","kind"]'
+		)
+			return true;
+		const key = canonical([record.kind, record.id]);
+		const value = canonical(record.current);
+		const unchanged = latest.has(key) && latest.get(key) === value;
+		latest.set(key, value);
+		return !unchanged;
+	});
 }
 
 export function validateWorkerBundle(value, expectedHash) {
@@ -525,13 +547,17 @@ export function createContributionWorker(
 						);
 					return Math.min(MODEL_TIMEOUT, remaining);
 				};
+				const context = parseJson(job.user, "Invalid worker task context");
+				const latestRecords = new Map();
+				if (Array.isArray(context?.currentRecords))
+					recordDeltas(context.currentRecords, latestRecords);
 				const messages = [
 					{ role: "system", content: nativeAgentSystem(bundle) },
 					{
 						role: "user",
 						content: canonical({
 							task: job.task,
-							context: parseJson(job.user, "Invalid worker task context"),
+							context,
 						}),
 					},
 				];
@@ -546,7 +572,9 @@ export function createContributionWorker(
 							parameters: tool.inputSchema,
 						},
 					}));
-				let schema = job.schema;
+				let schema = job.schema,
+					promptTokens = 0,
+					evaluatedMessages = messages.length;
 				agentResultSchema(schema);
 				const infer = async (history, declaration) => {
 					const remaining = remainingBudget();
@@ -566,7 +594,11 @@ export function createContributionWorker(
 							think: false,
 							truncate: false,
 							shift: false,
-							options: { temperature: 0, num_predict: 4096, num_ctx: 16384 },
+							options: {
+								temperature: 0,
+								num_predict: MODEL_OUTPUT,
+								num_ctx: MODEL_CONTEXT,
+							},
 							messages: history,
 							...declaration,
 						}),
@@ -575,7 +607,12 @@ export function createContributionWorker(
 						throw new Error(`Local model returned HTTP ${response.status}`);
 					const body = await readJson(response, "Invalid local model response");
 					remainingBudget();
-					return { body, message: nativeModelMessage(body, bundle) };
+					const message = nativeModelMessage(body, bundle);
+					// Ollama reports the full prompt, including cached tokens. Do
+					// not subtract cache hits when budgeting the next native turn.
+					promptTokens = body.prompt_eval_count;
+					evaluatedMessages = history.length;
+					return { body, message };
 				};
 				const finalize = async () => {
 					// Native parameter decoding can drop JSON-schema constraints.
@@ -622,6 +659,21 @@ export function createContributionWorker(
 					// This reserves time inside the original deadline; it does not
 					// cancel, retry or extend an in-flight model request.
 					if (remainingBudget() <= FINAL_RESERVE) return await finalize();
+					// Reserve output space before extending research. UTF-8 bytes
+					// conservatively estimate new text, with room for chat framing;
+					// this is not a tokenizer. Finalization retains the full history
+					// and drops native tool declarations. Ollama still rejects any
+					// overlong prompt/output with truncation and shifting disabled.
+					const additions = messages.slice(evaluatedMessages);
+					if (
+						promptTokens &&
+						promptTokens +
+							Buffer.byteLength(canonical(additions), "utf8") +
+							128 * additions.length +
+							MODEL_OUTPUT >=
+							MODEL_CONTEXT
+					)
+						return await finalize();
 					const { message } = await infer(messages, { tools });
 					messages.push(message);
 					if (!message.tool_calls?.length) return await finalize();
@@ -670,7 +722,13 @@ export function createContributionWorker(
 							research.set(query, facts);
 							receipts.push(read.receipt);
 							schema = read.schema;
-							data = read.data;
+							data =
+								object(read.data) && Array.isArray(read.data.records)
+									? {
+											...read.data,
+											records: recordDeltas(read.data.records, latestRecords),
+										}
+									: read.data;
 						}
 						messages.push({
 							role: "tool",

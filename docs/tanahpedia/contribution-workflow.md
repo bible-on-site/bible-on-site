@@ -200,7 +200,7 @@ discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
 Runtime v5 introduced Ollama's native read functions and assistant/tool messages;
-the current runtime v6 retains that transport. Once research ends, one separate request receives the
+the current runtime v7 retains that transport. Once research ends, one separate request receives the
 complete constrained result schema. This avoids losing schema constraints in
 Ollama's native function-parameter representation. Both phases share the existing
 120-second execution deadline, 16K context and 4,096-token output limit; reads
@@ -220,6 +220,17 @@ and schema moves directly to the single final generation. Before another researc
 request, 45 seconds or less remaining also selects that final phase. This is a
 soft reserve within the original deadline; it neither cancels nor extends an
 in-flight request. Changed data or schema remains new information.
+Runtime v7 also budgets the next research turn using Ollama's full
+`prompt_eval_count`, including cached tokens, plus a conservative UTF-8 byte
+estimate of newly appended messages and chat framing. It reserves the existing
+4,096-token output allowance and selects the final phase before another research
+request would consume that reserve. This estimate is not a tokenizer; Ollama's
+strict context/output checks still apply. Final generation keeps all source
+pages, human feedback and read results, and omits the native tool declarations.
+Cumulative `records` arrays omit exact repeats of their latest previously
+supplied value, including initial `currentRecords`; changed values are supplied
+again. The original server receipts, schema validation and freshness checks
+remain unchanged. Missing evidence still requires clarification.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
@@ -417,8 +428,8 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
-The current bundle v11 and worker runtime v6 retain API v5, protocol v2, literal
-article-link grounding and exact-copy enforcement. They add fixed, typed feedback
+The current bundle v11 and worker runtime v7 retain API v5, protocol v2, literal
+article-link grounding and exact-copy enforcement. They supply fixed, typed feedback
 for invalid arguments in the current read call, after the normal identity, lease
 and context checks. A rejected read supplies no receipt, records or result schema.
 Local and AWS agents can correct those arguments within the original execution

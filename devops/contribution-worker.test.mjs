@@ -364,7 +364,171 @@ test("native API five batches keep real tool history, ordered receipts and the f
 		assert.equal(model.body.truncate, false);
 		assert.equal(model.body.shift, false);
 	}
-	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v6");
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v7");
+});
+
+test("cumulative record reads retain every latest change without duplicating supplied records", async () => {
+	const original = { kind: "perek", id: 1, current: { name: "בראשית א" } },
+		changed = { ...original, current: { name: "עדכון" } },
+		missing = { kind: "perek", id: "1", current: null },
+		unknown = { ...original, extra: "Keep this unknown record shape" };
+	const feedback = { body: 'יש לשמר בדיוק "  נוסח אדם  "', id: "human" };
+	const fixture = agentFixture({
+		job: {
+			user: JSON.stringify({
+				currentRecords: [original],
+				pendingFeedback: feedback,
+			}),
+		},
+		replies: [
+			nativeReply("", [readCall("discussion", { cursor: 0 })]),
+			nativeReply("", [readCall("discussion", { cursor: 1 })]),
+			nativeReply("", [readCall("discussion", { cursor: 2 })]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "one" },
+				schema: actionSchema(),
+				data: {
+					records: [original, missing, unknown],
+					text: "Exact page",
+					nextCursor: 1,
+				},
+			},
+			{
+				receipt: { id: "two" },
+				schema: actionSchema(),
+				data: {
+					records: [changed, missing],
+					text: "Exact page",
+					nextCursor: 2,
+				},
+			},
+			{
+				receipt: { id: "three" },
+				schema: actionSchema(),
+				data: {
+					records: [original, missing],
+					text: "Final page",
+					nextCursor: null,
+				},
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const history = fixture.models.at(-1).body.messages;
+	assert.deepEqual(
+		JSON.parse(history[1].content).context.pendingFeedback,
+		feedback,
+	);
+	assert.deepEqual(
+		history
+			.filter(({ role }) => role === "tool")
+			.map(({ content }) => JSON.parse(content)),
+		[
+			{ records: [missing, unknown], text: "Exact page", nextCursor: 1 },
+			{ records: [changed], text: "Exact page", nextCursor: 2 },
+			{ records: [original], text: "Final page", nextCursor: null },
+		],
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [
+		{ id: "one" },
+		{ id: "two" },
+		{ id: "three" },
+	]);
+});
+
+test("full cached prompt usage selects final output before another overflowing research turn", async () => {
+	const text = "Source evidence ".repeat(100),
+		latest = actionSchema();
+	const fixture = agentFixture({
+		job: {
+			user: JSON.stringify({
+				pendingFeedback: { body: "Original human request" },
+			}),
+		},
+		replies: (body, number) => {
+			assert.ok(
+				number <= 2,
+				"Research must not advance to the 17932-token request",
+			);
+			if (!body.format)
+				return nativeReply("", [readCall()], {
+					prompt_eval_count: 12057,
+					prompt_eval_cached_count: 8822,
+				});
+			assert.equal(body.tools, undefined);
+			return nativeReply('{"outcome":"unchanged"}', undefined, {
+				prompt_eval_count: 11000,
+			});
+		},
+		contexts: [
+			{
+				receipt: { id: "read" },
+				schema: latest,
+				data: { text, total: text.length, nextCursor: null },
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(
+		JSON.parse(fixture.models[1].body.messages.at(-2).content).text,
+		text,
+	);
+	assert.match(
+		fixture.models[1].body.messages[1].content,
+		/Original human request/,
+	);
+	assert.deepEqual(
+		fixture.models[1].body.format,
+		latest.oneOf[0].properties.result,
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "read" }]);
+	assert.equal(fixture.failed.length, 0);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("context reserve counts multibyte additions and completes a whole native read batch", async () => {
+	for (const letter of ["a", "א"]) {
+		const text = letter.repeat(1400),
+			fixture = agentFixture({
+				replies: [
+					nativeReply(
+						"",
+						[readCall(), readCall("discussion", { cursor: 1 }, "second")],
+						{ prompt_eval_count: 10000 },
+					),
+					...(letter === "a"
+						? [nativeReply("Ready", undefined, { prompt_eval_count: 11000 })]
+						: []),
+					nativeReply('{"outcome":"unchanged"}'),
+				],
+				contexts: [
+					{ receipt: { id: "first" }, schema: actionSchema(), data: { text } },
+					{
+						receipt: { id: "second" },
+						schema: actionSchema(),
+						data: { cursor: 1, items: ["new fact"] },
+					},
+				],
+			});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.equal(fixture.models.length, letter === "a" ? 3 : 2);
+		assert.equal(fixture.reads.length, 2);
+		assert.deepEqual(fixture.completed[0].receipts, [
+			{ id: "first" },
+			{ id: "second" },
+		]);
+		assert.equal(
+			fixture.models.at(-1).body.messages.filter(({ role }) => role === "tool")
+				.length,
+			2,
+		);
+	}
 });
 
 test("typed argument errors enter real tool history without receipts or schema changes", async () => {
