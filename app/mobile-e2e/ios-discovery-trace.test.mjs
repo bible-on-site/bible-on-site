@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
 	mkdtempSync,
@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 import {
 	discoveryLoadHook,
+	nonFatalReporter,
 	spanRecorder,
 	traceAsyncCall,
 	traceMethods,
@@ -101,44 +102,73 @@ describe("iOS discovery tracing", () => {
 			assert.equal(events[1].success, false);
 			assert(!JSON.stringify(events).includes("private fixture"));
 		});
-		it("rejects missing diagnostic method bindings", () => {
-			assert.throws(
-				() => traceMethods({}, ["getDevices"], () => {}),
-				/Missing CoreSimulator/,
-			);
+		it("leaves every method untouched when a binding is missing or frozen", () => {
+			for (const frozen of [false, true]) {
+				const read = async () => 42;
+				const target = { read };
+				if (frozen) Object.freeze(target);
+				const events = [];
+				traceMethods(
+					target,
+					frozen ? ["read"] : ["read", "absent"],
+					() => assert.fail("partial instrumentation"),
+					(e) => events.push(e),
+				);
+				assert.equal(target.read, read);
+				assert.deepEqual(events, [
+					{ phase: "unsupported", name: "coresim", reason: "method-binding" },
+				]);
+			}
 		});
-		it("retains both the operation failure and diagnostic failure", async () => {
+		it("preserves operation failure identity when timing retention also fails", async () => {
 			const original = new Error("operation");
-			const diagnostic = new Error("retention");
+			let warnings = 0;
 			const wrapped = traceAsyncCall(
 				"read",
 				async () => {
 					throw original;
 				},
-				() => () => {
-					throw diagnostic;
+				spanRecorder(
+					() => {
+						throw new Error("retention");
+					},
+					undefined,
+					() => warnings++,
+				),
+			);
+			await assert.rejects(wrapped(), (e) => e === original);
+			assert.equal(warnings, 1);
+		});
+		it("returns successful results when completion timing cannot be retained", async () => {
+			let writes = 0,
+				warnings = 0;
+			const start = spanRecorder(
+				() => {
+					if (++writes > 1) throw new Error("retention");
+				},
+				undefined,
+				() => warnings++,
+			);
+			assert.equal(await traceAsyncCall("read", async () => 1, start)(), 1);
+			assert.equal(warnings, 1);
+		});
+		it("stops diagnostic writes after the first failure even with a closed warning pipe", () => {
+			let writes = 0,
+				warnings = 0;
+			const observe = nonFatalReporter(
+				() => {
+					writes++;
+					throw new Error("retention");
+				},
+				() => {
+					warnings++;
+					throw new Error("closed pipe");
 				},
 			);
-			await assert.rejects(
-				wrapped(),
-				(e) =>
-					e instanceof AggregateError &&
-					e.errors[0] === original &&
-					e.errors[1] === diagnostic,
-			);
-		});
-		it("surfaces diagnostic retention failure after a successful call", async () => {
-			const error = new Error("retention");
-			await assert.rejects(
-				traceAsyncCall(
-					"read",
-					async () => 1,
-					() => () => {
-						throw error;
-					},
-				)(),
-				(e) => e === error,
-			);
+			observe({});
+			observe({});
+			assert.equal(writes, 1);
+			assert.equal(warnings, 1);
 		});
 	});
 
@@ -244,10 +274,11 @@ describe("iOS discovery tracing", () => {
 				assert.equal(events[0].name, subject);
 			});
 		}
-		it("accepts string source and rejects unsupported formats or bindings", () => {
+		it("accepts string source and retains unsupported modules unchanged", () => {
+			const events = [];
 			const hook = discoveryLoadHook({
 				helperUrl: import.meta.url,
-				report: () => {},
+				report: (e) => events.push(e),
 			});
 			assert(
 				hook(xcodeUrl, {}, () => ({
@@ -259,16 +290,35 @@ describe("iOS discovery tracing", () => {
 				{ format: "commonjs", source: xcodeSource },
 				{ format: "module", source: null },
 			])
-				assert.throws(() => hook(xcodeUrl, {}, () => result), /module format/);
-			for (const url of [nativeUrl, xcodeUrl])
-				assert.throws(
-					() =>
-						hook(url, {}, () => ({
-							format: "module",
-							source: "export const changed = true;",
-						})),
-					/diagnostic binding/,
+				assert.equal(
+					hook(xcodeUrl, {}, () => result),
+					result,
 				);
+			for (const url of [nativeUrl, xcodeUrl]) {
+				const result = {
+					format: "module",
+					source: "export const changed = true;",
+				};
+				assert.equal(
+					hook(url, {}, () => result),
+					result,
+				);
+			}
+			assert.equal(events.filter((e) => e.phase === "unsupported").length, 4);
+		});
+		it("preserves an original module-loading failure", () => {
+			const error = new Error("original loader failure");
+			const hook = discoveryLoadHook({
+				helperUrl: import.meta.url,
+				report: () => assert.fail("unexpected observation"),
+			});
+			assert.throws(
+				() =>
+					hook(nativeUrl, {}, () => {
+						throw error;
+					}),
+				(e) => e === error,
+			);
 		});
 		it("executes the real preload and traces only naturally invoked fixture calls", (t) => {
 			const root = mkdtempSync(join(tmpdir(), "ios-discovery-trace-"));
@@ -319,7 +369,8 @@ describe("iOS discovery tracing", () => {
 				.trim()
 				.split("\n")
 				.map((line) => JSON.parse(line));
-			assert.equal(events.filter((e) => e.phase === "instrumented").length, 2);
+			assert.equal(events.filter((e) => e.phase === "source-hooked").length, 2);
+			assert.equal(events.filter((e) => e.phase === "ready").length, 2);
 			assert.equal(events.filter((e) => e.phase === "start").length, 4);
 			assert.equal(
 				events.filter((e) => e.phase === "end" && e.success).length,
@@ -331,6 +382,31 @@ describe("iOS discovery tracing", () => {
 				),
 			);
 			assert(!contents.includes("privateFixture"));
+		});
+		it("runs the entry point when the actual preload cannot write its evidence", (t) => {
+			const root = mkdtempSync(join(tmpdir(), "ios-discovery-write-failure-"));
+			t.after(() => rmSync(root, { recursive: true, force: true }));
+			const main = join(root, "main.mjs");
+			writeFileSync(main, "console.log('completed');");
+			const child = spawnSync(
+				process.execPath,
+				[
+					"--import",
+					new URL("./ios-discovery-trace.mjs", import.meta.url).href,
+					main,
+				],
+				{
+					encoding: "utf8",
+					windowsHide: true,
+					env: { ...process.env, MOBILE_IOS_DISCOVERY_TRACE: root },
+				},
+			);
+			assert.equal(child.status, 0);
+			assert.equal(child.stdout.trim(), "completed");
+			assert.equal(
+				child.stderr.trim(),
+				"iOS discovery tracing unavailable; native outcome is unchanged.",
+			);
 		});
 	});
 });

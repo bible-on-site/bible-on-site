@@ -89,7 +89,12 @@ const hangMonitor = interactions ? monitorNativeInteractions((command, request) 
   interactions.capture(command, request),
   { pin: request => interactions.pin(request) }) : undefined;
 const discoveryTrace = resolve(artifacts, "ios-discovery-spans.jsonl");
-if (platform === "ios") writeFileSync(discoveryTrace, "");
+if (platform === "ios") {
+  try { writeFileSync(discoveryTrace, ""); } catch {
+    // Optional timing evidence cannot change the test outcome.
+    console.error("Could not reset iOS discovery timing evidence; measurement may be incomplete.");
+  }
+}
 const server = spawn(process.execPath, [...(platform === "ios"
   ? ["--import", resolve(directory, "ios-discovery-trace.mjs")] : []), resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
