@@ -10,16 +10,16 @@
 		{
 			"id": "logo-header",
 			"sourcePath": "app/BibleOnSite/Resources/Images/logo_header.jpg",
-			"sourceSha256": "72c2e128653629dba3b97b7157057a8833aa173350849393c53bc426ced78fe6",
-			"sha256": "72c2e128653629dba3b97b7157057a8833aa173350849393c53bc426ced78fe6",
-			"file": "logo-header-72c2e1286536.jpg",
-			"s3Key": "branding/daily-bulletin/logo-header-72c2e1286536.jpg",
+			"sourceSha256": "a9e7d3878aee9edfb9aa2ef6b1a5d78f2a592cda1e54f21925d6031a2f22abc0",
+			"sha256": "a9e7d3878aee9edfb9aa2ef6b1a5d78f2a592cda1e54f21925d6031a2f22abc0",
+			"file": "logo-header-a9e7d3878aee.jpg",
+			"s3Key": "branding/daily-bulletin/logo-header-a9e7d3878aee.jpg",
 			"url": "https://xn--febl3a.co.il/images/logos/header-logo.jpg",
 			"contentType": "image/jpeg",
 			"width": 1040,
 			"height": 313,
-			"bytes": 42663,
-			"attribution": "Al Heperek Yehuda 0.9.2 outlined wordmark, shared with the native application and PDF header."
+			"bytes": 38006,
+			"attribution": "Al Heperek Yehuda 0.9.3 outlined wordmark, shared with the native application and PDF header."
 		},
 		{
 			"id": "envelope",

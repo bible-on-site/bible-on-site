@@ -1,6 +1,6 @@
 # Bulletin brand and contact assets
 
-These are the Al Heperek Yehuda 0.9.2 wordmark and project contact artwork for email and the daily PDF. The wordmark uses the same outlined lettering as the website, native header and launcher. The PDF embeds the JPEG bytes from `app/BibleOnSite/Resources/Images/logo_header.jpg`. The current wordmark is 1040 × 313 pixels. Email displays the same wordmark from the website's `/images/logos/header-logo.jpg`.
+These are the Al Heperek Yehuda 0.9.3 wordmark and project contact artwork for email and the daily PDF. The wordmark uses the same outlined lettering as the website, native header and launcher. The PDF embeds the JPEG bytes from `app/BibleOnSite/Resources/Images/logo_header.jpg`. The current wordmark is 1040 × 313 pixels. Email displays the same wordmark from the website's `/images/logos/header-logo.jpg`.
 
 The four contact PNGs rasterize the website's existing SVG icons at 36 × 36, with transparent backgrounds and the original black artwork. Their shapes retain their aspect ratios inside the square canvas without redrawing or recoloring. The globe PNG uses the project-authored 24 × 24 SVG in `source/globe.svg`, rasterized with the same 36 × 36 transparent canvas. Display these icons at 16 or 18 CSS pixels.
 

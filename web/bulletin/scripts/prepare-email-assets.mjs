@@ -107,7 +107,7 @@ await addAsset(
 	"app/BibleOnSite/Resources/Images/logo_header.jpg",
 	"jpg",
 	async (source) => source,
-	"Al Heperek Yehuda 0.9.2 outlined wordmark, shared with the native application and PDF header.",
+	"Al Heperek Yehuda 0.9.3 outlined wordmark, shared with the native application and PDF header.",
 );
 
 const sources = {

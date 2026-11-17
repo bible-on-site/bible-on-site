@@ -9,7 +9,7 @@ use super::{
     typst_escape, typst_string,
 };
 
-const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-06e724f0db1e.jpg");
+const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-a9e7d3878aee.jpg");
 const ICONS: [(&str, &[u8]); 5] = [
     (
         "email",
