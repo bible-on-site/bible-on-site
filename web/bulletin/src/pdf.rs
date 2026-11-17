@@ -877,9 +877,13 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
                     "" => header,
                     author => format!("{} / {}", header, author),
                 };
+                // The header may quote cantillated scripture; marked runs need
+                // the article's bundled cantillation face like the body (#2961)
+                // — Typst per-glyph fallback would duplicate base letters.
+                let mut header_markup = String::new();
+                push_article_text(&mut header_markup, &header_text, Some(CANTILLATION_FONT));
                 markup.push_str(&format!(
-                    "#text(size: 12pt, weight: \"bold\")[{}]\n\n",
-                    typst_escape(&header_text)
+                    "#text(size: 12pt, weight: \"bold\")[{header_markup}]\n\n"
                 ));
 
                 let typst_content = html_to_typst(&body_html, &mut files);

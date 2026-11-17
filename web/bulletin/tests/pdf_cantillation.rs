@@ -464,6 +464,58 @@ fn pointed_chapter_headings_use_complete_scripture_runs() {
 }
 
 #[test]
+fn marked_article_titles_shape_on_the_cantillation_face() {
+    // A cantillated quote inside an article h1 becomes the PDF heading. The
+    // sefer exporter once escaped that text on the UI-first stack, so Typst
+    // per-glyph fallback re-shaped bases and duplicated glyphs; marked runs
+    // must travel the article cantillation face like the body does (#2961).
+    let mut req = melachim_request(String::new());
+    req.perakim[0].pesukim.clear();
+    req.perakim[0].articles.clear();
+    req.perakim[0].articles.push((
+        "unused".into(),
+        "הרב צבי שוויגר".into(),
+        "<h1>וַיֹּאמֶ֞ר אֵלָ֑יו</h1><p>טקסט רגיל.</p>".into(),
+    ));
+    for bytes in [
+        pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+        pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+    ] {
+        let doc = Document::load_mem(&bytes).unwrap();
+        let shown = shown_texts(&doc);
+        assert!(shown.iter().all(|run| run.notdef == 0));
+        // The defect mechanism: a mark the UI face lacks drawn on that face.
+        assert!(
+            shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .all(|run| !run.text.chars().any(is_missing_mark)),
+            "article title marks must not shape on the UI face: {shown:?}"
+        );
+        // The whole marked run survives on the article cantillation face.
+        let clm_text: String = shown
+            .iter()
+            .filter(|run| run.font.contains("TaameyFrankCLM"))
+            .map(|run| run.text.as_str())
+            .collect();
+        assert!(
+            clm_text.contains('֞') && clm_text.contains('֑'),
+            "title marks missing from TaameyFrankCLM output: {clm_text:?}"
+        );
+        // The unpointed author suffix stays on the article font.
+        let ui_text: String = shown
+            .iter()
+            .filter(|run| run.font.contains("AlHeperekUI"))
+            .map(|run| run.text.as_str())
+            .collect();
+        assert!(
+            ui_text.contains("שוויגר") || ui_text.contains("רגיווש"),
+            "title author missing from UI-face output: {ui_text:?}"
+        );
+    }
+}
+
+#[test]
 fn daily_article_without_taamim_never_loads_cantillation_face() {
     let mut req = melachim_request("<h1>כותרת רגילה</h1><p>טקסט רגיל ללא טעמים כלל.</p>".into());
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
