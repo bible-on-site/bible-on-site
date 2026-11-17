@@ -2886,6 +2886,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "26.13.1"
+      - name: Install CI policy and storage test dependencies
+        run: bun install --cwd devops --frozen-lockfile
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -2905,8 +2907,6 @@ jobs:
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/app-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
         run: bun test devops/daily-bulletin-infra.test.mjs
-      - name: Install storage test dependencies
-        run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: |
@@ -3943,7 +3943,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
