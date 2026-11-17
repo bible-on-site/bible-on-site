@@ -24,6 +24,10 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Scan the merge queue's synthetic commit, not only the original PR merge.
+  # https://docs.github.com/en/code-security/reference/code-scanning/workflow-configuration-options#scanning-pull-requests
+  merge_group:
+    types: [checks_requested]
   schedule:
     - cron: "27 3 * * 1"
 

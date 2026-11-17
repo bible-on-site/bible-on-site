@@ -185,6 +185,56 @@
   text-underline-offset: 0.1em;
 }
 
+/* Editorial blockquotes inside authored article/perush HTML (#3443): the
+   accent rule sits on the logical leading edge — the right side under the
+   body's RTL direction — and an oversized translucent quotation mark crowns
+   that corner behind the text. The mark is a ::before glyph, so it never
+   enters DOM text: copy, screen readers, excerpts and reading metrics only
+   see the authored quote. `isolation: isolate` keeps the negative z-index
+   inside the quote box — the mark slips under the text yet stays above the
+   card background. */
+.articleBody blockquote,
+.noteContent blockquote {
+  position: relative;
+  isolation: isolate;
+  margin: 1.4em 0;
+  padding-block: 0.45em;
+  padding-inline: 1.2em 0.85em;
+  border-inline-start: 3px solid
+    color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 55%, transparent);
+  background: color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 5%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.articleBody blockquote::before,
+.noteContent blockquote::before {
+  /* The empty alternative marks the glyph decorative for assistive tech,
+     and user-select keeps it out of copied article text. */
+  content: "\201C" / ""; /* left double quotation mark */
+  position: absolute;
+  inset-block-start: -0.08em;
+  inset-inline-start: 0.16em;
+  font-size: 3.2em;
+  line-height: 1;
+  color: color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 14%, transparent);
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Nested quotes keep the identity without compounding the inset. */
+.articleBody blockquote blockquote,
+.noteContent blockquote blockquote {
+  margin-block: 1em;
+  padding-inline-start: 0.9em;
+}
+
+.articleBody blockquote blockquote::before,
+.noteContent blockquote blockquote::before {
+  font-size: 2.4em;
+  inset-block-start: -0.04em;
+}
+
 .backToPerek {
   margin-top: 24px;
   padding-top: 16px;

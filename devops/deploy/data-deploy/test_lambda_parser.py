@@ -149,6 +149,20 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
         self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
 
+    def test_push_device_upgrade_is_in_manifest_and_additive(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanah_push_device_upgrade.sql"
+        self.assertIn(migration, manifest)
+        self.assertGreater(manifest.index(migration), manifest.index("tanah_web_push_upgrade.sql"))
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        # Two session settings plus one SET/PREPARE/EXECUTE/DEALLOCATE block.
+        self.assertEqual(len(LAMBDA.parse_statements(processed)), 6)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+
     def test_telegram_upgrade_is_additive_and_follows_saved_bulletin_schema(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         migration = "tanah_daily_bulletin_telegram_upgrade.sql"

@@ -1,0 +1,66 @@
+name: App Push Daily Perek
+
+# Triggers the app's daily perek push notification (#1097) through
+# POST /api/push/device/daily on the website. The route itself skips
+# Shabbat, review days and days without a scheduled perek, so the schedule
+# only needs to pick the delivery time: 05:00 UTC is 07:00/08:00 in Israel —
+# the same slot as the web-push sender. Scheduled runs broadcast to the FCM
+# `daily_perek` topic and wait for the repository variable
+# APP_PUSH_ENABLED=`true` plus the PUSH_SEND_SECRET secret matching the
+# website's environment. A manual dispatch is always allowed but must name
+# exactly one FCM registration token, so the controlled delivery check can
+# run before the schedule is armed and can never broadcast by accident.
+
+on:
+  schedule:
+    - cron: "0 5 * * 0-5"
+  workflow_dispatch:
+    inputs:
+      token:
+        description: >-
+          FCM registration token of the single device to notify, from the
+          test device's registration. Required: manual dispatch never
+          broadcasts.
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: app-push-daily
+  cancel-in-progress: false
+
+jobs:
+  send:
+    # Scheduled sends fire only after the approved arm switch; a manual
+    # dispatch is ungated so the controlled delivery check can run first.
+    if: github.event_name == 'workflow_dispatch' || vars.APP_PUSH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Send daily perek notifications
+        env:
+          PUSH_SEND_SECRET: ${{ secrets.PUSH_SEND_SECRET }}
+          SITE_ORIGIN: ${{ vars.WEB_PUSH_SITE_ORIGIN || 'https://xn--febl3a.co.il' }}
+        run: |
+          args=(-X POST -H "Authorization: Bearer ${PUSH_SEND_SECRET}")
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Step env values appear in public logs. Read the private token
+            # from the event file instead, and mask it before sending.
+            token="$(jq --exit-status --raw-output \
+              '.inputs.token | select(type == "string" and length > 0)' \
+              "${GITHUB_EVENT_PATH}")"
+            masked_token="${token//'%'/'%25'}"
+            masked_token="${masked_token//$'\r'/'%0D'}"
+            masked_token="${masked_token//$'\n'/'%0A'}"
+            printf '::add-mask::%s\n' "${masked_token}"
+            # Manual dispatch targets exactly one device; only the armed
+            # schedule sends the bodyless broadcast. The route also
+            # validates the token's shape.
+            body="$(jq --compact-output --null-input \
+              --arg token "${token}" '{token: $token}')"
+            args+=(-H "Content-Type: application/json"
+              --data "${body}")
+          fi
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            "${args[@]}" "${SITE_ORIGIN}/api/push/device/daily"

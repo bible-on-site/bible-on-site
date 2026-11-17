@@ -13,13 +13,24 @@
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
-| [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
 | [`codeql.yml`](../../../../.github/workflows/codeql.yml) | CodeQL analysis (independent check) |
 | [`dependency-review.yml`](../../../../.github/workflows/dependency-review.yml) | PR dependency review (independent check) |
 | [`dependency-submission.yml`](../../../../.github/workflows/dependency-submission.yml) | Dependency snapshot submission |
 | [`xcode-mcpbridge-poc.yml`](../../../../.github/workflows/xcode-mcpbridge-poc.yml) | Diagnostic PoC for Xcode's mcpbridge device driver (dispatch only) |
 
 ## Triggers and concurrency
+
+### Explicit pull request creation
+
+Contributors and assigned agents open pull requests explicitly and choose
+whether the work is a draft or ready for review. Publishing a branch does
+not open a pull request.
+
+The two former branch-publication workflows were disabled repository-wide
+and removed with their scripts and tests on November 17, 2026. Historical
+branches can still contain those workflows, so keep their GitHub workflow
+IDs `216311524` and `421128633` inactive. Re-enabling them would allow old
+branch activity to recreate completed or deliberately closed work.
 
 `ci.yml` runs on `push` to `master`, on `pull_request` to `master`, on
 `merge_group` (merge-queue validation), and on `workflow_dispatch`. The

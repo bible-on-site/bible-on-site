@@ -360,9 +360,15 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
-            # ASSETS_BASE_URL is intentionally unset in production. Enable
-            # only after an approved additive CDN rollout passes the legacy
-            # S3 URL, CORS, Range and freshness checks in the cost risk audit.
+            # ASSETS_BASE_URL is intentionally unset here in production. The
+            # approved CDN origin arrives through the image itself: release
+            # builds bake the BROWSER_ASSETS_BASE_URL repository variable into
+            # static HTML and the container's runtime default, so an
+            # environment edit alone could never rewrite prerendered pages.
+            # This entry remains an emergency runtime override. Enable only
+            # after the approved rollout checks in
+            # docs/aws/s3-delivery-cost-2026-11-01.md pass (legacy S3 URL,
+            # CORS, Range and freshness).
             # VAPID_SUBJECT is the public contact URI advertised to browser
             # push services (web-push spec: mailto: or https:). Not a secret.
             - Name: VAPID_SUBJECT
@@ -394,6 +400,12 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
             - Name: PUSH_SEND_SECRET
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
+            # App push (#1097): not yet deployed. When the operator stores
+            # the tanah-al-haperek sender service account JSON in SSM
+            # (prerequisites block below), uncomment and roll the service —
+            # until then the /api/push/device routes report unconfigured.
+            # - Name: FCM_SERVICE_ACCOUNT_JSON
+            #   ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-fcm-service-account-json"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -599,8 +611,10 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
-            # Keep ASSETS_BASE_URL unset, matching the website. Existing S3
-            # asset URLs must remain public even after a future CDN rollout.
+            # Keep ASSETS_BASE_URL unset here, matching the website: the admin
+            # image bakes the same BROWSER_ASSETS_BASE_URL opt-in and this
+            # entry is only an emergency runtime override. Existing S3 asset
+            # URLs must remain public even after a future CDN rollout.
             # Admin reaches the website task over Cloud Map service discovery
             # (MULTIVALUE A records) to expire its content caches post-commit.
             - Name: VITE_WEBSITE_URL
@@ -791,6 +805,18 @@ Outputs:
 #     --region il-central-1
 #   aws ssm put-parameter --name bible-on-site-push-send-secret \
 #     --type SecureString --value "$PUSH_SEND_SECRET" \
+#     --region il-central-1
+#
+#   # App push (#1097): the Google service account JSON (project_id,
+#   # client_email, private_key) allowed to send Firebase Cloud Messaging on
+#   # tanah-al-haperek, stored as one line without printing it — e.g. read
+#   # from a local key file that is removed afterwards:
+#   #   --value "$(jq -c . key.json)". Then uncomment the
+#   # FCM_SERVICE_ACCOUNT_JSON Secrets entry above and arm the daily sender
+#   # with the APP_PUSH_ENABLED repository variable — full order in
+#   # docs/app/push-notifications.md.
+#   aws ssm put-parameter --name bible-on-site-fcm-service-account-json \
+#     --type SecureString --value "<service-account-json>" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
