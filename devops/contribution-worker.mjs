@@ -218,14 +218,67 @@ function recordDeltas(records, latest) {
 			typeof record.kind !== "string" ||
 			!(typeof record.id === "string" || typeof record.id === "number") ||
 			canonical(Object.keys(record).sort()) !== '["current","id","kind"]'
-		)
+		) {
+			// Unknown record formats may describe a changed identity/value.
+			// Retain them and stop suppressing older values on their behalf.
+			latest.clear();
 			return true;
+		}
 		const key = canonical([record.kind, record.id]);
 		const value = canonical(record.current);
 		const unchanged = latest.has(key) && latest.get(key) === value;
 		latest.set(key, value);
 		return !unchanged;
 	});
+}
+
+/** API v5 article commands change sets/assignments. Repeating an identical
+ * adjacent command is idempotent. Never fold A -> B -> A or other change kinds. */
+function compactArticleCommands(output, apiVersion) {
+	if (apiVersion !== 5) return;
+	const proposals = [
+		...(Array.isArray(output.pullRequests) ? output.pullRequests : []),
+		...(object(output.draft) ? [output.draft] : []),
+	];
+	const actions = {
+		primaryPerek: ["replace"],
+		coveringSources: ["add", "remove", "replace", "clear"],
+		moadim: ["add", "remove", "replace", "clear"],
+		dedicationAssignments: ["add", "remove", "replace"],
+	};
+	for (const proposal of proposals) {
+		if (!Array.isArray(proposal?.changes)) continue;
+		for (const change of proposal.changes) {
+			if (
+				change?.kind !== "article_links" ||
+				!Array.isArray(change.after?.commands)
+			)
+				continue;
+			let previous;
+			change.after.commands = change.after.commands.filter((command) => {
+				if (
+					!object(command) ||
+					!object(command.target) ||
+					!Object.hasOwn(actions, command.relationshipKey) ||
+					!actions[command.relationshipKey].includes(command.action)
+				) {
+					previous = undefined;
+					return true;
+				}
+				const target = { ...command.target };
+				// The domain validator compares these sets after sorting them.
+				for (const field of ["pasukCoordinates", "moedIds"])
+					if (Array.isArray(target[field]))
+						target[field] = [...target[field]].sort((a, b) =>
+							canonical(a).localeCompare(canonical(b)),
+						);
+				const key = canonical({ ...command, target });
+				const duplicate = key === previous;
+				previous = key;
+				return !duplicate;
+			});
+		}
+	}
 }
 
 export function validateWorkerBundle(value, expectedHash) {
@@ -674,7 +727,7 @@ export function createContributionWorker(
 							{
 								role: "user",
 								content:
-									"Now return only the final result object matching the supplied JSON response schema, as minified JSON without indentation or optional whitespace. Keep generated titles, descriptions and summaries concise; do not repeat the same explanation in several fields. Preserve every required change, evidence and comment response, the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft, preserving all whitespace inside that text.",
+									"Now return only the final result object matching the supplied JSON response schema, as minified JSON without indentation or optional whitespace. Keep generated titles, descriptions and summaries concise; do not repeat the same explanation in several fields. Emit each command once. Group article coordinates with the same relationship/action into one command when their order has no effect. When revising a PR, omit optional unchanged draft fields instead of reproducing them. Preserve every required change, evidence and comment response, the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft, preserving all whitespace inside that text.",
 							},
 						],
 						{ format: agentResultSchema(schema) },
@@ -686,6 +739,9 @@ export function createContributionWorker(
 						"Invalid local model response",
 					);
 					if (!object(output)) throw new Error("Invalid local model response");
+					// The decoder cannot enforce uniqueItems. Only compact known,
+					// adjacent idempotent repeats; server validation remains mandatory.
+					compactArticleCommands(output, job.apiVersion);
 					remainingBudget();
 					const result = await api(
 						"complete",

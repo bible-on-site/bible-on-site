@@ -437,7 +437,7 @@ test("cumulative record reads retain every latest change without duplicating sup
 			.map(({ content }) => JSON.parse(content)),
 		[
 			{ records: [missing, unknown], text: "Exact page", nextCursor: 1 },
-			{ records: [changed], text: "Exact page", nextCursor: 2 },
+			{ records: [changed, missing], text: "Exact page", nextCursor: 2 },
 			{ records: [original], text: "Final page", nextCursor: null },
 		],
 	);
@@ -446,6 +446,40 @@ test("cumulative record reads retain every latest change without duplicating sup
 		{ id: "two" },
 		{ id: "three" },
 	]);
+});
+
+test("an unknown record update cannot hide a later return to a previously supplied value", async () => {
+	const original = { kind: "perek", id: 1, current: { name: "A" } },
+		unknown = { ...original, current: { name: "B" }, newField: true };
+	const fixture = agentFixture({
+		job: { user: JSON.stringify({ currentRecords: [original] }) },
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall("discussion", { cursor: 1 })]),
+			nativeReply(),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "new-shape" },
+				schema: actionSchema(),
+				data: { records: [unknown] },
+			},
+			{
+				receipt: { id: "old-value" },
+				schema: actionSchema(),
+				data: { records: [original] },
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.models
+			.at(-1)
+			.body.messages.filter(({ role }) => role === "tool")
+			.map(({ content }) => JSON.parse(content).records),
+		[[unknown], [original]],
+	);
 });
 
 const operationSchema = (kind, extra = {}) =>
@@ -681,6 +715,202 @@ test("context reserve counts multibyte additions and completes a whole native re
 				.length,
 			2,
 		);
+	}
+});
+
+test("API five compresses only adjacent idempotent article commands and preserves human fields", async () => {
+	const add = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: {
+				pasukCoordinates: [
+					{ perekId: 15, pasuk: 14 },
+					{ perekId: 15, pasuk: 13 },
+				],
+			},
+		},
+		reordered = {
+			...add,
+			target: { pasukCoordinates: [...add.target.pasukCoordinates].reverse() },
+		},
+		moed = {
+			relationshipKey: "moadim",
+			action: "add",
+			target: { moedIds: [3, 1] },
+		},
+		dedication = {
+			relationshipKey: "dedicationAssignments",
+			action: "replace",
+			target: { dedicationId: 9, expiresAt: null },
+		},
+		primary = {
+			relationshipKey: "primaryPerek",
+			action: "replace",
+			target: { perekId: 1 },
+		};
+	const draft = {
+		description: '  נוסח מדויק "אנושי"\n  ',
+		evidenceIndexes: [0],
+		changes: [
+			{
+				kind: "article_links",
+				targetId: "594",
+				after: {
+					commands: [
+						add,
+						reordered,
+						moed,
+						moed,
+						dedication,
+						dedication,
+						primary,
+						primary,
+					],
+				},
+			},
+		],
+	};
+	const output = {
+		outcome: "revised",
+		summary: "Reviewed",
+		responses: [
+			{ body: "Exact response", commentId: issueId, status: "addressed" },
+		],
+		draft,
+	};
+	const fixture = agentFixture({
+		bundle: agentBundle({ apiVersion: 5 }),
+		job: { apiVersion: 5, task: "pr_resolution" },
+		replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const received = JSON.parse(fixture.completed[0].content);
+	assert.deepEqual(received.draft.changes[0].after.commands, [
+		add,
+		moed,
+		dedication,
+		primary,
+	]);
+	assert.equal(received.draft.description, draft.description);
+	assert.deepEqual(received.draft.evidenceIndexes, draft.evidenceIndexes);
+	assert.deepEqual(received.responses, output.responses);
+});
+
+test("nonadjacent repeated article commands retain order and remain subject to server rejection", async () => {
+	const add = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+		},
+		remove = { ...add, action: "remove" };
+	const output = {
+		outcome: "implemented",
+		summary: "Requested",
+		responses: [],
+		pullRequests: [
+			{
+				changes: [
+					{
+						kind: "article_links",
+						targetId: "594",
+						after: { commands: [add, remove, add] },
+					},
+				],
+			},
+		],
+	};
+	let rejected;
+	const fixture = agentFixture({
+		bundle: agentBundle({ apiVersion: 5 }),
+		job: { apiVersion: 5 },
+		replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+		intercept: (target, body) => {
+			if (target.endsWith("/complete")) {
+				rejected = JSON.parse(body.content);
+				return new Response("Invalid sequence", { status: 400 });
+			}
+		},
+	});
+	assert.equal((await fixture.run()).status, "failed");
+	assert.deepEqual(rejected, output);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("command compaction never repairs other versions, creations, unknown actions or malformed fields", async () => {
+	const known = {
+			relationshipKey: "moadim",
+			action: "add",
+			target: { moedIds: [1] },
+		},
+		unknown = { ...known, action: "future_action" };
+	for (const [apiVersion, changes] of [
+		[
+			6,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [known, known] },
+				},
+			],
+		],
+		[5, [{ kind: "entry", after: { commands: [known, known] } }]],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [unknown, unknown] },
+				},
+			],
+		],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [null, null] },
+				},
+			],
+		],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: {
+						commands: [
+							{ ...known, target: null },
+							{ ...known, target: null },
+						],
+					},
+				},
+			],
+		],
+		[
+			5,
+			[{ kind: "article_links", targetId: "594", after: { commands: null } }],
+		],
+		[5, [{ kind: "article_links", targetId: "594", after: null }]],
+	]) {
+		const output = {
+				outcome: "implemented",
+				summary: "Requested",
+				responses: [],
+				pullRequests: [{ changes }],
+			},
+			fixture = agentFixture({
+				bundle: agentBundle({ apiVersion }),
+				job: { apiVersion },
+				replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+			});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.deepEqual(JSON.parse(fixture.completed[0].content), output);
 	}
 });
 

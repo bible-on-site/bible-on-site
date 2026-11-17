@@ -239,6 +239,13 @@ the result contract refreshes the guide before the next inference, and changed
 system text also consumes the context reserve. Open, referenced or unknown
 contracts retain the full guide. Final JSON requests omit optional indentation
 and keep generated prose concise while preserving exact human quotations.
+The local grammar cannot enforce JSON Schema `uniqueItems`; the server still
+validates the complete result. For API v5 article-link proposals only, the worker
+compacts adjacent repetitions of the same idempotent set/assignment command
+before submission. Coordinate and moed sets compare independently of item
+order. It preserves nonadjacent sequences such as add/remove/add, unknown
+actions, other operation kinds and other API versions. It never compacts human
+text or evidence; invalid output remains subject to the server's normal checks.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
