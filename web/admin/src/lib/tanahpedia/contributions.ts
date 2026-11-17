@@ -9,10 +9,24 @@ import {
 	type FamilyUnionEndReason,
 	type FamilyUnionType,
 } from "~/server/tanahpedia/family-api-spec";
+import { CONTRIBUTION_AGENT_TARGET_KINDS } from "./contribution-agent-read-kinds";
+import type {
+	ContributionAgentProvider,
+	ContributionAgentResponse,
+	ContributionAgentTask,
+} from "./contribution-agents";
 import {
 	type ContributionApiMigration,
 	migrationBlocked,
 } from "./contribution-api";
+import {
+	type ArticleLinkChange,
+	type ArticleLinkChangeInput,
+	articleLinksHaveEffect,
+	contributionArticleId,
+	validateArticleLinkChange,
+	validateArticleLinkState,
+} from "./contribution-article-links";
 import {
 	contributionIdentifierKey,
 	contributionRecordId,
@@ -33,8 +47,8 @@ import { ADMIN_CREATABLE_ENTITY_TYPES } from "./schema-registry";
 export type Assignee =
 	| { kind: "unassigned" }
 	| { kind: "human"; id: string; name: string }
-	| { kind: "aws_llm" }
-	| { kind: "local_llm" };
+	| { kind: "aws_llm"; agentId?: string }
+	| { kind: "local_llm"; agentId?: string };
 
 export interface Contributor {
 	id: string;
@@ -48,6 +62,13 @@ export interface Evidence {
 	quote: string;
 	url: string | null;
 	note: string;
+	articleSource?: {
+		articleId: string;
+		contentHash: string;
+		sourceHash?: string;
+		spanStart: number;
+		spanEnd: number;
+	};
 }
 
 /** Normalize recognizable scripture references for display, retaining stored
@@ -108,18 +129,64 @@ export interface EntryShellChange {
 export type ChangeInput =
 	| ContributionRecordInput
 	| SpecialChangeInput
+	| ArticleLinkChangeInput
 	| { kind: "parent_child"; targetId?: string; after: ParentChildChange | null }
 	| { kind: "union"; targetId?: string; after: UnionChange | null }
 	| { kind: "place"; targetId?: string; after: PlaceChange | null }
 	| { kind: "metadata"; targetId: string; after: { displayName: string } }
 	| { kind: "entry"; targetId?: string; after: EntryShellChange };
 
+export interface IssueScope {
+	kind: ChangeInput["kind"];
+	targetId?: string;
+}
+
+export const CONTRIBUTION_ISSUE_SCOPE_KINDS: readonly ChangeInput["kind"][] = [
+	...CONTRIBUTION_AGENT_TARGET_KINDS,
+];
+
+export function validateIssueScope(value: unknown): IssueScope | undefined {
+	if (value == null) return undefined;
+	const input = record(value, "scope");
+	rejectUnknown(input, ["kind", "targetId"]);
+	const kind = oneOf(input.kind, CONTRIBUTION_ISSUE_SCOPE_KINDS, "scope.kind");
+	if (input.targetId === undefined) return { kind };
+	if (kind === "entry")
+		throw new Error("Entry creation cannot select an existing target");
+	const targetId =
+		kind === "article_links"
+			? contributionArticleId(input.targetId)
+			: contributionRecordId(input.targetId, "scope.targetId");
+	return { kind, targetId };
+}
+
+/** Scope constrains model implementation of an issue, never subsequent human PR work. */
+export function assertIssueScopeChanges(
+	changes: ChangeInput[],
+	value?: IssueScope,
+): void {
+	const scope = validateIssueScope(value);
+	if (!scope) return;
+	for (const change of changes) {
+		if (
+			change.kind !== scope.kind ||
+			(scope.targetId !== undefined &&
+				(!change.targetId ||
+					contributionIdentifierKey(change.targetId) !==
+						contributionIdentifierKey(scope.targetId))) ||
+			(scope.kind === "entry" && change.targetId !== undefined)
+		)
+			throw new Error("The generated change is outside the issue scope");
+	}
+}
+
 export type ChangeValue =
 	| string
 	| number
 	| boolean
 	| null
-	| { entryId: string; label: string }[];
+	| { [key: string]: ChangeValue }
+	| ChangeValue[];
 export type ChangeState = Record<string, ChangeValue>;
 
 export interface ReviewedChange {
@@ -150,12 +217,20 @@ export interface ContributionEvent {
 		| "merged"
 		| "generated"
 		| "generation_queued"
+		| "agent_response"
 		| "rebased";
 	actor: Contributor;
 	body: string;
 	at: string;
 	revision: number;
 	snapshot?: ContributionRevisionSnapshot;
+	responses?: ContributionAgentResponse[];
+	run?: {
+		jobId: string;
+		agentId: string;
+		bundleVersion: string;
+		model: string;
+	};
 }
 
 export interface ContributionRevisionSnapshot {
@@ -169,6 +244,7 @@ export interface ContributionRevisionSnapshot {
 	changes: ReviewedChange[];
 	issueId: string | null;
 	closeIssue: boolean;
+	scope?: IssueScope;
 	at: string;
 }
 
@@ -186,13 +262,20 @@ export function contributionSnapshot(
 		changes: item.changes,
 		issueId: item.issueId,
 		closeIssue: item.closeIssue,
+		scope: item.scope,
 		at: new Date().toISOString(),
 	});
 }
 
 export interface ContributionGeneration {
 	id: string;
-	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	status:
+		| "queued"
+		| "running"
+		| "completed"
+		| "needs_input"
+		| "failed"
+		| "cancelled";
 	requestedAt: string;
 	requestedBy: string;
 	attempts: number;
@@ -206,6 +289,22 @@ export interface ContributionGeneration {
 	outputHash: string | null;
 	prIds: string[];
 	error: string | null;
+	task?: ContributionAgentTask;
+	provider?: ContributionAgentProvider;
+	agentId?: string;
+	agentVersion?: number;
+	bundleVersion?: string;
+	bundleHash?: string;
+	triggerEventIds?: string[];
+	trigger?: "assignment" | "comment" | "edit" | "reopen" | "manual";
+	result?: {
+		outcome: "implemented" | "revised" | "clarification" | "unchanged";
+		summary: string;
+		addressedCommentIds: string[];
+		pendingCommentIds: string[];
+		revision: number;
+		changed: boolean;
+	};
 }
 
 export interface Contribution {
@@ -218,6 +317,7 @@ export interface Contribution {
 	author: Contributor;
 	revisionAuthor?: Contributor;
 	assignee: Assignee;
+	scope?: IssueScope;
 	evidence: Evidence[];
 	changes: ReviewedChange[];
 	issueId: string | null;
@@ -236,6 +336,10 @@ export interface Contribution {
 	domainConflict?: string;
 	rebasePending?: boolean;
 	deferredContentMerge?: { id: string; number: number };
+	/** Durable intent precedes external API writes. Retries use the same reviewed
+	 * revision; authored edits cannot race an unresolved external write. */
+	articleLinkMerge?: { id: string; revision: number; startedAt: string };
+	legacyArticleLinks?: { articleId: number; proposalIds: string[] };
 }
 
 export interface ContributionListRequest {
@@ -261,18 +365,21 @@ export function validateContributionList(
 	raw: unknown,
 ): ContributionListRequest {
 	const input = record(raw ?? {});
-	if (input.kind !== undefined && !["issue", "pr"].includes(String(input.kind)))
+	if (
+		input.kind !== undefined &&
+		(typeof input.kind !== "string" || !["issue", "pr"].includes(input.kind))
+	)
 		throw new Error("Invalid discussion kind");
 	if (
 		input.state !== undefined &&
-		!["open", "closed", "all"].includes(String(input.state))
+		(typeof input.state !== "string" ||
+			!["open", "closed", "all"].includes(input.state))
 	)
 		throw new Error("Invalid discussion state");
 	if (
 		input.assignee !== undefined &&
-		!["unassigned", "human", "aws_llm", "local_llm"].includes(
-			String(input.assignee),
-		)
+		(typeof input.assignee !== "string" ||
+			!["unassigned", "human", "aws_llm", "local_llm"].includes(input.assignee))
 	)
 		throw new Error("Invalid assignee filter");
 	if (
@@ -310,6 +417,7 @@ export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
 	place: "זיהוי מקום",
 	metadata: "מטא-נתונים",
 	entry: "ערך חדש",
+	article_links: "קישורי מאמר",
 };
 
 /** Proper names and the canonical migration status requested for both queues. */
@@ -442,6 +550,8 @@ export function validateAssignee(value: unknown): Assignee {
 			id: textField(input.id, "assignee.id", 200),
 			name: textField(input.name, "assignee.name", 120),
 		};
+	if ((kind === "local_llm" || kind === "aws_llm") && input.agentId != null)
+		return { kind, agentId: uuidField(input.agentId, "assignee.agentId") };
 	return { kind };
 }
 
@@ -454,11 +564,53 @@ export function validateEvidence(value: unknown): Evidence[] {
 		const url = optionalText(input.url, "url", 2000);
 		if (url && !["http:", "https:"].includes(new URL(url).protocol))
 			throw new Error("Evidence URLs must use http or https");
+		const quote =
+			input.articleSource !== undefined &&
+			typeof input.quote === "string" &&
+			input.quote.length <= 8000
+				? input.quote
+				: (optionalText(input.quote, "quote", 8000) ?? "");
+		let articleSource: Evidence["articleSource"];
+		if (input.articleSource !== undefined) {
+			const source = record(input.articleSource, "articleSource");
+			rejectUnknown(source, [
+				"articleId",
+				"contentHash",
+				"sourceHash",
+				"spanStart",
+				"spanEnd",
+			]);
+			const articleId = contributionArticleId(source.articleId);
+			if (
+				typeof source.contentHash !== "string" ||
+				!/^[0-9a-f]{32}$/.test(source.contentHash) ||
+				(source.sourceHash !== undefined &&
+					(typeof source.sourceHash !== "string" ||
+						!/^[0-9a-f]{64}$/.test(source.sourceHash))) ||
+				!Number.isSafeInteger(source.spanStart) ||
+				!Number.isSafeInteger(source.spanEnd) ||
+				Number(source.spanStart) < 0 ||
+				Number(source.spanEnd) > 4000000 ||
+				Number(source.spanEnd) - Number(source.spanStart) !== quote.length ||
+				!quote.length
+			)
+				throw new Error("Invalid structured article evidence span or hash");
+			articleSource = {
+				articleId,
+				contentHash: source.contentHash,
+				...(source.sourceHash === undefined
+					? {}
+					: { sourceHash: source.sourceHash as string }),
+				spanStart: Number(source.spanStart),
+				spanEnd: Number(source.spanEnd),
+			};
+		}
 		return {
 			citation,
-			quote: optionalText(input.quote, "quote", 8000) ?? "",
+			quote,
 			url,
 			note: optionalText(input.note, "note", 4000) ?? "",
+			...(articleSource ? { articleSource } : {}),
 		};
 	});
 }
@@ -466,6 +618,7 @@ export function validateEvidence(value: unknown): Evidence[] {
 export function validateChange(value: unknown): ChangeInput {
 	const input = record(value, "change");
 	rejectUnknown(input, ["kind", "targetId", "after"]);
+	if (input.kind === "article_links") return validateArticleLinkChange(input);
 	if (isContributionRecordKind(input.kind))
 		return validateContributionRecord(input);
 	if (input.kind === "alias_mapping" || input.kind === "source_reference")
@@ -624,6 +777,13 @@ export function validateChanges(value: unknown): ChangeInput[] {
 	if (!Array.isArray(value) || value.length === 0 || value.length > 40)
 		throw new Error("A PR requires 1-40 typed changes");
 	const changes = value.map(validateChange);
+	if (
+		changes.some((change) => change.kind === "article_links") &&
+		changes.length !== 1
+	)
+		throw new Error(
+			"An article-link PR contains one article aggregate; create separate PRs for other targets",
+		);
 	const targets = changes
 		.filter((c) => c.targetId)
 		.map((c) => `${c.kind}:${contributionIdentifierKey(c.targetId as string)}`);
@@ -657,6 +817,14 @@ export function reviewStatus(
 export function assertMergeAllowed(pr: Contribution): void {
 	if (pr.kind !== "pr" || pr.state !== "open")
 		throw new Error("Only an open PR can be merged");
+	if (
+		["local_llm", "aws_llm"].includes(pr.assignee.kind) &&
+		pr.generation &&
+		["queued", "running"].includes(pr.generation.status)
+	)
+		throw new Error(
+			"Wait for the assigned agent pass or unassign the PR before merging",
+		);
 	if (pr.domainConflict)
 		throw new Error(
 			`Refresh the proposal's changes before merging: ${pr.domainConflict}`,
@@ -678,6 +846,11 @@ export function sameState(a: unknown, b: unknown): boolean {
 	return canonicalJson(a) === canonicalJson(b);
 }
 export function contributionHasEffect(change: ReviewedChange): boolean {
+	if (change.kind === "article_links")
+		return articleLinksHaveEffect(
+			validateArticleLinkState(change.before),
+			change.after as unknown as ArticleLinkChange,
+		);
 	return (
 		!sameState(change.before, change.after) ||
 		(change.kind === "metadata" &&

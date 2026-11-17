@@ -14,6 +14,7 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { toHebrewLetters } from "~/utils/hebrew";
+import { ContributionArticleLinkDiff } from "./ContributionArticleLinks";
 import {
 	HEBREW_MONTHS,
 	RECORD_OPTION_LABELS,
@@ -305,55 +306,60 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 							של הנתון.
 						</p>
 					)}
-					<div className="contribution-diff-table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">שדה</th>
-									<th scope="col">לפני</th>
-									<th scope="col">אחרי</th>
-								</tr>
-							</thead>
-							<tbody>
-								{changedFields(change).map((field) => (
-									<tr key={field}>
-										<th scope="row">
-											{(isContributionRecordKind(change.kind)
-												? CONTRIBUTION_RECORDS[change.kind].fields[field]?.label
-												: undefined) ??
-												FIELD_LABELS[field] ??
-												(
-													{
-														targets: "יעדי הכינוי",
-														name: "כינוי",
-														targetKind: "סוג הטענה",
-														targetId: "הטענה או היישות",
-														sourceType: "סוג מקור",
-														sourceText: "הפניה ביבליוגרפית",
-														perekId: "פרק",
-														pasukNumber: "פסוק",
-														perushId: "פירוש",
-													} as Record<string, string>
-												)[field] ??
-												field}
-										</th>
-										<td className="removed">
-											<span aria-hidden="true">− </span>
-											<bdi>
-												{shown(change.before?.[field], change.labels, field)}
-											</bdi>
-										</td>
-										<td className="added">
-											<span aria-hidden="true">+ </span>
-											<bdi>
-												{shown(change.after?.[field], change.labels, field)}
-											</bdi>
-										</td>
+					{change.kind === "article_links" ? (
+						<ContributionArticleLinkDiff change={change} />
+					) : (
+						<div className="contribution-diff-table-wrap">
+							<table>
+								<thead>
+									<tr>
+										<th scope="col">שדה</th>
+										<th scope="col">לפני</th>
+										<th scope="col">אחרי</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+								</thead>
+								<tbody>
+									{changedFields(change).map((field) => (
+										<tr key={field}>
+											<th scope="row">
+												{(isContributionRecordKind(change.kind)
+													? CONTRIBUTION_RECORDS[change.kind].fields[field]
+															?.label
+													: undefined) ??
+													FIELD_LABELS[field] ??
+													(
+														{
+															targets: "יעדי הכינוי",
+															name: "כינוי",
+															targetKind: "סוג הטענה",
+															targetId: "הטענה או היישות",
+															sourceType: "סוג מקור",
+															sourceText: "הפניה ביבליוגרפית",
+															perekId: "פרק",
+															pasukNumber: "פסוק",
+															perushId: "פירוש",
+														} as Record<string, string>
+													)[field] ??
+													field}
+											</th>
+											<td className="removed">
+												<span aria-hidden="true">− </span>
+												<bdi>
+													{shown(change.before?.[field], change.labels, field)}
+												</bdi>
+											</td>
+											<td className="added">
+												<span aria-hidden="true">+ </span>
+												<bdi>
+													{shown(change.after?.[field], change.labels, field)}
+												</bdi>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 					{change.kind === "entry" && (
 						<p className="contribution-diff-note">
 							הערך ייווצר עם מטא-נתונים וגוף ריק. טקסט הערך נכתב בנפרד על ידי

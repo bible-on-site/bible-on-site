@@ -12,6 +12,7 @@ vi.mock("~/server/tanahpedia/contribution-rebases.server", () => ({
 
 const mocks = vi.hoisted(() => ({
 	items: new Map<string, Contribution>(),
+	lockedReads: [] as string[],
 	prepare: vi.fn(),
 	read: vi.fn(),
 	apply: vi.fn(),
@@ -21,6 +22,18 @@ const mocks = vi.hoisted(() => ({
 	entries: vi.fn(),
 	query: vi.fn(),
 	afterTransaction: vi.fn(),
+	agent: vi.fn(),
+	notify: vi.fn(),
+	evidence: vi.fn(async (_conn: unknown, item: Contribution) => item.evidence),
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
+	getAssignedContributionAgent: mocks.agent,
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
+	notifyContributionAgentWork: mocks.notify,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-evidence.server", () => ({
+	refreshArticleLinkEvidence: mocks.evidence,
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	withContributions: async (fn: (conn: object) => Promise<unknown>) => {
@@ -35,7 +48,8 @@ vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 			throw error;
 		}
 	},
-	readContribution: async (_conn: object, id: string) => {
+	readContribution: async (_conn: object, id: string, lock = false) => {
+		if (lock) mocks.lockedReads.push(id);
 		const item = mocks.items.get(id);
 		if (!item) throw new Error("not found");
 		return structuredClone(item);
@@ -70,6 +84,7 @@ vi.mock("~/server/tanahpedia/paths", () => ({
 
 import {
 	addEvent,
+	applyContributionAgentRevision,
 	assertVersion,
 	createContribution,
 	editContribution,
@@ -185,6 +200,7 @@ const action = (item: Contribution, name: string, extra = {}) => ({
 describe("contribution lifecycle", () => {
 	beforeEach(() => {
 		mocks.items.clear();
+		mocks.lockedReads.length = 0;
 		for (const mock of [
 			mocks.prepare,
 			mocks.read,
@@ -195,18 +211,557 @@ describe("contribution lifecycle", () => {
 			mocks.entries,
 			mocks.query,
 			mocks.afterTransaction,
+			mocks.agent,
+			mocks.notify,
+			mocks.evidence,
 		])
 			mock.mockReset();
 		mocks.prepare.mockImplementation(async (_conn, inputs) =>
 			inputs.length ? [structuredClone(change)] : [],
 		);
+		mocks.evidence.mockImplementation(async (_conn, item) => item.evidence);
 		mocks.read.mockResolvedValue(change.before);
 		mocks.people.mockResolvedValue([]);
 		mocks.entities.mockResolvedValue([]);
 		mocks.entries.mockResolvedValue([]);
 		mocks.query.mockResolvedValue([]);
+		mocks.agent.mockImplementation(async (_conn, assignee) => ({
+			id: ID,
+			version: 1,
+			provider: assignee.kind,
+			model: "configured:model",
+			enabled: true,
+			installedVersion: "agents-v1",
+			bundleHash: "a".repeat(64),
+		}));
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it("refuses a no-op edit while a merge reservation still owns the current revision", async () => {
+		const item = await pr();
+		item.articleLinkMerge = {
+			id: OTHER,
+			revision: item.revision,
+			startedAt: "2026-11-17T00:00:00Z",
+		};
+		mocks.items.set(item.id, structuredClone(item));
+		await expect(
+			editContribution(
+				{
+					id: item.id,
+					version: item.version,
+					title: item.title,
+					description: item.description,
+					evidence: item.evidence,
+					changes: input.changes,
+					closeIssue: item.closeIssue,
+				},
+				alice,
+			),
+		).rejects.toThrow(/merge|מיזוג/i);
+		expect(mocks.items.get(item.id)).toEqual(item);
+	});
+	it.each(["feedback", "recovery"])(
+		"rolls back %s on a real evidence storage error",
+		async (operation) => {
+			const item = await pr();
+			const failure = Object.assign(new Error("Evidence storage unavailable"), {
+				code: "ER_LOCK_DEADLOCK",
+			});
+			mocks.evidence.mockRejectedValueOnce(failure);
+			if (operation === "recovery")
+				item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+			else
+				item.articleLinkMerge = {
+					id: OTHER,
+					revision: item.revision,
+					startedAt: "2026-11-17T00:00:00Z",
+				};
+			mocks.items.set(item.id, structuredClone(item));
+			const operationPromise =
+				operation === "recovery"
+					? recoverContributionSequence(
+							{
+								id: item.id,
+								version: item.version,
+								apiVersion: CONTRIBUTION_API_VERSION,
+								sequence: [change],
+							},
+							alice,
+						)
+					: updateContribution(
+							action(item, "comment", { body: "Feedback" }),
+							alice,
+						);
+			await expect(operationPromise).rejects.toBe(failure);
+			expect(mocks.items.get(item.id)).toEqual(item);
+		},
+	);
+	it.each([new Error("Source changed"), "untyped refresh failure"])(
+		"retains human feedback when an interrupted article merge cannot refresh: %s",
+		async (failure) => {
+			const item = await pr();
+			item.changes = [
+				{
+					kind: "article_links",
+					targetId: "27",
+					before: null,
+					after: {
+						commands: [
+							{
+								relationshipKey: "primaryPerek",
+								action: "replace",
+								target: { perekId: 1 },
+							},
+						],
+					},
+					labels: {},
+				},
+			];
+			item.articleLinkMerge = {
+				id: OTHER,
+				revision: item.revision,
+				startedAt: "2026-11-17T00:00:00Z",
+			};
+			mocks.items.set(item.id, structuredClone(item));
+			mocks.prepare.mockRejectedValueOnce(failure);
+			const result = await updateContribution(
+				action(item, "comment", { body: "Please keep this feedback" }),
+				alice,
+			);
+			expect(result.events.at(-1)?.body).toBe("Please keep this feedback");
+			expect(result.domainConflict).toBe(
+				failure instanceof Error
+					? failure.message
+					: "Could not refresh the interrupted article merge",
+			);
+			expect(result.revision).toBe(item.revision + 1);
+		},
+	);
+	it.each([new Error("Evidence moved"), "untyped evidence failure"])(
+		"recovers the API vocabulary while preserving evidence repair as a domain conflict: %s",
+		async (failure) => {
+			const item = await pr();
+			item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+			mocks.items.set(item.id, structuredClone(item));
+			mocks.evidence.mockRejectedValueOnce(failure);
+			const result = await recoverContributionSequence(
+				{
+					id: item.id,
+					version: item.version,
+					apiVersion: CONTRIBUTION_API_VERSION,
+					sequence: [change],
+				},
+				alice,
+			);
+			expect(result.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+			expect(result.domainConflict).toBe(
+				failure instanceof Error
+					? failure.message
+					: "Structured evidence requires repair",
+			);
+		},
+	);
+	it("persists optional issue scope, preserves old-client edits, and refreshes work when scope changes", async () => {
+		let item = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Description",
+				evidence,
+				assignee: { kind: "local_llm" },
+				scope: { kind: "metadata", targetId: ID },
+			},
+			alice,
+		);
+		expect(item.scope).toEqual({ kind: "metadata", targetId: ID });
+		const originalJob = item.generation?.id;
+		const unchanged = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+			},
+			alice,
+		);
+		expect(unchanged.scope).toEqual(item.scope);
+		expect(unchanged.version).toBe(item.version);
+		expect(unchanged.generation?.id).toBe(originalJob);
+		item = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+				scope: { kind: "metadata", targetId: OTHER },
+			},
+			alice,
+		);
+		expect(item.scope).toEqual({ kind: "metadata", targetId: OTHER });
+		expect(item.revision).toBe(2);
+		expect(item.revisionHistory?.at(-1)?.scope).toEqual({
+			kind: "metadata",
+			targetId: ID,
+		});
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "edit",
+		});
+		expect(item.generation?.id).not.toBe(originalJob);
+		await expect(
+			editContribution(
+				{
+					id: item.id,
+					version: 1,
+					title: item.title,
+					description: item.description,
+					evidence,
+					scope: null,
+				},
+				alice,
+			),
+		).rejects.toThrow("Reload");
+		const cleared = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+				scope: null,
+			},
+			alice,
+		);
+		expect(cleared.scope).toBeUndefined();
+		expect(cleared.revisionHistory?.at(-1)?.scope).toEqual({
+			kind: "metadata",
+			targetId: OTHER,
+		});
+	});
+	it("keeps human PRs independent of the linked issue's model scope", async () => {
+		const scoped = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Description",
+				scope: { kind: "entry" },
+			},
+			alice,
+		);
+		expect(
+			await createContribution({ ...input, issueId: scoped.id }, alice),
+		).toMatchObject({ kind: "pr", changes: [change] });
+		await expect(
+			createContribution({ ...input, scope: { kind: "metadata" } }, alice),
+		).rejects.toThrow("Only issues");
+		const manual = await pr();
+		await expect(
+			editContribution(
+				{
+					...input,
+					id: manual.id,
+					version: manual.version,
+					scope: { kind: "metadata" },
+				},
+				alice,
+			),
+		).rejects.toThrow("Only issues");
+	});
+	it.each(["issue", "pr"])(
+		"creating an assigned %s queues its implementation task atomically",
+		async (kind) => {
+			let committed = false;
+			mocks.afterTransaction.mockImplementation(async () => {
+				committed = true;
+			});
+			mocks.notify.mockImplementation(() => expect(committed).toBe(true));
+			const item = await createContribution(
+				{ ...input, kind, assignee: { kind: "local_llm" } },
+				alice,
+			);
+			expect(item.generation).toMatchObject({
+				status: "queued",
+				task: kind === "issue" ? "issue_implementation" : "pr_resolution",
+				agentId: ID,
+				agentVersion: 1,
+				bundleVersion: "agents-v1",
+				trigger: "assignment",
+				attempts: 0,
+			});
+			expect(item.events.at(-1)?.run?.jobId).toBe(item.generation?.id);
+			expect(mocks.notify).toHaveBeenCalledOnce();
+			expect(mocks.apply).not.toHaveBeenCalled();
+		},
+	);
+	it("human feedback replaces the old lease and retains pending trigger IDs without loops from model replies", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		const previousId = item.generation?.id;
+		item = await updateContribution(
+			action(item, "comment", { body: "Fix this fact" }),
+			alice,
+		);
+		expect(item.generation?.id).not.toBe(previousId);
+		const feedback = item.events
+			.filter((event) => event.kind === "comment")
+			.at(-1);
+		expect(item.generation?.triggerEventIds).toContain(feedback?.id);
+		expect(item.revision).toBe(1);
+		const request = structuredClone(item.generation);
+		item = await updateContribution(
+			action(item, "comment", { body: "Working on it" }),
+			{ ...alice, kind: "local_llm" },
+		);
+		expect(item.generation).toEqual(request);
+	});
+	it("owner change requests enqueue feedback while approval alone does not launch another pass", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "aws_llm" } },
+			alice,
+		);
+		item = await updateContribution(
+			action(item, "request_changes", { body: "Please correct the date" }),
+			owner,
+		);
+		expect(item.generation?.triggerEventIds).toContain(
+			item.events.filter((event) => event.kind === "changes_requested").at(-1)
+				?.id,
+		);
+		const jobId = item.generation?.id;
+		item = await updateContribution(action(item, "approve"), owner);
+		expect(item.generation?.id).toBe(jobId);
+	});
+	it("explicit reassignment/rerun refreshes work, and closing/unassigning revokes it", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		const first = item.generation?.id;
+		item = await updateContribution(
+			action(item, "assign", { assignee: item.assignee }),
+			alice,
+		);
+		expect(item.generation?.id).not.toBe(first);
+		item = await updateContribution(action(item, "run_agent"), alice);
+		expect(item.generation?.trigger).toBe("manual");
+		item = await updateContribution(action(item, "close"), alice);
+		expect(item.generation?.status).toBe("cancelled");
+		item = await updateContribution(action(item, "reopen"), alice);
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "reopen",
+		});
+		item = await updateContribution(
+			action(item, "assign", { assignee: { kind: "unassigned" } }),
+			alice,
+		);
+		expect(item.generation?.status).toBe("cancelled");
+		await expect(
+			updateContribution(action(item, "run_agent"), alice),
+		).rejects.toThrow("assigned");
+	});
+	it.each(["disabled", "missing model"])(
+		"saves assignments needing %s configuration without pretending to execute",
+		async (reason) => {
+			mocks.agent.mockResolvedValue({
+				id: ID,
+				version: 1,
+				provider: "aws_llm",
+				model: reason === "missing model" ? null : "model",
+				enabled: reason !== "disabled",
+				installedVersion: "v1",
+				bundleHash: "a".repeat(64),
+			});
+			const item = await createContribution(
+				{
+					kind: "issue",
+					title: "Issue",
+					description: "Implement",
+					assignee: { kind: "aws_llm" },
+				},
+				alice,
+			);
+			expect(item.generation?.status).toBe("needs_input");
+			expect(item.generation?.error).toBeTruthy();
+			expect(mocks.notify).not.toHaveBeenCalled();
+		},
+	);
+	it("a model-authored no-op response retains approval, while an actual revision records fresh model authorship", async () => {
+		let item = await pr();
+		item = await updateContribution(action(item, "approve"), owner);
+		const modelActor: Contributor = {
+			id: "agent:model",
+			name: "Local reviewer",
+			kind: "local_llm",
+			isDoradsoft: false,
+		};
+		const prior = structuredClone(item);
+		expect(
+			await applyContributionAgentRevision({} as never, item, {}, modelActor),
+		).toBe(false);
+		expect(item).toEqual(prior);
+		expect(
+			await applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ description: "Corrected explanation" },
+				modelActor,
+			),
+		).toBe(true);
+		expect(item.revision).toBe(2);
+		expect(item.revisionAuthor).toEqual(modelActor);
+		expect(item.revisionHistory?.at(-1)?.description).toBe(prior.description);
+		expect(
+			item.events.find((event) => event.kind === "approved")?.snapshot
+				?.revision,
+		).toBe(1);
+		await expect(
+			applyContributionAgentRevision({} as never, item, {}, owner),
+		).rejects.toThrow("model authorship");
+		item.state = "closed";
+		await expect(
+			applyContributionAgentRevision({} as never, item, {}, modelActor),
+		).rejects.toThrow("open PR");
+	});
+	it("description-only edits preserve a successful API migration that retired all operations", async () => {
+		let item = await pr();
+		item.changes = [];
+		item.apiMigration = {
+			id: ID,
+			status: "succeeded",
+			from: 3,
+			to: CONTRIBUTION_API_VERSION,
+			at: new Date().toISOString(),
+			steps: [],
+			error: null,
+			sequence: JSON.stringify([change]),
+		};
+		mocks.items.set(item.id, structuredClone(item));
+		item = await editContribution(
+			{
+				...input,
+				id: item.id,
+				version: item.version,
+				changes: [],
+				description: "Obsolete request explained",
+			},
+			alice,
+		);
+		expect(item.changes).toEqual([]);
+		expect(item.apiMigration?.status).toBe("succeeded");
+		const modelActor: Contributor = {
+			id: "agent",
+			name: "Agent",
+			kind: "local_llm",
+			isDoradsoft: false,
+		};
+		expect(
+			await applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ description: "Further explanation" },
+				modelActor,
+			),
+		).toBe(true);
+		expect(item.changes).toEqual([]);
+		expect(item.apiMigration?.status).toBe("succeeded");
+		await expect(
+			applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ evidence: [] },
+				modelActor,
+			),
+		).rejects.toThrow("evidence");
+	});
+	it.each(["title", "description"] as const)(
+		"preserves only server-constrained %s bytes through a model revision",
+		async (field) => {
+			const item = await pr();
+			const actor: Contributor = {
+				id: "agent",
+				name: "Agent",
+				kind: "local_llm",
+				isDoradsoft: false,
+			};
+			const exact = "  קוֹד 😀\n ";
+			expect(
+				await applyContributionAgentRevision(
+					{} as never,
+					item,
+					{ [field]: exact },
+					actor,
+					{ verbatimFields: [field] },
+				),
+			).toBe(true);
+			expect(item[field]).toBe(exact);
+			const previous = structuredClone(item);
+			await expect(
+				applyContributionAgentRevision(
+					{} as never,
+					item,
+					{ [field]: `x${" ".repeat(field === "title" ? 255 : 20000)}` },
+					actor,
+					{ verbatimFields: [field] },
+				),
+			).rejects.toThrow("maximum length");
+			expect(item).toEqual(previous);
+		},
+	);
+	it("manual raw recovery atomically replaces failed assigned work and wakes it after commit", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+		if (!item.generation) throw new Error("Missing assigned task");
+		item.generation.status = "failed";
+		const previousJob = item.generation.id;
+		mocks.items.set(item.id, structuredClone(item));
+		mocks.notify.mockClear();
+		item = await recoverContributionSequence(
+			{
+				id: item.id,
+				version: item.version,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				sequence: [change],
+			},
+			alice,
+		);
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "edit",
+			task: "pr_resolution",
+		});
+		expect(item.generation?.id).not.toBe(previousJob);
+		expect(item.generation?.triggerEventIds).toContain(
+			item.events.filter((event) => event.kind === "edited").at(-1)?.id,
+		);
+		expect(mocks.notify).toHaveBeenCalledOnce();
+	});
+	it("legacy generation cannot strip versioned agent metadata from an already modern task", async () => {
+		const item = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Implement",
+				evidence,
+				assignee: { kind: "local_llm" },
+			},
+			alice,
+		);
+		if (!item.generation) throw new Error("Missing assigned task");
+		item.generation.status = "completed";
+		mocks.items.set(item.id, structuredClone(item));
+		await expect(
+			updateContribution(action(item, "queue_generation"), alice),
+		).rejects.toThrow("run_agent");
+		expect(mocks.items.get(item.id)?.generation).toEqual(item.generation);
+	});
 	it("retains immutable authored snapshots and the exact proposal attached to an approval", async () => {
 		let item = await pr();
 		item = await updateContribution(action(item, "approve"), owner);
@@ -250,22 +805,33 @@ describe("contribution lifecycle", () => {
 		);
 		expect(assigned.assignee.kind).toBe("local_llm");
 		expect(assigned.revision).toBe(item.revision);
-		expect(assigned.events.at(-1)?.kind).toBe("assigned");
+		expect(assigned.events.at(-2)?.kind).toBe("assigned");
+		expect(assigned.events.at(-1)?.kind).toBe("generation_queued");
 		await expect(
 			mergeContribution({ id: assigned.id, version: assigned.version }, alice),
+		).rejects.toThrow(/agent|סוכן/i);
+		const released = await updateContribution(
+			action(assigned, "assign", { assignee: { kind: "unassigned" } }),
+			alice,
+		);
+		await expect(
+			mergeContribution({ id: released.id, version: released.version }, alice),
 		).resolves.toMatchObject({ state: "merged" });
 	});
-	it("queues workstation work explicitly, prevents duplicates and allows recovery after a lost lease", async () => {
+	it("preserves pre-upgrade explicit worker requests, duplicate protection and lost-lease recovery", async () => {
 		let item = await createContribution(
 			{
 				kind: "issue",
 				title: "Issue",
 				description: "Saved source",
 				evidence,
-				assignee: { kind: "local_llm" },
+				assignee: { kind: "unassigned" },
 			},
 			alice,
 		);
+		// This fixture represents a persisted assignment from before automatic work.
+		item.assignee = { kind: "local_llm" };
+		mocks.items.set(item.id, structuredClone(item));
 		item = await updateContribution(action(item, "queue_generation"), alice);
 		expect(item.generation).toMatchObject({
 			status: "queued",
@@ -311,13 +877,14 @@ describe("contribution lifecycle", () => {
 			if (reason === "closed") item.state = "closed";
 			if (reason === "pr") item.kind = "pr";
 			mocks.items.set(item.id, structuredClone(item));
+			const generation = structuredClone(item.generation);
 			await expect(
 				updateContribution(
 					action(item, "queue_generation"),
 					reason === "model actor" ? { ...alice, kind: "local_llm" } : alice,
 				),
 			).rejects.toThrow();
-			expect(mocks.items.get(item.id)?.generation).toBeUndefined();
+			expect(mocks.items.get(item.id)?.generation).toEqual(generation);
 		},
 	);
 	it("creates an issue without touching content and records assignment", async () => {
@@ -398,7 +965,9 @@ describe("contribution lifecycle", () => {
 				alice,
 			);
 			expect(item.assignee).toEqual(assignee);
-			expect(item.events.at(-1)?.kind).toBe("assigned");
+			expect(item.events.some((event) => event.kind === "assigned")).toBe(true);
+			if (assignee.kind.endsWith("llm"))
+				expect(item.generation?.status).toBe("queued");
 		}
 	});
 	it("rejects stale updates", async () => {
@@ -584,6 +1153,7 @@ describe("contribution lifecycle", () => {
 		);
 		await mergeContribution({ id: item.id, version: item.version }, owner);
 		expect(mocks.items.get(linked.id)?.state).toBe("closed");
+		expect(mocks.lockedReads.slice(-2)).toEqual([linked.id, item.id]);
 	});
 	it("requires review when another editor changes an owner-authored PR", async () => {
 		const original = await pr(owner);
@@ -624,6 +1194,7 @@ describe("contribution lifecycle", () => {
 		);
 		await mergeContribution({ id: item.id, version: item.version }, owner);
 		expect(mocks.items.get(linked.id)?.state).toBe("open");
+		expect(mocks.lockedReads.slice(-2)).toEqual([linked.id, item.id]);
 	});
 	it("keeps an already-closed source issue unchanged", async () => {
 		let linked = await issue();

@@ -11,7 +11,19 @@ const mocks = vi.hoisted(() => ({
 	destroy: vi.fn(),
 	fetch: vi.fn(),
 	clientSettings: vi.fn(),
+	scopeContext: vi.fn(),
+	grounding: vi.fn(),
 }));
+vi.mock(
+	"~/server/tanahpedia/contribution-agent-context.server",
+	async (original) => ({
+		...(await original<
+			typeof import("~/server/tanahpedia/contribution-agent-context.server")
+		>()),
+		readContributionIssueScopeContext: mocks.scopeContext,
+		readContributionArticleGroundingContext: mocks.grounding,
+	}),
+);
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
 	BedrockRuntimeClient: class {
 		constructor(settings: unknown) {
@@ -40,11 +52,16 @@ vi.mock("~/server/tanahpedia/contribution-service.server", () => ({
 	createContribution: mocks.create,
 }));
 
+import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
+import { contributionAgentResultSchema } from "~/server/tanahpedia/contribution-agent-output.server";
+import { contributionAgentActionSchema } from "~/server/tanahpedia/contribution-agent-protocol";
 import {
 	assertGeneratedReferences,
+	awsGenerate,
 	contributionLlmStatus,
 	contributionOutputSchema,
 	contributionSystemPrompt,
+	createGeneratedContributionPrs,
 	generateContributionPrs,
 	prepareContributionGeneration,
 } from "~/server/tanahpedia/contribution-llm.server";
@@ -81,6 +98,285 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("does not advertise a scoped target absent from the supplied catalogue", () => {
+		const schema = contributionOutputSchema(
+			{
+				people: [],
+				places: [],
+				entities: [{ id: ID, name: "Other entity" }],
+				targets: [],
+				references: {},
+			},
+			1,
+			{ kind: "metadata", targetId: "00000000-0000-4000-8000-000000000002" },
+		);
+		expect(
+			schema.properties.pullRequests.items.properties.changes.items.oneOf,
+		).toEqual([{ not: {} }]);
+	});
+	it.each([false, true])(
+		"grounds selected articles before decoding, retaining the existing transaction: %s",
+		async (scoped) => {
+			const state = {
+				contentHash: "a".repeat(32),
+				sourceHash: "b".repeat(64),
+				perekId: 1,
+				authorId: 2,
+				coverageVerified: false,
+				coveringSources: [],
+				dedicationAssignments: [],
+				moedIds: [],
+			};
+			issue.description = "articleId 27";
+			const catalogue = {
+				people: [],
+				places: [],
+				entities: [],
+				targets: [{ kind: "article_links", id: "27", after: state }],
+				references: { article: [{ id: 27, name: "Current article" }] },
+			};
+			mocks.catalogue.mockResolvedValue(catalogue);
+			if (scoped) {
+				issue.scope = { kind: "article_links", targetId: "27" };
+				mocks.scopeContext.mockResolvedValue({
+					catalogue: {
+						...catalogue,
+						targets: [{ kind: "article_links", id: "27", current: state }],
+					},
+					records: [
+						{
+							kind: "article_source",
+							id: "27",
+							current: { sourceHash: state.sourceHash },
+						},
+					],
+				});
+			}
+			const groundings = [
+				{
+					articleId: "27",
+					sourceHash: state.sourceHash,
+					coordinates: [{ perekId: 1, pasuk: 26 }],
+					chapters: [],
+				},
+			];
+			mocks.grounding.mockResolvedValue({
+				people: [],
+				places: [],
+				entities: [],
+				targets: [],
+				references: {},
+				articleGroundings: groundings,
+			});
+			const conn = {} as NonNullable<
+				Parameters<typeof prepareContributionGeneration>[1]
+			>;
+			const context = await prepareContributionGeneration(
+				input,
+				scoped ? conn : undefined,
+			);
+			expect(mocks.grounding).toHaveBeenCalledExactlyOnceWith(
+				scoped ? conn : expect.anything(),
+				ID,
+				["27"],
+			);
+			expect(context.modelCatalogue.articleGroundings).toEqual(groundings);
+			expect(JSON.parse(context.user).catalogue.targets).toEqual([
+				{ kind: "article_links", id: "27", current: state },
+			]);
+			expect(mocks.fetch).not.toHaveBeenCalled();
+		},
+	);
+	it("retains aliases selected through exact destination identity and their alternative group", async () => {
+		issue.description = ID;
+		const aliasId = "00000000-0000-4000-8000-000000000002";
+		const groupId = "00000000-0000-4000-8000-000000000003";
+		mocks.catalogue.mockResolvedValue({
+			people: [],
+			places: [],
+			entities: [{ id: ID, name: "Entry" }],
+			references: { entry: [{ id: ID, name: "Entry" }] },
+			targets: [
+				{
+					kind: "alias_mapping",
+					id: aliasId,
+					after: {
+						name: "Alias",
+						altGroupId: groupId,
+						targets: [
+							null,
+							1,
+							[],
+							{ entryId: 1 },
+							{ entryId: ID, label: "Meaning" },
+						],
+					},
+				},
+			],
+		});
+		const context = await prepareContributionGeneration(input);
+		expect(context.modelCatalogue.targets).toMatchObject([{ id: aliasId }]);
+		expect(context.modelCatalogue.references?.alternative).toContainEqual({
+			id: groupId,
+			name: "קבוצת דעות חלופיות",
+		});
+	});
+	it("preloads an exact scoped target beyond bounded name-search candidates", async () => {
+		issue.scope = { kind: "metadata", targetId: ID };
+		mocks.scopeContext.mockResolvedValue({
+			catalogue: {
+				people: [],
+				places: [],
+				entities: [{ id: ID, name: "Canonical" }],
+				targets: [
+					{ kind: "metadata", id: ID, current: { displayName: "Canonical" } },
+				],
+				references: { entity: [{ id: ID, name: "Canonical" }] },
+			},
+			records: [
+				{
+					kind: "target:metadata",
+					id: ID,
+					current: { displayName: "Canonical" },
+				},
+			],
+		});
+		const context = await prepareContributionGeneration(input);
+		expect(mocks.scopeContext).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ scope: issue.scope }),
+		);
+		expect(context.modelCatalogue.entities).toEqual([
+			{ id: ID, name: "Canonical" },
+		]);
+		expect(JSON.parse(context.user)).toMatchObject({
+			issue: { scope: issue.scope },
+			catalogue: {
+				targets: [
+					{ kind: "metadata", id: ID, current: { displayName: "Canonical" } },
+				],
+			},
+			currentRecords: [
+				{
+					kind: "target:metadata",
+					id: ID,
+					current: { displayName: "Canonical" },
+				},
+			],
+		});
+		expect(
+			context.schema.properties.pullRequests.items.properties.changes.items
+				.oneOf,
+		).toHaveLength(1);
+	});
+	it("validates every generated draft before inserting any PR", async () => {
+		issue.scope = { kind: "entry" };
+		const unrelated = {
+			...draft,
+			changes: [
+				{ kind: "metadata", targetId: ID, after: { displayName: "Changed" } },
+			],
+		};
+		await expect(
+			createGeneratedContributionPrs(
+				{
+					issue,
+					provider: "local_llm",
+					modelCatalogue: {
+						people: [],
+						places: [],
+						entities: [{ id: ID, name: "Name" }],
+						targets: [],
+					},
+				},
+				{
+					content: JSON.stringify({ pullRequests: [draft, unrelated] }),
+					model: "local",
+				},
+			),
+		).rejects.toThrow("outside the issue scope");
+		expect(mocks.create).not.toHaveBeenCalled();
+	});
+	it("rechecks the locked issue scope even when the earlier context omitted it", async () => {
+		issue.scope = { kind: "entry" };
+		const stale = { ...structuredClone(issue), scope: undefined };
+		await expect(
+			createGeneratedContributionPrs(
+				{
+					issue: stale,
+					provider: "local_llm",
+					modelCatalogue: {
+						people: [],
+						places: [],
+						entities: [{ id: ID, name: "Name" }],
+						targets: [],
+					},
+				},
+				{
+					content: JSON.stringify({
+						pullRequests: [
+							{
+								...draft,
+								changes: [
+									{
+										kind: "metadata",
+										targetId: ID,
+										after: { displayName: "Changed" },
+									},
+								],
+							},
+						],
+					}),
+					model: "local",
+				},
+			),
+		).rejects.toThrow("outside the issue scope");
+		expect(mocks.create).not.toHaveBeenCalled();
+	});
+	it.each(["queued", "running", "completed"] as const)(
+		"does not bypass the registry through legacy generation for a %s assigned-agent job",
+		async (status) => {
+			issue.generation = {
+				id: ID,
+				status,
+				task: "issue_implementation",
+				requestedAt: "now",
+				requestedBy: "editor",
+				attempts: 0,
+				apiVersion: 4,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				leaseExpiresAt: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			await expect(generateContributionPrs(input)).rejects.toThrow(
+				"assigned-agent work",
+			);
+			expect(mocks.fetch).not.toHaveBeenCalled();
+			expect(mocks.send).not.toHaveBeenCalled();
+			expect(mocks.create).not.toHaveBeenCalled();
+		},
+	);
+	it("retains every issue comment rather than silently dropping the oldest after twenty", async () => {
+		issue.events = Array.from({ length: 25 }, (_, index) => ({
+			id: `${ID}-${index}`,
+			kind: "comment",
+			actor: issue.author,
+			body: `Comment ${index}`,
+			at: "now",
+			revision: 1,
+		}));
+		const prepared = await prepareContributionGeneration(input);
+		const discussion = JSON.parse(prepared.user).issue.comments;
+		expect(discussion).toHaveLength(25);
+		expect(discussion[0]).toBe("Comment 0");
+		expect(discussion[24]).toBe("Comment 24");
+	});
 	it("reports absent provider configuration without inventing a model", () => {
 		vi.stubEnv("LOCAL_LLM_MODEL", undefined);
 		vi.stubEnv("BEDROCK_MODEL_ID", undefined);
@@ -611,6 +907,34 @@ describe("issue-to-PR LLM generation", () => {
 			isDoradsoft: false,
 		});
 		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
+	it("passes the same closed tool and outcome schemas through Bedrock Converse without flattening them", async () => {
+		const current = { ...issue, kind: "pr" as const, changes: [] };
+		const schema = contributionAgentActionSchema(
+			buildContributionAgentBundle(),
+			contributionAgentResultSchema(current, {
+				people: [],
+				places: [],
+				entities: [],
+				targets: [],
+				references: {},
+			}),
+		);
+		const signal = new AbortController().signal;
+		await awsGenerate("Versioned instructions", "Current PR feedback", schema, {
+			model: "bedrock-fixture",
+			signal,
+		});
+		const command = mocks.send.mock.calls[0][0].input;
+		expect(
+			JSON.parse(command.outputConfig.textFormat.structure.jsonSchema.schema),
+		).toEqual(schema);
+		expect(mocks.send.mock.calls[0][1].abortSignal).toBe(signal);
+		expect(command.modelId).toBe("bedrock-fixture");
+		const complete = schema.oneOf.find(
+			(branch) => branch.properties.action.const === "complete",
+		);
+		expect(complete).toHaveProperty("properties.result.oneOf");
 	});
 	it("cleans up AWS clients on inference failures", async () => {
 		issue.assignee = { kind: "aws_llm" };
