@@ -2514,6 +2514,17 @@ jobs:
           path: app/.artifacts/aab-size-report.json
           if-no-files-found: error
 
+      # #3444: public debug ELFs are cached on disk by GNU build ID. The save
+      # key is a hash of the cache contents, so a new immutable entry is only
+      # created when the downloaded symbol set changes — never per app commit
+      # or version bump. Identical builds reuse the restored entry.
+      - name: Restore public native symbol cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1
+          restore-keys: android-native-symbols-v1-
+
       # #2970: the release packaging job is master-only. Exercise the real
       # symbols path here — produce the archive from this build's
       # app_shared_libraries and validate it against the AAB just built, so a
@@ -2523,6 +2534,12 @@ jobs:
           dotnet run --project devops -- PackageAndroidSymbols --configuration Release \
             --aab-path "$(realpath "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)")" \
             --android-symbols-path "$RUNNER_TEMP/native-symbols.zip"
+
+      - name: Save public native symbol cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1-${{ hashFiles('app/.cache/android-native-symbols/*') }}
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py

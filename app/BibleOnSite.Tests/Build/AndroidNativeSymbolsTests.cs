@@ -499,6 +499,129 @@ public class AndroidNativeSymbolsTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => AndroidNativeSymbols.DownloadPublicSymbols(id, client));
     }
 
+    private string CacheDir => Path.Join(root, "symbol-cache");
+    private static string CacheKey(byte[] buildId) => Convert.ToHexString(buildId).ToLowerInvariant();
+
+    // #3444: cold public downloads get a bounded 90 seconds; everything else
+    // keeps its existing deadline and there are no retries.
+    [Fact]
+    public void Cold_public_downloads_allow_up_to_ninety_seconds()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(90), AndroidNativeSymbols.ColdDownloadDeadline);
+    }
+
+    [Fact]
+    public void Warm_public_symbol_cache_makes_no_fetch_calls()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Directory.CreateDirectory(CacheDir);
+        File.WriteAllBytes(Path.Join(CacheDir, CacheKey(id)), Elf(buildId: id));
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => throw new InvalidOperationException("Warm cache must not fetch"), CacheDir);
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(["arm64-v8a/libcoreclr.so", "arm64-v8a/libxamarin-app.so"],
+            zip.Entries.Select(entry => entry.FullName));
+    }
+
+    [Fact]
+    public void Cold_download_is_cached_by_build_id_and_reused_across_builds()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        var fetches = 0;
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, buildId =>
+        {
+            fetches++;
+            return Elf(buildId: Convert.FromHexString(buildId));
+        }, CacheDir);
+
+        Assert.Equal(1, fetches);
+        var cached = Path.Join(CacheDir, CacheKey(id));
+        Assert.True(File.Exists(cached));
+        Assert.Equal(Elf(buildId: id), File.ReadAllBytes(cached));
+
+        // A later build with the same build IDs hits the cache and never fetches.
+        File.Delete(Output);
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => throw new InvalidOperationException("Cached build ID must not fetch"), CacheDir);
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(2, zip.Entries.Count);
+    }
+
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    [InlineData("oversized")]
+    public void Invalid_cache_entries_are_evicted_and_fetched_fresh(string kind)
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Directory.CreateDirectory(CacheDir);
+        var path = Path.Join(CacheDir, CacheKey(id));
+        File.WriteAllBytes(path, kind switch
+        {
+            "mismatched" => Elf(buildId: Enumerable.Repeat((byte)9, 20).ToArray()),
+            "stripped" => Elf(symbols: false, buildId: id),
+            "oversized" => new byte[AndroidNativeSymbols.MaximumSymbolBytes + 1],
+            _ => "garbage"u8.ToArray()
+        });
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            buildId => Elf(buildId: Convert.FromHexString(buildId)), CacheDir);
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Contains(zip.Entries, e => e.FullName == "arm64-v8a/libcoreclr.so");
+        // The poisoned entry was evicted and replaced by the fresh download.
+        Assert.Equal(Elf(buildId: id), File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void Fetched_symbols_are_validated_before_entering_the_cache()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(
+            Libraries, Bundle, Output, _ => "garbage"u8.ToArray(), CacheDir));
+
+        Assert.False(File.Exists(Output));
+        var files = Directory.Exists(CacheDir) ? Directory.GetFiles(CacheDir) : Array.Empty<string>();
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public void Missing_public_symbols_are_not_negatively_cached()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        var fetches = 0;
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => { fetches++; return null; }, CacheDir);
+
+        var files = Directory.Exists(CacheDir) ? Directory.GetFiles(CacheDir) : Array.Empty<string>();
+        Assert.Empty(files);
+
+        // A 404 is reported again on the next build — never remembered forever.
+        File.Delete(Output);
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => { fetches++; return null; }, CacheDir);
+        Assert.Equal(2, fetches);
+    }
+
     private sealed class SymbolHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

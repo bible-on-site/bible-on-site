@@ -442,6 +442,17 @@ jobs:
           path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
+      # #3444: public debug ELFs are cached on disk by GNU build ID. The save
+      # key is a hash of the cache contents, so a new immutable entry is only
+      # created when the downloaded symbol set changes — never per app commit
+      # or version bump. Identical builds reuse the restored entry.
+      - name: Restore public native symbol cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1
+          restore-keys: android-native-symbols-v1-
+
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
         env:
@@ -456,6 +467,12 @@ jobs:
           else
             dotnet run --project devops -- Package --platform Android --configuration Release
           fi
+
+      - name: Save public native symbol cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1-${{ hashFiles('app/.cache/android-native-symbols/*') }}
 
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
