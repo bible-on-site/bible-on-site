@@ -23,7 +23,11 @@ export async function appendAgentArticleEvidence(
 	catalogue: ModelCatalogue,
 	evidence: Evidence[],
 ): Promise<Evidence[]> {
-	const result = [...evidence];
+	const currentEvidence = await refreshArticleLinkEvidence(conn, {
+		changes,
+		evidence,
+	});
+	const result = [...currentEvidence];
 	const key = (source: Evidence) =>
 		source.articleSource &&
 		canonicalJson([
@@ -32,7 +36,7 @@ export async function appendAgentArticleEvidence(
 			source.articleSource.spanEnd,
 			source.quote,
 		]);
-	const seen = new Set(evidence.map(key).filter(Boolean));
+	const seen = new Set(currentEvidence.map(key).filter(Boolean));
 	const chapters = new Map<number, string>();
 	const articles = changes
 		.filter((change) => change.kind === "article_links")
@@ -123,7 +127,7 @@ export async function appendAgentArticleEvidence(
 		}
 	}
 	validateEvidence(result);
-	return result.length === evidence.length ? evidence : result;
+	return result.length === currentEvidence.length ? currentEvidence : result;
 }
 
 /** Structured spans refer to the exact plain-text name/abstract/content join.
@@ -131,7 +135,9 @@ export async function appendAgentArticleEvidence(
  * ambiguous or removed evidence requires a human to repair the same PR. */
 export async function refreshArticleLinkEvidence(
 	conn: PoolConnection,
-	item: Pick<Contribution, "changes" | "evidence">,
+	item: Pick<Contribution, "evidence"> & {
+		changes: readonly { kind: ChangeInput["kind"]; targetId?: string | null }[];
+	},
 ): Promise<Evidence[]> {
 	const articleIds = [
 		...new Set(

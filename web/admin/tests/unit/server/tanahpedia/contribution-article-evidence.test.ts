@@ -155,7 +155,9 @@ it("retains legacy grounding without quotes and skips unrequested articles and n
 	const catalogue = literalCatalogue();
 	const legacy = structuredClone(catalogue);
 	delete legacy.articleGroundings?.[0].citations;
-	const original = evidence();
+	const original = [
+		{ citation: "מקור חופשי", quote: "ציטוט", note: "", url: null },
+	];
 	for (const [proposals, current] of [
 		[[], catalogue],
 		[[{ kind: "metadata", after: { displayName: "Name" } }], catalogue],
@@ -246,6 +248,52 @@ it("fails explicitly at the evidence limit instead of dropping human sources", a
 	).rejects.toThrow("maximum 30 sources");
 	expect(original).toHaveLength(30);
 });
+it.each([1, 30])(
+	"refreshes a shifted unique quotation before deduplication with %i existing sources",
+	async (count) => {
+		read.mockResolvedValue({
+			plainText: "😀חדש ציטוט",
+			state: { contentHash: "c".repeat(32), sourceHash: "d".repeat(64) },
+		});
+		const catalogue = literalCatalogue();
+		const citation = catalogue.articleGroundings?.[0].citations?.[0];
+		if (!citation) throw new Error("Missing source citation");
+		citation.spanStart = 5;
+		citation.spanEnd = 11;
+		const original = [
+			...evidence(),
+			...Array.from({ length: count - 1 }, (_, index) => ({
+				citation: `מקור ${index}`,
+				quote: "מקור אדם",
+				note: "",
+				url: null,
+			})),
+		];
+		original[0].citation = "תווית אנושית";
+		original[0].note = "הערת עורך";
+		const before = structuredClone(original);
+		const result = await appendAgentArticleEvidence(
+			{} as never,
+			[literalChange],
+			catalogue,
+			original,
+		);
+		expect(result).toHaveLength(count);
+		expect(result[0]).toMatchObject({
+			citation: "תווית אנושית",
+			quote: " ציטוט",
+			note: "הערת עורך",
+			articleSource: {
+				spanStart: 5,
+				spanEnd: 11,
+				contentHash: "c".repeat(32),
+				sourceHash: "d".repeat(64),
+			},
+		});
+		expect(result.slice(1)).toEqual(original.slice(1));
+		expect(original).toEqual(before);
+	},
+);
 it.each(["removed", "renamed", "bounds", "missing receipt"])(
 	"rejects a %s chapter before attaching source evidence",
 	async (mode) => {

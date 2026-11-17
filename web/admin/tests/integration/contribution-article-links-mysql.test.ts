@@ -454,8 +454,9 @@ describe("Article link contribution transactions", () => {
 				pullRequests: [coverageDraft("1", 1, 26)],
 			}),
 		});
+		const [createdPrId] = result.prIds;
 		const pr = await store.withContributions((connection) =>
-			store.readContribution(connection, result.prIds[0]),
+			store.readContribution(connection, createdPrId),
 		);
 		expect(pr.evidence[0]).toEqual(evidence[0]);
 		expect(pr.evidence[1]).toMatchObject({
@@ -524,6 +525,116 @@ describe("Article link contribution transactions", () => {
 		expect(reviewStatus(revised)).toBe("required");
 		expect(api.write).not.toHaveBeenCalled();
 	});
+	it.each([1, 30])(
+		"rebases a moved citation before supplementing a PR with %i existing sources",
+		async (count) => {
+			const quote = "בראשית א כו";
+			await conn.execute(
+				"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+			);
+			const { readArticleLinkContext } = await import(
+				"~/server/tanahpedia/contribution-article-links.server"
+			);
+			const article = await store.withContributions((connection) =>
+				readArticleLinkContext(connection, "1"),
+			);
+			const start = article.plainText.indexOf(quote);
+			const sources = [
+				{
+					citation: "תווית עורך",
+					quote,
+					note: "הערה אנושית",
+					url: null,
+					articleSource: {
+						articleId: "1",
+						contentHash: article.state.contentHash,
+						sourceHash: article.state.sourceHash,
+						spanStart: start,
+						spanEnd: start + quote.length,
+					},
+				},
+				...Array.from({ length: count - 1 }, (_, index) => ({
+					citation: `מקור ${index}`,
+					quote: "מקור חופשי",
+					note: "",
+					url: null,
+				})),
+			];
+			let prior = await service.createContribution(
+				{
+					kind: "pr",
+					title: "ראיות לשימור",
+					description: "קישורים מפורשים",
+					evidence: sources,
+					changes: coverageDraft("1", 1, 26).changes,
+				},
+				human,
+			);
+			prior = await approved(prior);
+			await conn.execute(
+				"UPDATE tanah_article SET content='<p>😀 חדש בראשית א כו.</p>' WHERE id=1",
+			);
+			const task = await claimedArticleTask(
+				prior,
+				"רענן את הראיות מהמאמר ושמור את ההצעה והמקורות הקיימים.",
+			);
+			const comment = task.item.events.find(
+				(event) => event.kind === "comment",
+			);
+			if (!comment) throw new Error("Missing refresh feedback");
+			await task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "revised",
+					summary: "הראיות רועננו",
+					responses: [
+						{
+							commentId: comment.id,
+							status: "addressed",
+							body: "מיקום הציטוט עודכן.",
+						},
+					],
+					draft: {
+						evidenceIndexes: Array.from({ length: count }, (_, index) => index),
+					},
+				}),
+			});
+			const revised = await fresh(prior);
+			const newStart = "מאמר בדיקה\n😀 חדש ".length;
+			expect(revised.evidence).toHaveLength(count);
+			expect(revised.evidence[0]).toMatchObject({
+				citation: "תווית עורך",
+				quote,
+				note: "הערה אנושית",
+				articleSource: {
+					spanStart: newStart,
+					spanEnd: newStart + quote.length,
+				},
+			});
+			expect(revised.evidence[0].articleSource?.sourceHash).not.toBe(
+				article.state.sourceHash,
+			);
+			expect(revised.evidence.slice(1)).toEqual(prior.evidence.slice(1));
+			expect(revised.id).toBe(prior.id);
+			expect(
+				revised.changes.map(({ kind, targetId, after }) => ({
+					kind,
+					targetId,
+					after,
+				})),
+			).toEqual(
+				prior.changes.map(({ kind, targetId, after }) => ({
+					kind,
+					targetId,
+					after,
+				})),
+			);
+			expect(reviewStatus(revised)).toBe("required");
+			expect(prior.evidence[0].articleSource?.spanStart).toBe(start);
+			expect(api.write).not.toHaveBeenCalled();
+		},
+	);
 	it("rejects an invented verse1 beside a valid literal26 before inserting any modern PR", async () => {
 		await conn.execute(
 			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",

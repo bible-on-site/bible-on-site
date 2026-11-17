@@ -427,8 +427,9 @@ deadline; authentication, stale-context, replay and storage failures remain fata
 For generated article-link PRs and agent revisions, resolved citations from the
 job's actual source reads also become structured PR evidence. The server checks
 the current source hash, exact UTF-16 span and chapter identity/bounds, includes only citations supporting
-proposed verse links, and preserves existing evidence and editor notes. Repeated
-pages or revisions do not duplicate a citation. No model-written quotation is
+proposed verse links, and preserves existing evidence and editor notes. Existing
+spans refresh before deduplication and source-limit checks, so repeated pages or
+revisions do not duplicate a citation. No model-written quotation is
 accepted through this path. Supplementing evidence requires a revised draft;
 an unchanged response cannot claim that a requested edit was applied. Older
 receipts without citation spans remain readable. The normal 30-source limit
