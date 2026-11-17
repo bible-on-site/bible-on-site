@@ -44,8 +44,11 @@ change workflow definitions on historical refs.
 
 **Rollout:** disable the legacy **Auto Create PR** workflow (ID `216311524`)
 repository-wide, then merge this replacement. Keep that legacy workflow
-disabled: deleting its file on master alone does not retire the copies on
-old branches. The new filename provides a separate workflow identity for
+disabled. Retain `auto-create-pr.yml` as a manual-only retirement stub:
+deleting it changes GitHub's workflow state to `deleted` rather than keeping
+the explicit `disabled_manually` state. The stub has no PR-writing permission
+or automatic trigger. Disabling its registered ID also blocks the unrestricted
+copies on old branches. The new filename provides a separate workflow identity for
 new branches. During installation, before the script exists on master,
 the new workflow emits a notice and the installation PR is opened manually.
 No historical branch needs to be rewritten or pushed for this rollout.

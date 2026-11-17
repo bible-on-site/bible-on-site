@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import stringify from "fast-json-stable-stringify";
+import { parse } from "yaml";
 import {
 	describeChanges,
 	openPullRequest,
@@ -304,6 +305,20 @@ describe("Git patch inspection", () => {
 });
 
 describe("workflow rollout", () => {
+	it("retains a manual-only legacy identity without PR-writing permissions", () => {
+		const legacy = parse(
+			readFileSync(
+				new URL(
+					"../../../.github/workflows/auto-create-pr.yml",
+					import.meta.url,
+				),
+				"utf8",
+			),
+		);
+		assert.deepEqual(Object.keys(legacy.on), ["workflow_dispatch"]);
+		assert.deepEqual(legacy.permissions, {});
+		assert.ok(!Object.values(legacy.jobs).some((job) => job.permissions));
+	});
 	it("uses default-branch code under a new workflow identity", () => {
 		const workflow = readFileSync(
 			new URL("../../../.github/workflows/auto-open-pr.yml", import.meta.url),
