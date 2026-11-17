@@ -345,6 +345,33 @@ test("heal waits out a still-booting handed-off device without rebooting", async
   assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
 });
 
+test("heal waits out a mid-flight shutdown, then re-boots the device", async (t) => {
+  // Cleanup can still be powering the device off at session entry — a state
+  // the native waitForBoot rejects outright. The check waits for the power-off
+  // to land, then recovers through the driver's own boot path.
+  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  simQueue.push("Shutting Down", "Shutdown");
+  await bootIos({ ...options, mode: "heal", sleep: async () => {},
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(calls.filter(([kind]) => kind === "sim-stat").length, 2);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
+});
+
+test("heal fails when the power-off outlives the boot deadline", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Shutting Down");
+  let tick = 0;
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    sleep: async () => {}, now: () => (tick += 200000) }),
+    /past the boot deadline/);
+  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 0);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
 test("heal propagates a failed recovery boot without exporting readiness", async (t) => {
   const { options, env, setSimState } = fixture(t);
   setSimState("Shutdown");

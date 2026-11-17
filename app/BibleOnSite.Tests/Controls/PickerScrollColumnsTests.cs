@@ -1,5 +1,6 @@
 using BibleOnSite.Controls;
 using FluentAssertions;
+using Microsoft.Maui;
 using Microsoft.Maui.Controls;
 using Moq;
 
@@ -483,5 +484,105 @@ public class PickerScrollColumnsTests
         column.LastVisibleIndex.Should().Be(19);
         SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
         SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
+
+    [Fact]
+    public void PendingScroll_HandlerAttach_LandsTheRecordedScroll()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 9);
+        var arranged = false;
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => arranged;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+        columns.ScrollSelectedIntoView(list);   // recorded while unarranged
+        scrolled.Should().BeEmpty();
+
+        // The platform attaching its handler is the other arrange signal —
+        // the recorded scroll lands on the now-real viewport.
+        arranged = true;
+        list.Handler = new Mock<IViewHandler>().Object;
+
+        scrolled.Should().Equal(SelectedItemAt(list, 9));
+        column.PendingScrollItem.Should().Be(SelectedItemAt(list, 9));
+    }
+
+    [Fact]
+    public void HandleHandlerChanged_UnknownList_IgnoresTheEvent()
+    {
+        var column = MakeColumn(20, out _, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        // Only subscribed lists send this event — a foreign sender is ignored.
+        var foreign = new CollectionView { ItemsSource = new List<int> { 1 }, SelectedItem = 1 };
+        columns.HandleHandlerChanged(foreign, EventArgs.Empty);
+
+        scrolled.Should().BeEmpty();
+        column.PendingScrollItem.Should().BeNull();
+    }
+
+    // A lazy sequence has no indexable list behind it — the centering still
+    // goes out, only the predicted-range anchor has nothing to grab.
+    private static System.Collections.IEnumerable LazyItems(int count)
+    {
+        for (var i = 1; i <= count; i++)
+        {
+            yield return i;
+        }
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_LazyItemSource_SkipsTheRangeAnchor()
+    {
+        var list = new CollectionView { ItemsSource = LazyItems(20), SelectedItem = 9 };
+        var column = new PickerScrollColumn(list, new Label(), new Label(), new Label());
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);
+
+        scrolled.Should().Equal(9);
+        column.PendingScrollItem.Should().Be(9);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_SelectionOutsideItemSource_SkipsTheRangeAnchor()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = 999;   // a selection the items do not contain
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);
+
+        scrolled.Should().Equal(999);
+        column.PendingScrollItem.Should().Be(999);
+    }
+
+    [Fact]
+    public void HandleScrolled_LazyItemSource_ReissuesTheDroppedScrollOnce()
+    {
+        var list = new CollectionView { ItemsSource = LazyItems(20), SelectedItem = 9 };
+        var column = new PickerScrollColumn(list, new Label(), new Label(), new Label());
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+        columns.ScrollSelectedIntoView(list);
+
+        // The first report still misses the item — an unindexable source
+        // resolves to no index — so the dropped-scroll re-issue goes out once.
+        columns.HandleScrolled(list, firstVisibleIndex: 0, lastVisibleIndex: 4);
+
+        scrolled.Should().Equal(9, 9);
+        column.PendingScrollItem.Should().Be(9);
     }
 }

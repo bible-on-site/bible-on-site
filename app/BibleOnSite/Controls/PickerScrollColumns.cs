@@ -56,7 +56,7 @@ public sealed class PickerScrollColumns
         _columns = columns;
         foreach (var column in _columns)
         {
-            column.List.HandlerChanged += OnColumnHandlerChanged;
+            column.List.HandlerChanged += HandleHandlerChanged;
         }
     }
 
@@ -145,7 +145,8 @@ public sealed class PickerScrollColumns
         Refresh(column);
     }
 
-    private void OnColumnHandlerChanged(object? sender, EventArgs e)
+    /// <summary>The platform attaching its handler is the other arrange signal a deferred scroll waits for.</summary>
+    internal void HandleHandlerChanged(object? sender, EventArgs e)
     {
         var column = ColumnFor(sender);
         if (column != null)
@@ -246,13 +247,14 @@ public sealed class PickerScrollColumns
             return;
         }
 
+        // A missing item — including an empty list — leaves nothing to anchor.
         var index = items.IndexOf(item);
-        var count = items.Count;
-        if (index < 0 || count == 0)
+        if (index < 0)
         {
             return;
         }
 
+        var count = items.Count;
         var capacity = ItemCapacity(column);
         var first = Math.Max(0, Math.Min(index - capacity / 2, count - capacity));
         column.FirstVisibleIndex = first;

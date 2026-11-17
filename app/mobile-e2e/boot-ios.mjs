@@ -1,6 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { compareVersions, loadIosNativeSimulator, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
@@ -41,6 +42,8 @@ export async function bootIos({
   execute = promisify(execFile),
   loadDriver = loadIosSimulatorDriver,
   loadNativeDriver = loadIosNativeSimulator,
+  sleep = delay,
+  now = Date.now,
   log = console.log,
 } = {}) {
   if (!["start", "wait", "boot", "resolve", "heal"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
@@ -80,8 +83,23 @@ export async function bootIos({
     // destroyed device.
     const { getSimulator } = await loadDriver();
     const simulator = await getSimulator(primary.udid);
-    const state = (await simulator.stat()).state;
+    const stat = async () => (await simulator.stat()).state;
+    let state = await stat();
     if (state === "Booted") return;
+    if (state === "Shutting Down") {
+      // The runner's cleanup is mid-flight: the native waitForBoot rejects
+      // 'Shutting Down', so give the power-off the same bounded window a boot
+      // gets, then boot the device once it is actually down.
+      log(`Simulator ${primary.udid} is shutting down after the reported boot; waiting for the power-off.`);
+      const deadline = now() + 300000;
+      while (state === "Shutting Down") {
+        if (now() > deadline) {
+          throw new Error(`Simulator ${primary.udid} stayed 'Shutting Down' past the boot deadline.`);
+        }
+        await sleep(5000);
+        state = await stat();
+      }
+    }
     if (state === "Shutdown") {
       log(`Simulator ${primary.udid} was powered off after the reported boot; booting it again.`);
       await simulator.boot();
