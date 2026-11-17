@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	rmSync,
@@ -37,19 +38,19 @@ const CLI = {
 };
 
 describe("isDedupePath", () => {
-	it("accepts payload roots and dump files", () => {
+	it("accepts only node_modules payload", () => {
 		for (const p of [
 			"web/bible-on-site/node_modules/lodash/index.js",
 			"node_modules/.bin/x",
+		])
+			assert.ok(isDedupePath(p), p);
+	});
+	it("rejects in-place-rewritten payloads, source, secrets and build outputs", () => {
+		for (const p of [
 			"app/BibleOnSite/Platforms/Windows/ExtensionPacks/pack.bin",
 			"web/bible-on-site/public/generated/img.png",
 			"web/bible-on-site/src/data/db/dump.tanah_view.json.br",
 			"app/AssetPacks/x.perushim_notes.sqlite",
-		])
-			assert.ok(isDedupePath(p), p);
-	});
-	it("rejects source, secrets and build outputs", () => {
-		for (const p of [
 			"src/index.ts",
 			".env",
 			"website/.next/server.js",
@@ -111,20 +112,33 @@ describe("dedupe", () => {
 			cleanup();
 		}
 	});
-	it("skips a file whose content changed between scan and replace", () => {
+	it("relinks every alias of a pre-linked donor inode and reclaims it once", () => {
 		const { dir, cleanup } = makeTree();
 		try {
 			const payload = Buffer.alloc(64 * 1024, "q");
 			const a = settled(dir, "wt1/node_modules/p/x", payload);
 			const b = settled(dir, "wt2/node_modules/p/x", payload);
-			// mutate b's size so the re-verify inside dedupe trips — but the
-			// scan runs first in dedupe(), so emulate staleness by shrinking
-			// the settle window to include a rewrite: instead verify via a
-			// second dedupe that an already-linked pair is not double-counted.
+			const c = join(dir, "wt2/node_modules/p/y");
+			linkSync(b, c); // b and c already share an inode
+			utimesSync(c, OLD, OLD);
+			const r = dedupe([join(dir, "wt1"), join(dir, "wt2")], CLI);
+			assert.equal(r.linked, 2); // both aliases leave the donor inode
+			assert.equal(r.reclaimedBytes, payload.length); // reclaimed once
+			assert.equal(statSync(a).ino, statSync(c).ino);
+		} finally {
+			cleanup();
+		}
+	});
+	it("is idempotent on a second pass", () => {
+		const { dir, cleanup } = makeTree();
+		try {
+			const payload = Buffer.alloc(64 * 1024, "q");
+			const a = settled(dir, "wt1/node_modules/p/x", payload);
+			const b = settled(dir, "wt2/node_modules/p/x", payload);
 			const r1 = dedupe([join(dir, "wt1"), join(dir, "wt2")], CLI);
 			assert.equal(r1.linked, 1);
 			const r2 = dedupe([join(dir, "wt1"), join(dir, "wt2")], CLI);
-			assert.equal(r2.linked, 0); // idempotent — same inode now
+			assert.equal(r2.linked, 0); // same inode now
 			assert.equal(statSync(a).ino, statSync(b).ino);
 		} finally {
 			cleanup();

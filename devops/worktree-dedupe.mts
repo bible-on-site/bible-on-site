@@ -14,10 +14,15 @@
  * Default is a dry-run: prints what would be linked and bytes reclaimed.
  *
  * Safety model (fail-closed):
- *  - Only paths under whitelisted payload roots are eligible
- *    (node_modules, ExtensionPacks, public/generated, data dumps). Source
- *    files, build outputs with in-place writers and anything user-authored
- *    are never touched.
+ *  - Only paths under whitelisted payload roots are eligible.
+ *    `node_modules` is the sole default root: package content is
+ *    versioned and written once at install time — later installs replace
+ *    directories atomically rather than editing files in place.
+ *    Generated dumps, codegen output and asset packs are deliberately
+ *    excluded: their producers rewrite them in place (e.g. the website's
+ *    compress-canonical-data prebuild), and an in-place write through a
+ *    hardlink would silently corrupt every linked worktree's copy.
+ *    Deleting them is safe (they regenerate); sharing them is not.
  *  - A file must be older than --settle-min so in-flight installs/builds
  *    cannot be linked mid-write.
  *  - Hashing is size-bucketed: only sizes seen more than once are hashed.
@@ -34,25 +39,20 @@ import {
 	readdirSync,
 	readFileSync,
 	appendFileSync,
+	unlinkSync,
 	linkSync,
 	renameSync,
 } from "node:fs";
-import { join, basename } from "node:path";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // ---------- tunables ----------
 
-/** Directory segments whose whole subtree is read-mostly payload. */
-const DEDUPE_DIR_NAMES = new Set([
-	"node_modules",
-	"ExtensionPacks",
-	"generated",
-]);
-/** Data dumps that are reproducible but expensive to regenerate — share
- *  one copy across worktrees instead of deleting them. */
-const DEDUPE_FILE_RE =
-	/\.tanah_view\.(json|sqlite)(\.br|\.gz)?$|\.perushim_notes\.sqlite(\.gz)?$/i;
+/** Directory segments whose whole subtree is write-once payload. Only
+ *  node_modules qualifies: generated dumps and asset packs have in-place
+ *  writers, which would corrupt every worktree sharing the inode. */
+const DEDUPE_DIR_NAMES = new Set(["node_modules"]);
 
 const SKIP_DIR_NAMES = new Set([".git"]);
 const DEFAULT_MIN_BYTES = 64 * 1024;
@@ -114,12 +114,9 @@ interface Candidate {
 }
 
 /** Path (worktree-relative, /-separated) is under a whitelisted payload
- *  root or names a known data dump. */
+ *  root. */
 export function isDedupePath(rel: string): boolean {
-	return (
-		rel.split("/").some((s) => DEDUPE_DIR_NAMES.has(s)) ||
-		DEDUPE_FILE_RE.test(basename(rel))
-	);
+	return rel.split("/").some((s) => DEDUPE_DIR_NAMES.has(s));
 }
 
 /** Bounded recursive walk collecting eligible settled files. */
@@ -225,52 +222,75 @@ export function dedupe(paths: string[], cli: Cli): DedupeResult {
 		else bySize.set(c.size, [c]);
 	}
 
-	// hash → canonical inode; inode identity keeps pre-linked files free
-	const canonicalByHash = new Map<string, Candidate>();
-	const seenInode = new Set<string>();
+	// Canonical file per (device, hash): hardlinks cannot cross volumes,
+	// so each device gets its own canonical for the same content.
+	const canonByKey = new Map<string, Candidate>();
 	for (const [, group] of bySize) {
 		if (group.length < 2) continue;
+		// Aliases of one inode share storage and content: hash once, then
+		// relink every alias — a donor inode's bytes are reclaimed only
+		// when its last alias leaves.
+		const byInode = new Map<string, Candidate[]>();
 		for (const c of group) {
-			const key = `${c.dev}:${c.ino}`;
-			if (seenInode.has(key)) continue; // already linked to itself
-			seenInode.add(key);
+			const k = `${c.dev}:${c.ino}`;
+			const arr = byInode.get(k);
+			if (arr) arr.push(c);
+			else byInode.set(k, [c]);
+		}
+		for (const [, aliases] of byInode) {
 			let h: string;
 			try {
-				h = hash(c.path);
+				h = hash(aliases[0].path);
 			} catch (e) {
-				res.errors.push(`hash ${c.path}: ${(e as Error).message}`);
+				res.errors.push(`hash ${aliases[0].path}: ${(e as Error).message}`);
 				continue;
 			}
 			res.hashed++;
-			const canon = canonicalByHash.get(h);
+			const key = `${aliases[0].dev}:${h}`;
+			const canon = canonByKey.get(key);
 			if (!canon) {
-				canonicalByHash.set(h, c);
+				canonByKey.set(key, aliases[0]);
 				continue;
 			}
-			if (canon.dev === c.dev && canon.ino === c.ino) continue;
-			if (canon.dev !== c.dev) continue; // cross-volume cannot hardlink
-			if (!cli.apply) {
-				res.linked++;
-				res.reclaimedBytes += c.size;
-				continue;
-			}
-			// atomic replace: re-verify then link temp + rename over
-			try {
-				const st = statSync(c.path);
-				if (st.size !== c.size || st.mtimeMs !== c.mtimeMs) continue;
-				const cst = statSync(canon.path);
-				if (cst.size !== canon.size) {
-					canonicalByHash.set(h, c); // canonical shrank; take this one
+			if (canon.dev === aliases[0].dev && canon.ino === aliases[0].ino)
+				continue; // already shares the canonical inode
+			let relinked = 0;
+			for (const c of aliases) {
+				if (!cli.apply) {
+					relinked++;
 					continue;
 				}
-				const tmp = `${c.path}.dedupe-${process.pid}`;
-				linkSync(canon.path, tmp);
-				renameSync(tmp, c.path);
-				res.linked++;
-				res.reclaimedBytes += c.size;
-			} catch (e) {
-				res.errors.push(`link ${c.path}: ${(e as Error).message}`);
+				// atomic replace: re-verify then link temp + rename over
+				try {
+					const st = statSync(c.path);
+					if (st.size !== c.size || st.mtimeMs !== c.mtimeMs) continue;
+					const cst = statSync(canon.path);
+					if (cst.size !== canon.size || cst.mtimeMs !== canon.mtimeMs) {
+						// Canonical was rewritten since the scan; this verified
+						// donor inode still holds the hashed content and becomes
+						// the new canonical — its other aliases need no relink.
+						canonByKey.set(key, c);
+						break;
+					}
+					const tmp = `${c.path}.dedupe-${process.pid}`;
+					linkSync(canon.path, tmp);
+					try {
+						renameSync(tmp, c.path);
+					} catch (re) {
+						try {
+							unlinkSync(tmp);
+						} catch {
+							/* temp alias could not be removed */
+						}
+						throw re;
+					}
+					relinked++;
+				} catch (e) {
+					res.errors.push(`link ${c.path}: ${(e as Error).message}`);
+				}
 			}
+			res.linked += relinked;
+			if (relinked === aliases.length) res.reclaimedBytes += aliases[0].size;
 		}
 	}
 	return res;
