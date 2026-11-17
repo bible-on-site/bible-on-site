@@ -459,6 +459,57 @@ public class SharedTopBarTests : IDisposable
     }
 
     [Fact]
+    public void SharedTopBar_FocusNavigationButton_WithoutBar_ReturnsFalse()
+    {
+        // No usable bar in the tree — the caller keeps its page-specific
+        // fallback instead of pretending focus landed (#2766).
+        var page = new ContentPage { Content = new Label { Text = "no bar" } };
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void SharedTopBar_FocusNavigationButton_UnusableBar_ReturnsFalse(
+        bool isEnabled, bool isVisible)
+    {
+        // A disabled or hidden hamburger is not a keyboard entry point.
+        var bar = new SharedTopBar();
+        var page = new ContentPage { Content = bar };
+        bar.NavigationButton.IsEnabled = isEnabled;
+        bar.NavigationButton.IsVisible = isVisible;
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SharedTopBar_FocusNavigationButton_UsableBar_FocusesTheHamburger()
+    {
+        var bar = new SharedTopBar();
+        var page = new ContentPage { Content = bar };
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeTrue(
+            "an enabled, visible hamburger is the shared keyboard entry point");
+    }
+
+    [Fact]
+    public void SharedTopBar_FocusNavigationButton_SkipsDisabledBarForAUsableOne()
+    {
+        // The first SharedTopBar in tree order is not always the usable one —
+        // the query keeps walking until an enabled, visible hamburger appears.
+        var disabledBar = new SharedTopBar();
+        var usableBar = new SharedTopBar();
+        var page = new ContentPage
+        {
+            Content = new VerticalStackLayout { Children = { disabledBar, usableBar } },
+        };
+        disabledBar.NavigationButton.IsEnabled = false;
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeTrue();
+    }
+
+    [Fact]
     public void ToolbarPill_MatchesReaderPillChrome()
     {
         var pill = new ToolbarPill();
