@@ -64,13 +64,16 @@
 		<DisablePush Condition="'$(DisablePush)' == ''">false</DisablePush>
 		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
 
-		<!-- #1097: stays false until the App ID's Push Notifications capability is
-		     enabled and the provisioning profiles regenerated (operator checklist in
-		     docs/app/push-notifications.md). While false, iOS device signing selects
-		     Entitlements.Base.plist (app groups only); pass
-		     -p:IosPushProvisioned=true — or flip this default — once aps-environment
-		     is authorized. -->
-		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">false</IosPushProvisioned>
+		<!-- #1097: the App ID's Push Notifications capability is enabled and the
+		     distribution profile authorizes aps-environment=production (production
+		     setup of November 11, 2026 — see docs/app/push-notifications.md). While
+		     true, iOS device signing selects Entitlements.App.plist (Debug:
+		     aps-environment=development) / Entitlements.Dist.plist (Release:
+		     production); a build whose profile does not authorize aps-environment —
+		     e.g. a local development profile that was not regenerated — passes
+		     -p:IosPushProvisioned=false to sign with Entitlements.Base.plist
+		     (app groups only). -->
+		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">true</IosPushProvisioned>
 
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -267,12 +270,13 @@
 	       Entitlements.Dist.plist so App Store validation and
 	       ios_signing_requirements.py (evaluated with Configuration=Release)
 	       both see `production`.
-	     - #1097: the App ID's Push Notifications capability is not enabled yet,
-	       so no provisioning profile authorizes `aps-environment` — signing with
-	       it fails codesign and CI validation alike. Until the operator enables
-	       the capability and regenerates the profiles, builds sign with
-	       Entitlements.Base.plist (app groups only). Pass
-	       -p:IosPushProvisioned=true to switch to the aps-environment plists. -->
+	     - #1097: the App ID's Push Notifications capability is enabled and the
+	       production distribution profile authorizes `aps-environment=production`.
+	       IosPushProvisioned defaults to true so signing-requirements discovery
+	       and signed packaging resolve the same plists; a device build whose
+	       profile does not authorize aps-environment (e.g. an unregenerated
+	       development profile) passes -p:IosPushProvisioned=false to keep
+	       Entitlements.Base.plist (app groups only). -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
