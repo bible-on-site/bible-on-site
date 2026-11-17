@@ -148,6 +148,14 @@
 			]
 		},
 		{
+			"description": "html-flip-book-react's package.json pin and the NPM_VERSION restore constant in toggle-flip-book-dep.mjs must land in one PR or `flip-book:npm` silently downgrades (#3449).",
+			"matchPackageNames": [
+				"html-flip-book-react"
+			],
+			"groupName": "all non-major bun dependencies",
+			"groupSlug": "bun-minor-patch"
+		},
+		{
 			"description": "Regular cargo-make CLI updates require review for the upstream ZIP gap; vulnerability-alert updates retain the existing repository policy. https://github.com/bible-on-site/bible-on-site/issues/2826",
 			"matchDatasources": [
 				"crate"
@@ -177,6 +185,19 @@
 		"dependencies"
 	],
 	"customManagers": [
+		{
+			"customType": "regex",
+			"description": "Track the published-version constant restored by `flip-book:npm`; the regex-manager update groups with the package.json bump via the bun group rule.",
+			"managerFilePatterns": [
+				"/^web\\/bible-on-site\\/scripts\\/toggle-flip-book-dep\\.mjs$/"
+			],
+			"matchStrings": [
+				"NPM_VERSION = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+(?:-alpha\\.[0-9]+)?)\""
+			],
+			"depNameTemplate": "html-flip-book-react",
+			"datasourceTemplate": "npm",
+			"versioningTemplate": "semver"
+		},
 		{
 			"customType": "regex",
 			"description": "Track explicitly pinned cargo-make CLI installs; the unsupported upstream ZIP migration is recorded in https://github.com/bible-on-site/bible-on-site/issues/2826",
