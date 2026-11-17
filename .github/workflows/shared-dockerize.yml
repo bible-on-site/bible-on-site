@@ -397,6 +397,7 @@ jobs:
       - name: Verify public content and recitation in the packaged website
         if: ${{ env.IS_NPM == 'true' }}
         timeout-minutes: 8
+        shell: bash
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url }}
           BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}

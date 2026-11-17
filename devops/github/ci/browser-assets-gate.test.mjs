@@ -19,7 +19,12 @@ const gate = step.run.slice(start, step.run.indexOf("\nfi", start) + 3);
 const shell =
 	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
 
-test("browser asset gate drains large responses and retains failure checks", async (t) => {
+test("accepts complete CDN responses and rejects incomplete or missing matches", async (t) => {
+	assert.equal(
+		step.shell,
+		"bash",
+		"workflow must use the same pipefail shell as this test",
+	);
 	let mode;
 	let requests;
 	const server = createServer((request, response) => {
@@ -51,15 +56,16 @@ test("browser asset gate drains large responses and retains failure checks", asy
 		server.close();
 	});
 	const origin = `http://127.0.0.1:${server.address().port}`;
-	for (mode of [
-		"large",
-		"missing-html",
-		"missing-recitation",
-		"http-error",
-		"truncated",
-		"disabled",
+	for (const [currentMode, expectation] of [
+		["large", "accepts large responses after draining both endpoints"],
+		["missing-html", "rejects an HTML response without the CDN hostname"],
+		["missing-recitation", "rejects recitation data without the CDN hostname"],
+		["http-error", "rejects an HTTP error"],
+		["truncated", "rejects a truncated response containing the CDN hostname"],
+		["disabled", "skips both requests when the CDN gate is disabled"],
 	]) {
-		await t.test(mode, async () => {
+		mode = currentMode;
+		await t.test(expectation, async () => {
 			requests = [];
 			const child = spawn(
 				shell,
