@@ -18,7 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          # Full history is required to diff the branch against origin/master.
+          fetch-depth: 0
 
       - name: Check if PR exists
         id: check-pr
@@ -37,12 +38,20 @@ jobs:
         if: steps.check-pr.outputs.exists == '0'
         id: commit-msg
         run: |
-          # Get the first line as title
-          TITLE=$(git log -1 --pretty=%s)
+          # Title the PR after the branch's first non-merge commit vs master,
+          # so merge/sync or polish pushes can't misname it after the tip.
+          TITLE=$(git log --no-merges --reverse --pretty=%s origin/master..HEAD | head -1)
+          if [ -z "$TITLE" ]; then TITLE=$(git log -1 --pretty=%s); fi
           echo "title=$TITLE" >> $GITHUB_OUTPUT
 
-          # Get the commit body
-          BODY=$(git log -1 --pretty=%b | tail -n +1)
+          # Body: tip commit text plus every non-merge commit unique to the branch.
+          TIP_BODY=$(git log -1 --pretty=%b)
+          COMMITS=$(git log --no-merges --reverse --pretty='- %s' origin/master..HEAD)
+          if [ -n "$COMMITS" ]; then
+            BODY=$(printf '%s\n\nChanges in this branch:\n%s' "$TIP_BODY" "$COMMITS")
+          else
+            BODY=$TIP_BODY
+          fi
 
           # Handle multiline body for GitHub Actions
           {
