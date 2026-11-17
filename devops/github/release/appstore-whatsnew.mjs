@@ -57,6 +57,46 @@ function versionState(version) {
 	return version.attributes?.appVersionState ?? version.attributes?.appStoreState;
 }
 
+/** The states that mean "store users run this build today". */
+const LIVE_STATES = ["READY_FOR_DISTRIBUTION", "READY_FOR_SALE"];
+
+/**
+ * A list response is only trustworthy whole. An explicit next page or a
+ * paging total beyond the returned rows means Apple truncated the answer —
+ * resolving a baseline or verifying a write against partial state would
+ * guess, which is worse than blocking.
+ */
+function completeList(result, what) {
+	const data = result?.data;
+	if (!Array.isArray(data))
+		throw new Error(`App Store Connect ${what} response is malformed`);
+	if (
+		result?.links?.next ||
+		(result?.meta?.paging?.total != null &&
+			result.meta.paging.total !== data.length)
+	)
+		throw new Error(
+			`App Store Connect ${what} response is incomplete (${data.length} rows returned)`,
+		);
+	return data;
+}
+
+/** Sanitized one-line identity for diagnostics — never the opaque record id. */
+function describeRow(row) {
+	const platform = row.attributes?.platform ?? "?";
+	const state = versionState(row) ?? "?";
+	const version = row.attributes?.versionString ?? "(no version)";
+	return `${version} [platform=${platform}, state=${state}]`;
+}
+
+function unverifiableError(rows, what) {
+	return new Error(
+		`App Store Connect returned ${rows.length} ${what} record(s) that cannot be classified: ` +
+			`${rows.join(", ")} — verify the API response still carries platform and version-state ` +
+			"attributes, then rerun the notes job",
+	);
+}
+
 /** The version store users currently run — the honest public baseline. */
 export async function liveVersion(appId, read) {
 	const result = await read(`apps/${encodeURIComponent(appId)}/appStoreVersions`, {
@@ -64,25 +104,45 @@ export async function liveVersion(appId, read) {
 		"filter[platform]": "IOS",
 		limit: "200",
 	});
-	const versions = result.data
-		.filter(
-			(v) =>
-				v.attributes?.platform === "IOS" &&
-				["READY_FOR_DISTRIBUTION", "READY_FOR_SALE"].includes(versionState(v)),
-		)
-		.map((v) => ({
-			id: v.id,
-			version: v.attributes?.versionString,
-		}))
-		.filter((v) => typeof v.version === "string");
+	const live = [];
+	const unverifiable = [];
+	for (const row of completeList(result, "appStoreVersions")) {
+		const platform = row.attributes?.platform;
+		const state = versionState(row);
+		const version = row.attributes?.versionString;
+		// Only a proven non-iOS platform or a proven non-live state excludes a
+		// row — a missing attribute can never prove a row is not the live
+		// record, so it must not silently become "no public baseline".
+		if (platform !== undefined && platform !== "IOS") continue;
+		if (state !== undefined && !LIVE_STATES.includes(state)) continue;
+		if (
+			platform !== "IOS" ||
+			!LIVE_STATES.includes(state) ||
+			typeof version !== "string"
+		) {
+			unverifiable.push(describeRow(row));
+		} else {
+			live.push({ version, state });
+		}
+	}
+	if (unverifiable.length)
+		throw unverifiableError(unverifiable, "appStoreVersions");
+	// Several records agreeing on one version string are one baseline, not an
+	// ambiguity — only distinct live version strings conflict.
+	const versions = [...new Map(live.map((v) => [v.version, v.state]))];
 	if (versions.length > 1)
-		throw new Error("More than one live iOS App Store version reported");
-	if (versions.length === 0) return null;
-	if (!/^\d+\.\d+\.\d+$/.test(versions[0].version))
 		throw new Error(
-			`Live App Store version is not semver: ${versions[0].version}`,
+			`More than one live iOS App Store version reported: ` +
+				`${versions.map(([version, state]) => `${version} (${state})`).join(", ")} — ` +
+				"resolve the conflicting public version records in App Store Connect " +
+				"so exactly one iOS version is live, then rerun the notes job",
 		);
-	return versions[0].version;
+	if (!versions.length) return null;
+	if (!/^\d+\.\d+\.\d+$/.test(versions[0][0]))
+		throw new Error(
+			`Live App Store version is not semver: ${versions[0][0]}`,
+		);
+	return versions[0][0];
 }
 
 /**
@@ -95,12 +155,29 @@ export async function editableVersion(appId, version, read) {
 		"filter[platform]": "IOS",
 		limit: "200",
 	});
-	const versions = result.data.filter(
-		(v) =>
-			v.id &&
-			v.attributes?.platform === "IOS" &&
-			v.attributes?.versionString === version,
-	);
+	const versions = [];
+	const unverifiable = [];
+	for (const row of completeList(result, "appStoreVersions")) {
+		const platform = row.attributes?.platform;
+		const versionString = row.attributes?.versionString;
+		// Same proof rule as liveVersion: only attributes that are present may
+		// exclude a row; a row that cannot be classified makes the response
+		// untrustworthy rather than silently skipped.
+		if (platform !== undefined && platform !== "IOS") continue;
+		if (versionString !== undefined && versionString !== version) continue;
+		if (
+			typeof row.id !== "string" ||
+			!row.id ||
+			platform !== "IOS" ||
+			versionString !== version
+		) {
+			unverifiable.push(describeRow(row));
+		} else {
+			versions.push(row);
+		}
+	}
+	if (unverifiable.length)
+		throw unverifiableError(unverifiable, "appStoreVersions");
 	if (versions.length > 1)
 		throw new Error("App Store Connect version identity is ambiguous");
 	if (!versions.length) return null;
@@ -120,12 +197,13 @@ export async function publishWhatsNew({ versionId, notes, read, write }) {
 		throw new Error(
 			`Notes are ${notes.length} chars, over Apple's ${WHATS_NEW_LIMIT} whatsNew limit`,
 		);
-	const localizations = (
+	const localizations = completeList(
 		await read(
 			`appStoreVersions/${encodeURIComponent(versionId)}/appStoreVersionLocalizations`,
 			{ limit: "200" },
-		)
-	).data;
+		),
+		"appStoreVersionLocalizations",
+	);
 	const hebrew = localizations.find((l) => l.attributes?.locale === LOCALE);
 	let localizationId;
 	if (hebrew) {
@@ -162,12 +240,13 @@ export async function publishWhatsNew({ versionId, notes, read, write }) {
 	// Read back through the version's localization list: appleReader only
 	// accepts array results, and the list proves what the version record
 	// actually persisted.
-	const check = (
+	const check = completeList(
 		await read(
 			`appStoreVersions/${encodeURIComponent(versionId)}/appStoreVersionLocalizations`,
 			{ "fields[appStoreVersionLocalizations]": "whatsNew,locale", limit: "200" },
-		)
-	).data.find((l) => l.id === localizationId);
+		),
+		"appStoreVersionLocalizations",
+	).find((l) => l.id === localizationId);
 	if (check?.attributes?.whatsNew !== notes)
 		throw new Error("App Store Connect did not accept the exact whatsNew text");
 	return { localizationId, verified: true };
