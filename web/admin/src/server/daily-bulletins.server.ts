@@ -11,7 +11,14 @@ import {
 	hebrewBulletinMonthDay,
 } from "~/lib/daily-bulletin";
 import { pool, query, queryOne } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 import { renderDailyBulletin } from "./render-daily.server";
+
+/** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the dedication upgrade is not there yet. */
+const isMissingDedicationSchema = (error: unknown): boolean =>
+	isMysqlSchemaMissing(error, {
+		codes: ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"],
+	});
 
 interface BulletinRow {
 	input_json: BulletinInput | string;
@@ -57,12 +64,6 @@ export async function readBulletinEmailContent(
 		"SELECT subject, email_html AS emailHtml FROM tanah_daily_bulletin WHERE bulletin_date = ?",
 		[date],
 	);
-}
-
-/** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the dedication upgrade is not there yet. */
-function isMissingMysqlSchema(error: unknown): boolean {
-	const code = (error as { code?: string })?.code;
-	return code === "ER_NO_SUCH_TABLE" || code === "ER_BAD_FIELD_ERROR";
 }
 
 /**
@@ -116,7 +117,7 @@ async function bulletinHebrewDateArticle(date: string): Promise<{
 			content: assigned.content,
 		};
 	} catch (error) {
-		if (isMissingMysqlSchema(error)) {
+		if (isMissingDedicationSchema(error)) {
 			console.warn(
 				"Article Hebrew-date schema is not deployed yet; " +
 					"bulletin keeps ordinary article selection until the migration runs.",
@@ -156,7 +157,7 @@ async function bulletinDedications(
 			[perekId, perekId, perekId],
 		);
 	} catch (error) {
-		if (!isMissingMysqlSchema(error)) throw error;
+		if (!isMissingDedicationSchema(error)) throw error;
 		return await query<{ subject: string }>(
 			`SELECT DISTINCT d.id, d.subject FROM tanah_dedication d
 			 JOIN tanah_perek_dedication pd ON pd.dedication_id = d.id

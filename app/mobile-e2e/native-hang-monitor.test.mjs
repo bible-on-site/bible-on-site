@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { monitorNativeInteractions } from './native-hang-monitor.mjs';
 
-function fixture(capture) {
+function fixture(capture, options = {}) {
   const callbacks = new Map();
   const captures = [];
   const monitor = monitorNativeInteractions(capture ?? ((command, info) => captures.push({ command, info })), {
     schedule(callback) { const id = Symbol(); callbacks.set(id, callback); return id; },
     cancel(id) { callbacks.delete(id); },
+    ...options,
   });
   return { monitor, captures, callbacks, trigger() { for (const callback of [...callbacks.values()]) callback(); } };
 }
@@ -94,6 +95,27 @@ test('stopping waits for every capture already in flight', async () => {
   release();
   await completion;
   assert.equal(stopped, true);
+});
+
+test('every issued request gets its issue-time pin, including fast-completing ones', async () => {
+  const pins = [];
+  const f = fixture(undefined, { pin: info => pins.push(info) });
+  f.monitor.write('[HTTP] --> GET /session/id/element/cell/attribute/hittable \n');
+  f.monitor.write('[HTTP] <-- GET /session/id/element/cell/attribute/hittable 200 60 ms\n');
+  f.monitor.write('[HTTP] --> POST /session/id/elements {"value":"PerekSource"}\n');
+  await f.monitor.stop();
+  assert.deepEqual(pins.map(info => info.sequence), [1, 2]);
+  assert.equal(pins[0].command, 'GET /session/id/element/cell/attribute/hittable');
+  assert.equal(pins[0].sessionId, 'id');
+  assert.equal(pins[1].request, '{"value":"PerekSource"}');
+});
+
+test('a pin failure is retained without losing the request or its later capture', async () => {
+  const f = fixture(undefined, { pin() { throw new Error('passive pin failed'); } });
+  f.monitor.write('[HTTP] --> GET /session/id/source \n');
+  f.trigger();
+  await assert.rejects(f.monitor.stop(), /passive pin failed/);
+  assert.equal(f.captures.length, 1);
 });
 
 test('capture failures are retained while later interactions remain observable', async () => {

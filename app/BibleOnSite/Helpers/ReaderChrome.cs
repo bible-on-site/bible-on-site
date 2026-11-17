@@ -54,6 +54,21 @@ public interface IReaderArticlesSurface
 }
 
 /// <summary>
+/// The ⋮ options-menu surface shared by the readers — the contract
+/// <see cref="Controls.ReaderMenuPanel"/> satisfies on readers that carry the
+/// menu; readers without one pass null.
+/// </summary>
+public interface IReaderMenuSurface
+{
+    /// <summary>
+    /// Whether the articles view is the active content. In articles mode the
+    /// menu shows only הסתר שם השם — the שניים מקרא and תיקון קוראים scripture
+    /// actions do not apply to an article catalogue (#3401).
+    /// </summary>
+    bool IsArticlesMode { get; set; }
+}
+
+/// <summary>
 /// The named controls a reader page hands to <see cref="ReaderChrome"/>. Every
 /// reader declares the same chrome in XAML, so the surfaces are identical —
 /// only the division adapters in <see cref="ReaderChromeActions"/> differ.
@@ -70,6 +85,12 @@ public sealed class ReaderChromeSurfaces
 
     /// <summary>The reading content hidden while articles show (the carousel).</summary>
     public required VisualElement ReaderContent { get; init; }
+
+    /// <summary>
+    /// The ⋮ options menu whose actions follow the active content mode
+    /// (#3401). Readers without an options menu leave this surface null.
+    /// </summary>
+    public IReaderMenuSurface? MenuPanel { get; init; }
 
     /// <summary>
     /// The reading-position indicator owned by the reading content — the
@@ -125,6 +146,14 @@ public sealed class ReaderChromeActions
     /// closing the search surface or refreshing the Android Back callback.
     /// </summary>
     public Action<bool>? FullscreenStateChanged { get; init; }
+
+    /// <summary>
+    /// Runs after the articles/reading-view swap actually settles — the page
+    /// re-reads <see cref="ReaderChrome.IsShowingArticles"/> and reports the
+    /// analytics surface that is now on screen (#3378). A failed articles
+    /// load never swapped the surfaces and notifies nothing.
+    /// </summary>
+    public Action<bool>? ArticlesVisibilityChanged { get; init; }
 }
 
 /// <summary>
@@ -244,7 +273,9 @@ public sealed class ReaderChrome
         _ui.ReaderContent.IsVisible = true;
         _ui.ReadingProgressIndicator?.IsVisible = true;
 
+        _ui.MenuPanel?.IsArticlesMode = false;
         _ui.BottomBar.IsArticlesActive = false;
+        _actions.ArticlesVisibilityChanged?.Invoke(false);
     }
 
     /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
@@ -302,7 +333,12 @@ public sealed class ReaderChrome
             // leaving it drawn painted it over the article cards (#3364).
             _ui.ReadingProgressIndicator?.IsVisible = false;
 
+            // The menu now serves the article catalogue — only הסתר שם השם
+            // applies there (#3401). Set only after the swap so a failed
+            // load leaves the scripture menu untouched.
+            _ui.MenuPanel?.IsArticlesMode = true;
             _ui.BottomBar.IsArticlesActive = true;
+            _actions.ArticlesVisibilityChanged?.Invoke(true);
         }
 #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
         catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.

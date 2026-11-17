@@ -20,7 +20,11 @@ assert.ok(
 assert.equal(endpoint.protocol, "http:");
 const client = new S3Client({
 	endpoint: endpoint.href,
-	region: "il-central-1",
+	// The local RustFS server runs its default us-east-1 region and, since
+	// 1.0.5, rejects a CreateBucket LocationConstraint that differs from the
+	// configured server region — the SDK derives that constraint from this
+	// client region, so it must not claim a prod region.
+	region: "us-east-1",
 	forcePathStyle: true,
 });
 

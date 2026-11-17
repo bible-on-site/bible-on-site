@@ -8,6 +8,7 @@ import {
 import { transaction, txExecute, txQueryOne } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
 import { pediaChangesForEntities } from "./paths";
+import { isMissingMysqlSchema } from "./sql-helpers";
 
 /**
  * Admin management of entity external identifiers (#3330) — the
@@ -42,11 +43,6 @@ import { pediaChangesForEntities } from "./paths";
 
 const STALE_MESSAGE =
 	"המיפוי השתנה על ידי עורך אחר - רעננו את העמוד לפני שמירה חוזרת";
-
-/** ER_NO_SUCH_TABLE — the external_reference deploy has not run here yet. */
-function isMissingMysqlSchema(error: unknown): boolean {
-	return (error as { code?: string })?.code === "ER_NO_SUCH_TABLE";
-}
 
 async function lockEntityOrThrow(
 	conn: PoolConnection,

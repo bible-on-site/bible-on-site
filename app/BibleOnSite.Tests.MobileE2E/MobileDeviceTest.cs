@@ -217,28 +217,36 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // Attribute session creation, app restart, startup wait and coverage
         // collection to the scenario that follows them.
         DriverTelemetry.Reset();
-        var launchId = Configuration.Platform == MobilePlatform.IOS && AppCoverage.Enabled
+        var launchId = Configuration.Platform == MobilePlatform.IOS && InstrumentedStartup
             ? ReaderStartupReadiness.CreateLaunchId()
             : null;
         AcquireSession(launchId);
         Page = new(Driver!, Platform);
-        if (launchId == null)
+        AwaitReaderStartup(launchId);
+        // An iOS terminate can leave WebDriverAgent's automation session bound
+        // to the dead process: the relaunch then reports success and snapshot
+        // lookups resolve the new app's tree, but every live attribute read
+        // faults for "another pid" — the reader looks loaded while no element
+        // can ever be tapped (#3379). The ordinary restart is also the
+        // recovery: a clean terminate re-pins the session to the live process,
+        // exactly as the next scenario's launch did in the incident.
+        if (Configuration.Platform == MobilePlatform.IOS && LiveChannelFaulted())
         {
-            Page.WaitForStartup();
-            if (Configuration.Platform == MobilePlatform.IOS)
-            {
-                MobilePlatformAdapter.EnsurePortrait(Driver!);
-            }
-        }
-        else
-        {
-            var budget = TimeSpan.FromSeconds(45);
-            var startup = Stopwatch.StartNew();
-            _ = ReaderStartupReadiness.WaitForReady(launchId, budget);
-            // Creation/recovery can inherit landscape. Read orientation only
-            // after readiness, counting correction in the same startup budget.
-            MobilePlatformAdapter.EnsurePortrait(Driver!);
-            Page.WaitForStartup(budget - startup.Elapsed);
+            Output.WriteLine($"{Configuration.Platform}: the relaunched reader answers element " +
+                "lookups but its live attribute channel faults — the automation session stayed " +
+                "bound to the terminated process; launching once more to re-pin it.");
+            launchId = InstrumentedStartup ? ReaderStartupReadiness.CreateLaunchId() : null;
+            AcquireSession(launchId);
+            // The acquire may have rebuilt the session around a new driver, so
+            // the page object binds whatever the session answers now.
+            Page = new(Driver!, Platform);
+            AwaitReaderStartup(launchId);
+            // A snapshot-only scenario could report green on a reader nothing
+            // can tap, so the second proof fails the connect instead of
+            // leaving a broken channel to masquerade as a pass.
+            Assert.False(LiveChannelFaulted(), $"{Configuration.Platform}: the live attribute " +
+                "channel still faults through a second launch; the automation session stayed " +
+                "bound to the terminated process.");
         }
         // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
         // runs before the first reset; attribute it to a startup dump so the
@@ -246,6 +254,63 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // the content is identical app-init hits either way.
         AppCoverage.Collect(Configuration, "_startup", "passed", Output);
         AppCoverage.Reset(Configuration, Output);
+    }
+
+    // Unit coverage substitutes the instrumented readiness probe and its gate,
+    // while production answers both from the coverage-enabled app build.
+    protected virtual bool InstrumentedStartup => AppCoverage.Enabled;
+
+    protected virtual TimeSpan WaitForReaderReady(string launchId, TimeSpan budget) =>
+        ReaderStartupReadiness.WaitForReady(launchId, budget);
+
+    private void AwaitReaderStartup(string? launchId)
+    {
+        if (launchId == null)
+        {
+            Page.WaitForStartup();
+            if (Configuration.Platform == MobilePlatform.IOS)
+            {
+                MobilePlatformAdapter.EnsurePortrait(Driver!);
+            }
+            return;
+        }
+        var budget = TimeSpan.FromSeconds(45);
+        var startup = Stopwatch.StartNew();
+        _ = WaitForReaderReady(launchId, budget);
+        // Creation/recovery can inherit landscape. Read orientation only
+        // after readiness, counting correction in the same startup budget.
+        MobilePlatformAdapter.EnsurePortrait(Driver!);
+        Page.WaitForStartup(budget - startup.Elapsed);
+    }
+
+    // Snapshot reads cannot prove the automation channel is live: the stale
+    // session kept resolving the new app's tree while every hit-test answer
+    // came back false. Probe the predicate the first tap relies on — CanTap's
+    // live hittable read — giving a transient startup overlay this short
+    // window to lift; a persistent fault is the dead binding's signature.
+    protected virtual TimeSpan LiveChannelProbe => TimeSpan.FromSeconds(5);
+
+    private bool LiveChannelFaulted()
+    {
+        try
+        {
+            Page.WaitFor("PerekSource", Platform.CanTap, LiveChannelProbe);
+            return false;
+        }
+        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception)
+            || DeviceTransportLoss.Matches(exception))
+        {
+            // A dead session or lost transport belongs to the outer recovery
+            // classifiers, not to one more app restart.
+            throw;
+        }
+        catch (WebDriverException)
+        {
+            // The lookup resolved the reader but no poll could answer hittable
+            // — timeout, persistent element fault, or a stale-element cache —
+            // the same signature the dead process binding produced (#3379).
+            return true;
+        }
     }
 
     // Unit coverage substitutes IMobileDeviceSession to observe this path

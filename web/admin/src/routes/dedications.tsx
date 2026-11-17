@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { previewDedicationLine } from "~/lib/dedication-line";
+import { useDebouncedValue } from "~/lib/use-debounced-value";
 import {
 	type AdminDedication,
 	createDedication,
@@ -52,15 +53,6 @@ interface FormState {
 }
 
 const SEARCH_DEBOUNCE_MS = 350;
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const t = setTimeout(() => setDebounced(value), delayMs);
-		return () => clearTimeout(t);
-	}, [value, delayMs]);
-	return debounced;
-}
 
 const emptyForm = (): FormState => ({
 	id: null,

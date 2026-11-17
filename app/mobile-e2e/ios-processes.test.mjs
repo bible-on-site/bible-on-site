@@ -359,6 +359,104 @@ test("successful earlier captures and a different session cannot identify the fa
   assert.deepEqual(f.calls, []);
 });
 
+test("the failed scenario's last fast-completing command pins the current app at issue time", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  const request = { sequence: 1, command: "GET /session/session-1/element/source/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: true };
+  diagnostics.pin(request);
+  request.pending = false; request.status = 200;
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.deepEqual(f.calls.map(call => call.command),
+    [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+  assert.equal(evidence.observation.source, "passive app identity pinned when the scenario issued the command");
+  assert.equal(evidence.observation.request.status, 200);
+  assert.equal(evidence.observation.request.pending, false);
+});
+
+for (const [label, request, signal] of [
+  ["before the scenario started", { startedAt: "2026-10-28T16:32:05Z" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["after the failure", { startedAt: "2026-10-28T16:33:01Z" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["another session", { sessionId: "other-session" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["a completed request without a scenario boundary", { pending: false, status: 200 }, {}],
+]) test(`a pinned command ${label} cannot identify the failed app`, async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: true, ...request });
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal(signal))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("a still-pending fast request pins its app even without a scenario boundary", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:58Z", pending: true });
+
+  assert.equal((await diagnostics.failure(failureSignal())).status, "captured");
+  assert.ok(f.calls.some(call => call.args.includes("8421")));
+});
+
+test("a failed issue-time pin retains its error beside the selected command", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f,
+    readPid() { throw new Error("native log unavailable"); } });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: false, status: 200 });
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.equal((await diagnostics.failure(failure)).status, "unknown");
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, null);
+  assert.equal(evidence.observation.identityError.message, "native log unavailable");
+});
+
+test("a pending capture keeps its pin ahead of later fast request pins", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  request.pending = false; request.status = 500;
+  writeFileSync(f.nativeLog, "2026-10-28 16:32:55.000 Df BibleOnSite[9912:def] relaunched\n");
+  diagnostics.pin({ sequence: 2, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:56Z", pending: false, status: 200 });
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" })),
+    { status: "captured", pid: 8421 });
+  assert.ok(f.calls.some(call => call.args.includes("8421")));
+  assert.ok(f.calls.every(call => !call.args.includes("9912")));
+});
+
+test("a pin revives failure evidence when a capture could not read the identity", async (t) => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f,
+    readPid() { reads++; if (reads === 1) throw new Error("native log unavailable"); return 8421; } });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  request.pending = false; request.status = 500;
+  diagnostics.pin({ sequence: 2, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:56Z", pending: false, status: 200 });
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+});
+
 test("a completed HTTP 200 lookup retains its pending capture identity within the failed scenario", async t => {
   const f = diagnosticFixture(t);
   const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });

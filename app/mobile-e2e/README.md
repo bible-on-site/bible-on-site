@@ -162,6 +162,16 @@ native element clicks. UI assertions and readiness deadlines remain shared.
 The startup gate requires a visible, nonempty perek source within the same
 45-second deadline as ordinary scenario lookups and navigation. A failure
 captures device diagnostics.
+On iOS a slow terminate can leave WebDriverAgent's automation session bound to
+the dead process: the relaunch reports success and snapshot lookups resolve the
+new app's tree, while every live hit-test attribute answers `false` forever
+(#3379). Content readiness alone cannot prove the channel is live, so connect
+then polls the `hittable` predicate the scenario's first tap needs for up to
+five seconds — a transient startup overlay clears inside that window — and a
+persistent fault triggers one more terminate/launch to re-pin the session with
+a fresh launch identity. A channel still faulting after the second launch fails
+the connect: a snapshot-only scenario must not report green on a reader nothing
+can tap.
 iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
 command otherwise waits for the app main thread to stay quiet for the whole
 threshold, which a reader that keeps re-rendering commentary cells (or a
@@ -373,8 +383,11 @@ and requests one CoreSimulator frame in `native-interaction.png`, with the
 existing five-second capture deadline. This is an observation while the
 ordinary interaction deadline remains 45 seconds: a successful 42-second
 lookup must not be treated as a failed test. A failed frame probe retains an
-error artifact without replacing the test result. Process queries and LLDB
-stack capture run only after a failed pilot, never alongside healthy tests.
+error artifact without replacing the test result. Every issued request also
+pins the live log's app identity at issue time, so a request that faults
+inside milliseconds — never reaching the pending capture — still names the
+process the failed scenario last drove. Process queries and LLDB stack
+capture run only after a failed pilot, never alongside healthy tests.
 Native live logs use info level so accessibility debug logging does not
 amplify the workload being measured. Pilot and interaction limits are unchanged.
 

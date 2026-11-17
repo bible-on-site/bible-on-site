@@ -62,6 +62,9 @@ tests/unit/components/err.txt
 # Build-time store snapshot; regenerate via scripts/collect-store-metadata.mts.
 /src/data/db/store-metadata-snapshot.generated.json
 
+# Build-time warm-up artifact; regenerate via scripts/generate-warm-derived.mts.
+/src/data/db/warm-derived.generated.json.br
+
 # Generated, content-addressed reader books
 /src/data/db/sefer-books/
 /public/generated/sefarim/
