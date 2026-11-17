@@ -189,7 +189,8 @@ public sealed class GooglePlayDeployTests
         var handler = new PlayStubHandler();
         handler.Respond(SessionInitiated("https://uploads.example/session-1"));
         handler.Respond(Json("""{"versionCode":"50100023"}"""));
-        var upload = BundleUpload(PlayService(handler));
+        using var aab = new MemoryStream(AabBytes);
+        var upload = BundleUpload(PlayService(handler), aab);
         var progress = Build.UploadWithResume(upload);
         Assert.Equal(UploadStatus.Completed, progress.Status);
         Assert.Equal<long?>(VersionCode, upload.ResponseBody?.VersionCode);
@@ -208,7 +209,8 @@ public sealed class GooglePlayDeployTests
         handler.Respond(SessionInitiated("https://uploads.example/session-1"));
         handler.Respond(Stall());
         handler.Respond(Json("""{"versionCode":"50100023","sha1":"abc"}"""));
-        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)));
+        using var aab = new MemoryStream(AabBytes);
+        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)), aab);
         var progress = Build.UploadWithResume(upload);
         Assert.Equal(UploadStatus.Completed, progress.Status);
         Assert.Equal<long?>(VersionCode, upload.ResponseBody?.VersionCode);
@@ -222,11 +224,12 @@ public sealed class GooglePlayDeployTests
         var handler = new PlayStubHandler();
         handler.Respond(SessionInitiated("https://uploads.example/session-1"));
         handler.Respond(Stall());
-        var resumed = new HttpResponseMessage((HttpStatusCode)308);
+        using var resumed = new HttpResponseMessage((HttpStatusCode)308);
         resumed.Headers.TryAddWithoutValidation("Range", "bytes=0-99999");
         handler.Respond(resumed);
         handler.Respond(Json("""{"versionCode":"50100023"}"""));
-        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)));
+        using var aab = new MemoryStream(AabBytes);
+        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)), aab);
         var progress = Build.UploadWithResume(upload);
         Assert.Equal(UploadStatus.Completed, progress.Status);
         Assert.Equal(4, handler.Requests.Count);
@@ -240,7 +243,8 @@ public sealed class GooglePlayDeployTests
         handler.Respond(SessionInitiated("https://uploads.example/session-1"));
         handler.Respond(Stall());
         handler.Respond(ApiError(HttpStatusCode.NotFound, "The resumable session does not exist"));
-        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)));
+        using var aab = new MemoryStream(AabBytes);
+        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)), aab);
         var progress = Build.UploadWithResume(upload);
         Assert.Equal(UploadStatus.Failed, progress.Status);
         Assert.IsType<GoogleApiException>(progress.Exception);
@@ -257,7 +261,8 @@ public sealed class GooglePlayDeployTests
         handler.Respond(Stall());
         handler.Respond(Stall());
         handler.Respond(Stall());
-        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)));
+        using var aab = new MemoryStream(AabBytes);
+        var upload = BundleUpload(PlayService(handler, TimeSpan.FromMilliseconds(50)), aab);
         var progress = Build.UploadWithResume(upload);
         Assert.Equal(UploadStatus.Failed, progress.Status);
         Assert.IsType<TaskCanceledException>(progress.Exception);
@@ -269,8 +274,8 @@ public sealed class GooglePlayDeployTests
         // Deliberately no pause — tests record the delay, never wait on it.
     }
 
-    static EditsResource.BundlesResource.UploadMediaUpload BundleUpload(AndroidPublisherService service) =>
-        service.Edits.Bundles.Upload("com.tanah.daily929", "edit-1", new MemoryStream(AabBytes), "application/octet-stream");
+    static EditsResource.BundlesResource.UploadMediaUpload BundleUpload(AndroidPublisherService service, Stream aab) =>
+        service.Edits.Bundles.Upload("com.tanah.daily929", "edit-1", aab, "application/octet-stream");
 
     static AndroidPublisherService PlayService(PlayStubHandler handler, TimeSpan? timeout = null) =>
         new(new BaseClientService.Initializer
