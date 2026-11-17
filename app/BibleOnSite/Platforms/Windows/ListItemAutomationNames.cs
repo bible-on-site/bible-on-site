@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using BibleOnSite.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -97,10 +98,13 @@ internal static class ListItemAutomationNames
 		if (args.Element is FrameworkElement element)
 		{
 			element.Loaded -= OnElementLoaded;
-			element.LayoutUpdated -= OnRetryLayoutUpdated;
+			StopLayoutRetry(element);
 		}
 
 		args.Element.ClearValue(AutomationProperties.NameProperty);
+		// A pooled container still has a live peer; left in the control view
+		// with an empty name it announces its item's CLR name ("ElementWrapper").
+		AutomationProperties.SetAccessibilityView(args.Element, AccessibilityView.Raw);
 	}
 
 #pragma warning disable S1172 // RoutedEventHandler requires the event-args parameter.
@@ -113,13 +117,30 @@ internal static class ListItemAutomationNames
 		}
 	}
 
-#pragma warning disable S1172 // EventHandler signature requires the second argument.
-	private static void OnRetryLayoutUpdated(object? sender, object _)
-#pragma warning restore S1172
+	// WinUI's LayoutUpdated event always supplies a null sender, so the
+	// retry handler must capture the element it watches. Kept per element
+	// so a found name or a recycle can unsubscribe that exact delegate.
+	private static readonly ConditionalWeakTable<FrameworkElement, LayoutRetry> LayoutRetries = new();
+
+	private sealed class LayoutRetry
 	{
-		if (sender is UIElement element)
+		public EventHandler<object>? Handler;
+	}
+
+	private static void StartLayoutRetry(FrameworkElement element)
+	{
+		var retry = LayoutRetries.GetOrCreateValue(element);
+		retry.Handler ??= (_, _) => ApplyName(element);
+		element.LayoutUpdated -= retry.Handler;
+		element.LayoutUpdated += retry.Handler;
+	}
+
+	private static void StopLayoutRetry(FrameworkElement element)
+	{
+		if (LayoutRetries.TryGetValue(element, out var retry) && retry.Handler is { } handler)
 		{
-			ApplyName(element);
+			element.LayoutUpdated -= handler;
+			retry.Handler = null;
 		}
 	}
 
@@ -149,8 +170,11 @@ internal static class ListItemAutomationNames
 		if (args.InRecycleQueue)
 		{
 			container.Loaded -= OnElementLoaded;
-			container.LayoutUpdated -= OnRetryLayoutUpdated;
+			StopLayoutRetry(container);
 			container.ClearValue(AutomationProperties.NameProperty);
+			// Keep the recycled container's peer out of the control view —
+			// an unnamed pooled row announces its item's CLR name.
+			AutomationProperties.SetAccessibilityView(container, AccessibilityView.Raw);
 			return;
 		}
 
@@ -189,15 +213,14 @@ internal static class ListItemAutomationNames
 			// compose a name and would be rescanned on every layout.
 			if (!sawInteractiveChild && element is FrameworkElement framework)
 			{
-				framework.LayoutUpdated -= OnRetryLayoutUpdated;
-				framework.LayoutUpdated += OnRetryLayoutUpdated;
+				StartLayoutRetry(framework);
 			}
 		}
 		else
 		{
 			if (element is FrameworkElement named)
 			{
-				named.LayoutUpdated -= OnRetryLayoutUpdated;
+				StopLayoutRetry(named);
 			}
 
 			AutomationProperties.SetAccessibilityView(element, AccessibilityView.Control);

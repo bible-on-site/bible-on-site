@@ -253,11 +253,14 @@ in the running tree:
   `ListItemAutomationNames` now also attaches to `ItemsView`: it locates
   the template `ItemsRepeater`, names each container on `ElementPrepared`
   (plus an already-realized-children sweep, a `Loaded` pass and a
-  `LayoutUpdated` retry while the name is still empty), clears names on
-  `ElementClearing`, and keeps content-less recycled containers out of
-  the UIA control/content views (`AccessibilityView.Raw`) instead of
-  letting them announce a type name. Verified: 0 of 39 list items in the
-  reader tree expose a CLR name; every pasuk row announces its verse
+  `LayoutUpdated` retry while the name is still empty — WinUI reports a
+  null `LayoutUpdated` sender, so the retry delegate captures its
+  element), clears names on `ElementClearing`, and drops every cleared
+  or content-less container to `AccessibilityView.Raw` so pooled rows
+  disappear from the UIA control/content views instead of announcing a
+  type name. Verified: 0 framework-named rows among 39 list items in the
+  reader tree including the offscreen/virtualized peers that previously
+  read `Items2.ElementWrapper`; every pasuk row announces its verse
   text. The legacy `ListViewBase` path is kept for `CarouselView` and for
   the handler-1 feature-switch fallback.
 - **Closed fan-menu satellites stayed in the focus/UIA tree.** They were
