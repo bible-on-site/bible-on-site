@@ -267,20 +267,30 @@ function compactArticleCommands(output, apiVersion) {
 					fields.clear();
 					return true;
 				}
-				const target = { ...command.target };
-				// The domain validator compares these sets after sorting them.
-				for (const field of ["pasukCoordinates", "moedIds"])
-					if (Array.isArray(target[field]))
-						target[field] = [...target[field]].sort((a, b) =>
-							canonical(a).localeCompare(canonical(b)),
-						);
-				const key = canonical({ ...command, target });
 				const field =
 					command.relationshipKey === "coveringSources"
 						? "pasukCoordinates"
 						: command.relationshipKey === "moadim"
 							? "moedIds"
 							: null;
+				// These API-v5 arrays are sets even for replacement. Preserve the
+				// first exact value and its position; never reinterpret unknown fields.
+				if (field && Array.isArray(command.target[field])) {
+					const values = new Set();
+					command.target[field] = command.target[field].filter((value) => {
+						const fingerprint = canonical(value);
+						if (values.has(fingerprint)) return false;
+						values.add(fingerprint);
+						return true;
+					});
+				}
+				const target = { ...command.target };
+				// Sort only the comparison fingerprint, never the proposed order.
+				if (field && Array.isArray(target[field]))
+					target[field] = [...target[field]].sort((a, b) =>
+						canonical(a).localeCompare(canonical(b)),
+					);
+				const key = canonical({ ...command, target });
 				const commuting =
 					field !== null &&
 					["add", "remove"].includes(command.action) &&

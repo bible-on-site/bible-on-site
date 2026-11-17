@@ -796,6 +796,53 @@ test("API five compresses only adjacent idempotent article commands and preserve
 	assert.deepEqual(received.responses, output.responses);
 });
 
+test("removes exact duplicates inside API five link sets without changing fields or action boundaries", async () => {
+	const first = { perekId: 15, pasuk: 14 },
+		second = { perekId: 15, pasuk: 13 };
+	for (const action of ["add", "remove", "replace", "clear"]) {
+		const commands = [
+			{
+				relationshipKey: "coveringSources",
+				action,
+				target: {
+					pasukCoordinates: [first, second, { pasuk: 14, perekId: 15 }],
+					coverageVerified: false,
+				},
+			},
+			{ relationshipKey: "moadim", action, target: { moedIds: [3, 1, 3] } },
+		];
+		for (const apiVersion of [5, 6]) {
+			const output = {
+				outcome: "revised",
+				summary: "Exact summary",
+				responses: [],
+				draft: {
+					description: '  Original human text "unchanged"\n  ',
+					evidenceIndexes: [0],
+					changes: [
+						{ kind: "article_links", targetId: "594", after: { commands } },
+					],
+				},
+			};
+			const fixture = agentFixture({
+				bundle: agentBundle({ apiVersion }),
+				job: { apiVersion, task: "pr_resolution" },
+				replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+			});
+			assert.equal((await fixture.run()).status, "completed");
+			const expected = structuredClone(output);
+			if (apiVersion === 5) {
+				expected.draft.changes[0].after.commands[0].target.pasukCoordinates = [
+					first,
+					second,
+				];
+				expected.draft.changes[0].after.commands[1].target.moedIds = [3, 1];
+			}
+			assert.deepEqual(JSON.parse(fixture.completed[0].content), expected);
+		}
+	}
+});
+
 test("nonadjacent repeated article commands retain order and remain subject to server rejection", async () => {
 	const add = {
 			relationshipKey: "coveringSources",

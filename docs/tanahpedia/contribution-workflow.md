@@ -245,8 +245,9 @@ The local grammar cannot enforce JSON Schema `uniqueItems`; the server still
 validates the complete result. For API v5 article-link proposals only, the worker
 compacts exact repetitions of idempotent commands on independent relationship
 fields and same-action set additions/removals. API v5 primary-perek, coverage,
-moed and dedication commands write separate fields. Coordinate and moed sets
-compare independently of item order. A different action/value on the same
+moed and dedication commands write separate fields. Exact repeated coordinates
+or moed IDs inside a command are removed, keeping the first value and its
+position. These sets compare independently of item order. A different action/value on the same
 field retains its order, including add/remove/add and replace A/B/A. Unknown
 commands reset this optimization. Other operation kinds and
 other API versions retain their sequence. It never compacts human
