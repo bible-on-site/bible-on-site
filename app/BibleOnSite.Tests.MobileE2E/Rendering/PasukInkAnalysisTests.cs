@@ -109,7 +109,9 @@ public sealed class PasukInkAnalysisTests
         Assert.Equal("none", profile.LastLine);
         Assert.False(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
-        Assert.False(profile.HasMissingLines);
+        // The whole element is an empty tail: nothing the text gate
+        // recognizes was drawn, so the verdict is missing lines.
+        Assert.True(profile.HasMissingLines);
     }
 
     [Fact]
@@ -212,6 +214,17 @@ public sealed class PasukInkAnalysisTests
         var profile = Measure(100, 38, new Line(10, 24, 50, 99));
 
         Assert.False(profile.HasMissingLines);
+    }
+
+    [Fact]
+    public void FloatingOnlyInkWithEmptyTailReportsMissingLines()
+    {
+        // Stray marks that never qualify as a text line cannot stand in for
+        // the pasuk's drawn text when the rest of the element stays empty.
+        var profile = Measure(100, 60, new Line(2, 4, 40, 45));
+
+        Assert.Equal(0, profile.LineBands);
+        Assert.True(profile.HasMissingLines);
     }
 
     [Fact]

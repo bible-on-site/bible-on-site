@@ -61,11 +61,14 @@ internal static class PasukInkAnalysis
         /// UILabel measures, so a real mismatch would surface as missing text.
         /// A correct last line's slack stays small even without descenders; a
         /// single band still flags when the tail could hold another whole
-        /// line, which is the same mismatch with only one line drawn.
+        /// line, which is the same mismatch with only one line drawn. No line
+        /// bands at all is the extreme mismatch — the draw produced nothing
+        /// the gate recognizes, and the tail swallows the element.
         /// </summary>
         public bool HasMissingLines =>
             EmptyTailRows > Math.Max(14, (int)(Height * 0.30))
-            && (LineBands >= 2 || (LineBands == 1 && EmptyTailRows >= MaxBandRows));
+            && (LineBands >= 2 || LineBands == 0
+                || (LineBands == 1 && EmptyTailRows >= MaxBandRows));
     }
 
     // Ink is whatever deviates enough in luminance from the sampled background,
