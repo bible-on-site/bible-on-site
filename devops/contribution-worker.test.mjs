@@ -838,7 +838,7 @@ test("nonadjacent repeated article commands retain order and remain subject to s
 	assert.equal(fixture.releases.length, 1);
 });
 
-test("only same-action set runs commute; replacements and action/key boundaries retain intent", async () => {
+test("independent fields commute while same-field action boundaries and replacements retain intent", async () => {
 	const addA = {
 			relationshipKey: "coveringSources",
 			action: "add",
@@ -865,7 +865,31 @@ test("only same-action set runs commute; replacements and action/key boundaries 
 		],
 		[
 			[addA, moedA, addA],
-			[addA, moedA, addA],
+			[addA, moedA],
+		],
+		[
+			[
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+			],
+			[
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+			],
 		],
 		[
 			[

@@ -239,13 +239,16 @@ the result contract refreshes the guide before the next inference, and changed
 system text also consumes the context reserve. Open, referenced or unknown
 contracts retain the full guide. Final JSON requests omit optional indentation
 and keep generated prose concise while preserving exact human quotations.
+Source totals guide read planning: a short article can use one complete page
+within the declared tool limits; unread text cannot be claimed as reviewed.
 The local grammar cannot enforce JSON Schema `uniqueItems`; the server still
 validates the complete result. For API v5 article-link proposals only, the worker
-compacts adjacent repetitions of the same idempotent set/assignment command,
-and repeats inside a consecutive run of additions or removals for the same
-relationship. Coordinate and moed sets compare independently of item order.
-Action/key boundaries and replacements retain their order, including
-add/remove/add and replace A/B/A. Unknown actions, other operation kinds and
+compacts exact repetitions of idempotent commands on independent relationship
+fields and same-action set additions/removals. API v5 primary-perek, coverage,
+moed and dedication commands write separate fields. Coordinate and moed sets
+compare independently of item order. A different action/value on the same
+field retains its order, including add/remove/add and replace A/B/A. Unknown
+commands reset this optimization. Other operation kinds and
 other API versions retain their sequence. It never compacts human
 text or evidence; invalid output remains subject to the server's normal checks.
 A disconnected worker can be replaced after lease expiry, with three automatic

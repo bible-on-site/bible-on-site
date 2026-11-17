@@ -206,6 +206,7 @@ function nativeAgentSystem(bundle, schema) {
 		...operationGuideForSchema(bundle, schema),
 		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
 		"Tool records arrays omit only records identical to their latest value already supplied in currentRecords or earlier tool messages. Reuse those earlier values; omission is never deletion. Changed records are supplied again. Text, citations, discussions and page cursors are retained in full.",
+		"Plan source reads from their totals. For a short article that fits a single declared article_text page, request its complete plainTextLength when practical instead of defaulting to a partial 4000-character page. Never claim unread source text was checked.",
 	].join("\n");
 }
 
@@ -232,9 +233,9 @@ function recordDeltas(records, latest) {
 	});
 }
 
-/** API v5 set additions/removals commute within a run of the same action/key.
- * Other known commands only compact adjacent identical repetitions. Never fold
- * add -> remove -> add, replace A -> B -> A, or other change kinds. */
+/** API v5 relationship keys write disjoint article fields. Track repeats per
+ * key, retaining action boundaries and replace A -> B -> A on that same field.
+ * Unknown commands are barriers; other APIs/change kinds are never compacted. */
 function compactArticleCommands(output, apiVersion) {
 	if (apiVersion !== 5) return;
 	const proposals = [
@@ -255,8 +256,7 @@ function compactArticleCommands(output, apiVersion) {
 				!Array.isArray(change.after?.commands)
 			)
 				continue;
-			let previous, group;
-			const seen = new Set();
+			const fields = new Map();
 			change.after.commands = change.after.commands.filter((command) => {
 				if (
 					!object(command) ||
@@ -264,9 +264,7 @@ function compactArticleCommands(output, apiVersion) {
 					!Object.hasOwn(actions, command.relationshipKey) ||
 					!actions[command.relationshipKey].includes(command.action)
 				) {
-					previous = undefined;
-					group = undefined;
-					seen.clear();
+					fields.clear();
 					return true;
 				}
 				const target = { ...command.target };
@@ -288,14 +286,18 @@ function compactArticleCommands(output, apiVersion) {
 					["add", "remove"].includes(command.action) &&
 					Object.keys(target).length === 1 &&
 					Array.isArray(target[field]);
-				const nextGroup = commuting
-					? `${command.relationshipKey}:${command.action}`
-					: undefined;
-				if (!commuting || nextGroup !== group) seen.clear();
-				const duplicate = key === previous || (commuting && seen.has(key));
-				group = nextGroup;
+				const previous = fields.get(command.relationshipKey);
+				const seen =
+					commuting && previous?.action === command.action
+						? previous.seen
+						: new Set();
+				const duplicate = key === previous?.key || (commuting && seen.has(key));
 				if (commuting) seen.add(key);
-				previous = key;
+				fields.set(command.relationshipKey, {
+					key,
+					action: command.action,
+					seen,
+				});
 				return !duplicate;
 			});
 		}
