@@ -2903,6 +2903,8 @@ jobs:
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/app-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
+      - name: Verify browser asset CDN response gate
+        run: node --test devops/github/ci/browser-assets-gate.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
         run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies
