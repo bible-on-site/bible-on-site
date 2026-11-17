@@ -12,4 +12,4 @@
 # The explicit CPU wheel keeps this environment CUDA-free. GPU inference
 # uses the separate requirements-cuda-cu126.txt profile.
 torch==2.15.0
-transformers==5.22.2
+transformers==5.23.0
