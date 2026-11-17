@@ -394,14 +394,19 @@ partial class Build
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
+    // #3444: public debug ELFs are cached here by GNU build ID and reused
+    // across local and CI builds; the workflows restore/save this path.
+    AbsolutePath PublicSymbolCacheDirectory => RootDirectory / ".cache" / "android-native-symbols";
+
     /// <summary>
     /// Produces the Play symbols archive beside a built AAB, then proves the
     /// file on disk — not just the intermediates — meets the contract the
     /// deploy target re-checks before any store write (#2970).
     /// </summary>
-    static void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
     {
-        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip);
+        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip,
+            symbolCacheDir: PublicSymbolCacheDirectory.ToString());
         LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
     }
 

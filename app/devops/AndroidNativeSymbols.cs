@@ -7,9 +7,13 @@ internal static class AndroidNativeSymbols
 {
     private static readonly HttpClient SymbolClient = new();
     internal const int MaximumSymbolBytes = 128 * 1024 * 1024;
+    // #3444: only cold (cache-miss) public downloads may take this long —
+    // a completed transfer returns immediately. Warm cache hits never
+    // reach the network, and every other deadline stays unchanged.
+    internal static readonly TimeSpan ColdDownloadDeadline = TimeSpan.FromSeconds(90);
 
     public static void Create(string sharedLibraries, string bundlePath, string outputPath,
-        Func<string, byte[]?>? findPublicSymbols = null)
+        Func<string, byte[]?>? findPublicSymbols = null, string? symbolCacheDir = null)
     {
         if (File.Exists(outputPath))
         {
@@ -47,7 +51,7 @@ internal static class AndroidNativeSymbols
         // Keep the app-owned sidecar requirement above. Runtime/vendor libraries
         // may carry their own symbol table or publish matching debug ELFs through
         // Microsoft's public, content-addressed SSQP symbol store.
-        AddAvailableSymbols(bundle, symbols, findPublicSymbols);
+        AddAvailableSymbols(bundle, symbols, findPublicSymbols, symbolCacheDir);
 
         // Validate everything before creating an output; never include the
         // assembly-store blob, its manifest, or a stripped library as symbols.
@@ -61,9 +65,10 @@ internal static class AndroidNativeSymbols
     }
 
     private static void AddAvailableSymbols(ZipArchive bundle, List<(string Name, byte[] Data)> symbols,
-        Func<string, byte[]?>? findPublicSymbols)
+        Func<string, byte[]?>? findPublicSymbols, string? symbolCacheDir)
     {
-        var lookup = findPublicSymbols ?? (id => DownloadPublicSymbols(id, SymbolClient).GetAwaiter().GetResult());
+        var fetch = findPublicSymbols ?? (id => DownloadPublicSymbols(id, SymbolClient).GetAwaiter().GetResult());
+        var lookup = (Func<string, byte[]?>)(id => FetchPublicSymbols(id, symbolCacheDir, fetch));
         var covered = symbols.Select(symbol => symbol.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var entry in bundle.Entries.OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
@@ -121,6 +126,63 @@ internal static class AndroidNativeSymbols
     private static bool SupportedPublicBuildId(string id) =>
         id.Length is >= 16 and <= 40 && id.Length % 2 == 0 && id.All(Uri.IsHexDigit);
 
+    /// <summary>
+    /// #3444: public-store downloads are cached by their exact GNU build ID, so
+    /// identical runtime/vendor ELFs are fetched once per SDK/dependency set —
+    /// never once per app commit or version bump. Only files that pass the same
+    /// strict ELF/ABI/size/identity validation as a fresh download enter the
+    /// cache; app-owned .dbg.so sidecars never touch it, so a sidecar can never
+    /// be reused across application builds. Corrupt or mismatched entries are
+    /// evicted and fetched again; misses are never negatively cached.
+    /// </summary>
+    private static byte[]? FetchPublicSymbols(string buildId, string? cacheDir, Func<string, byte[]?> fetch)
+    {
+        string? path = null;
+        if (!string.IsNullOrEmpty(cacheDir))
+        {
+            path = Path.Join(cacheDir, buildId.ToLowerInvariant());
+            if (File.Exists(path))
+            {
+                var cached = File.ReadAllBytes(path);
+                if (ValidPublicSymbols(cached, buildId))
+                {
+                    return cached;
+                }
+                File.Delete(path);
+            }
+        }
+        var debug = fetch(buildId);
+        if (debug is null)
+        {
+            return null;
+        }
+        if (!ValidPublicSymbols(debug, buildId))
+        {
+            throw new InvalidDataException("Public native symbols do not match the requested ELF build ID");
+        }
+        if (path is not null)
+        {
+            Directory.CreateDirectory(cacheDir!);
+            var temp = path + ".tmp";
+            File.WriteAllBytes(temp, debug);
+            File.Move(temp, path, overwrite: true);
+        }
+        return debug;
+    }
+
+    private static bool ValidPublicSymbols(byte[] bytes, string buildId)
+    {
+        if (bytes.Length == 0 || bytes.Length > MaximumSymbolBytes)
+        {
+            return false;
+        }
+        try
+        {
+            return ReadBuildId(bytes, true).Equals(buildId, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (InvalidDataException) { return false; }
+    }
+
     internal static async Task<byte[]?> DownloadPublicSymbols(string buildId, HttpClient client)
     {
         if (!SupportedPublicBuildId(buildId))
@@ -130,7 +192,7 @@ internal static class AndroidNativeSymbols
         // Microsoft's SSQP ELF symbol key, also used by dotnet-symbol/PerfView:
         // https://github.com/microsoft/perfview/blob/main/src/TraceEvent/Symbols/SymbolReader.cs
         var uri = new Uri($"https://msdl.microsoft.com/download/symbols/_.debug/elf-buildid-sym-{buildId.ToLowerInvariant()}/_.debug");
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var deadline = new CancellationTokenSource(ColdDownloadDeadline);
         using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -154,7 +216,7 @@ internal static class AndroidNativeSymbols
             output.Write(buffer, 0, read);
         }
         var symbols = output.ToArray();
-        if (!ReadBuildId(symbols, requireSymbols: true).Equals(buildId, StringComparison.OrdinalIgnoreCase))
+        if (!ValidPublicSymbols(symbols, buildId))
         {
             throw new InvalidDataException("Public native symbols do not match the requested ELF build ID");
         }

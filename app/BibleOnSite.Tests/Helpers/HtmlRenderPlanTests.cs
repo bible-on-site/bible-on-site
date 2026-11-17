@@ -163,6 +163,45 @@ public class HtmlRenderPlanTests
         }
     }
 
+    public class QuoteBlocks
+    {
+        [Fact]
+        public void quote_paragraph_becomes_a_quote_block()
+        {
+            var plan = HtmlRenderPlan.Build("<p>א</p><blockquote><p>ב</p></blockquote><p>ג</p>", rtl: false, 1, 1, 1);
+            plan.Text.Should().Be("א\nב\nג");
+            var block = plan.QuoteBlocks.Should().ContainSingle().Subject;
+            (block.Start, block.End, block.Depth).Should().Be((2, 4, 1));
+            plan.Text[block.Start..block.End].Should().Be("ב\n");
+        }
+
+        [Fact]
+        public void rtl_mark_shifts_quote_blocks_by_one()
+        {
+            var plan = HtmlRenderPlan.Build("<blockquote><p>ב</p></blockquote>", rtl: true, 1, 1, 1);
+            var block = plan.QuoteBlocks.Should().ContainSingle().Subject;
+            plan.Text[block.Start..block.End].Should().Be("ב");
+            block.Start.Should().Be(1);
+        }
+
+        [Fact]
+        public void nested_quotes_carry_their_depth()
+        {
+            var plan = HtmlRenderPlan.Build(
+                "<blockquote><p>א</p><blockquote><p>ב</p></blockquote></blockquote>",
+                rtl: false, 1, 1, 1);
+            plan.QuoteBlocks.Should().HaveCount(2);
+            plan.QuoteBlocks[0].Depth.Should().Be(1);
+            plan.QuoteBlocks[1].Depth.Should().Be(2);
+        }
+
+        [Fact]
+        public void no_quote_markup_means_empty_quote_blocks()
+        {
+            HtmlRenderPlan.Build("<p>א</p>", rtl: false, 1, 1, 1).QuoteBlocks.Should().BeEmpty();
+        }
+    }
+
     public class HeadingScales
     {
         [Fact]

@@ -5,7 +5,10 @@ export default defineConfig({
 	resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
 	test: {
 		environment: "node",
-		include: ["tests/integration/contributions-mysql.test.ts"],
+		include: [
+			"tests/integration/contributions-mysql.test.ts",
+			"tests/integration/contribution-article-links-mysql.test.ts",
+		],
 		fileParallelism: false,
 		coverage: {
 			provider: "v8",

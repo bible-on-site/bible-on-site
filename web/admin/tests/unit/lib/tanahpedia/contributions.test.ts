@@ -22,10 +22,39 @@ import {
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
+it("requires a separate PR for an article aggregate and any other domain operation", () => {
+	expect(() =>
+		validateChanges([
+			{
+				kind: "article_links",
+				targetId: "27",
+				after: {
+					commands: [
+						{
+							relationshipKey: "primaryPerek",
+							action: "replace",
+							target: { perekId: 1 },
+						},
+					],
+				},
+			},
+			{ kind: "metadata", targetId: ID, after: { displayName: "Name" } },
+		]),
+	).toThrow("one article aggregate");
+});
 it.each([
 	{ kind: "other" },
 	{ state: "merged" },
 	{ assignee: "other" },
+	{ kind: ["issue"] },
+	{ kind: ["pr"] },
+	{ state: ["open"] },
+	{ state: ["all"] },
+	{ assignee: ["human"] },
+	{ assignee: ["local_llm"] },
+	{ kind: null },
+	{ state: {} },
+	{ assignee: true },
 	{ before: 0 },
 	{ before: 1.5 },
 	{ before: "3" },
@@ -380,6 +409,54 @@ describe("contribution input validation", () => {
 });
 
 describe("PR approval rule", () => {
+	it.each(["queued", "running"] as const)(
+		"blocks merging an approved PR while its assigned agent is %s",
+		(status) => {
+			const item = pr();
+			item.author = doradsoft;
+			item.assignee = { kind: "local_llm", agentId: OTHER };
+			item.generation = {
+				id: ID,
+				status,
+				requestedAt: "now",
+				requestedBy: "editor",
+				attempts: 0,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				leaseExpiresAt: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			expect(reviewStatus(item)).toBe("exempt");
+			expect(() => assertMergeAllowed(item)).toThrow("assigned agent pass");
+			item.assignee = { kind: "unassigned" };
+			expect(() => assertMergeAllowed(item)).not.toThrow();
+			item.assignee = { kind: "aws_llm" };
+			for (const finished of [
+				"completed",
+				"needs_input",
+				"failed",
+				"cancelled",
+			] as const) {
+				item.generation.status = finished;
+				expect(() => assertMergeAllowed(item)).not.toThrow();
+			}
+		},
+	);
+	it("preserves registered agent IDs and rejects malformed assignment IDs", () => {
+		expect(validateAssignee({ kind: "aws_llm", agentId: OTHER })).toEqual({
+			kind: "aws_llm",
+			agentId: OTHER,
+		});
+		expect(() =>
+			validateAssignee({ kind: "local_llm", agentId: "unsafe" }),
+		).toThrow("agentId");
+	});
 	it("requires doradsoft approval and never trusts a display name", () => {
 		const item = pr();
 		item.author.name = "doradsoft";

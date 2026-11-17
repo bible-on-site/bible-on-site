@@ -13,9 +13,10 @@ vi.mock("@tanstack/react-router", () => ({
 		children?: React.ReactNode;
 		to?: string;
 		className?: string;
+		onClick?: () => void;
 		[key: string]: unknown;
 	}) => (
-		<a href={props.to} className={props.className}>
+		<a href={props.to} className={props.className} onClick={props.onClick}>
 			{props.children}
 		</a>
 	),
@@ -73,6 +74,22 @@ describe("TopBar", () => {
 		).not.toBeInTheDocument();
 		expect(
 			screen.queryByRole("button", { name: "יציאה מהחשבון" }),
+		).not.toBeInTheDocument();
+	});
+	it("keeps one navigation menu and closes it after following a link", () => {
+		renderBar(false);
+		const toggle = screen.getByRole("button", { name: "פתיחת תפריט הניווט" });
+		expect(toggle).toHaveAttribute("aria-expanded", "false");
+		fireEvent.click(toggle);
+		expect(toggle).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getAllByRole("link", { name: "מאמרים" })).toHaveLength(1);
+		fireEvent.click(screen.getByRole("link", { name: "מאמרים" }));
+		expect(toggle).toHaveAttribute("aria-expanded", "false");
+		expect(
+			screen.queryByRole("link", { name: "פניות ושינויים" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "הצעות קישור" }),
 		).not.toBeInTheDocument();
 	});
 

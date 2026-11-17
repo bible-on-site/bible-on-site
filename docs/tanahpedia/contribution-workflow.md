@@ -4,12 +4,16 @@ Implementation scope: GitHub/GitLab-inspired issue and pull-request queues in th
 Tanahpedia admin. Issues support unassigned, human, AWS LLM, and local LLM
 assignees. Assignment, authorship, and review are separate identities.
 
-The user extended the original 30-hour work window by 10 hours after an
-interruption. The revised deadline is **2026-11-15 06:10 UTC**, or **08:10 in
-Asia/Jerusalem**. This supersedes the original deadline in the active goal text.
+The user extended the original 30-hour work window by 10 hours, then explicitly
+continued the task through production verification after that window ended.
 
 ## Decisions
 
+- The admin home opens the issue queue directly, with a second tab for PRs.
+  The welcome promotion and duplicate navigation cards are removed. Bookmarks
+  under `/issues` and `/pull-requests` redirect to home while retaining their
+  discussion ID and filters. The header keeps brand, navigation and logout in
+  one desktop row; narrow screens use one accessible expandable menu.
 - Issues describe a problem; PRs carry evidence and typed operations. The
   description and changes have separate tabs. Diffs show domain fields,
   family relationships, and coordinates rather than source files.
@@ -37,8 +41,19 @@ Asia/Jerusalem**. This supersedes the original deadline in the active goal text.
 - PERSON display-name changes also update MAIN person names. Their reviewed
   values participate in conflict checks and appear in the diff, so independent
   name edits cannot be silently overwritten.
-- LLM assignment does not itself execute a model or merge changes. Generation
-  is explicit, and model output passes the same typed validation as human input.
+- Assigning an LLM queues implementation of an issue or review-comment handling
+  on the same PR. New human comments trigger another pass. Model output passes
+  the same typed validation as human input and cannot approve or merge changes.
+- A valid agent lease may receive fixed, typed feedback for invalid current-call
+  read arguments. Rejected reads supply no receipt, catalogue entries or output
+  schema. Auth, stale context, prior-receipt replay, linked-PR authority and
+  storage failures remain fatal. Local and AWS agents may correct their own
+  arguments within the original deadline; the server never retargets a call.
+- Issues can optionally select a change kind and an existing target. The model's
+  issue implementation is constrained to that scope, and its dynamic context
+  includes the canonical target and read locators. Free-form issues remain
+  available. Scope is versioned with the issue; it does not override a human's
+  later feedback on an existing PR.
 - Family relationship choices come from the existing family API contract:
   biological/adoptive/step/foster parenthood and marriage/pilegesh/
   forbidden-with-gentile/banned-incest/betrothal unions. They share one Family
@@ -53,7 +68,7 @@ Local structured generation follows [Ollama structured outputs](https://docs.oll
 ## Supported changes
 
 All additional category types reviewed by the user are included. The current
-contract has 45 operation kinds; family choices use the nine existing API types.
+contract has 46 operation kinds; family choices use the nine existing API types.
 
 | Category | Structured changes |
 | --- | --- |
@@ -71,6 +86,7 @@ contract has 45 operation kinds; family choices use the nine existing API types.
 | Books | Match to an existing canonical biblical book |
 | Entry identity | Existing entry title, entry/entity links, complete alias target sets and disambiguation labels |
 | Sources | Entity/verse/segment links; scripture/commentary or bibliographic references attached to existing entities, entries or structured facts |
+| Article links | Primary chapter, verse coverage, dedication assignments with UTC expiry, and existing moed links |
 | Assets | Existing 3D asset key, format and label; no upload or access-policy change |
 | New entries | Empty entry and linked subtype for all 13 creatable entity types |
 
@@ -89,6 +105,39 @@ owner when edited. Competing facts can share an alternative-group identifier and
 carry separate evidence. Moving one source preserves other citations sharing its
 old source group.
 
+## Article links
+
+Article links use the ordinary home PR queue, evidence, visual diff and owner
+review gate. One PR groups commands for one article; unrelated targets use
+separate PRs. Add/remove intents retain unrelated links when the current base
+refreshes. The composer previews one selected article without loading its prose.
+The queue's deterministic discovery form reuses the existing citation matcher;
+repeated discovery opens its existing PR. Local agents can read complete source
+text through the paged `article_text` tool and propose the same operation kind.
+
+Existing proposals retain immutable original rows, review decisions, generator
+metadata and evidence in their import audit. Active proposals require ordinary
+owner review; historical applied/rejected proposals remain historical. Invalid
+or unsupported sequences become gray PRs with raw recovery in the same record.
+Technical origin metadata stays out of the generated description and quote.
+Structured article evidence binds exact UTF-16 spans and source hashes; a content
+refresh relocates only an unambiguous surviving quote. Editing its quote manually
+clears the previous structured anchor while retaining the original audit.
+
+The legacy write fence uses an in-place rename of physical `status` to
+`legacy_status`, followed by a virtual compatibility `status` that masks approved
+rows as stale. The rename waits for earlier legacy transactions before retiring
+the old apply path; interrupted initialization resumes the missing virtual column.
+Original status remains available for audit. Retain this fence on rollback:
+old legacy approval/apply writes fail closed. Ordinary article editing and public
+URLs remain available. The migration needs `ALTER`, with no trigger/SUPER grant.
+
+Article merges record durable intent before their guarded API call and finish
+dedication changes with the local merged marker. An interrupted response can
+resume without repeating satisfied writes; typed repair captures the actual
+current state and requires review under normal content rules. Deploy the additive
+API coverage precondition before API5 admin merges; old API callers remain valid.
+
 Alias changes review the complete destination set, including labels. These
 operations can explicitly change public alias routing after approval and merge;
 they cannot rename an existing alias in place or replace a canonical entry URL.
@@ -98,8 +147,19 @@ The feature deployment itself preserves existing public and crawled URLs.
 
 The queues are `/issues` and `/pull-requests` in the existing authenticated admin.
 The four assignee kinds remain available even when a model is not configured.
-Assignment never spends inference tokens. The explicit generation button uses
-the issue's saved assignee, evidence, discussion and matching catalogue records.
+Assigning an enabled agent queues durable work: an issue assignment implements
+the issue as reviewable PRs; a PR assignment reads its current state and resolves
+feedback in that same PR. Human comments, requests for changes, authored edits
+and reopening automatically queue another pass. Agent responses do not trigger
+themselves. Missing model configuration, disabled agents or insufficient evidence
+remain visible as needing input; they do not discard the discussion.
+
+An active assigned pass blocks merging until it finishes or the PR is unassigned.
+Assignment and response-only passes preserve approval. A pass that changes the
+proposal creates a model-authored revision and requires owner review. Original
+comments stay immutable; responses reference their exact comment IDs and record
+whether they were addressed or need input. Existing linked proposals are visible
+to issue agents so completed work can be acknowledged without duplicate PRs.
 Model-facing target records label existing values as `current`; proposed changes
 use `after`. The prompt explains each available operation and illustrates a title
 replacement. A creation at an occupied canonical address fails validation before
@@ -125,16 +185,41 @@ Run Ollama with `qwen3:8b`, sign into the existing AWS SSO profile, then run
 `node devops/contribution-worker.mjs --watch`. The worker defaults to the
 production admin and `AdministratorAccess-250598594267`. Use `--once` for one
 job, `--issue <UUID>` to select an issue, or `--origin http://localhost:3102 --dev`
-for an explicitly local preview. `--model` and `--ollama` select another local
-model or inference endpoint. The user requested automatic startup at Windows
+for an explicitly local preview. `--ollama` selects the local inference endpoint;
+`--model` supplies the legacy generation fallback. Assignment-driven runs use
+their registered model, which is changed on the Agents page. The user requested automatic startup at Windows
 sign-in; its launcher lives outside the repository so archiving this worktree
 does not remove it.
 
-The explicit local generation button saves a durable queue request. Workers
-claim one issue using a three-minute hashed lease, run inference under the
-existing two-minute deadline, and submit output for server validation. A changed
-issue, assignment, API contract or catalogue rejects the result. PR creation and
+Assignment saves the queue request in the same transaction as the discussion
+change. An explicit rerun remains available for recovery. Local workers claim
+one issue or PR using a three-minute hashed lease, run inference under the
+existing two-minute deadline, and submit output for server validation. AWS
+assignments use the same protocol through a serial background runtime. A changed
+discussion, assignment, agent configuration, API contract or read catalogue
+rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
+Runtime v5 introduced Ollama's native read functions and assistant/tool messages;
+the current runtime v6 retains that transport. Once research ends, one separate request receives the
+complete constrained result schema. This avoids losing schema constraints in
+Ollama's native function-parameter representation. Both phases share the existing
+120-second execution deadline, 16K context and 4,096-token output limit; reads
+still pass through the same server lease, identity and receipt validation.
+Native turns reuse model residency and prefix cache during one job. Their memory
+idle TTL is bounded by the remaining original deadline at dispatch; Ollama starts
+that TTL after responding, so it is a crash fallback, not an absolute expiry.
+After completion/failure acknowledgement, the worker sends an empty unload
+request for the configured model, using the existing 30-second I/O bound and an
+independent cleanup signal. A release warning preserves the primary outcome;
+the acknowledgement confirms a request, not immediate physical memory release.
+Legacy protocol 1 still unloads after each response. The change avoids measured
+repeated model loading/prefill without extending inference or adding retries.
+Every native read batch still executes against the server and retains its real
+receipts/history. A whole batch repeating the latest identical arguments, data
+and schema moves directly to the single final generation. Before another research
+request, 45 seconds or less remaining also selects that final phase. This is a
+soft reserve within the original deadline; it neither cancels nor extends an
+in-flight request. Changed data or schema remains new information.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
@@ -142,9 +227,11 @@ editing or reassigning the issue. Background job refreshes preserve unsaved draf
 The worker reads the existing service client's credentials in memory through
 AWS SSO and requests only `admin-api/contributions`. It retains a short-lived
 access token and never copies the service secret to disk. This scope only grants
-claim, complete and fail endpoints; ordinary `admin-api/service` tokens and
+claim, bundle/context reads, complete and fail endpoints; ordinary `admin-api/service` tokens and
 browser cookies cannot authenticate them. Worker tokens cannot review, merge or
 use the general admin API. Logs omit evidence, prompts, tokens and lease secrets.
+Malformed JSON from a model, context, worker endpoint or token response produces
+a fixed diagnostic, without a parser snippet or retained raw error cause.
 Expired SSO requires another AWS sign-in; queued issues remain saved meanwhile.
 The user chose to keep reusing AWS SSO rather than maintain a separate worker
 credential; refreshing that existing session lets the watch worker resume.
@@ -181,14 +268,59 @@ correct v4 title edit on the same issue: approximately 7.5 seconds of inference,
 with the unchanged 120-second deadline and 16K context. The visual diff showed
 the requested replacement, model authorship and the mandatory owner review.
 That synthetic PR and issue were closed without applying content. The worker now
-defaults to this tested 8B model; `--model` or `LOCAL_LLM_MODEL` can override it.
-Each worker request unloads the model on completion, returning its memory to the
-workstation between jobs instead of retaining an idle model while other apps run.
+defaults to this tested 8B model. `LOCAL_LLM_MODEL` sets the default for new local
+registrations; existing registered model choices survive CD and are edited in admin.
+The current worker reuses model residency during one job and requests unloading
+after its completion/failure acknowledgement, returning memory between jobs.
+Legacy protocol 1 retains its per-response unload behavior.
+
+## Agent versions and context
+
+`/contribution-agents` registers named configurations on the existing local or AWS
+runtime. Registration does not install executable packages. The provider, model
+and enabled setting are persisted independently from the released instructions
+and tool declarations. Default local/AWS configurations preserve the four
+existing assignment choices. Configuration changes use optimistic versions;
+editing a stale management screen cannot overwrite a concurrent update.
+
+Each release builds an immutable, content-hashed instruction/tool bundle with its
+own monotonically increasing version, separate from the contribution API version.
+CD refreshes registered agents; registration and the admin update action select
+the latest known bundle. Provider/model choices survive that refresh. Historical
+bundles remain available for audit, and every queued run records its agent
+configuration version and bundle hash. An older process cannot downgrade a newer
+registration. Reusing one release version for different bundle content fails
+closed; instruction or tool changes require a new bundle version.
+
+Dynamic context is refreshed for each run rather than baked into that bundle.
+The initial context includes the current issue/PR, evidence, operation sequence,
+review and API/comparison state, linked issue and related proposal index. Read
+tools provide explicit pages of complete discussion and immutable history,
+related PRs, catalogue searches and exact current records. Pages expose totals
+and continuation cursors instead of silently dropping older comments. The model
+can retrieve all relevant dynamic context within the existing inference deadline
+and context window; the complete database is not inserted into every prompt.
+Completion rechecks context fingerprints and tool-read records so concurrent
+changes cannot silently apply a stale result. The final transaction locks the
+linked issue and its related proposals before validating that context, retaining
+those locks through completion. Merging a linked PR uses the same issue-first
+order. Compatibility filtering runs before candidate pagination, so older
+incompatible work cannot hide a supported assignment later in the queue.
+
+Updating a configuration or bundle replaces incompatible pending work without
+changing the proposal's review revision. During a rolling deployment, a server
+only claims and executes bundles/API versions it implements exactly; older
+servers leave newer work intact. Protocol-1 issue generation remains available
+only for legacy task records. It cannot claim assignment-driven protocol-2 jobs.
+For the initial protocol-2 rollout, pause existing workstation workers before
+deploying admin: pre-feature servers do not recognize the new job envelope.
+Wait until the old admin tasks have drained, then upgrade and resume the worker
+and verify a fresh assignment and comment pass. Retain the previous worker file.
 
 ## API evolution
 
-The merge operation contract is currently version 4, independently of package or
-release versions. Versions 1, 2 and 3 are retained in migration history. `convertApiVersion`
+The merge operation contract is currently version 5, independently of package or
+release versions. Versions 1 through 4 are retained in migration history. `convertApiVersion`
 and its asynchronous counterpart compose explicit directed adapters through
 intermediate versions. Register reverse adapters when a reverse route is needed;
 no reverse transformation is inferred. Retain historical adapters for PRs that
@@ -217,6 +349,80 @@ approval.
 The v3-to-v4 adapter adds existing-entry title operations without changing saved
 sequences or approvals. Resolving a creation to an existing entry belongs to the
 content-rebase path, which creates a new revision and requires renewed review.
+
+The explicit v4-to-v5 identity adapter adds article-link operations while keeping
+existing sequences and approvals intact. Agent instructions/tools advance
+independently to bundle v10; the worker protocol remains v2.
+
+Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
+used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
+This fixes an observed unsupported `source` lookup without broadening read authority.
+Chapter lookup uses `perek`; verses remain integer coordinates within a chapter.
+Exact `currentRecords` and supplied referenced IDs already count as completed reads,
+so agents reuse them and fetch only missing records or paged article text. API v5,
+the native worker transport and its existing execution deadline are unchanged.
+
+Bundle v6 uses the shared scripture catalogue to resolve Hebrew and legacy Arabic
+chapter references deterministically. Search and exact reads return the same plain
+Hebrew labels, including split-book letters. Full verse references are checked
+against known verse bounds; ambiguous book parts remain separate results. Book-only
+and free-text searches retain pagination. Exact reference validation locks only the
+chapter, book and additional-letter rows, without unrelated calendar joins.
+
+Bundle v7 adds deterministic citation candidates to `article_text`, using the
+existing discovery matcher over the same complete plaintext. Returned coordinates
+are integers with exact source quotes, absolute UTF-16 spans and source hashes;
+ambiguous citations remain held. Candidates overlap the requested text window,
+including references crossing its boundary, and have independent bounded
+`citationCursor`/`citationLimit` pagination with explicit total/nextCursor. Both
+resolved and identifiable held chapter dependencies join the current read receipts,
+so changed bounds or book parts invalidate completion. These candidates guide
+literal reference handling without removing reviewed semantic-link proposals.
+
+Bundle v8 clarifies exact quotation intent: human-requested verbatim text is
+copied without translation, paraphrase, spelling corrections or Unicode/whitespace
+normalization, while unrequested fields are retained. Runtime, read tools and
+operation schemas are unchanged from v7.
+
+Bundle v9 retains exact quotation handling and tells agents to finalize from the
+verified context when research repeats unchanged information or the transport
+reserves the remaining time for its final answer. Missing evidence still yields
+clarification. This does not extend the existing execution deadline or change the
+read tools, typed operations or approval rules.
+
+Bundle v10 enforces the current agent policy on the server and in the decoder:
+new verse-article coverage additions/replacements require explicit, resolved literal
+citations from that exact article. Ranges expand deterministically; chapter constants
+and chapter-specific verse lists preserve coordinate pairs without a large repeated
+schema. Meaning-only links are deferred until explicit citations are exhausted;
+there is no semantic fallback. This applies to modern workers, retained issue
+generation and retained discovery models. Source hashes and chapter fingerprints
+are rechecked under current locks before any proposal/revision/checkpoint writes.
+Existing canonical links and the current PR's prior sequence can be retained;
+removal/clear and other link metadata keep their normal validation, and human
+manual proposals remain independent. Retained discovery advances to linking-v3
+and retained issue generation to tanahpedia-issues-v4; historical proposals and
+heuristic-v1 checkpoints are preserved.
+
+For clear human requests to append/replace an exact quotation in a named title or
+description, v10 derives an exact field constraint from pending human comments.
+Both the decoder and final transaction enforce the original bytes, and a false
+addressed response is rejected before a revision is saved. Constrained agent
+fields preserve whitespace/Unicode while retaining existing size/nonblank checks.
+An addressed response to a recognized exact-copy request uses one fixed Hebrew
+acknowledgement, enforced by the decoder, parser and final transaction. The model
+cannot paraphrase the quotation in that acknowledgement; needs-input responses
+and unrelated comments retain their ordinary text. Existing audit text is never rewritten.
+Unclear, conflicting, negative or critical quotations stay outside this narrow
+mechanism; evidence and model-authored text cannot grant edit authority. Manual
+human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
+
+The current bundle v11 and worker runtime v6 retain API v5, protocol v2, literal
+article-link grounding and exact-copy enforcement. They add fixed, typed feedback
+for invalid arguments in the current read call, after the normal identity, lease
+and context checks. A rejected read supplies no receipt, records or result schema.
+Local and AWS agents can correct those arguments within the original execution
+deadline; authentication, stale-context, replay and storage failures remain fatal.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
@@ -310,13 +516,14 @@ the merge path; a native concurrent-write regression checks that order.
 
 ## Deployment and rollback
 
-`tanahpedia_contribution_upgrade.sql` adds one InnoDB table and two queue indexes.
+`tanahpedia_contribution_upgrade.sql` adds the contribution table, two queue
+indexes, an agent registry and immutable instruction/tool bundle storage.
 It is idempotent and leaves all existing content, schema, and public URLs intact.
-The admin also safely ensures its owned table outside application transactions,
+The admin also safely ensures its owned tables outside application transactions,
 matching the existing proposal queue pattern. Issue/PR state and domain changes
 commit atomically on merge. Evidence and reviewed before/after values are retained.
 
-Roll back the admin image to disable the new screens while retaining this table;
+Roll back the admin image to disable the new screens while retaining these tables;
 do not drop review history. A content merge is corrected using a new reviewed
 inverse change based on the current state, rather than rewriting its audit record.
 Rolling back across a contract change requires an explicit reverse adapter;
@@ -325,12 +532,25 @@ upgrade/recovery path is restored. Existing public routes are preserved by the
 deployment; later reviewed alias or new-entry operations have the effects shown
 in their domain diffs.
 
-For configuration rollback, restore the prior writable Cognito client/resource
-settings from the private receipt and redeploy the prior admin task definition.
-After a later `latest` image publication, register its saved definition with the
-saved running image digest instead of relying on the mutable tag. Stop the local
-worker before removing its scope. Existing general admin service access remains
-unchanged because its original scope and client settings are preserved.
+For a rollback between version-aware agent releases, stop the newer workstation
+worker and restore its previous executable before starting it again. Retain
+registry, bundles and queued jobs. Version-aware servers skip unsupported bundles
+instead of downgrading registrations or executing newer work; restore the matching
+admin/worker release to resume it. Rolling back to the pre-feature admin
+`0.1.195` requires keeping contribution automation and workstation workers paused
+until protocol 2 is restored: that older image lacks these task gates. Do not
+resume old generation or merge agent-assigned proposals on that image while new
+jobs remain pending. Existing public content remains available during this pause.
+This release creates no new IAM grants, Cognito clients or public content routes.
+
+For configuration rollback, first re-read the healthy current task definition and
+Cognito client/resource settings. Restore only the settings changed by this
+configuration operation, using its private receipt and a fresh task-definition
+clone that preserves the current image references and runtime settings. The saved
+running image digest records provenance; a configuration rollback does not restore
+older application bytes. A binary rollback uses the normal reviewed release path
+and the protocol compatibility checks above. Stop the local worker before removing
+its scope. Preserve the original general admin service scope and client settings.
 
 Validation tasks: `bun run test:unit`, `bun run coverage:unit`,
 `bun run coverage:contributions:mysql`, `bun run lint`, and `bun run build` in

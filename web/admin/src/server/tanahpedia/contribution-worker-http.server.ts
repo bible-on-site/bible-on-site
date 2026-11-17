@@ -5,6 +5,8 @@ import {
 	claimContributionGeneration,
 	completeContributionGeneration,
 	failContributionGeneration,
+	getContributionWorkerBundle,
+	readContributionWorkerContext,
 } from "./contribution-worker.server";
 
 class WorkerRequestError extends Error {}
@@ -77,10 +79,18 @@ export async function handleContributionWorkerRequest(
 	)
 		return new Response("Unauthorized", { status: 401, headers });
 	const action = url.pathname.slice("/api/contributions/worker/".length);
-	if (!["claim", "complete", "fail"].includes(action))
+	if (!["claim", "complete", "fail", "bundle", "context"].includes(action))
 		return new Response("Not found", { status: 404, headers });
 	try {
 		const input = await workerBody(request);
+		if (action === "bundle")
+			return Response.json(await getContributionWorkerBundle(input), {
+				headers,
+			});
+		if (action === "context")
+			return Response.json(await readContributionWorkerContext(input), {
+				headers,
+			});
 		if (action === "claim") {
 			const job = await claimContributionGeneration(input);
 			return job

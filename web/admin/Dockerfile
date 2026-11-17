@@ -20,12 +20,25 @@ ENV NODE_ENV=production
 # Distinct from the runtime VITE_WEBSITE_URL, which names the cluster-internal
 # revalidation endpoint (#2763).
 ENV VITE_PUBLIC_WEBSITE_URL=https://xn--febl3a.co.il
+
+# Optional assets CDN origin (ASSETS_BASE_URL), matching the website image.
+# Empty/unset preserves the direct S3 fallback; see
+# docs/aws/s3-delivery-cost-2026-11-01.md.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
+
 RUN bun run build
 
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# Same baked default as the website runner: server code reads
+# ASSETS_BASE_URL at request time, and a task-definition environment
+# entry can still override it.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
 
 RUN apk add --no-cache curl~=8
 

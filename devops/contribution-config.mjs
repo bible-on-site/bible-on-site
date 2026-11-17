@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { pathToFileURL } from "node:url";
 import { writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+
 const execute = promisify(execFile);
 // Public account identifier used to reject configuration in the wrong account.
 const ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
@@ -153,7 +154,9 @@ export async function configureContributions({
 						timeout: 30000,
 						maxBuffer: 2097152,
 						windowsHide: true,
-						env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+						// AWS CLI v2 ignores Python encoding variables. ECS task
+						// definitions include Hebrew labels on Windows as well.
+						env: { ...process.env, AWS_CLI_OUTPUT_ENCODING: "UTF-8" },
 					},
 				);
 				return stdout.trim() ? JSON.parse(stdout) : {};

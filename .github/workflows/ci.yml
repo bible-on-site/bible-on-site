@@ -749,6 +749,9 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Dockerize Admin
+        env:
+          # Browser-facing asset CDN opt-in (#2576); unset/empty keeps S3 URLs.
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           docker buildx build --load \
             --platform linux/amd64 \
@@ -757,6 +760,7 @@ jobs:
             --progress=plain \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            --build-arg ASSETS_BASE_URL="$BROWSER_ASSETS_BASE_URL" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
@@ -836,6 +840,9 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Dockerize Admin
+        env:
+          # Browser-facing asset CDN opt-in (#2576); unset/empty keeps S3 URLs.
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           docker buildx build --load \
             --platform linux/arm64 \
@@ -844,6 +851,7 @@ jobs:
             --progress=plain \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            --build-arg ASSETS_BASE_URL="$BROWSER_ASSETS_BASE_URL" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
@@ -2421,7 +2429,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "17"
+          java-version: "25"
           verify-signature: true
 
       - name: Setup Python for recitation extension packaging
@@ -2450,7 +2458,7 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg
@@ -2506,6 +2514,17 @@ jobs:
           path: app/.artifacts/aab-size-report.json
           if-no-files-found: error
 
+      # #3444: public debug ELFs are cached on disk by GNU build ID. The save
+      # key is a hash of the cache contents, so a new immutable entry is only
+      # created when the downloaded symbol set changes — never per app commit
+      # or version bump. Identical builds reuse the restored entry.
+      - name: Restore public native symbol cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1
+          restore-keys: android-native-symbols-v1-
+
       # #2970: the release packaging job is master-only. Exercise the real
       # symbols path here — produce the archive from this build's
       # app_shared_libraries and validate it against the AAB just built, so a
@@ -2515,6 +2534,12 @@ jobs:
           dotnet run --project devops -- PackageAndroidSymbols --configuration Release \
             --aab-path "$(realpath "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)")" \
             --android-symbols-path "$RUNNER_TEMP/native-symbols.zip"
+
+      - name: Save public native symbol cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1-${{ hashFiles('app/.cache/android-native-symbols/*') }}
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
@@ -2861,6 +2886,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "26.13.1"
+      - name: Install CI policy and storage test dependencies
+        run: bun install --cwd devops --frozen-lockfile
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -2877,11 +2904,9 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/app-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
         run: bun test devops/daily-bulletin-infra.test.mjs
-      - name: Install storage test dependencies
-        run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: |
@@ -3918,7 +3943,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
