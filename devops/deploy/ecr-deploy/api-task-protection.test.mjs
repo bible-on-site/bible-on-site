@@ -496,9 +496,9 @@ for (const [name, describe] of [
 		}),
 	],
 	[
-		"stopping task",
+		"pending task",
 		() => ({
-			tasks: [{ ...stoppedTask(), lastStatus: "STOPPING" }],
+			tasks: [{ ...stoppedTask(), lastStatus: "PENDING" }],
 			failures: [],
 		}),
 	],
@@ -607,3 +607,30 @@ test("running-task errors and an invalid clear receipt never adopt a retired mar
 		false,
 	);
 });
+
+for (const status of ["DEACTIVATING", "STOPPING", "DEPROVISIONING"]) {
+	for (const stage of ["read", "write", "verify"]) {
+		test(`an acknowledged clear accepts owned task ${status} during marker ${stage}`, async () => {
+			const { aws, lease } = retiredTaskFixture(stage, () => ({
+				tasks: [{ ...stoppedTask(), lastStatus: status }],
+				failures: [],
+			}));
+			await lease.grant();
+			await lease.release();
+			assert.equal(lease.clearConfirmed, true);
+			assert.equal(lease.released, true);
+			assert.equal(aws.protected, false);
+			const event = aws.events.find(
+				(row) => row.name === "protection-marker-retiring",
+			);
+			assert.equal(event.value.lastStatus, status);
+			assert.equal(
+				aws.calls.filter(
+					(row) =>
+						row.name === "UpdateTaskProtection" && !row.input.protectionEnabled,
+				).length,
+				1,
+			);
+		});
+	}
+}

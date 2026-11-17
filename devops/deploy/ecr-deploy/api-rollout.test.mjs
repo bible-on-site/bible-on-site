@@ -484,3 +484,80 @@ test("the source grant must cover both existing rollout and recovery windows wit
 		1,
 	);
 });
+
+for (const status of ["DEACTIVATING", "STOPPING", "DEPROVISIONING"]) {
+	test(`marker rejection during ${status} still waits for terminal drain before completing rollout`, async () => {
+		const f = fixture();
+		f.backend.hook = async (name, input) => {
+			if (
+				name === "ListTagsForResource" &&
+				input.resourceArn === f.backend.old.taskArn &&
+				f.backend.releasedAt !== null
+			) {
+				f.backend.old.lastStatus = status;
+				f.backend.old.desiredStatus = "STOPPED";
+				throw Object.assign(new Error("The specified task is stopped"), {
+					name: "InvalidParameterException",
+				});
+			}
+		};
+		const result = await runAPIRollout(f);
+		assert.equal(result.protectionReleased, true);
+		assert.equal(f.backend.old.lastStatus, "STOPPED");
+		assert.equal(f.backend.updates, 1);
+		assert.ok(result.elapsedMs >= f.backend.releasedAt + 5000 + LIMITS.cache);
+		assert.ok(result.elapsedMs < LIMITS.overall);
+		assert.ok(
+			f.backend.records.some(
+				(row) =>
+					row.name === "protection-marker-retiring" &&
+					row.value.lastStatus === status,
+			),
+		);
+		assert.equal(
+			f.backend.records.some(
+				(row) =>
+					row.name === "rollout-failed" || row.name === "recovery-started",
+			),
+			false,
+		);
+		assert.equal(
+			f.backend.calls.some((row) => row.name === "StopServiceDeployment"),
+			false,
+		);
+	});
+}
+
+test("an acknowledged retiring marker cannot complete a rollout before the old task stops", async () => {
+	const f = fixture();
+	const evolve = f.backend.evolve.bind(f.backend);
+	f.backend.evolve = () => {
+		evolve();
+		if (f.backend.releasedAt !== null && !f.backend.recovering) {
+			f.backend.old.lastStatus = "STOPPING";
+			f.backend.old.desiredStatus = "STOPPED";
+		}
+	};
+	f.backend.hook = async (name, input) => {
+		if (
+			name === "ListTagsForResource" &&
+			input.resourceArn === f.backend.old.taskArn &&
+			f.backend.releasedAt !== null
+		) {
+			f.backend.evolve();
+			throw Object.assign(new Error("The specified task is stopped"), {
+				name: "InvalidParameterException",
+			});
+		}
+	};
+	await assert.rejects(runAPIRollout(f), /API ECS completion exceeded 180s/);
+	assert.ok(f.backend.at >= LIMITS.completion);
+	assert.ok(
+		f.backend.records.some((row) => row.name === "protection-marker-retiring"),
+	);
+	assert.ok(f.backend.records.some((row) => row.name === "rollout-failed"));
+	assert.equal(
+		f.backend.records.some((row) => row.name === "rollout-completed"),
+		false,
+	);
+});
