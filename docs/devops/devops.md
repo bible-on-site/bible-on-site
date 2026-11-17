@@ -118,4 +118,5 @@ This document describes the DevOps tools and practices used in the Bible on Site
 - [CI performance measurements](../github/workflows/ci/performance.md)
 - [CD](../github/workflows/cd/cd.md) — release payload handoff, stores, rollback
 - [E2E test selection (coverage trees)](./e2e-test-selection.md) — deterministic selection design + current shadow/enforce status
+- [Android native debug symbols](./android-native-symbols.md) - Play symbols pipeline, supplier store, libe_sqlite3 provenance
 - [Version verification](../github/version-verification.md) — version bump and tag rules
