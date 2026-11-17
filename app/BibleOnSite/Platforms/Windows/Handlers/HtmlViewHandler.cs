@@ -455,18 +455,24 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
     private Microsoft.UI.Xaml.Controls.Border MakeQuoteBlock(HtmlNode node, bool inFootnotes)
     {
         var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
-        var text = new Microsoft.UI.Xaml.Controls.TextBlock
+        /* RichTextBlock, not TextBlock: InlineUIContainer children (nested
+           quotes, <sup> raised runs, generated footnote markers) only render
+           inside a rich block's paragraph — TextBlock inlines can't host
+           them (#3443). */
+        var paragraph = new Paragraph();
+        var text = new RichTextBlock
         {
             FontSize = VirtualView.EffectiveFontSize,
             FontFamily = PlatformView.FontFamily,
             Foreground = PlatformView.Foreground,
             TextWrapping = WinTextWrapping.Wrap,
-            /* Hosted controls sit outside the RichTextBlock's own selection,
-               so the quote needs its own — otherwise its text could no
-               longer be copied (#3443). */
+            /* Hosted controls sit outside the outer RichTextBlock's own
+               selection, so the quote needs its own — otherwise its text
+               could no longer be copied (#3443). */
             IsTextSelectionEnabled = true
         };
-        ParseNode(node, text.Inlines, inFootnotes);
+        text.Blocks.Add(paragraph);
+        ParseNode(node, paragraph.Inlines, inFootnotes);
         return new Microsoft.UI.Xaml.Controls.Border
         {
             BorderThickness = rtl
