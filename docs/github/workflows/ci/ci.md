@@ -13,7 +13,6 @@
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
-| [`auto-open-pr`](../../../../.github/workflows/auto-open-pr.yml) | Open PRs for eligible new branches using default-branch automation |
 | [`codeql.yml`](../../../../.github/workflows/codeql.yml) | CodeQL analysis (independent check) |
 | [`dependency-review.yml`](../../../../.github/workflows/dependency-review.yml) | PR dependency review (independent check) |
 | [`dependency-submission.yml`](../../../../.github/workflows/dependency-submission.yml) | Dependency snapshot submission |
@@ -21,46 +20,17 @@
 
 ## Triggers and concurrency
 
-### Automatic pull requests after branch publication
+### Explicit pull request creation
 
-`auto-open-pr.yml` reads its policy from the current default branch and only
-inspects the pushed commit as Git data. It does not check out or run the
-pushed branch's scripts. New work uses the first non-merge, non-equivalent
-commit as its title and lists the branch's commits in its description.
+Contributors and assigned agents open pull requests explicitly and choose
+whether the work is a draft or ready for review. Publishing a branch does
+not open a pull request.
 
-Automatic creation skips forced pushes, deleted or superseded heads,
-temporary evidence/screenshot branches, empty diffs and branches that have
-**any** previous PR, including closed or merged PRs with a different SHA.
-Use a fresh branch for a follow-up; deliberately reusing a delivered branch
-requires opening its PR explicitly. An issue identified by an `issue/`,
-`feat/` or `fix/` numeric prefix must remain open. A `devin/` branch must
-identify an open issue carrying `Devin Backlog`; unscoped Devin branches
-need an explicit PR instead. Human branches do not need the Devin label.
-
-The November 17 burst came from rewritten historical branches executing
-their own old copies of `auto-create-pr.yml`. Those copies checked only
-for an open PR and opened completed work again. Editing master cannot
-change workflow definitions on historical refs.
-
-**Rollout:** disable the legacy **Auto Create PR** workflow (ID `216311524`)
-repository-wide, then merge this replacement. Keep that legacy workflow
-disabled. Retain `auto-create-pr.yml` as a manual-only retirement stub:
-deleting it changes GitHub's workflow state to `deleted` rather than keeping
-the explicit `disabled_manually` state. The stub has no PR-writing permission
-or automatic trigger. Disabling its registered ID also blocks the unrestricted
-copies on old branches. The new filename provides a separate workflow identity for
-new branches. During installation, before the script exists on master,
-the new workflow emits a notice and the installation PR is opened manually.
-No historical branch needs to be rewritten or pushed for this rollout.
-
-Verify the legacy workflow remains disabled and the replacement is active
-after merge. A forced history push or a delivered branch must create no PR;
-a fresh eligible branch must create exactly one PR and trigger ordinary CI.
-Rollback disables the replacement and leaves explicit PR creation available;
-re-enabling the legacy workflow would reintroduce the historical-ref risk.
-
-`bun run test:auto-open-pr` in `devops/` covers branch-history
-replays, issue eligibility, creation races and real Git patch equivalence.
+The two former branch-publication workflows were disabled repository-wide
+and removed with their scripts and tests on November 17, 2026. Historical
+branches can still contain those workflows, so keep their GitHub workflow
+IDs `216311524` and `421128633` inactive. Re-enabling them would allow old
+branch activity to recreate completed or deliberately closed work.
 
 `ci.yml` runs on `push` to `master`, on `pull_request` to `master`, on
 `merge_group` (merge-queue validation), and on `workflow_dispatch`. The
