@@ -1,0 +1,45 @@
+name: Open PR for new work
+
+on:
+  push:
+    branches-ignore:
+      - master
+      - gh-readonly-queue/**
+      - dependabot/**
+      - renovate/**
+      - artifacts/**
+
+concurrency:
+  group: auto-open-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  open-pr:
+    if: ${{ !github.event.deleted && !github.event.forced }}
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      # Read automation from the default branch, never execute pushed branch code.
+      # The legacy auto-create-pr.yml workflow must remain disabled repository-wide:
+      # old branches still contain its old, unrestricted push workflow.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Open eligible pull request
+        env:
+          # PRs created with BOT_PAT trigger the ordinary PR checks.
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+        run: |
+          if [ -f devops/github/ci/auto-open-pr.mjs ]; then
+            node devops/github/ci/auto-open-pr.mjs
+          else
+            echo "::notice::PR automation is not installed on the default branch yet; open the installation PR manually."
+          fi
