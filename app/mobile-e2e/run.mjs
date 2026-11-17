@@ -24,6 +24,7 @@ import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diag
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 import { copyIosCrashReports } from "./ios-crash-reports.mjs";
 import { exitCode, phaseRecorder, remainingBudget } from "./shutdown-budget.mjs";
+import { prepareDiscoveryEvidence } from "./ios-discovery-evidence.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -88,14 +89,8 @@ const interactions = platform === "ios" ? iosInteractionDiagnostics({
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
   interactions.capture(command, request),
   { pin: request => interactions.pin(request) }) : undefined;
-const discoveryTrace = resolve(artifacts, "ios-discovery-spans.jsonl");
-if (platform === "ios") {
-  try { writeFileSync(discoveryTrace, ""); } catch {
-    // Optional timing evidence cannot change the test outcome.
-    console.error("Could not reset iOS discovery timing evidence; measurement may be incomplete.");
-  }
-}
-const server = spawn(process.execPath, [...(platform === "ios"
+const discoveryEvidence = platform === "ios" ? prepareDiscoveryEvidence(artifacts) : undefined;
+const server = spawn(process.execPath, [...(discoveryEvidence?.status === "ready"
   ? ["--import", resolve(directory, "ios-discovery-trace.mjs")] : []), resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   // Appium 4 defaults to info; the diagnostics below rely on the driver-level
@@ -103,7 +98,7 @@ const server = spawn(process.execPath, [...(platform === "ios"
   "--log-level", "debug",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
-  env: { ...process.env, MOBILE_IOS_DISCOVERY_TRACE: platform === "ios" ? discoveryTrace : "" },
+  env: { ...process.env, MOBILE_IOS_DISCOVERY_TRACE: discoveryEvidence?.path ?? "" },
 });
 for (const stream of [server.stdout, server.stderr].filter(Boolean)) {
   stream.on("data", (chunk) => {
@@ -119,6 +114,8 @@ const readinessStarted = Date.now();
 const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.stringify({
   time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
 })}\n`);
+if (platform === "ios") observeReadiness({ phase: "discovery-evidence",
+  status: discoveryEvidence.status, file: discoveryEvidence.file });
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 const hostDiagnostics = resolve(artifacts, "test-host-diagnostics");
 rmSync(hostDiagnostics, { recursive: true, force: true });
