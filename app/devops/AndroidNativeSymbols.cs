@@ -7,7 +7,7 @@ internal static class AndroidNativeSymbols
 {
     private static readonly HttpClient SymbolClient = new();
     internal const int MaximumSymbolBytes = 128 * 1024 * 1024;
-    // #3444: only cold (cache-miss) public downloads may take this long;
+    // #3444: only cold (cache-miss) public downloads may take this long —
     // a completed transfer returns immediately. Warm cache hits never
     // reach the network, and every other deadline stays unchanged.
     internal static readonly TimeSpan ColdDownloadDeadline = TimeSpan.FromSeconds(90);
