@@ -6,6 +6,9 @@
   <!-- AltCover.Recorder.g substitute for E2E-instrumented builds (#1232);
        referenced by path only under -p:E2ECoverage=true. -->
   <Project Path="BibleOnSite.E2eCoverage/BibleOnSite.E2eCoverage.csproj" />
+  <!-- In-process XHarness device-test app (#3349): IsTestProject=false — not a
+       dotnet-test project; the suite runs on-device via TestDeviceAndroid. -->
+  <Project Path="BibleOnSite.DeviceTests/BibleOnSite.DeviceTests.csproj" />
   <Project Path="BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj" />
   <Project Path="BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj" />
   <Project Path="BibleOnSite.Tests/BibleOnSite.Tests.csproj" />

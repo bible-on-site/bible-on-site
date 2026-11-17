@@ -85,7 +85,7 @@ E2E tests verify complete user flows through the application, testing the integr
 - **Website**: Uses Playwright with Monocart reporter
 - **Admin**: Uses Playwright (tests in `web/admin/tests`)
 - **API**: Uses Playwright with cargo-make orchestration
-- **App**: Windows UI Automation via xUnit + FlaUI (`BibleOnSite.Tests.E2E`), plus the native mobile suite `BibleOnSite.Tests.MobileE2E` driven by Appium on Android emulators and iOS simulators (`app/mobile-e2e/`)
+- **App**: Windows UI Automation via xUnit + FlaUI (`BibleOnSite.Tests.E2E`), plus the native mobile suite `BibleOnSite.Tests.MobileE2E` driven by Appium on Android emulators and iOS simulators (`app/mobile-e2e/`). Between the portable unit suite and Appium sits `app/BibleOnSite.DeviceTests` (#3349): an in-process XHarness layer that runs tests inside a dedicated test app on the Android emulator — real MAUI handlers, XAML inflation, RTL layout, platform services and UI-thread behavior. Packaged-app journeys stay on Appium.
 - See: [Website Coverage Documentation](../tests/website/coverage/coverage.md), [API Coverage Documentation](../tests/api/coverage/coverage.md), [App Coverage Documentation](../tests/app/coverage/coverage.md), [Mobile E2E impact selection](../tests/app/e2e-impact.md)
 
 ### Performance & Benchmarking
@@ -128,6 +128,8 @@ Performance tests measure application behavior under load and track metrics over
 | Mobile E2E (build) | `MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E` |
 | Mobile E2E (run) | `bun run --cwd app/mobile-e2e test` |
 | Mobile E2E Coverage | `MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E` |
+| Device tests (Android, build) | `dotnet run --project devops -- CompileDeviceTests` |
+| Device tests (Android, run — needs a booted emulator) | `MOBILE_UDID=emulator-5554 dotnet run --project devops -- TestDeviceAndroid` |
 | Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
 

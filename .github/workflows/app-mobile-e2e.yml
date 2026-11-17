@@ -56,6 +56,22 @@ jobs:
       force_full_suite: ${{ inputs.force_full_suite }}
       perushim_notes_sqlite_artifact: ${{ inputs.perushim_notes_sqlite_artifact }}
 
+  # In-process device-test layer (#3349): XHarness drives the dedicated test
+  # app's instrumentation on the same emulator recipe — real handlers, XAML
+  # inflation, RTL layout, platform services and UI-thread behavior at unit
+  # speed. Additive to Appium, which keeps every packaged-app journey.
+  android_device_tests:
+    name: XHarness Android device tests
+    if: ${{ always() && !cancelled() && !failure() }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: Android
+      platform_id: android
+      artifact: android-device-tests
+      runner: ubuntu-latest
+      workload: maui-android
+      mode: device-tests
+
   # Release-configuration startup guard (#2373): the Debug suite above can
   # never execute the analytics initialization that crashed #2247 store
   # launches — Debug compiles it out under DISABLE_ANALYTICS. This leg builds

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<!--
+		supportsRtl: the device suite covers RTL layout — without this flag
+		ApplicationInfo.FLAG_SUPPORTS_RTL stays unset and View.setLayoutDirection
+		early-returns LTR on every platform view, making FlowDirection untestable.
+		Matches the production manifest (app/BibleOnSite).
+	-->
+	<application android:allowBackup="true" android:supportsRtl="true">
+	</application>
+</manifest>

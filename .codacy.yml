@@ -44,6 +44,10 @@ engines:
     exclude_paths:
       - "app/mobile-e2e/native-logs.test.mjs"
       - "app/mobile-e2e/verify-ios-host-log.test.mjs"
+      # Same html-in-template-string false positive as the entries above: this
+      # adapter emits JUnit XML through escaped interpolations (escapeXml) —
+      # markup output, never rendered HTML.
+      - "app/mobile-e2e/xharness-results.mjs"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
