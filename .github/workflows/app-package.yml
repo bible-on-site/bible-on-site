@@ -223,7 +223,7 @@ jobs:
 
       # Preserve verified downloads even if a later packaging/store step fails.
       - name: Save verified recitation audio cache
-        if: ${{ !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.mp3
@@ -436,7 +436,7 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg
@@ -796,7 +796,7 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg
