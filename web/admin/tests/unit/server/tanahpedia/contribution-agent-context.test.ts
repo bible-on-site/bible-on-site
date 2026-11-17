@@ -18,6 +18,7 @@ import {
 	mergeAgentCatalogues,
 	readContributionAgentInitialContext,
 	readContributionAgentTool,
+	readContributionArticleGroundingContext,
 	readContributionIssueScopeContext,
 } from "~/server/tanahpedia/contribution-agent-context.server";
 import { CONTRIBUTION_PEREK_SELECT } from "~/server/tanahpedia/contribution-perek-reads.server";
@@ -230,6 +231,160 @@ beforeEach(() => {
 });
 
 describe("complete contribution agent context", () => {
+	it("returns an empty history for a legacy item without snapshots", async () => {
+		delete item.revisionHistory;
+		const result = await readContributionAgentTool(conn, item, "history", {});
+		expect(result.data).toMatchObject({
+			total: 0,
+			items: [],
+			nextCursor: null,
+		});
+	});
+	it("orders simultaneous discussion events by immutable identity", async () => {
+		item.events = [
+			{ ...event(1), at: "2025-01-01T00:00:00Z" },
+			{ ...event(0), at: "2025-01-01T00:00:00Z" },
+		];
+		const result = await readContributionAgentTool(conn, item, "discussion", {
+			source: "item",
+		});
+		expect(result.data).toMatchObject({
+			items: [{ id: event(0).id }, { id: event(1).id }],
+		});
+	});
+	it("deduplicates a missing removal target without granting a creation identity", async () => {
+		const change = {
+			kind: "metadata",
+			targetId: entityId,
+			before: { displayName: "Removed" },
+			after: null,
+			labels: {},
+		} as const;
+		item.changes = [change, change];
+		const result = await readContributionAgentInitialContext(conn, item);
+		expect(result.catalogue.targets).toEqual([]);
+		expect(mocks.state).toHaveBeenCalledTimes(1);
+	});
+	it("follows the entity owner of a place reference without treating it as a person or war", async () => {
+		references.set(`place:${personId}`, {
+			id: personId,
+			name: "Place",
+			ownerId: entityId,
+		});
+		references.set(`entity:${entityId}`, { id: entityId, name: "Entity" });
+		const result = await readContributionAgentTool(conn, item, "record", {
+			kind: "place",
+			id: personId,
+		});
+		expect(result.catalogue.entities).toEqual([
+			{ id: entityId, name: "Entity" },
+		]);
+	});
+	it("omits a disappeared chapter from search results instead of returning an unreceipted identity", async () => {
+		mocks.query.mockResolvedValue([
+			{
+				id: 1,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		]);
+		const result = await readContributionAgentTool(conn, item, "search", {
+			kind: "perek",
+			query: "בראשית",
+		});
+		expect(result.data).toMatchObject({
+			items: [],
+			total: 1,
+			nextCursor: null,
+		});
+		expect(result.catalogue.references.perek).toBeUndefined();
+	});
+	it("returns an empty bounded catalogue when its count row is absent", async () => {
+		mocks.one.mockResolvedValue(null);
+		const result = await readContributionAgentTool(conn, item, "search", {
+			kind: "entity",
+			query: "",
+		});
+		expect(result.data).toMatchObject({
+			items: [],
+			total: 0,
+			nextCursor: null,
+		});
+	});
+	it("deduplicates repeated exact targets and accepts a removal without inventing an after state", async () => {
+		mocks.state.mockResolvedValue({ displayName: "Current" });
+		const change = {
+			kind: "metadata",
+			targetId: entityId,
+			before: { displayName: "Current" },
+			after: null,
+			labels: {},
+		} as const;
+		item.changes = [change, change];
+		const result = await readContributionAgentInitialContext(conn, item);
+		expect(result.catalogue.targets).toEqual([
+			{ kind: "metadata", id: entityId, current: { displayName: "Current" } },
+		]);
+		expect(mocks.state).toHaveBeenCalledTimes(1);
+	});
+	it.each([null, [], {}, { entryId: 42 }])(
+		"rejects corrupt stored alias destinations before granting reference authority: %j",
+		async (destination) => {
+			mocks.state.mockResolvedValue({ targets: [destination] });
+			await expect(
+				readContributionAgentTool(conn, item, "record", {
+					kind: "target:alias_mapping",
+					id,
+				}),
+			).rejects.toThrow("Invalid contribution alias reference");
+		},
+	);
+	it("follows the owning war of an exact war-side reference", async () => {
+		references.set(`war_side:${nameId}`, {
+			id: nameId,
+			name: "Side",
+			ownerId: entityId,
+		});
+		references.set(`war:${entityId}`, { id: entityId, name: "War" });
+		const result = await readContributionAgentTool(conn, item, "record", {
+			kind: "war_side",
+			id: nameId,
+		});
+		expect(result.catalogue.references.war).toEqual([
+			{ id: entityId, name: "War" },
+		]);
+	});
+	it.each([null, { latitude: 31, longitude: 35 }])(
+		"reads a place-identification claim once across both sides of a source change: %j",
+		async (fact) => {
+			const source = {
+				targetKind: "place_identification",
+				targetId: personId,
+				perekId: null,
+				perushId: null,
+			};
+			mocks.source.mockResolvedValue(fact);
+			item.changes = [
+				{
+					kind: "source_reference",
+					targetId: id,
+					before: source,
+					after: source,
+					labels: {},
+				},
+			];
+			await readContributionAgentInitialContext(conn, item);
+			expect(mocks.source).toHaveBeenCalledTimes(1);
+		},
+	);
+	it("rejects a missing read kind before evaluating a SQL dispatch", async () => {
+		await expect(
+			readContributionAgentTool(conn, item, "record", { id }),
+		).rejects.toThrow("Missing contribution tool kind");
+		expect(mocks.one).not.toHaveBeenCalled();
+	});
 	it("keeps the finite declared read vocabulary equal to the exact accepted SQL dispatch sets", () => {
 		expect(contributionAgentReadDispatchKinds().sort()).toEqual(
 			[...CONTRIBUTION_AGENT_READ_KINDS].sort(),
@@ -1931,6 +2086,109 @@ describe("fresh article source context", () => {
 		mocks.article.mockImplementation(async () => structuredClone(article));
 	});
 
+	it("normalizes a canonical string article reference to its exact numeric SQL identity", async () => {
+		const result = await readContributionAgentTool(conn, item, "record", {
+			kind: "article",
+			id: "27",
+		});
+		expect(result.data).toMatchObject({
+			record: { id: 27, name: article.title },
+		});
+		expect(mocks.article).not.toHaveBeenCalled();
+	});
+	it("reads all proposed article relationship dependencies once alongside their current state", async () => {
+		item.changes = [
+			{
+				kind: "article_links",
+				targetId: "27",
+				before: null,
+				labels: {},
+				after: {
+					commands: [
+						{ relationshipKey: "primaryPerek", target: { perekId: 1 } },
+						{
+							relationshipKey: "coveringSources",
+							target: { pasukCoordinates: [{ perekId: 3, pasuk: 4 }] },
+						},
+						{
+							relationshipKey: "dedicationAssignments",
+							target: { dedicationId: 6 },
+						},
+						{ relationshipKey: "moadim", target: { moedIds: [7, 5] } },
+					],
+				},
+			} as unknown as Contribution["changes"][number],
+		];
+		const result = await readContributionAgentInitialContext(conn, item);
+		expect(
+			result.catalogue.references.dedication?.map((row) => row.id),
+		).toEqual([4, 6]);
+		expect(result.catalogue.references.moed?.map((row) => row.id)).toEqual([
+			5, 7,
+		]);
+		expect(result.catalogue.references.perek?.map((row) => row.id)).toEqual([
+			1, 3,
+		]);
+		expect(mocks.article).toHaveBeenCalledTimes(1);
+		expect(result.data).toMatchObject({ item: { changes: item.changes } });
+	});
+	it("grounds selected one-pass articles from literal source text and deduplicates their identities", async () => {
+		article.plainText = "בראשית א כו. בראשית ג א";
+		mocks.query.mockResolvedValue(
+			[1, 3].map((id) => ({
+				id,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: id,
+				pasukCount: 31,
+			})),
+		);
+		const result = await readContributionArticleGroundingContext(
+			conn,
+			issueId,
+			["27", "27"],
+		);
+		expect(result.articleGroundings).toMatchObject([
+			{
+				articleId: "27",
+				sourceHash: article.state.sourceHash,
+				coordinates: [
+					{ perekId: 1, pasuk: 26 },
+					{ perekId: 3, pasuk: 1 },
+				],
+				chapters: [
+					{ id: 1, fingerprint: expect.any(String) },
+					{ id: 3, fingerprint: expect.any(String) },
+				],
+			},
+		]);
+		expect(mocks.article).toHaveBeenCalledTimes(1);
+		expect(
+			await readContributionArticleGroundingContext(conn, issueId, []),
+		).toEqual(emptyCatalogue());
+	});
+	it("fails grounding when an indexed chapter disappears before its authoritative read", async () => {
+		article.plainText = "בראשית א כו";
+		mocks.query.mockResolvedValue([
+			{
+				id: 1,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		]);
+		references.delete("perek:1");
+		await expect(
+			readContributionAgentTool(conn, item, "article_text", { id: "27" }),
+		).rejects.toThrow("citation chapter changed");
+	});
+	it("refuses a missing article in the one-pass generator without inventing source grounding", async () => {
+		await expect(
+			readContributionArticleGroundingContext(conn, issueId, ["28"]),
+		).rejects.toThrow("Article not found");
+		expect(mocks.article).not.toHaveBeenCalled();
+	});
 	it("preloads a scoped article's full link state, typed references and complete text locator", async () => {
 		item.kind = "issue";
 		item.issueId = null;

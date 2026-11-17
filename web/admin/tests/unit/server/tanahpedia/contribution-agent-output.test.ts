@@ -95,6 +95,48 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it("enforces the raw field budget even when an exact-copy instruction preserves surrounding whitespace", () => {
+		const current = item();
+		current.events[0].body = 'Replace the title with exactly "Title"';
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "Done",
+					responses: [verbatimResponse],
+					draft: { title: `${" ".repeat(255)}Title` },
+				},
+				current,
+			),
+		).toThrow("exceeds maximum length");
+	});
+	it.each(["missing", "object", "oversize"])(
+		"rejects %s response collections without accepting a completion",
+		(shape) => {
+			const responses =
+				shape === "missing"
+					? undefined
+					: shape === "object"
+						? {}
+						: Array.from({ length: 1001 }, () => response);
+			expect(() =>
+				parse({ outcome: "unchanged", summary: "Done", responses }),
+			).toThrow("Agent responses are required");
+		},
+	);
+	it("refuses proposal creation hidden inside an issue clarification", () => {
+		expect(() =>
+			parse(
+				{
+					outcome: "clarification",
+					summary: "Need evidence",
+					responses: [],
+					pullRequests: [],
+				},
+				{ ...item(), kind: "issue" },
+			),
+		).toThrow("Only implemented issues may create PRs");
+	});
 	it.each(
 		[["unchanged"], ["clarification"], ["revised"], null, {}, true, 0].map(
 			(value) => ({ value }),

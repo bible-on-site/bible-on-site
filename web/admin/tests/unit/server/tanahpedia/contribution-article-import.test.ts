@@ -196,6 +196,55 @@ it("keeps outdated evidence blocked even when commands can be translated", async
 	await promoteLegacyArticleLinkProposals({} as never, 123);
 	expect(mocks.insert.mock.calls[0][1].domainConflict).toBeTruthy();
 });
+it("imports sparse legacy evidence as free text without manufacturing structured spans", async () => {
+	mocks.txQuery.mockResolvedValue([
+		row("sparse", { evidence_json: [{ spanStart: 0, spanEnd: 5 }] }),
+	]);
+	await promoteLegacyArticleLinkProposals({} as never, 123);
+	const imported = mocks.insert.mock.calls[0][1] as Contribution;
+	expect(imported.evidence[0].quote).toBe("");
+	expect(imported.evidence[0].articleSource).toBeUndefined();
+});
+it("retains an untyped translation failure as a gray raw sequence", async () => {
+	mocks.prepare.mockRejectedValue("untyped translation failure");
+	await promoteLegacyArticleLinkProposals({} as never, 123);
+	const imported = mocks.insert.mock.calls[0][1] as Contribution;
+	expect(imported.apiMigration).toMatchObject({
+		status: "failed",
+		error: "Legacy operation cannot be translated",
+	});
+	expect(imported.apiMigration?.sequence).toContain("legacyProposals");
+});
+
+it.each([new Error("Source changed"), "untyped source failure"])(
+	"keeps translated legacy operations recoverable when evidence cannot be refreshed: %s",
+	async (failure) => {
+		mocks.evidence.mockRejectedValue(failure);
+		await promoteLegacyArticleLinkProposals({} as never, 123);
+		const imported = mocks.insert.mock.calls[0][1] as Contribution;
+		expect(imported.state).toBe("open");
+		expect(imported.domainConflict).toBe(
+			failure instanceof Error
+				? failure.message
+				: "Structured evidence could not be refreshed",
+		);
+		expect(imported.apiMigration).toBeUndefined();
+		expect(imported.evidence[0].articleSource).toMatchObject({
+			articleId: "123",
+			contentHash: base.contentHash,
+		});
+	},
+);
+it("propagates evidence storage failures without saving a misleading recoverable PR", async () => {
+	const failure = Object.assign(new Error("Storage unavailable"), {
+		code: "ER_LOCK_DEADLOCK",
+	});
+	mocks.evidence.mockRejectedValue(failure);
+	await expect(
+		promoteLegacyArticleLinkProposals({} as never, 123),
+	).rejects.toBe(failure);
+	expect(mocks.insert).not.toHaveBeenCalled();
+});
 it.each(["author", "mentionAnnotations", "hebrewDates"])(
 	"preserves unsupported %s operations as gray raw PRs",
 	async (relationship_key) => {

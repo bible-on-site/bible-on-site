@@ -178,6 +178,41 @@ function show(kind: "issue" | "pr" = "issue") {
 }
 
 describe("issues and PR administration", () => {
+	it("cancels editing back to the current discussion without navigating away", async () => {
+		mocks.search = { id: ID };
+		show();
+		fireEvent.click(await screen.findByRole("button", { name: "עריכה" }));
+		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
+		expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+			issue.title,
+		);
+		expect(mocks.navigate).not.toHaveBeenCalled();
+	});
+	it.each(["session", "agents"] as const)(
+		"shows a %s lookup failure with the queue still visible",
+		async (source) => {
+			mocks[source].mockRejectedValue(new Error(`${source} unavailable`));
+			show();
+			expect(await screen.findByRole("alert")).toHaveTextContent(
+				`${source} unavailable`,
+			);
+			expect(
+				screen.getByRole("button", { name: "ניסיון נוסף" }),
+			).toBeInTheDocument();
+		},
+	);
+	it.each(["new", PRID])(
+		"renders the ordinary %s view while agent configuration is still loading",
+		async (id) => {
+			mocks.search = { id };
+			mocks.agents.mockReturnValue(new Promise(() => {}));
+			show("pr");
+			expect(
+				await screen.findByRole("heading", { level: 1 }),
+			).toHaveTextContent(id === "new" ? "הצעת שינוי חדשה" : pr.title);
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		},
+	);
 	beforeEach(() => {
 		mocks.search = {};
 		for (const mock of [

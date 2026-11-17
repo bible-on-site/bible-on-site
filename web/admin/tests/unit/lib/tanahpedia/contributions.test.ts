@@ -22,6 +22,26 @@ import {
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
+it("requires a separate PR for an article aggregate and any other domain operation", () => {
+	expect(() =>
+		validateChanges([
+			{
+				kind: "article_links",
+				targetId: "27",
+				after: {
+					commands: [
+						{
+							relationshipKey: "primaryPerek",
+							action: "replace",
+							target: { perekId: 1 },
+						},
+					],
+				},
+			},
+			{ kind: "metadata", targetId: ID, after: { displayName: "Name" } },
+		]),
+	).toThrow("one article aggregate");
+});
 it.each([
 	{ kind: "other" },
 	{ state: "merged" },

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -76,6 +77,68 @@ async function card() {
 	return screen.findByRole("article", { name: "Workstation" });
 }
 describe("versioned agent configuration", () => {
+	it("disables a pending configuration save and permits the runtime default model", async () => {
+		let finish: (value: ContributionAgentSummary) => void = () => {};
+		mocks.update.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		show();
+		const region = await card();
+		const form = within(region).getByRole("form");
+		fireEvent.change(within(form).getByLabelText("מודל"), {
+			target: { value: " " },
+		});
+		fireEvent.submit(form);
+		expect(
+			await within(region).findByRole("button", { name: "מעדכן..." }),
+		).toBeDisabled();
+		expect(mocks.update).toHaveBeenCalledWith({
+			data: expect.objectContaining({ model: null }),
+		});
+		await act(async () => {
+			current = [agent({ model: null, version: 3 })];
+			finish(current[0]);
+		});
+		expect(
+			await within(region).findByRole("button", { name: "שמירת הגדרות הסוכן" }),
+		).toBeEnabled();
+	});
+	it("restores the local model when switching providers and disables a pending installation", async () => {
+		let finish: (value: ContributionAgentSummary) => void = () => {};
+		mocks.install.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		show();
+		const form = await screen.findByRole("form", { name: "התקנת הגדרת סוכן" });
+		fireEvent.change(within(form).getByLabelText("סביבת הרצה"), {
+			target: { value: "aws_llm" },
+		});
+		fireEvent.change(within(form).getByLabelText("סביבת הרצה"), {
+			target: { value: "local_llm" },
+		});
+		expect(within(form).getByLabelText("מודל")).toHaveValue("qwen3:8b");
+		fireEvent.change(within(form).getByLabelText("שם הסוכן"), {
+			target: { value: "New local worker" },
+		});
+		fireEvent.submit(form);
+		expect(
+			await within(form).findByRole("button", { name: "מתקין הגדרה..." }),
+		).toBeDisabled();
+		await act(async () => {
+			const installed = agent({ id: "new-agent", name: "New local worker" });
+			current.push(installed);
+			finish(installed);
+		});
+		expect(
+			await screen.findByRole("article", { name: "New local worker" }),
+		).toBeInTheDocument();
+	});
 	beforeEach(() => {
 		vi.clearAllMocks();
 		current = [agent()];

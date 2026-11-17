@@ -91,6 +91,27 @@ function add() {
 }
 
 describe("article-link contribution fields", () => {
+	it.each(["coveringSources", "moadim"] as const)(
+		"retains existing %s targets when changing a populated draft's action",
+		(relationshipKey) => {
+			const target =
+				relationshipKey === "moadim"
+					? { moedIds: [4, 6] }
+					: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] };
+			setup([{ relationshipKey, action: "add", target } as ArticleLinkCommand]);
+			fireEvent.change(screen.getByLabelText("פעולת קישור 1"), {
+				target: { value: "remove" },
+			});
+			expect(draft()[0]).toEqual({ relationshipKey, action: "remove", target });
+		},
+	);
+	it("shows a numeric chapter when an exact preview has no chapter label", async () => {
+		setup([], vi.fn().mockResolvedValue({ ...preview, labels: {} }));
+		fireEvent.click(screen.getByRole("button", { name: "טעינת המאמר" }));
+		expect(
+			await screen.findByRole("region", { name: "המאמר שנבחר" }),
+		).toHaveTextContent("1");
+	});
 	it("loads exactly the selected article without including its prose or hashes", async () => {
 		const loader = vi.fn().mockResolvedValue({
 			...preview,

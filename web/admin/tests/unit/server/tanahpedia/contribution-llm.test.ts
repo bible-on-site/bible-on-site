@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 	fetch: vi.fn(),
 	clientSettings: vi.fn(),
 	scopeContext: vi.fn(),
+	grounding: vi.fn(),
 }));
 vi.mock(
 	"~/server/tanahpedia/contribution-agent-context.server",
@@ -20,6 +21,7 @@ vi.mock(
 			typeof import("~/server/tanahpedia/contribution-agent-context.server")
 		>()),
 		readContributionIssueScopeContext: mocks.scopeContext,
+		readContributionArticleGroundingContext: mocks.grounding,
 	}),
 );
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
@@ -96,6 +98,129 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("does not advertise a scoped target absent from the supplied catalogue", () => {
+		const schema = contributionOutputSchema(
+			{
+				people: [],
+				places: [],
+				entities: [{ id: ID, name: "Other entity" }],
+				targets: [],
+				references: {},
+			},
+			1,
+			{ kind: "metadata", targetId: "00000000-0000-4000-8000-000000000002" },
+		);
+		expect(
+			schema.properties.pullRequests.items.properties.changes.items.oneOf,
+		).toEqual([{ not: {} }]);
+	});
+	it.each([false, true])(
+		"grounds selected articles before decoding, retaining the existing transaction: %s",
+		async (scoped) => {
+			const state = {
+				contentHash: "a".repeat(32),
+				sourceHash: "b".repeat(64),
+				perekId: 1,
+				authorId: 2,
+				coverageVerified: false,
+				coveringSources: [],
+				dedicationAssignments: [],
+				moedIds: [],
+			};
+			issue.description = "articleId 27";
+			const catalogue = {
+				people: [],
+				places: [],
+				entities: [],
+				targets: [{ kind: "article_links", id: "27", after: state }],
+				references: { article: [{ id: 27, name: "Current article" }] },
+			};
+			mocks.catalogue.mockResolvedValue(catalogue);
+			if (scoped) {
+				issue.scope = { kind: "article_links", targetId: "27" };
+				mocks.scopeContext.mockResolvedValue({
+					catalogue: {
+						...catalogue,
+						targets: [{ kind: "article_links", id: "27", current: state }],
+					},
+					records: [
+						{
+							kind: "article_source",
+							id: "27",
+							current: { sourceHash: state.sourceHash },
+						},
+					],
+				});
+			}
+			const groundings = [
+				{
+					articleId: "27",
+					sourceHash: state.sourceHash,
+					coordinates: [{ perekId: 1, pasuk: 26 }],
+					chapters: [],
+				},
+			];
+			mocks.grounding.mockResolvedValue({
+				people: [],
+				places: [],
+				entities: [],
+				targets: [],
+				references: {},
+				articleGroundings: groundings,
+			});
+			const conn = {} as NonNullable<
+				Parameters<typeof prepareContributionGeneration>[1]
+			>;
+			const context = await prepareContributionGeneration(
+				input,
+				scoped ? conn : undefined,
+			);
+			expect(mocks.grounding).toHaveBeenCalledExactlyOnceWith(
+				scoped ? conn : expect.anything(),
+				ID,
+				["27"],
+			);
+			expect(context.modelCatalogue.articleGroundings).toEqual(groundings);
+			expect(JSON.parse(context.user).catalogue.targets).toEqual([
+				{ kind: "article_links", id: "27", current: state },
+			]);
+			expect(mocks.fetch).not.toHaveBeenCalled();
+		},
+	);
+	it("retains aliases selected through exact destination identity and their alternative group", async () => {
+		issue.description = ID;
+		const aliasId = "00000000-0000-4000-8000-000000000002";
+		const groupId = "00000000-0000-4000-8000-000000000003";
+		mocks.catalogue.mockResolvedValue({
+			people: [],
+			places: [],
+			entities: [{ id: ID, name: "Entry" }],
+			references: { entry: [{ id: ID, name: "Entry" }] },
+			targets: [
+				{
+					kind: "alias_mapping",
+					id: aliasId,
+					after: {
+						name: "Alias",
+						altGroupId: groupId,
+						targets: [
+							null,
+							1,
+							[],
+							{ entryId: 1 },
+							{ entryId: ID, label: "Meaning" },
+						],
+					},
+				},
+			],
+		});
+		const context = await prepareContributionGeneration(input);
+		expect(context.modelCatalogue.targets).toMatchObject([{ id: aliasId }]);
+		expect(context.modelCatalogue.references?.alternative).toContainEqual({
+			id: groupId,
+			name: "קבוצת דעות חלופיות",
+		});
+	});
 	it("preloads an exact scoped target beyond bounded name-search candidates", async () => {
 		issue.scope = { kind: "metadata", targetId: ID };
 		mocks.scopeContext.mockResolvedValue({

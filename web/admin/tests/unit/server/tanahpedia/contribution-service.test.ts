@@ -24,12 +24,16 @@ const mocks = vi.hoisted(() => ({
 	afterTransaction: vi.fn(),
 	agent: vi.fn(),
 	notify: vi.fn(),
+	evidence: vi.fn(async (_conn: unknown, item: Contribution) => item.evidence),
 }));
 vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
 	getAssignedContributionAgent: mocks.agent,
 }));
 vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
 	notifyContributionAgentWork: mocks.notify,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-evidence.server", () => ({
+	refreshArticleLinkEvidence: mocks.evidence,
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	withContributions: async (fn: (conn: object) => Promise<unknown>) => {
@@ -209,11 +213,13 @@ describe("contribution lifecycle", () => {
 			mocks.afterTransaction,
 			mocks.agent,
 			mocks.notify,
+			mocks.evidence,
 		])
 			mock.mockReset();
 		mocks.prepare.mockImplementation(async (_conn, inputs) =>
 			inputs.length ? [structuredClone(change)] : [],
 		);
+		mocks.evidence.mockImplementation(async (_conn, item) => item.evidence);
 		mocks.read.mockResolvedValue(change.before);
 		mocks.people.mockResolvedValue([]);
 		mocks.entities.mockResolvedValue([]);
@@ -230,6 +236,131 @@ describe("contribution lifecycle", () => {
 		}));
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it("refuses a no-op edit while a merge reservation still owns the current revision", async () => {
+		const item = await pr();
+		item.articleLinkMerge = {
+			id: OTHER,
+			revision: item.revision,
+			startedAt: "2026-11-17T00:00:00Z",
+		};
+		mocks.items.set(item.id, structuredClone(item));
+		await expect(
+			editContribution(
+				{
+					id: item.id,
+					version: item.version,
+					title: item.title,
+					description: item.description,
+					evidence: item.evidence,
+					changes: input.changes,
+					closeIssue: item.closeIssue,
+				},
+				alice,
+			),
+		).rejects.toThrow(/merge|מיזוג/i);
+		expect(mocks.items.get(item.id)).toEqual(item);
+	});
+	it.each(["feedback", "recovery"])(
+		"rolls back %s on a real evidence storage error",
+		async (operation) => {
+			const item = await pr();
+			const failure = Object.assign(new Error("Evidence storage unavailable"), {
+				code: "ER_LOCK_DEADLOCK",
+			});
+			mocks.evidence.mockRejectedValueOnce(failure);
+			if (operation === "recovery")
+				item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+			else
+				item.articleLinkMerge = {
+					id: OTHER,
+					revision: item.revision,
+					startedAt: "2026-11-17T00:00:00Z",
+				};
+			mocks.items.set(item.id, structuredClone(item));
+			const operationPromise =
+				operation === "recovery"
+					? recoverContributionSequence(
+							{
+								id: item.id,
+								version: item.version,
+								apiVersion: CONTRIBUTION_API_VERSION,
+								sequence: [change],
+							},
+							alice,
+						)
+					: updateContribution(
+							action(item, "comment", { body: "Feedback" }),
+							alice,
+						);
+			await expect(operationPromise).rejects.toBe(failure);
+			expect(mocks.items.get(item.id)).toEqual(item);
+		},
+	);
+	it.each([new Error("Source changed"), "untyped refresh failure"])(
+		"retains human feedback when an interrupted article merge cannot refresh: %s",
+		async (failure) => {
+			const item = await pr();
+			item.changes = [
+				{
+					kind: "article_links",
+					targetId: "27",
+					before: null,
+					after: {
+						commands: [
+							{
+								relationshipKey: "primaryPerek",
+								action: "replace",
+								target: { perekId: 1 },
+							},
+						],
+					},
+					labels: {},
+				},
+			];
+			item.articleLinkMerge = {
+				id: OTHER,
+				revision: item.revision,
+				startedAt: "2026-11-17T00:00:00Z",
+			};
+			mocks.items.set(item.id, structuredClone(item));
+			mocks.prepare.mockRejectedValueOnce(failure);
+			const result = await updateContribution(
+				action(item, "comment", { body: "Please keep this feedback" }),
+				alice,
+			);
+			expect(result.events.at(-1)?.body).toBe("Please keep this feedback");
+			expect(result.domainConflict).toBe(
+				failure instanceof Error
+					? failure.message
+					: "Could not refresh the interrupted article merge",
+			);
+			expect(result.revision).toBe(item.revision + 1);
+		},
+	);
+	it.each([new Error("Evidence moved"), "untyped evidence failure"])(
+		"recovers the API vocabulary while preserving evidence repair as a domain conflict: %s",
+		async (failure) => {
+			const item = await pr();
+			item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+			mocks.items.set(item.id, structuredClone(item));
+			mocks.evidence.mockRejectedValueOnce(failure);
+			const result = await recoverContributionSequence(
+				{
+					id: item.id,
+					version: item.version,
+					apiVersion: CONTRIBUTION_API_VERSION,
+					sequence: [change],
+				},
+				alice,
+			);
+			expect(result.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+			expect(result.domainConflict).toBe(
+				failure instanceof Error
+					? failure.message
+					: "Structured evidence requires repair",
+			);
+		},
+	);
 	it("persists optional issue scope, preserves old-client edits, and refreshes work when scope changes", async () => {
 		let item = await createContribution(
 			{

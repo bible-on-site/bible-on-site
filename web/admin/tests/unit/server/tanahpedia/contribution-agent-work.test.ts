@@ -3,6 +3,7 @@ import {
 	CONTRIBUTION_AGENT_TOOL_ERRORS,
 	ContributionAgentToolInputError,
 } from "~/lib/tanahpedia/contribution-agent-tool-errors";
+import * as toolArguments from "~/lib/tanahpedia/contribution-agent-tool-arguments";
 import type { RegisteredContributionAgent } from "~/lib/tanahpedia/contribution-agents";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
@@ -104,6 +105,7 @@ import {
 	claimContributionGeneration,
 	completeContributionAgentWork,
 	failContributionGeneration,
+	getContributionWorkerBundle,
 	readContributionWorkerContext,
 	runAwsContributionAgentTask,
 } from "~/server/tanahpedia/contribution-worker.server";
@@ -279,6 +281,52 @@ async function claim() {
 }
 
 describe("assignment-driven leased contribution work", () => {
+	it("keeps unexpected argument-validator faults fatal without returning model feedback", async () => {
+		const input = await claim();
+		const failure = new TypeError("Internal validation failure");
+		const spy = vi
+			.spyOn(toolArguments, "validateContributionAgentToolArguments")
+			.mockImplementation(() => {
+				throw failure;
+			});
+		try {
+			await expect(
+				readContributionWorkerContext({
+					...input,
+					name: "record",
+					arguments: { kind: "entity", id },
+				}),
+			).rejects.toBe(failure);
+			expect(mocks.tool).not.toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+		}
+	});
+	it.each(["invalidAction", "untypedFailure"])(
+		"records a failed AWS pass without writes for %s",
+		async (failure) => {
+			agent().provider = "aws_llm";
+			current().assignee = { kind: "aws_llm", agentId: jobId };
+			job().provider = "aws_llm";
+			if (failure === "invalidAction")
+				mocks.aws.mockResolvedValue({
+					content: JSON.stringify({ action: "approve" }),
+					model: "configured-model",
+				});
+			else mocks.aws.mockRejectedValue("private untyped provider failure");
+			expect(await runAwsContributionAgentTask()).toMatchObject({
+				status: "failed",
+			});
+			expect(job().status).toBe("failed");
+			expect(job().error).toBe(
+				failure === "invalidAction"
+					? "Invalid agent action"
+					: "AWS agent failed",
+			);
+			expect(mocks.revise).not.toHaveBeenCalled();
+			expect(mocks.create).not.toHaveBeenCalled();
+		},
+	);
 	it("locks the complete contribution graph before final item, agent and domain reads for a PR revision", async () => {
 		const input = await claim(),
 			order: string[] = [];
@@ -723,6 +771,71 @@ describe("assignment-driven leased contribution work", () => {
 		expect(mocks.aws).toHaveBeenCalledTimes(1);
 		expect(job().status).toBe("failed");
 	});
+	it.each(["missingTask", "savedBundle", "installedBundle", "disabled"])(
+		"rejects a %s lease change before tool execution or context disclosure",
+		async (change) => {
+			const input = await claim();
+			if (change === "missingTask") delete job().task;
+			if (change === "savedBundle") job().bundleHash = "f".repeat(64);
+			if (change === "installedBundle") agent().bundleHash = "f".repeat(64);
+			if (change === "disabled") agent().enabled = false;
+			const before = structuredClone(current());
+			mocks.initial.mockClear();
+			await expect(
+				readContributionWorkerContext({
+					...input,
+					name: "record",
+					arguments: { kind: "entity", id },
+				}),
+			).rejects.toThrow(
+				/agent task changed|does not implement|configuration or bundle changed/,
+			);
+			expect(mocks.initial).not.toHaveBeenCalled();
+			expect(mocks.tool).not.toHaveBeenCalled();
+			expect(current()).toEqual(before);
+		},
+	);
+	it.each(["object", "oversize"])(
+		"rejects an invalid %s receipt collection before replaying any tool",
+		async (shape) => {
+			const receipts =
+				shape === "object" ? {} : Array.from({ length: 1001 }, () => ({}));
+			const input = await claim();
+			const before = structuredClone(current());
+			await expect(
+				readContributionWorkerContext({
+					...input,
+					name: "record",
+					arguments: { kind: "entity", id },
+					receipts,
+				}),
+			).rejects.toThrow("Invalid context receipts");
+			expect(mocks.tool).not.toHaveBeenCalled();
+			expect(current()).toEqual(before);
+		},
+	);
+	it("rejects an undeclared prior receipt before evaluating its arguments", async () => {
+		const input = await claim();
+		await expect(
+			readContributionWorkerContext({
+				...input,
+				name: "record",
+				arguments: { kind: "entity", id },
+				receipts: [
+					{ name: "execute_sql", arguments: {}, hash: "a".repeat(64) },
+				],
+			}),
+		).rejects.toThrow("Unsupported agent tool");
+		expect(mocks.tool).not.toHaveBeenCalled();
+	});
+	it.each(["g".repeat(64), "a".repeat(63)])(
+		"rejects invalid bundle hashes before registry access: %s",
+		async (hash) => {
+			await expect(getContributionWorkerBundle({ hash })).rejects.toThrow(
+				"Invalid bundle hash",
+			);
+		},
+	);
 	it("leases a same-PR resolution using registered task/provider/bundle metadata", async () => {
 		const input = await claim();
 		expect(input.version).toBe(7);

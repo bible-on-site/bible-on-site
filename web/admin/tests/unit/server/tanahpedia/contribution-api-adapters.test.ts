@@ -22,6 +22,52 @@ vi.mock("~/server/tanahpedia/contribution-specials.server", () => ({
 }));
 const id = "00000000-0000-4000-8000-000000000001",
 	nameId = "00000000-0000-4000-8000-000000000002";
+it("rejects mixed article aggregates, extra base fields and a non-null new-entry base", () => {
+	const article = {
+		kind: "article_links",
+		targetId: "27",
+		before: {
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			perekId: 1,
+			authorId: 2,
+			coverageVerified: false,
+			coveringSources: [],
+			dedicationAssignments: [],
+			moedIds: [7, 3],
+		},
+		after: {
+			commands: [
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 2 },
+				},
+			],
+		},
+		labels: {},
+	};
+	expect(() => validateApiSequence([article, article])).toThrow(
+		"one article aggregate",
+	);
+	expect(() => validateApiSequence([article])).toThrow("noncanonical fields");
+	expect(() =>
+		validateApiSequence([
+			{
+				kind: "entry",
+				targetId: id,
+				before: {},
+				after: {
+					title: "New",
+					uniqueName: "new",
+					entityType: "PERSON",
+					displayName: "New",
+				},
+				labels: {},
+			},
+		]),
+	).toThrow("null base");
+});
 it("adds API5 through an explicit identity4→5 adapter without content reads", async () => {
 	const contract = currentContributionApiContract({} as never);
 	const operation = {

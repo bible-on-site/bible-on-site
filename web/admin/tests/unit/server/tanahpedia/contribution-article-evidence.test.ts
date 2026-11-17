@@ -102,6 +102,31 @@ it("keeps free text untouched and performs no source read", async () => {
 	).toBe(values);
 	expect(read).not.toHaveBeenCalled();
 });
+it("refreshes multiple sources in numeric order while preserving unrelated free text and article spans", async () => {
+	const original = [
+		...evidence(),
+		{
+			...evidence()[0],
+			articleSource: { ...evidence()[0].articleSource!, articleId: "9" },
+		},
+		{ citation: "Free", quote: "Free evidence", note: "", url: null },
+	];
+	const result = await refreshArticleLinkEvidence({} as never, {
+		changes: [
+			{ kind: "article_links", targetId: "123" },
+			{ kind: "article_links", targetId: "9" },
+		] as never,
+		evidence: original,
+	});
+	expect(read.mock.calls.map(([, id]) => id)).toEqual(["9", "123"]);
+	expect(result.map((e) => e.articleSource?.articleId)).toEqual([
+		"123",
+		"9",
+		undefined,
+	]);
+	expect(result[2]).toEqual(original[2]);
+	expect(original[0].articleSource?.contentHash).toBe(source.contentHash);
+});
 it("returns unchanged structured evidence without inventing another revision", async () => {
 	const values = evidence();
 	read.mockResolvedValue({
