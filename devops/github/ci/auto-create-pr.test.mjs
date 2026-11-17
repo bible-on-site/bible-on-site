@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import stringify from "fast-json-stable-stringify";
 import {
 	describeChanges,
 	openPullRequest,
@@ -27,7 +28,7 @@ function harness(options = {}) {
 		calls.push({ args, input });
 		if (args[0] === "pr" && args[1] === "list") {
 			if (options.historyError) throw options.historyError;
-			return JSON.stringify(
+			return stringify(
 				options.histories?.[histories++] ?? options.history ?? [],
 			);
 		}
@@ -37,12 +38,12 @@ function harness(options = {}) {
 		}
 		if (args[1].includes("/branches/")) {
 			if (options.branchError) throw options.branchError;
-			return JSON.stringify({
+			return stringify({
 				commit: { sha: options.branchHeads?.[branches++] ?? headSha },
 			});
 		}
 		if (args[1].includes("/issues/"))
-			return JSON.stringify(
+			return stringify(
 				options.issue ?? { state: "open", labels: [{ name: "Devin Backlog" }] },
 			);
 		throw new Error(`Unexpected GitHub request ${JSON.stringify(args)}`);
@@ -177,6 +178,19 @@ describe("automatic PR eligibility", () => {
 			devin: false,
 			numbers: [2766],
 		});
+	});
+	it("checks the target issue without treating numeric revisions as issues", () => {
+		for (const branch of [
+			"devin/1793295877-issue-2249-ben-edition-2",
+			"devin/2249-ben-edition-2",
+			"devin/back-video-2117-2",
+		]) {
+			const h = harness();
+			assert.equal(openPullRequest(push(branch), h.dependencies).created, true);
+			const queries = h.calls.filter((c) => c.args?.[1]?.includes("/issues/"));
+			assert.equal(queries.length, 1);
+			assert.match(queries[0].args[1], /\/(2249|2117)$/);
+		}
 	});
 });
 

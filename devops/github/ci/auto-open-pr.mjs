@@ -29,15 +29,17 @@ export function pushTarget(event) {
 
 export function targetIssues(head) {
 	const devin = head.startsWith("devin/");
-	const issueBranch = /^(?:issue|feat|fix)\/(\d+)(?:-|$)/.exec(head);
-	const numbers = devin
-		? [...head.matchAll(/(?:^|[-/])(\d{1,6})(?=[-/]|$)/g)].map((m) =>
-				Number(m[1]),
-			)
-		: issueBranch
-			? [Number(issueBranch[1])]
-			: [];
-	return { devin, numbers: [...new Set(numbers)] };
+	if (!devin) {
+		const issue = /^(?:issue|feat|fix)\/(\d+)(?:-|$)/.exec(head);
+		return { devin, numbers: issue ? [Number(issue[1])] : [] };
+	}
+	const name = head.slice("devin/".length).replace(/^\d{8,}-/, "");
+	// Match an issue identifier, never every numeric token (e.g. revision -2).
+	const issue =
+		/(?:^|-)issue-(\d+)(?:-|$)/.exec(name) ??
+		/^(\d+)(?:-|$)/.exec(name) ??
+		/^[a-z][a-z0-9-]*-(\d{3,6})(?:-(?:v|r)?\d{1,2})?$/.exec(name);
+	return { devin, numbers: issue ? [Number(issue[1])] : [] };
 }
 
 function command(executable, args, input) {
