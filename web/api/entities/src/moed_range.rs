@@ -7,9 +7,11 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "tanah_moed_range")]
 pub struct Model {
+    /// INT UNSIGNED — sqlx refuses a signed decode for unsigned columns.
     #[sea_orm(primary_key)]
-    pub id: i32,
-    pub section_id: i32,
+    pub id: u32,
+    /// INT UNSIGNED.
+    pub section_id: u32,
     pub position: i16,
     pub perek_id_start: i32,
     pub pasuk_start: i16,
