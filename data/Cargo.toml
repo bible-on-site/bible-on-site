@@ -5,6 +5,7 @@ members = [
     "mysql/db-populator",
     "reading-metrics",
     "s3/s3-populator",
+    "sefaria/mongo-config",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
     "sefaria/pipelines/perushim-view",
@@ -34,5 +35,6 @@ unicode-normalization = "0.1"
 unicode_categories = "0.1"
 sha2 = "0.11"
 reading-metrics = { path = "reading-metrics" }
+mongo-config = { path = "sefaria/mongo-config" }
 bson = "3"
 sunrise = "3"
