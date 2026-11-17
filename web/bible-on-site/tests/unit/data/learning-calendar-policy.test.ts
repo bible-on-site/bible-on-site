@@ -3,6 +3,7 @@ import {
 	calendarCycleExportOpens,
 	canExportCalendarPeriod,
 	clampCalendarMonth,
+	getActiveLearningCycle,
 	getCalendarCycleWindow,
 	visibleCalendarMonths,
 } from "@/data/learning-calendar-policy";
@@ -18,6 +19,31 @@ import {
 
 const date = parseNumericalDateToHebcalDate;
 const today = date(57870217);
+
+describe("getActiveLearningCycle (#3612)", () => {
+	it("returns the cycle containing today", () => {
+		expect(getActiveLearningCycle(today)).toMatchObject({
+			number: 4,
+			projected: false,
+		});
+	});
+	it("returns the upcoming cycle on each inter-cycle gap day", () => {
+		for (const offset of [1, 2, 3]) {
+			expect(
+				getActiveLearningCycle(getCycle(4).end.add(offset)).number,
+			).toBe(5);
+		}
+	});
+	it("returns cycle 1 before the programme starts", () => {
+		expect(getActiveLearningCycle(getCycle(1).start.add(-1)).number).toBe(1);
+	});
+	it("returns the next projected cycle inside a projected gap", () => {
+		expect(getActiveLearningCycle(getCycle(11).end.add(2))).toMatchObject({
+			number: 12,
+			projected: true,
+		});
+	});
+});
 
 describe("learning calendar limits", () => {
 	it("normalizes legacy punctuation in displayed Hebrew dates and month names", () => {

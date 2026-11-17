@@ -88,6 +88,51 @@ test.describe("Sefer left-page panel", () => {
 		});
 	});
 
+	test("dates each chapter's panel by its scheduled day in the active cycle, not today (#3612)", async ({
+		page,
+	}) => {
+		test.setTimeout(120_000);
+		// Freeze on ח כסלו ה'תשפ"ז — perek 319's study day of cycle 4 — while
+		// opening בראשית, whose chapters were scheduled months earlier in the
+		// same cycle. The date between the tabs must follow the chapter, not
+		// the calendar day.
+		await page.clock.setFixedTime(new Date("2026-11-18T10:00:00+02:00"));
+		const seferPage = new SeferPage(page);
+		const panelDate = (pageIndex: number) =>
+			page
+				.locator(`.he-book .page[data-page-index="${pageIndex}"]`)
+				.getByRole("tablist", { name: "בחירת תצוגה" })
+				.locator('[role="presentation"]');
+		const todayLabel = "ח כסלו ה'תשפ\"ז";
+
+		// Direct book deep link: בראשית א sat ז אלול ה'תשפ"ה in cycle 4.
+		await page.goto("/929/1?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(panelDate(4)).toHaveText("ז אלול ה'תשפ\"ה");
+		await expect(panelDate(4)).not.toHaveText(todayLabel);
+
+		// A page turn shows the next chapter's own scheduled date.
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(panelDate(6)).toHaveText("ח אלול ה'תשפ\"ה");
+		await test.info().attach("sefer-panel-perek-2-scheduled-date", {
+			body: await page.screenshot(),
+			contentType: "image/png",
+		});
+
+		// Browser Back restores בראשית א with its own date again.
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/1\?book/);
+		await expect(panelDate(4)).toHaveText("ז אלול ה'תשפ\"ה");
+
+		// An upcoming chapter of the same cycle — יחזקאל מח (perek 500) — shows
+		// its future study date כ"ד תמוז ה'תשפ"ז, still inside cycle 4.
+		await page.goto("/929/500?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(panelDate(98)).toHaveText("כ\"ד תמוז ה'תשפ\"ז");
+		await expect(panelDate(98)).not.toHaveText(todayLabel);
+	});
+
 	test("multi-selects perushim and groups their notes by pasuk", async ({
 		page,
 	}) => {
