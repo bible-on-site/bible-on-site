@@ -107,6 +107,7 @@ function makeDeps() {
 			};
 		}),
 		log: jest.fn(),
+		warn: jest.fn(),
 		version: "0.0.0-test",
 	};
 
@@ -409,32 +410,37 @@ describe("createEventLoopDiagnostics", () => {
 
 	it.each([
 		// The makeDeps default {0,0,0} snapshot already is the Bun stub shape.
-		["a zero-returning stub", undefined],
+		["a zero-returning stub", undefined, false],
 		[
 			"a throwing primitive",
 			() => {
 				throw new Error("not implemented");
 			},
+			true,
 		],
 		[
 			"a malformed snapshot",
 			() => ({ idle: Number.NaN, active: 0, utilization: 0 }),
+			false,
 		],
 		[
 			"a snapshot with a non-finite active",
 			() => ({ idle: 5, active: Number.NaN, utilization: 0 }),
+			false,
 		],
 		[
 			"a null snapshot",
 			() => null as unknown as EventLoopUtilization,
+			false,
 		],
 		[
 			"a non-object snapshot",
 			() => "nope" as unknown as EventLoopUtilization,
+			false,
 		],
 	])(
 		"marks eventLoopUtilization unsupported for %s",
-		(_label, implementation) => {
+		(_label, implementation, throws) => {
 			const { deps, timers, setNow } = makeDeps();
 			if (implementation !== undefined) {
 				deps.eventLoopUtilization.mockImplementation(
@@ -451,6 +457,16 @@ describe("createEventLoopDiagnostics", () => {
 			expect(lastEmitted(deps.log).eventLoopUtilization).toEqual({
 				unsupported: true,
 			});
+			// A thrown read is caught and reported once per session — the
+			// anchor read at start() and the emit read dedupe to one warn;
+			// malformed returns carry no error to log.
+			expect(deps.warn).toHaveBeenCalledTimes(throws ? 1 : 0);
+			if (throws) {
+				expect(deps.warn).toHaveBeenCalledWith(
+					expect.stringContaining("eventLoopUtilization"),
+					expect.any(Error),
+				);
+			}
 			handle.stop();
 		},
 	);
@@ -485,20 +501,21 @@ describe("createEventLoopDiagnostics", () => {
 
 	it.each([
 		// The makeDeps default {0,0} snapshot already is the stub shape.
-		["a zero-returning stub", undefined],
+		["a zero-returning stub", undefined, false],
 		[
 			"a throwing primitive",
 			() => {
 				throw new Error("not implemented");
 			},
+			true,
 		],
-		["a malformed snapshot", () => ({ user: 500, system: Number.NaN })],
-		["a snapshot missing user", () => ({ user: Number.NaN, system: 5 })],
-		["a null snapshot", () => null as unknown as NodeJS.CpuUsage],
-		["a non-object snapshot", () => 7 as unknown as NodeJS.CpuUsage],
+		["a malformed snapshot", () => ({ user: 500, system: Number.NaN }), false],
+		["a snapshot missing user", () => ({ user: Number.NaN, system: 5 }), false],
+		["a null snapshot", () => null as unknown as NodeJS.CpuUsage, false],
+		["a non-object snapshot", () => 7 as unknown as NodeJS.CpuUsage, false],
 	])(
 		"marks cpu unsupported for %s",
-		(_label, implementation) => {
+		(_label, implementation, throws) => {
 			const { deps, timers, setNow } = makeDeps();
 			if (implementation !== undefined) {
 				deps.cpuUsage.mockImplementation(
@@ -513,6 +530,13 @@ describe("createEventLoopDiagnostics", () => {
 			setNow(5000);
 			timers[0].cb();
 			expect(lastEmitted(deps.log).cpu).toEqual({ unsupported: true });
+			expect(deps.warn).toHaveBeenCalledTimes(throws ? 1 : 0);
+			if (throws) {
+				expect(deps.warn).toHaveBeenCalledWith(
+					expect.stringContaining("cpuUsage"),
+					expect.any(Error),
+				);
+			}
 			handle.stop();
 		},
 	);
@@ -546,6 +570,10 @@ describe("createEventLoopDiagnostics", () => {
 		setNow(5000);
 		timers[0].cb();
 		expect(lastEmitted(deps.log).gc).toEqual({ unsupported: true });
+		expect(deps.warn).toHaveBeenCalledWith(
+			expect.stringContaining("gc observer"),
+			expect.any(Error),
+		);
 		handle.stop();
 	});
 
@@ -593,6 +621,13 @@ describe("createEventLoopDiagnostics", () => {
 			expect(JSON.parse(deps.log.mock.calls[0][0]).gc).toEqual({
 				unsupported: true,
 			});
+			// The throwing capability getter is caught by the acquirer and
+			// logged once — unsupported marks the field, warn keeps the cause.
+			expect(deps.warn).toHaveBeenCalledTimes(1);
+			expect(deps.warn).toHaveBeenCalledWith(
+				expect.stringContaining("gc observer"),
+				expect.any(Error),
+			);
 			handle.stop();
 		} finally {
 			if (original) {
@@ -616,6 +651,11 @@ describe("createEventLoopDiagnostics", () => {
 		});
 		expect(() => handle.start()).not.toThrow();
 		expect(handle.running).toBe(true);
+		expect(deps.warn).toHaveBeenCalledTimes(1);
+		expect(deps.warn).toHaveBeenCalledWith(
+			expect.stringContaining("delay sampler"),
+			expect.any(Error),
+		);
 		setNow(5000);
 		timers[0].cb();
 		expect(

@@ -94,6 +94,12 @@ export interface EventLoopDiagnosticsDeps {
 	/** Registers a teardown hook run at process exit; returns its remover. */
 	onExit: (callback: () => void) => () => void;
 	log: (line: string) => void;
+	/**
+	 * Surfaces swallowed primitive failures. A capability probe or reader
+	 * that throws must stay visible to operators; the emitted field still
+	 * reports `unsupported`, but the cause is never silently dropped.
+	 */
+	warn: (message: string, error: unknown) => void;
 	version: string;
 }
 
@@ -115,15 +121,12 @@ const defaultDeps: EventLoopDiagnosticsDeps = {
 	eventLoopUtilization: () => performance.eventLoopUtilization(),
 	cpuUsage: () => process.cpuUsage(),
 	uptime: () => process.uptime(),
+	// A missing capability list means support cannot be verified — the caller
+	// treats a false return as unsupported. A throwing probe propagates into
+	// the acquirer's catch, which logs it instead of hiding it.
 	gcEntryTypeSupported: () => {
-		try {
-			const types = PerformanceObserver.supportedEntryTypes;
-			return Array.isArray(types) && types.includes("gc");
-		} catch {
-			// No capability list means support cannot be verified — report
-			// unsupported rather than attach a possibly-silent observer.
-			return false;
-		}
+		const types = PerformanceObserver.supportedEntryTypes;
+		return Array.isArray(types) && types.includes("gc");
 	},
 	observeGc: (onEntries) => {
 		const observer = new PerformanceObserver((list) => {
@@ -144,6 +147,7 @@ const defaultDeps: EventLoopDiagnosticsDeps = {
 		};
 	},
 	log: (line) => console.log(line),
+	warn: (message, error) => console.warn(message, error),
 	version: packageJson.version,
 };
 
@@ -210,15 +214,30 @@ export function createEventLoopDiagnostics(
 	// field then reports `unsupported` instead of healthy-looking zeros.
 	let session: DiagnosticsSession | null = null;
 
+	// Readers run every window, so a permanently broken primitive must not
+	// re-warn each emit; the dedupe resets with each start().
+	const warnedKeys = new Set<string>();
+	function warnOnce(key: string, message: string, error: unknown): void {
+		if (warnedKeys.has(key)) return;
+		warnedKeys.add(key);
+		deps.warn(message, error);
+	}
+
 	// A diagnostics session must never take the server down: a runtime that
 	// lacks a primitive reports it unsupported per window instead of throwing
-	// during start() and failing instrumentation register().
+	// during start() and failing instrumentation register(). The failure is
+	// still logged — unsupported marks the field, not the cause.
 	function acquireSampler(): EventLoopDelaySampler | null {
 		try {
 			const sampler = deps.createDelaySampler();
 			sampler.enable();
 			return sampler;
-		} catch {
+		} catch (error) {
+			warnOnce(
+				"delay-sampler",
+				"event-loop diagnostics: delay sampler unavailable; reporting eventLoopDelay unsupported",
+				error,
+			);
 			return null;
 		}
 	}
@@ -227,7 +246,12 @@ export function createEventLoopDiagnostics(
 		try {
 			if (!deps.gcEntryTypeSupported()) return null;
 			return deps.observeGc(onGcEntries);
-		} catch {
+		} catch (error) {
+			warnOnce(
+				"gc-observer",
+				"event-loop diagnostics: gc observer unavailable; reporting gc unsupported",
+				error,
+			);
 			return null;
 		}
 	}
@@ -248,8 +272,12 @@ export function createEventLoopDiagnostics(
 				Number.isFinite(u.active)
 			)
 				return u;
-		} catch {
-			// Missing primitive — emitted as unsupported for this window.
+		} catch (error) {
+			warnOnce(
+				"elu-read",
+				"event-loop diagnostics: eventLoopUtilization() unavailable; reporting unsupported",
+				error,
+			);
 		}
 		return null;
 	}
@@ -264,8 +292,12 @@ export function createEventLoopDiagnostics(
 				Number.isFinite(c.system)
 			)
 				return c;
-		} catch {
-			// Missing primitive — emitted as unsupported for this window.
+		} catch (error) {
+			warnOnce(
+				"cpu-read",
+				"event-loop diagnostics: cpuUsage() unavailable; reporting unsupported",
+				error,
+			);
 		}
 		return null;
 	}
@@ -391,6 +423,9 @@ export function createEventLoopDiagnostics(
 
 	function start(): void {
 		if (session !== null) return;
+		// A new session re-warns on primitive failures: a runtime that recovers
+		// and breaks again must not hide the second failure behind dedupe.
+		warnedKeys.clear();
 		session = {
 			sampler: acquireSampler(),
 			gcObserver: acquireGcObserver(),
