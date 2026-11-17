@@ -262,14 +262,20 @@ partial class Build
     /// the bundle is committable: Play finishes processing it asynchronously
     /// and rejects the commit with 400 "Some of the Android App Bundle
     /// uploads are not completed yet" until processing lands (CD run
-    /// 44034434746, #3609). A rejected commit leaves the edit open, so that
-    /// exact rejection and 5xx answers retry on the same edit inside a
-    /// bounded budget; every other rejection stays permanent. A
-    /// transport-level failure resolves against remote state instead of
-    /// guessing — a version code already live on the track proves the commit
-    /// landed despite the lost response, as does a follow-up 404 after an
-    /// earlier attempt — so delivery is never declared on an uncommitted
-    /// edit and a possibly committed edit is never discarded prematurely.
+    /// 44034434746, #3609 — the store needed more than the ~4s that elapsed
+    /// between the accepted upload and the first commit; the bounded budget
+    /// below covers that measured processing window, not an open-ended wait).
+    /// A rejected commit leaves the edit open, so that exact rejection and
+    /// 5xx answers retry on the same edit inside a bounded budget; every
+    /// other rejection stays permanent. A transport-level failure resolves
+    /// against remote state instead of guessing — but Play allows only one
+    /// open edit per account, so a fresh probe edit could invalidate a
+    /// still-pending commit. The original edit's own state is read first:
+    /// still open proves the commit did not land and retries it; consumed
+    /// (404) proves it landed and only then may a probe edit verify the
+    /// version code on the live track — so delivery is never declared on an
+    /// uncommitted edit and a possibly committed edit is never discarded
+    /// prematurely.
     /// </summary>
     internal static void CommitPlayEdit(AndroidPublisherService service, string editId, string track, long versionCode,
         Action<TimeSpan>? sleep = null)
@@ -307,15 +313,29 @@ partial class Build
             catch (Exception uncertain) when (uncertain is HttpRequestException or TaskCanceledException
                 or IOException or AggregateException)
             {
-                // The response was lost, not necessarily the commit — inspect
-                // the live track before declaring failure or discarding an
-                // edit whose commit may already have landed.
-                if (PlayReleaseIsLive(service, track, versionCode))
+                // The response was lost, not necessarily the commit. Resolve
+                // the original edit's state with a non-mutating read before
+                // any new edit exists: still open proves the commit did not
+                // land, so the same edit retries within the bounded budget;
+                // consumed proves it landed, so a probe edit can safely ask
+                // the live track whether the release published. An
+                // unreadable state keeps the original failure.
+                switch (PlayEditStillOpen(service, editId))
                 {
-                    Serilog.Log.Warning($"Play edit commit response was lost but release {versionCode} is live on {track}; treating the commit as landed");
-                    return;
+                    case true when attempt < PlayCommitMaxAttempts:
+                    {
+                        var delay = PlayCommitRetryDelays[Math.Min(attempt - 1, PlayCommitRetryDelays.Length - 1)];
+                        Serilog.Log.Warning($"Play edit commit attempt {attempt}/{PlayCommitMaxAttempts} lost its response " +
+                            $"but edit {editId} is still open; retrying the commit in {delay.TotalSeconds:0}s");
+                        (sleep ?? Thread.Sleep)(delay);
+                        continue;
+                    }
+                    case false when PlayReleaseIsLive(service, track, versionCode):
+                        Serilog.Log.Warning($"Play edit commit response was lost but release {versionCode} is live on {track}; treating the commit as landed");
+                        return;
+                    default:
+                        throw;
                 }
-                throw;
             }
         }
     }
@@ -340,10 +360,38 @@ partial class Build
             && error.Message.Contains("not completed", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// Non-mutating read of the original edit's own state: true while the
+    /// edit is still open, false once consumed, null when the answer itself
+    /// is unreachable. Play allows one open edit per account and a new edit
+    /// invalidates an existing one, so this must always run before any probe
+    /// edit is created while a commit outcome is uncertain.
+    /// </summary>
+    static bool? PlayEditStillOpen(AndroidPublisherService service, string editId)
+    {
+        try
+        {
+            service.Edits.Get(GooglePlayPackageName, editId).Execute();
+            return true;
+        }
+        catch (GoogleApiException gone) when (gone.HttpStatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+        catch (Exception probe) when (probe is GoogleApiException or HttpRequestException
+            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+        {
+            Serilog.Log.Debug($"Play edit {editId} state read failed: {probe.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Whether the committed (live) state of the track already carries the
     /// uploaded version code — the proof that a commit whose answer was lost
-    /// still landed. An inconclusive read counts as not live so the caller
-    /// keeps the original failure.
+    /// still landed. Must only run once the deployment edit is provably
+    /// consumed, because the read creates a throwaway edit and Play allows
+    /// only one open edit per account. An inconclusive read counts as not
+    /// live so the caller keeps the original failure.
     /// </summary>
     static bool PlayReleaseIsLive(AndroidPublisherService service, string track, long versionCode) =>
         ReadLiveTrack(service, track)?.Releases?

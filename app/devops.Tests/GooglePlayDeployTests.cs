@@ -91,13 +91,57 @@ public sealed class GooglePlayDeployTests
     {
         var handler = new PlayStubHandler();
         handler.Respond((_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset")));
+        // The original edit is already consumed — only then may a probe
+        // edit read the live track without invalidating a pending commit.
+        handler.Respond(ApiError(HttpStatusCode.NotFound, "Edit not found"));
         handler.Respond(Json("""{"id":"probe"}"""));
         handler.Respond(Json(TrackJson(VersionCode)));
         handler.Respond(Json("{}"));
         Build.CommitPlayEdit(PlayService(handler), "edit-1", "internal", VersionCode, NoSleep);
         Assert.Equal(1, handler.Requests.Count(r => r.Contains(":commit")));
+        Assert.Contains(handler.Requests, r => r.StartsWith("GET") && r.Contains("edits/edit-1"));
         Assert.Contains(handler.Requests, r => r.StartsWith("GET") && r.Contains("tracks/internal"));
         Assert.Contains(handler.Requests, r => r.StartsWith("DELETE") && r.Contains("probe"));
+    }
+
+    [Fact]
+    public void CommitPlayEditRetriesAStillOpenEditInsteadOfProbing()
+    {
+        var handler = new PlayStubHandler();
+        handler.Respond((_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset")));
+        // The edit is still open — the commit provably did not land, so the
+        // same edit retries and no new edit may be created.
+        handler.Respond(Json("""{"id":"edit-1"}"""));
+        handler.Respond(Json("""{"id":"edit-1"}"""));
+        var delays = new List<TimeSpan>();
+        Build.CommitPlayEdit(PlayService(handler), "edit-1", "internal", VersionCode, delays.Add);
+        Assert.Equal(2, handler.Requests.Count(r => r.Contains(":commit")));
+        Assert.Contains(handler.Requests, r => r.StartsWith("GET") && r.Contains("edits/edit-1"));
+        // No new edit may be created while the original is still open —
+        // Play would invalidate the pending edit.
+        Assert.DoesNotContain(handler.Requests, r => r.StartsWith("POST") && r.EndsWith("/edits"));
+        Assert.DoesNotContain(handler.Requests, r => r.Contains("tracks/internal"));
+        Assert.Single(delays);
+    }
+
+    [Fact]
+    public void CommitPlayEditKeepsAStillOpenEditUnprobedUntilTheBudgetEnds()
+    {
+        var handler = new PlayStubHandler();
+        for (var i = 0; i < Build.PlayCommitMaxAttempts; i++)
+        {
+            handler.Respond((_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset")));
+            handler.Respond(Json("""{"id":"edit-1"}"""));
+        }
+        Assert.Throws<HttpRequestException>(() => Build.CommitPlayEdit(
+            PlayService(handler), "edit-1", "internal", VersionCode, NoSleep));
+        Assert.Equal(Build.PlayCommitMaxAttempts, handler.Requests.Count(r => r.Contains(":commit")));
+        Assert.Equal(Build.PlayCommitMaxAttempts,
+            handler.Requests.Count(r => r.StartsWith("GET") && r.Contains("edits/edit-1")));
+        // A probe edit would have inserted an edit and asked the live
+        // track — neither may happen while the original stays open.
+        Assert.DoesNotContain(handler.Requests, r => r.StartsWith("POST") && r.EndsWith("/edits"));
+        Assert.DoesNotContain(handler.Requests, r => r.Contains("tracks/internal"));
     }
 
     [Fact]
@@ -105,6 +149,7 @@ public sealed class GooglePlayDeployTests
     {
         var handler = new PlayStubHandler();
         handler.Respond((_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset")));
+        handler.Respond(ApiError(HttpStatusCode.NotFound, "Edit not found"));
         handler.Respond(Json("""{"id":"probe"}"""));
         handler.Respond(Json(TrackJson(50100022)));
         handler.Respond(Json("{}"));
@@ -219,7 +264,10 @@ public sealed class GooglePlayDeployTests
         Assert.Equal(4, handler.Requests.Count);
     }
 
-    static void NoSleep(TimeSpan _) { }
+    static void NoSleep(TimeSpan _)
+    {
+        // Deliberately no pause — tests record the delay, never wait on it.
+    }
 
     static EditsResource.BundlesResource.UploadMediaUpload BundleUpload(AndroidPublisherService service) =>
         service.Edits.Bundles.Upload("com.tanah.daily929", "edit-1", new MemoryStream(AabBytes), "application/octet-stream");
@@ -257,7 +305,7 @@ public sealed class GooglePlayDeployTests
 
     sealed class StubHttpClientFactory(PlayStubHandler handler, TimeSpan timeout) : IHttpClientFactory
     {
-        public ConfigurableHttpClient CreateHttpClient(CreateHttpClientArgs args) =>
+        public ConfigurableHttpClient CreateHttpClient(CreateHttpClientArgs _) =>
             new(new ConfigurableMessageHandler(handler)) { Timeout = timeout };
     }
 
@@ -271,8 +319,8 @@ public sealed class GooglePlayDeployTests
         readonly Queue<Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>> _script = new();
         public readonly List<string> Requests = [];
 
-        public void Respond(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) =>
-            _script.Enqueue(respond);
+        public void Respond(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder) =>
+            _script.Enqueue(responder);
 
         public void Respond(HttpResponseMessage response) =>
             _script.Enqueue((_, _) => Task.FromResult(response));
