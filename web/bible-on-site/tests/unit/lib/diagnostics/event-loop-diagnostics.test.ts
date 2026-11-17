@@ -72,6 +72,7 @@ function makeDeps() {
 		eventLoopUtilization: jest.fn((): EventLoopUtilization => utilization),
 		cpuUsage: jest.fn((): NodeJS.CpuUsage => cpu),
 		uptime: jest.fn((): number => uptimeSeconds),
+		gcEntryTypeSupported: jest.fn((): boolean => true),
 		observeGc: jest.fn(
 			(
 				onEntries: (entries: readonly PerformanceEntry[]) => void,
@@ -106,6 +107,7 @@ function makeDeps() {
 			};
 		}),
 		log: jest.fn(),
+		warn: jest.fn(),
 		version: "0.0.0-test",
 	};
 
@@ -389,8 +391,9 @@ describe("createEventLoopDiagnostics", () => {
 		});
 	});
 
-	it("reports zero utilization when the loop made no progress", () => {
-		const { deps, timers, setNow } = makeDeps();
+	it("reports zero utilization deltas when live counters did not advance", () => {
+		const { deps, timers, setNow, setUtilization } = makeDeps();
+		setUtilization({ idle: 100, active: 50, utilization: 0.25 });
 		const handle = createEventLoopDiagnostics({
 			intervalMs: 5000,
 			...deps,
@@ -403,6 +406,268 @@ describe("createEventLoopDiagnostics", () => {
 			activeMs: 0,
 			utilization: 0,
 		});
+	});
+
+	it.each([
+		// The makeDeps default {0,0,0} snapshot already is the Bun stub shape.
+		["a zero-returning stub", undefined, false],
+		[
+			"a throwing primitive",
+			() => {
+				throw new Error("not implemented");
+			},
+			true,
+		],
+		[
+			"a malformed snapshot",
+			() => ({ idle: Number.NaN, active: 0, utilization: 0 }),
+			false,
+		],
+		[
+			"a snapshot with a non-finite active",
+			() => ({ idle: 5, active: Number.NaN, utilization: 0 }),
+			false,
+		],
+		[
+			"a null snapshot",
+			() => null as unknown as EventLoopUtilization,
+			false,
+		],
+		[
+			"a non-object snapshot",
+			() => "nope" as unknown as EventLoopUtilization,
+			false,
+		],
+	])(
+		"marks eventLoopUtilization unsupported for %s",
+		(_label, implementation, throws) => {
+			const { deps, timers, setNow } = makeDeps();
+			if (implementation !== undefined) {
+				deps.eventLoopUtilization.mockImplementation(
+					implementation as () => EventLoopUtilization,
+				);
+			}
+			const handle = createEventLoopDiagnostics({
+				intervalMs: 5000,
+				...deps,
+			});
+			handle.start();
+			setNow(5000);
+			timers[0].cb();
+			expect(lastEmitted(deps.log).eventLoopUtilization).toEqual({
+				unsupported: true,
+			});
+			// A thrown read is caught and reported once per session — the
+			// anchor read at start() and the emit read dedupe to one warn;
+			// malformed returns carry no error to log.
+			expect(deps.warn).toHaveBeenCalledTimes(throws ? 1 : 0);
+			if (throws) {
+				expect(deps.warn).toHaveBeenCalledWith(
+					expect.stringContaining("eventLoopUtilization"),
+					expect.any(Error),
+				);
+			}
+			handle.stop();
+		},
+	);
+
+	it("reports cumulative deltas once stub counters start advancing", () => {
+		const { deps, timers, setNow, setUtilization } = makeDeps();
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...deps,
+		});
+		handle.start();
+		setNow(5000);
+		timers[0].cb();
+		expect(
+			JSON.parse(deps.log.mock.calls[0][0]).eventLoopUtilization,
+		).toEqual({ unsupported: true });
+		setUtilization({ idle: 300, active: 100, utilization: 0.25 });
+		setNow(10_000);
+		timers[1].cb();
+		// The first live window is anchored at zero, so the delta is the
+		// counter's cumulative measured work — real data, not a fake zero.
+		expect(
+			JSON.parse(deps.log.mock.calls[1][0]).eventLoopUtilization,
+		).toEqual({ idleMs: 300, activeMs: 100, utilization: 0.25 });
+		setUtilization({ idle: 700, active: 300, utilization: 0.3 });
+		setNow(15_000);
+		timers[2].cb();
+		expect(
+			JSON.parse(deps.log.mock.calls[2][0]).eventLoopUtilization,
+		).toEqual({ idleMs: 400, activeMs: 200, utilization: 0.333 });
+	});
+
+	it.each([
+		// The makeDeps default {0,0} snapshot already is the stub shape.
+		["a zero-returning stub", undefined, false],
+		[
+			"a throwing primitive",
+			() => {
+				throw new Error("not implemented");
+			},
+			true,
+		],
+		["a malformed snapshot", () => ({ user: 500, system: Number.NaN }), false],
+		["a snapshot missing user", () => ({ user: Number.NaN, system: 5 }), false],
+		["a null snapshot", () => null as unknown as NodeJS.CpuUsage, false],
+		["a non-object snapshot", () => 7 as unknown as NodeJS.CpuUsage, false],
+	])(
+		"marks cpu unsupported for %s",
+		(_label, implementation, throws) => {
+			const { deps, timers, setNow } = makeDeps();
+			if (implementation !== undefined) {
+				deps.cpuUsage.mockImplementation(
+					implementation as () => NodeJS.CpuUsage,
+				);
+			}
+			const handle = createEventLoopDiagnostics({
+				intervalMs: 5000,
+				...deps,
+			});
+			handle.start();
+			setNow(5000);
+			timers[0].cb();
+			expect(lastEmitted(deps.log).cpu).toEqual({ unsupported: true });
+			expect(deps.warn).toHaveBeenCalledTimes(throws ? 1 : 0);
+			if (throws) {
+				expect(deps.warn).toHaveBeenCalledWith(
+					expect.stringContaining("cpuUsage"),
+					expect.any(Error),
+				);
+			}
+			handle.stop();
+		},
+	);
+
+	it("marks gc unsupported without attaching an observer when the entry type is unavailable", () => {
+		const { deps, timers, observers, setNow } = makeDeps();
+		deps.gcEntryTypeSupported.mockReturnValue(false);
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...deps,
+		});
+		handle.start();
+		setNow(5000);
+		timers[0].cb();
+		expect(deps.observeGc).not.toHaveBeenCalled();
+		expect(observers).toHaveLength(0);
+		expect(lastEmitted(deps.log).gc).toEqual({ unsupported: true });
+		handle.stop();
+	});
+
+	it("marks gc unsupported when observing throws despite claimed support", () => {
+		const { deps, timers, setNow } = makeDeps();
+		deps.observeGc.mockImplementation(() => {
+			throw new Error("observe failed");
+		});
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...deps,
+		});
+		handle.start();
+		setNow(5000);
+		timers[0].cb();
+		expect(lastEmitted(deps.log).gc).toEqual({ unsupported: true });
+		expect(deps.warn).toHaveBeenCalledWith(
+			expect.stringContaining("gc observer"),
+			expect.any(Error),
+		);
+		handle.stop();
+	});
+
+	it("marks gc unsupported when the real probe cannot verify the entry type", () => {
+		const { PerformanceObserver } = jest.requireActual<
+			typeof import("node:perf_hooks")
+		>("node:perf_hooks");
+		const original = Object.getOwnPropertyDescriptor(
+			PerformanceObserver,
+			"supportedEntryTypes",
+		);
+		const { deps, timers, setNow } = makeDeps();
+		// Drop the injected probe so the default reads the patched getter.
+		const { gcEntryTypeSupported: _gcProbe, ...realProbeDeps } = deps;
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...realProbeDeps,
+		});
+		try {
+			// A capability list that omits "gc" — the Bun signature.
+			Object.defineProperty(PerformanceObserver, "supportedEntryTypes", {
+				get: () => ["mark", "measure"],
+				configurable: true,
+			});
+			handle.start();
+			setNow(5000);
+			timers[0].cb();
+			expect(JSON.parse(deps.log.mock.calls[0][0]).gc).toEqual({
+				unsupported: true,
+			});
+			expect(deps.observeGc).not.toHaveBeenCalled();
+			handle.stop();
+
+			// A getter that throws — support cannot be verified at all.
+			Object.defineProperty(PerformanceObserver, "supportedEntryTypes", {
+				get: () => {
+					throw new Error("no list");
+				},
+				configurable: true,
+			});
+			deps.log.mockClear();
+			handle.start();
+			setNow(10_000);
+			timers[2].cb();
+			expect(JSON.parse(deps.log.mock.calls[0][0]).gc).toEqual({
+				unsupported: true,
+			});
+			// The throwing capability getter is caught by the acquirer and
+			// logged once — unsupported marks the field, warn keeps the cause.
+			expect(deps.warn).toHaveBeenCalledTimes(1);
+			expect(deps.warn).toHaveBeenCalledWith(
+				expect.stringContaining("gc observer"),
+				expect.any(Error),
+			);
+			handle.stop();
+		} finally {
+			if (original) {
+				Object.defineProperty(
+					PerformanceObserver,
+					"supportedEntryTypes",
+					original,
+				);
+			}
+		}
+	});
+
+	it("marks eventLoopDelay unsupported without crashing when the sampler cannot be created", () => {
+		const { deps, timers, setNow } = makeDeps();
+		deps.createDelaySampler.mockImplementation(() => {
+			throw new Error("monitorEventLoopDelay missing");
+		});
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...deps,
+		});
+		expect(() => handle.start()).not.toThrow();
+		expect(handle.running).toBe(true);
+		expect(deps.warn).toHaveBeenCalledTimes(1);
+		expect(deps.warn).toHaveBeenCalledWith(
+			expect.stringContaining("delay sampler"),
+			expect.any(Error),
+		);
+		setNow(5000);
+		timers[0].cb();
+		expect(
+			JSON.parse(deps.log.mock.calls[0][0]).eventLoopDelay,
+		).toEqual({ unsupported: true });
+		// A second window exercises accumulator reset with no sampler.
+		setNow(10_000);
+		timers[1].cb();
+		expect(
+			JSON.parse(deps.log.mock.calls[1][0]).eventLoopDelay,
+		).toEqual({ unsupported: true });
+		expect(() => handle.stop()).not.toThrow();
 	});
 
 	it("start is idempotent", () => {
@@ -524,9 +789,13 @@ describe("createEventLoopDiagnostics", () => {
 		);
 	});
 
-	it("emits through the real GC observer, uptime, console sink and version", async () => {
+	it("emits through the real runtime primitives, GC observer, console sink and version", async () => {
 		const { deps, timers, setNow } = makeDeps();
 		const {
+			createDelaySampler: _createDelaySampler,
+			eventLoopUtilization: _eventLoopUtilization,
+			cpuUsage: _cpuUsage,
+			gcEntryTypeSupported: _gcEntryTypeSupported,
 			log: _log,
 			uptime: _uptime,
 			observeGc: _observeGc,
@@ -561,6 +830,14 @@ describe("createEventLoopDiagnostics", () => {
 			const summary = JSON.parse(line as string);
 			expect(summary.version).toBe(packageJson.version);
 			expect(summary.uptimeSeconds).toBeGreaterThan(0);
+			// Under Node every primitive is supported and reports real values.
+			expect(summary.eventLoopDelay.unsupported).not.toBe(true);
+			expect(summary.eventLoopDelay.count).toBeGreaterThanOrEqual(0);
+			expect(summary.eventLoopUtilization.unsupported).not.toBe(true);
+			expect(summary.eventLoopUtilization.idleMs).toBeGreaterThanOrEqual(0);
+			expect(summary.cpu.unsupported).not.toBe(true);
+			expect(summary.cpu.userMs).toBeGreaterThanOrEqual(0);
+			expect(summary.gc.unsupported).not.toBe(true);
 			expect(summary.gc.count).toBeGreaterThan(0);
 			handle.stop();
 		} finally {
