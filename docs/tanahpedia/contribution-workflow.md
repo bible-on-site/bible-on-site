@@ -231,6 +231,14 @@ Cumulative `records` arrays omit exact repeats of their latest previously
 supplied value, including initial `currentRecords`; changed values are supplied
 again. The original server receipts, schema validation and freshness checks
 remain unchanged. Missing evidence still requires clarification.
+The native system prompt includes only operation guides permitted by the
+server's finite result-kind constraints. Other declared operation guides are
+omitted; general instructions and the complete read-tool declarations remain.
+Human text and model hints cannot select this scope. A trusted read that changes
+the result contract refreshes the guide before the next inference, and changed
+system text also consumes the context reserve. Open, referenced or unknown
+contracts retain the full guide. Final JSON requests omit optional indentation
+and keep generated prose concise while preserving exact human quotations.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.

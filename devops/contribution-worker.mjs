@@ -147,14 +147,63 @@ function nativeModelMessage(body, bundle) {
 	return message;
 }
 
-function nativeAgentSystem(bundle) {
+/** Select operation instructions only from the server's constrained result
+ * schema, never from a model/human hint. Unknown or open contracts retain the
+ * whole guide so future schemas cannot silently lose their instructions. */
+function operationGuideForSchema(bundle, schema) {
+	const kinds = new Set(),
+		pending = [agentResultSchema(schema)];
+	while (pending.length) {
+		const node = pending.pop();
+		if (!object(node)) continue;
+		if (Object.hasOwn(node, "$ref")) return bundle.operationGuide;
+		if (object(node.properties) && Object.hasOwn(node.properties, "kind")) {
+			const kind = node.properties.kind;
+			if (typeof kind?.const === "string") kinds.add(kind.const);
+			else if (
+				Array.isArray(kind?.enum) &&
+				kind.enum.length &&
+				kind.enum.every((value) => typeof value === "string")
+			)
+				for (const value of kind.enum) kinds.add(value);
+			else return bundle.operationGuide;
+		}
+		for (const value of Object.values(node)) {
+			if (Array.isArray(value)) pending.push(...value);
+			else if (object(value)) pending.push(value);
+		}
+	}
+	const matches = (guide, kind) =>
+		guide.startsWith(`${kind}:`) || guide.startsWith(`${kind} (`);
+	if (
+		!kinds.size ||
+		[...kinds].some(
+			(kind) => !bundle.operationGuide.some((guide) => matches(guide, kind)),
+		)
+	)
+		return bundle.operationGuide;
+	const vocabulary = bundle.tools.find((tool) => tool.name === "record")
+		?.inputSchema?.properties?.kind?.enum;
+	if (!Array.isArray(vocabulary)) return bundle.operationGuide;
+	const otherKinds = vocabulary
+		.filter((kind) => typeof kind === "string" && kind.startsWith("target:"))
+		.map((kind) => kind.slice(7))
+		.filter((kind) => !kinds.has(kind));
+	// Only omit a guide for a declared, disallowed operation. General guidance
+	// and future/unknown instruction formats always remain in the prompt.
+	return bundle.operationGuide.filter(
+		(guide) => !otherKinds.some((kind) => matches(guide, kind)),
+	);
+}
+
+function nativeAgentSystem(bundle, schema) {
 	return [
 		bundle.system.replace(
 			"Return JSON matching the supplied action schema.",
 			"Use the supplied native read functions to obtain missing context; the final proposal uses a separately constrained result schema.",
 		),
 		"Operation guide:",
-		...bundle.operationGuide,
+		...operationGuideForSchema(bundle, schema),
 		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
 		"Tool records arrays omit only records identical to their latest value already supplied in currentRecords or earlier tool messages. Reuse those earlier values; omission is never deletion. Changed records are supplied again. Text, citations, discussions and page cursors are retained in full.",
 	].join("\n");
@@ -551,8 +600,10 @@ export function createContributionWorker(
 				const latestRecords = new Map();
 				if (Array.isArray(context?.currentRecords))
 					recordDeltas(context.currentRecords, latestRecords);
+				let schema = job.schema,
+					promptTokens = 0;
 				const messages = [
-					{ role: "system", content: nativeAgentSystem(bundle) },
+					{ role: "system", content: nativeAgentSystem(bundle, schema) },
 					{
 						role: "user",
 						content: canonical({
@@ -572,9 +623,8 @@ export function createContributionWorker(
 							parameters: tool.inputSchema,
 						},
 					}));
-				let schema = job.schema,
-					promptTokens = 0,
-					evaluatedMessages = messages.length;
+				let evaluatedMessages = messages.length,
+					evaluatedSystem = messages[0].content;
 				agentResultSchema(schema);
 				const infer = async (history, declaration) => {
 					const remaining = remainingBudget();
@@ -612,6 +662,7 @@ export function createContributionWorker(
 					// not subtract cache hits when budgeting the next native turn.
 					promptTokens = body.prompt_eval_count;
 					evaluatedMessages = history.length;
+					evaluatedSystem = history[0].content;
 					return { body, message };
 				};
 				const finalize = async () => {
@@ -623,7 +674,7 @@ export function createContributionWorker(
 							{
 								role: "user",
 								content:
-									"Now return only the final result object matching the supplied JSON response schema. Preserve the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft.",
+									"Now return only the final result object matching the supplied JSON response schema, as minified JSON without indentation or optional whitespace. Keep generated titles, descriptions and summaries concise; do not repeat the same explanation in several fields. Preserve every required change, evidence and comment response, the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft, preserving all whitespace inside that text.",
 							},
 						],
 						{ format: agentResultSchema(schema) },
@@ -668,6 +719,9 @@ export function createContributionWorker(
 					if (
 						promptTokens &&
 						promptTokens +
+							(messages[0].content === evaluatedSystem
+								? 0
+								: Buffer.byteLength(messages[0].content, "utf8")) +
 							Buffer.byteLength(canonical(additions), "utf8") +
 							128 * additions.length +
 							MODEL_OUTPUT >=
@@ -729,6 +783,12 @@ export function createContributionWorker(
 											records: recordDeltas(read.data.records, latestRecords),
 										}
 									: read.data;
+							// A trusted read can widen the result contract. Refresh its
+							// operation guide before the next research/final request.
+							messages[0] = {
+								role: "system",
+								content: nativeAgentSystem(bundle, schema),
+							};
 						}
 						messages.push({
 							role: "tool",

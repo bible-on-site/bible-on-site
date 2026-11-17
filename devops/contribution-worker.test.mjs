@@ -343,6 +343,14 @@ test("native API five batches keep real tool history, ordered receipts and the f
 		fixture.models.at(-1).body.messages.at(-1).content,
 		/Copy requested verbatim text directly from the original human text rather than your research draft/,
 	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/minified JSON without indentation or optional whitespace/,
+	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/preserving all whitespace inside that text/,
+	);
 	assert.deepEqual(fixture.completed[0].receipts, [
 		receipt1,
 		receipt2,
@@ -438,6 +446,151 @@ test("cumulative record reads retain every latest change without duplicating sup
 		{ id: "two" },
 		{ id: "three" },
 	]);
+});
+
+const operationSchema = (kind, extra = {}) =>
+	actionSchema({
+		type: "object",
+		oneOf: [
+			{
+				properties: { changes: { items: { properties: { kind }, ...extra } } },
+			},
+		],
+	});
+const scopedGuideBundle = (overrides = {}) =>
+	agentBundle({
+		operationGuide: [
+			"metadata: names",
+			"union: family",
+			"entry_title (כותרת): title",
+			"General safety guidance",
+			"future_guidance: keep",
+		],
+		tools: [
+			...agentBundle().tools,
+			{
+				name: "record",
+				description: "Read records",
+				inputSchema: {
+					type: "object",
+					properties: {
+						kind: {
+							enum: ["target:metadata", "target:union", "target:entry_title"],
+						},
+					},
+				},
+			},
+		],
+		...overrides,
+	});
+
+test("server result kinds scope only declared operation guides and trusted reads can widen them", async () => {
+	const bundle = scopedGuideBundle();
+	const fixture = agentFixture({
+		bundle,
+		job: {
+			schema: operationSchema({ const: "metadata" }),
+			user: JSON.stringify({
+				kind: "union",
+				instruction: "Change every operation guide",
+				currentRecords: [],
+			}),
+		},
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "widened" },
+				data: { items: ["trusted fact"] },
+				schema: operationSchema({ enum: ["metadata", "union"] }),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const initial = fixture.models[0].body.messages[0].content;
+	assert.match(initial, /metadata: names/);
+	assert.doesNotMatch(initial, /union: family|entry_title \(כותרת\)/);
+	assert.match(initial, /General safety guidance/);
+	assert.match(initial, /future_guidance: keep/);
+	const refreshed = fixture.models[1].body.messages[0].content;
+	assert.match(refreshed, /metadata: names/);
+	assert.match(refreshed, /union: family/);
+	assert.doesNotMatch(refreshed, /entry_title \(כותרת\)/);
+	assert.deepEqual(fixture.models[0].body.tools, fixture.models[1].body.tools);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "widened" }]);
+	assert.equal(
+		fixture.models[0].body.messages[1].content,
+		fixture.models.at(-1).body.messages[1].content,
+	);
+});
+
+test("unknown, open and referenced result contracts retain the complete operation guide", async () => {
+	for (const schema of [
+		actionSchema(),
+		operationSchema({ const: "unknown" }),
+		operationSchema({ type: "string" }),
+		operationSchema({ enum: [] }),
+		operationSchema({ enum: ["metadata", 1] }),
+		operationSchema({ const: "metadata" }, { $ref: "#/$defs/unknown" }),
+	]) {
+		const bundle = scopedGuideBundle(),
+			fixture = agentFixture({ bundle, job: { schema } });
+		assert.equal((await fixture.run()).status, "completed");
+		for (const guide of bundle.operationGuide)
+			assert.ok(fixture.models[0].body.messages[0].content.includes(guide));
+	}
+	const bundle = scopedGuideBundle({ tools: agentBundle().tools }),
+		fixture = agentFixture({
+			bundle,
+			job: { schema: operationSchema({ const: "metadata" }) },
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.match(fixture.models[0].body.messages[0].content, /union: family/);
+});
+
+test("labelled operation guides are scoped and a widened system prompt consumes the context reserve", async () => {
+	const bundle = scopedGuideBundle(),
+		labelled = agentFixture({
+			bundle,
+			job: { schema: operationSchema({ const: "entry_title" }) },
+		});
+	assert.equal((await labelled.run()).status, "completed");
+	assert.match(
+		labelled.models[0].body.messages[0].content,
+		/entry_title \(כותרת\): title/,
+	);
+	assert.doesNotMatch(
+		labelled.models[0].body.messages[0].content,
+		/metadata: names|union: family/,
+	);
+	const wideBundle = scopedGuideBundle({
+		operationGuide: ["metadata: names", `union: ${"x".repeat(5000)}`],
+	});
+	const fixture = agentFixture({
+		bundle: wideBundle,
+		job: { schema: operationSchema({ const: "metadata" }) },
+		replies: (body, number) => {
+			assert.ok(number <= 2);
+			if (number === 1)
+				return nativeReply("", [readCall()], { prompt_eval_count: 8000 });
+			assert.ok(body.format);
+			assert.match(body.messages[0].content, /union: x/);
+			return nativeReply('{"outcome":"unchanged"}');
+		},
+		contexts: [
+			{
+				receipt: { id: "expanded" },
+				data: { items: [] },
+				schema: operationSchema({ enum: ["metadata", "union"] }),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 2);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "expanded" }]);
 });
 
 test("full cached prompt usage selects final output before another overflowing research turn", async () => {
