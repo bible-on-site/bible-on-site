@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { parse } from "yaml";
 
 // Evaluate only the literal conjunctions used by these cache guards, without
@@ -47,43 +47,55 @@ const saves = workflows.flatMap(({ name, workflow }) =>
 	),
 );
 
-test("includes all four verified-audio publishers in the trust matrix", () => {
-	assert.equal(saves.length, 4);
-});
-
-for (const { name, job, step } of saves) {
-	test(`shares ${name}/${job} audio only from master cache misses`, () => {
-		for (const [event, ref, expected] of [
-			["push", "refs/heads/master", true],
-			["workflow_dispatch", "refs/heads/master", true],
-			["repository_dispatch", "refs/heads/master", true],
-			["pull_request", "refs/pull/123/merge", false],
-			["merge_group", "refs/heads/gh-readonly-queue/master/pr-123-base", false],
-			["push", "refs/heads/codex/change", false],
-			["workflow_dispatch", "refs/heads/codex/change", false],
-		]) {
-			for (const cacheHit of ["", "false", "true"]) {
-				const context = {
-					github: { event_name: event, ref },
-					inputs: { compile_only: false },
-					steps: { recitation_audio: { outputs: { "cache-hit": cacheHit } } },
-				};
-				assert.equal(
-					allowed(step.if, context),
-					expected && cacheHit !== "true",
-					`${event}/${ref}/${cacheHit}`,
-				);
-			}
-		}
-		if (job === "package_windows") {
-			assert.equal(
-				allowed(step.if, {
-					github: { ref: "refs/heads/master" },
-					inputs: { compile_only: true },
-					steps: { recitation_audio: { outputs: { "cache-hit": "false" } } },
-				}),
-				false,
-			);
-		}
+describe("recitation cache publication", () => {
+	test("includes all four verified-audio publishers in the trust matrix", () => {
+		assert.equal(saves.length, 4);
 	});
-}
+
+	for (const { name, job, step } of saves) {
+		describe(`for ${name}/${job}`, () => {
+			test("allows cache-miss saves only on master", () => {
+				for (const [event, ref, expected] of [
+					["push", "refs/heads/master", true],
+					["workflow_dispatch", "refs/heads/master", true],
+					["repository_dispatch", "refs/heads/master", true],
+					["pull_request", "refs/pull/123/merge", false],
+					[
+						"merge_group",
+						"refs/heads/gh-readonly-queue/master/pr-123-base",
+						false,
+					],
+					["push", "refs/heads/codex/change", false],
+					["workflow_dispatch", "refs/heads/codex/change", false],
+				]) {
+					for (const cacheHit of ["", "false", "true"]) {
+						const context = {
+							github: { event_name: event, ref },
+							inputs: { compile_only: false },
+							steps: {
+								recitation_audio: { outputs: { "cache-hit": cacheHit } },
+							},
+						};
+						assert.equal(
+							allowed(step.if, context),
+							expected && cacheHit !== "true",
+							`${event}/${ref}/${cacheHit}`,
+						);
+					}
+				}
+				if (job === "package_windows") {
+					assert.equal(
+						allowed(step.if, {
+							github: { ref: "refs/heads/master" },
+							inputs: { compile_only: true },
+							steps: {
+								recitation_audio: { outputs: { "cache-hit": "false" } },
+							},
+						}),
+						false,
+					);
+				}
+			});
+		});
+	}
+});
