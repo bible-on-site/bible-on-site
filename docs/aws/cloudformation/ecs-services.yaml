@@ -400,6 +400,12 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
             - Name: PUSH_SEND_SECRET
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
+            # App push (#1097): not yet deployed. When the operator stores
+            # the tanah-al-haperek sender service account JSON in SSM
+            # (prerequisites block below), uncomment and roll the service —
+            # until then the /api/push/device routes report unconfigured.
+            # - Name: FCM_SERVICE_ACCOUNT_JSON
+            #   ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-fcm-service-account-json"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -799,6 +805,18 @@ Outputs:
 #     --region il-central-1
 #   aws ssm put-parameter --name bible-on-site-push-send-secret \
 #     --type SecureString --value "$PUSH_SEND_SECRET" \
+#     --region il-central-1
+#
+#   # App push (#1097): the Google service account JSON (project_id,
+#   # client_email, private_key) allowed to send Firebase Cloud Messaging on
+#   # tanah-al-haperek, stored as one line without printing it — e.g. read
+#   # from a local key file that is removed afterwards:
+#   #   --value "$(jq -c . key.json)". Then uncomment the
+#   # FCM_SERVICE_ACCOUNT_JSON Secrets entry above and arm the daily sender
+#   # with the APP_PUSH_ENABLED repository variable — full order in
+#   # docs/app/push-notifications.md.
+#   aws ssm put-parameter --name bible-on-site-fcm-service-account-json \
+#     --type SecureString --value "<service-account-json>" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)

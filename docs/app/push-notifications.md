@@ -2,16 +2,17 @@
 
 Daily-perek push notifications for Android and iOS over Firebase Cloud
 Messaging (FCM). This document covers the app-side architecture, the identity
-and registration contract the backend implements (deferred), and the platform
-console setup required before delivery can be verified end to end.
+and registration contract the backend implements, and the remaining operator
+steps before delivery can be verified end to end.
 
 ## Scope
 
 | Piece | Status |
 |-------|--------|
-| App-side push layer (this repo) | Implemented here |
-| Backend `POST/DELETE /api/push/device` route + sender | Deferred — contract below |
-| Firebase console topics/sender setup, APNs key, Play-console notification channel review | Operator task (see checklist) |
+| App-side push layer (this repo) | Implemented (#3188) |
+| Backend `POST/DELETE /api/push/device` route + sender | Implemented here (`web/bible-on-site/src/app/api/push/device`, `src/lib/app-push`) |
+| Production Apple/Firebase console setup | Done (November 11, 2026 — Push capability on `com.tanah.daily929`, APNs key `ZHG8KWF7FZ` in the Firebase production APNs slot, distribution profile regenerated with `aps-environment=production`, CI profile secrets refreshed) |
+| FCM sender credential deployment + schedule arming + device acceptance | Remaining operator steps (see checklist) |
 | Web push subscriptions (`/api/push/subscription`) | Separate implementation (#1096) — do not conflate |
 
 ## User flow
@@ -27,7 +28,7 @@ console setup required before delivery can be verified end to end.
    dialog offering to open system settings; the toggle snaps back to off.
 3. On success the app subscribes to the FCM topic `daily_perek`, persists the
    preference, and POSTs the device-registration row (best-effort — failures
-   are log-only while the backend route is deferred).
+   are log-only so a backend outage never blocks the opt-in).
 4. **Opt-out**: same toggle off → unsubscribe topic + `DELETE` registration.
    The local preference is written first so opt-out never gets stuck behind a
    flaky network. A failed unsubscribe records `push.pending_unsubscribe`
@@ -65,9 +66,9 @@ self-claimed by the device that holds them; the daily-perek payload is
 non-personal public content). If a future feature needs authenticated
 delivery, layer Firebase Anonymous Auth sign-in on top and send an ID token.
 
-## Backend contract (deferred)
+## Backend contract
 
-Route on the website API surface, mirroring `web/.../api/push/subscription`:
+Routes on the website API surface, mirroring `web/.../api/push/subscription`:
 
 ```
 POST   /api/push/device        upsert
@@ -90,23 +91,51 @@ POST body (`PushDeviceRegistration`, camelCase, `JsonSerializerDefaults.Web`):
 
 DELETE body: `{ "userId": "fid-or-guid" }`.
 
-Semantics the backend must implement:
+Semantics the backend implements (`src/lib/app-push/service.ts`):
 
 - **Upsert by `userId`**: a row carries one current `(installationId, token)`
   pair; a changed token replaces it (token rotation), a changed installation
-  id replaces the stale installation (reinstall).
+  id replaces the stale installation (reinstall). Rows live in
+  `tanah_push_device` (`data/mysql/tanah_push_device_upgrade.sql`).
 - **Topics**: sender publishes the daily perek to the FCM topic
-  `daily_perek`. Store `topics` only to reflect/debug; the source of truth is
-  the device's FCM topic subscription — send via topic, not per-token fan-out.
+  `daily_perek`. `topics` is stored only to reflect/debug; the source of
+  truth is the device's FCM topic subscription — the sender uses the topic,
+  not per-token fan-out.
 - **DELETE** removes the row entirely (opt-out).
-- **Stale-token cleanup**: on FCM send errors (`NotRegistered`,
-  `InvalidRegistration`) drop the token/installation row.
-- No authentication is required (public daily-perek content), but rate-limit
-  the route the same way `/api/push/subscription` is handled.
+- **Stale-token cleanup**: only a genuine dead-token verdict drops the row —
+  `404 NOT_FOUND`, or `400` whose `FcmError` detail carries `UNREGISTERED`
+  (the HTTP v1 mapping of legacy `NotRegistered`/`InvalidRegistration`).
+  Other 400s are message-shape errors and leave the row alone.
+- No authentication is required (public daily-perek content), matching the
+  self-claimed-row model of `/api/push/subscription`. `POST` reports itself
+  unconfigured (404) until the FCM service account is deployed; `DELETE`
+  always works so opt-out is never blocked.
 
 Registration is deduplicated client-side by a stored
 `(user|installation|token|topics)` fingerprint — a routine launch only re-POSTs
 when something actually rotated.
+
+### Sender
+
+`POST /api/push/device/daily` publishes the daily perek to the `daily_perek`
+topic over FCM HTTP v1 — no client library; the service account JWT bearer
+grant is minted in `service.ts`. It shares the `PUSH_SEND_SECRET` bearer
+credential and the fail-closed body contract of `/api/push/daily`: an absent
+body broadcasts to the topic, while `{ "token": "<fcm registration token>" }`
+targets exactly one device for the controlled delivery check — a mistyped or
+invalid key is a 400, never a broadcast. `.github/workflows/app-push-daily.yml`
+calls it on the same 05:00 UTC schedule as the web-push sender, armed by the
+`APP_PUSH_ENABLED` repository variable. Messages carry the same 12-hour
+expiry as the web sender — `android.ttl` plus the `apns-expiration` header —
+so a device that reconnects later (Shabbat, offline) never receives
+yesterday's reminder on a different study day.
+
+Configuration: the `FCM_SERVICE_ACCOUNT_JSON` environment value is the Google
+service account JSON (`project_id`, `client_email`, `private_key`) for a
+service account with `firebase.messaging` send scope on `tanah-al-haperek`;
+the website task injects it from the SSM SecureString
+`bible-on-site-fcm-service-account-json` (commented wiring in
+`docs/aws/cloudformation/ecs-services.yaml`, mirroring the VAPID block).
 
 ## Notification payload
 
@@ -146,7 +175,7 @@ system-tray rendering):
 |------|-------|-------|
 | `POST_NOTIFICATIONS` permission | `AndroidManifest.xml` | Runtime-asked on opt-in (Android 13+) |
 | Default channel/icon meta-data | `AndroidManifest.xml` | `daily_perek`, `@mipmap/appicon` |
-| `aps-environment` | `Entitlements.App.plist` (Debug) / `Entitlements.Dist.plist` (Release) | Signed value must literally match the profile: `development` vs `production`. Gated on `-p:IosPushProvisioned=true` in `_SetIosCodesignEntitlements` — until the App ID's Push capability is enabled and the profiles regenerated (operator step 1), builds sign with `Entitlements.Base.plist` (app groups only) because no profile authorizes `aps-environment` yet |
+| `aps-environment` | `Entitlements.App.plist` (Debug) / `Entitlements.Dist.plist` (Release) | Signed value must literally match the profile: `development` vs `production`. `IosPushProvisioned` defaults to `true` (capability enabled and production profile regenerated on November 11, 2026), so `_SetIosCodesignEntitlements`, `ios_signing_requirements.py` and signed packaging all resolve the same plist. A device build whose profile does not authorize `aps-environment` (e.g. an unregenerated local development profile) passes `-p:IosPushProvisioned=false` to keep `Entitlements.Base.plist` (app groups only) |
 | `UIBackgroundModes → remote-notification` | `Info.plist` | Data/background delivery |
 | `google-services.json` / `GoogleService-Info.plist` | checked in | Same `tanah-al-haperek` project as analytics |
 | `AD_ID` removed | `AndroidManifest.xml` | `tools:node="remove"` — push adds **no** advertising-id usage |
@@ -159,19 +188,32 @@ which the Messaging SDK depends on. A Debug build can opt in with
 
 ## Operator checklist (before first real delivery)
 
-1. **Apple Developer**: enable the *Push Notifications* capability on the App
-   ID `com.tanah.daily929`; regenerate the distribution profile (it gains
-   `aps-environment=production`) and refresh the CI profile secrets.
-   Afterwards pass `-p:IosPushProvisioned=true` to iOS builds so
-   `_SetIosCodesignEntitlements` selects the `aps-environment` plists
-   (`Entitlements.App.plist` Debug / `Entitlements.Dist.plist` Release)
-   instead of `Entitlements.Base.plist`.
-2. **Firebase console** (`tanah-al-haperek`): upload the APNs authentication
-   key (Cloud Messaging → APNs Authentication Key). No server key needed in
-   the app — sending uses the topic via the Admin SDK/HTTP v1 backend-side.
-3. **Backend**: implement `POST/DELETE /api/push/device` per the contract
-   above plus the daily-perek topic sender (schedule mirrors the web-push
-   sender's timing), then verify with a controlled test send on a device that
-   opted in.
-4. Verify on device: opt-in prompt → topic subscription → receive in
-   background → tap opens today's perek; opt-out removes delivery.
+Done November 11, 2026 (see the issue status): the App ID's Push
+Notifications capability, the production APNs key uploaded to Firebase, and
+the regenerated distribution profile (`aps-environment=production`) with
+refreshed CI profile secrets. Historical notes claiming this setup was still
+unavailable are superseded.
+
+Remaining:
+
+1. **FCM sender credential**: create a Google service account on
+   `tanah-al-haperek` allowed to send Firebase Cloud Messaging, download its
+   JSON key, and store it as the SSM SecureString
+   `bible-on-site-fcm-service-account-json`; add it to the website task
+   definition's `Secrets` as `FCM_SERVICE_ACCOUNT_JSON` (commented wiring in
+   `docs/aws/cloudformation/ecs-services.yaml`) and roll the service. Until
+   then `POST /api/push/device` answers 404 and the app logs a best-effort
+   registration failure — no user-visible change. `PUSH_SEND_SECRET` already
+   exists and is shared with the web-push sender.
+2. **Controlled delivery check**: on a push-enabled signed build, opt in,
+   read the device's FCM registration token, and manually dispatch the
+   `App Push Daily Perek` workflow with that `token` input. A
+   `{"skipped": ...}` response means a non-study day — re-dispatch on a
+   study day. The direct-token check proves delivery but bypasses
+   `daily_perek` topic membership, so it cannot alone prove topic opt-out.
+3. **Arm the schedule**: set the `APP_PUSH_ENABLED` repository variable to
+   `true` — scheduled runs then broadcast to the `daily_perek` topic. Do
+   not broadcast to production subscribers before acceptance.
+4. **Verify on device**: opt-in prompt → topic subscription → receive in
+   background → tap opens today's perek; opt-out stops delivery (topic
+   unsubscribe is the real opt-out check, distinct from the token test).
