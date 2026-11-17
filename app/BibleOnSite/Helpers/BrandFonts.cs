@@ -11,7 +11,7 @@ public static class BrandFonts
 
     public static string WebViewCss => Css.Value;
 
-    private static string FontFace(string style, int weight)
+    internal static string FontFace(string style, int weight)
     {
         using var stream = typeof(BrandFonts).Assembly.GetManifestResourceStream($"AlHeperekUI-{style}.ttf")
             ?? throw new InvalidOperationException($"The bundled Al Heperek {style} font is missing.");

@@ -465,6 +465,25 @@ describe("buildTanachPdfForPerekRange", () => {
 		}
 	});
 
+	it("routes a stray mark in an LTR run to the scripture face without reordering", async () => {
+		// A nonspacing mark after a Latin base stays inside the LTR embedding
+		// level, so the run must keep its logical chunk order (no reversal).
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{ name: "מאמר", authorName: "מחבר", abstract: "<p>x\u0591</p>" },
+		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
+		await buildTanachPdfForPerekRange([1]);
+		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
+		const mark = calls.find((call: [string]) => call[0] === "\u0591");
+		expect(mark[1].font).toBe(pdfLib.__mockScriptureFont);
+		const latin = calls.find((call: [string]) => call[0].includes("x"));
+		expect(latin[1].font).toBe(pdfLib.__mockFont);
+	});
+
 	it("creates a new page for each perek", async () => {
 		mockGetPerekByPerekId
 			.mockReturnValueOnce(

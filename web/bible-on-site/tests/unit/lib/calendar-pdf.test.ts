@@ -492,6 +492,19 @@ describe("fitText truncation", () => {
 		expect(labelOps[0].length).toBeGreaterThan(0);
 		expect(labelOps[0].length).toBeLessThan(120);
 	});
+
+	it("shrinks a slightly over-wide label instead of truncating it", async () => {
+		// 17 × 'ץ' measures ~70.9pt at 6.5pt — just beyond the 67pt cell text
+		// width — so fitText scales to ~6.13pt and keeps the complete label.
+		// Truncation would emit at most 16 glyphs at the full 6.5pt.
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], {
+				dayLabel: () => "ץ".repeat(17),
+			}),
+		);
+		const labelOps = pages[0].map((o) => o.text).filter((t) => /^ץ+$/.test(t));
+		expect(labelOps).toEqual(["ץ".repeat(17)]);
+	});
 });
 
 describe("branded layout (issue #2727)", () => {
