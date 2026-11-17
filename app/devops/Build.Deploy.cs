@@ -315,9 +315,9 @@ partial class Build
             {
                 // The response was lost, not necessarily the commit. Resolve
                 // the original edit's state with a non-mutating read before
-                // any new edit exists: still open proves the commit did not
-                // land, so the same edit retries within the bounded budget;
-                // consumed proves it landed, so a probe edit can safely ask
+                // any new edit exists. Still open proves the commit did not
+                // land — the same edit retries within the bounded budget.
+                // Consumed proves it landed — only then may a probe edit ask
                 // the live track whether the release published. An
                 // unreadable state keeps the original failure.
                 switch (PlayEditStillOpen(service, editId))

@@ -310,8 +310,11 @@ public sealed class GooglePlayDeployTests
 
     sealed class StubHttpClientFactory(PlayStubHandler handler, TimeSpan timeout) : IHttpClientFactory
     {
-        public ConfigurableHttpClient CreateHttpClient(CreateHttpClientArgs _) =>
-            new(new ConfigurableMessageHandler(handler)) { Timeout = timeout };
+        public ConfigurableHttpClient CreateHttpClient(CreateHttpClientArgs args)
+        {
+            ArgumentNullException.ThrowIfNull(args);
+            return new ConfigurableHttpClient(new ConfigurableMessageHandler(handler)) { Timeout = timeout };
+        }
     }
 
     /// <summary>
