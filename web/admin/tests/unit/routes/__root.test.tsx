@@ -60,18 +60,17 @@ describe("RootDocument", () => {
 		session({ error: "login" }, 401);
 	});
 
-	it("renders the link-proposals nav entry for the proposals queue", () => {
+	it("uses home for contribution work without separate proposals navigation", () => {
 		renderRoot();
-
-		const proposalsLink = server.links.find(
-			(link) => link.to === "/link-proposals",
+		expect(screen.getByRole("link", { name: "בית" })).toHaveAttribute(
+			"href",
+			"/",
 		);
-		expect(proposalsLink).toMatchObject({
-			search: { articleId: undefined },
-		});
-		expect(
-			screen.getByText("הצעות קישור", { selector: "*" }),
-		).toBeInTheDocument();
+		expect(server.links.some((link) => link.to === "/link-proposals")).toBe(
+			false,
+		);
+		expect(screen.queryByText("הצעות קישור")).not.toBeInTheDocument();
+		expect(screen.queryByText("פניות ושינויים")).not.toBeInTheDocument();
 	});
 
 	it("renders the remaining primary navigation entries", () => {

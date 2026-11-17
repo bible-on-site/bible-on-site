@@ -14,6 +14,7 @@ import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as ArchiveSettingsRouteImport } from './routes/archive-settings'
 import { Route as ArticlesRouteImport } from './routes/articles'
 import { Route as BulletinsRouteImport } from './routes/bulletins'
+import { Route as ContributionAgentsRouteImport } from './routes/contribution-agents'
 import { Route as DedicationsRouteImport } from './routes/dedications'
 import { Route as IssuesRouteImport } from './routes/issues'
 import { Route as LinkProposalsRouteImport } from './routes/link-proposals'
@@ -53,6 +54,11 @@ const ArticlesRoute = ArticlesRouteImport.update({
 const BulletinsRoute = BulletinsRouteImport.update({
   id: '/bulletins',
   path: '/bulletins',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContributionAgentsRoute = ContributionAgentsRouteImport.update({
+  id: '/contribution-agents',
+  path: '/contribution-agents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DedicationsRoute = DedicationsRouteImport.update({
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/archive-settings': typeof ArchiveSettingsRoute
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
+  '/contribution-agents': typeof ContributionAgentsRoute
   '/dedications': typeof DedicationsRoute
   '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/archive-settings': typeof ArchiveSettingsRoute
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
+  '/contribution-agents': typeof ContributionAgentsRoute
   '/dedications': typeof DedicationsRoute
   '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
@@ -181,6 +189,7 @@ export interface FileRoutesById {
   '/archive-settings': typeof ArchiveSettingsRoute
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
+  '/contribution-agents': typeof ContributionAgentsRoute
   '/dedications': typeof DedicationsRoute
   '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/archive-settings'
     | '/articles'
     | '/bulletins'
+    | '/contribution-agents'
     | '/dedications'
     | '/issues'
     | '/link-proposals'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/archive-settings'
     | '/articles'
     | '/bulletins'
+    | '/contribution-agents'
     | '/dedications'
     | '/issues'
     | '/link-proposals'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/archive-settings'
     | '/articles'
     | '/bulletins'
+    | '/contribution-agents'
     | '/dedications'
     | '/issues'
     | '/link-proposals'
@@ -271,6 +283,7 @@ export interface RootRouteChildren {
   ArchiveSettingsRoute: typeof ArchiveSettingsRoute
   ArticlesRoute: typeof ArticlesRouteWithChildren
   BulletinsRoute: typeof BulletinsRoute
+  ContributionAgentsRoute: typeof ContributionAgentsRoute
   DedicationsRoute: typeof DedicationsRoute
   IssuesRoute: typeof IssuesRoute
   LinkProposalsRoute: typeof LinkProposalsRoute
@@ -315,6 +328,13 @@ declare module '@tanstack/react-router' {
       path: '/bulletins'
       fullPath: '/bulletins'
       preLoaderRoute: typeof BulletinsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contribution-agents': {
+      id: '/contribution-agents'
+      path: '/contribution-agents'
+      fullPath: '/contribution-agents'
+      preLoaderRoute: typeof ContributionAgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dedications': {
@@ -485,6 +505,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArchiveSettingsRoute: ArchiveSettingsRoute,
   ArticlesRoute: ArticlesRouteWithChildren,
   BulletinsRoute: BulletinsRoute,
+  ContributionAgentsRoute: ContributionAgentsRoute,
   DedicationsRoute: DedicationsRoute,
   IssuesRoute: IssuesRoute,
   LinkProposalsRoute: LinkProposalsRoute,

@@ -2,11 +2,10 @@
  * The LLM/heuristic article-linking pipeline (#3103): generation produces
  * evidence-backed DRAFT proposals only — never a relationship write, never
  * coverage verification, never content edits, never SQL from the model.
- * A human reviews each proposal; approval stores the reviewed patch;
- * apply pushes it through the typed relationship write path (#3102)
- * (`updateArticleRelationships` for article-owned keys, the dedication
- * aggregate for dedicationAssignments) inside one proposal-marking
- * transaction.
+ * Persisted suggestions are grouped into ordinary contribution PRs in the
+ * proposal/checkpoint transaction. Review and merge use that PR's doradsoft
+ * gate, guarded API executor and durable recovery intent. Legacy rows retain
+ * their original model/reviewer audit; they no longer own an apply workflow.
  *
  * Server-only implementation module — the public server-fn wrappers that
  * client routes may import live in ./article-link-proposals.
@@ -18,9 +17,9 @@ import {
 	cataloguePerekLabel,
 	type TargetCatalogue,
 } from "~/lib/article-linking/catalogue";
+import { extractCitations } from "~/lib/article-linking/citations";
 import { buildHeuristicDrafts } from "~/lib/article-linking/heuristic";
 import { extractPlainText } from "~/lib/article-linking/html-text";
-import { planProposalApply } from "~/lib/article-linking/merge";
 import {
 	buildArticleLinkSystemPrompt,
 	buildArticleLinkUserMessage,
@@ -38,28 +37,31 @@ import type {
 	ProposalTarget,
 } from "~/lib/article-linking/types";
 import {
-	AUTHOR_ATTRIBUTION_POLICY_REASON,
-	normalizeTarget,
 	type RawModelOutput,
 	validateModelOutput,
 } from "~/lib/article-linking/validate";
 import { ARTICLE_RELATIONSHIP_REGISTRY } from "~/lib/article-relationships";
 import { canonicalJson } from "~/lib/canonical-json";
 import {
-	articleApiConfigured,
-	updateArticleRelationships,
-} from "./article-relationships-api";
-import { isCoveringSourceSchemaMissing } from "./covering-sources";
+	type ArticleLiteralGrounding,
+	assertLiteralArticleCoverage,
+	expandLiteralCitationCoordinates,
+} from "~/lib/tanahpedia/contribution-article-grounding";
 import {
-	execute,
-	query,
-	queryOne,
-	transaction,
-	txExecute,
-	txQueryOne,
-} from "./db";
-import { applyArticleDedicationLink } from "./dedication-targets.server";
+	type ArticleLinkChangeInput,
+	validateArticleLinkChange,
+} from "~/lib/tanahpedia/contribution-article-links";
+import { articleApiConfigured } from "./article-relationships-api";
+import { isCoveringSourceSchemaMissing } from "./covering-sources";
+import { execute, query, queryOne, transaction, txExecute } from "./db";
 import { callOpenAiJson, llmConfigured } from "./llm-json";
+import { assertCurrentAgentArticleGrounding } from "./tanahpedia/contribution-article-grounding.server";
+import {
+	articleLinkContributionIds,
+	ensureArticleLinkPromotionSchema,
+	promoteLegacyArticleLinkProposals,
+} from "./tanahpedia/contribution-article-import.server";
+import { articleSourceHash } from "./tanahpedia/contribution-article-links.server";
 
 // ---------------------------------------------------------------------------
 // Lazy schema ensure — same DDL as data/mysql/tanah_article_link_proposal_upgrade.sql,
@@ -493,7 +495,7 @@ async function insertProposals(
 			`INSERT IGNORE INTO tanah_article_link_proposal
 			 (id, run_id, article_id, relationship_key, action, target_json,
 			  target_label, evidence_json, rationale, confidence, conflict,
-			  status, dedupe_key, decision_key, generator, model,
+			  legacy_status, dedupe_key, decision_key, generator, model,
 			  prompt_version, base_content_hash, base_snapshot_json,
 			  prompt_tokens, completion_tokens)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -596,8 +598,13 @@ export function validateGenerateInput(
  */
 export async function runLinkGeneration(
 	data: GenerateLinkProposalsInput,
-): Promise<{ runId: string; outcomes: ArticleGenerationOutcome[] }> {
+): Promise<{
+	runId: string;
+	outcomes: ArticleGenerationOutcome[];
+	prIds: string[];
+}> {
 	await ensureLinkSchema();
+	if (!data.dryRun) await ensureArticleLinkPromotionSchema();
 	const runId = randomUUID();
 	const engine = data.engine ?? "heuristic";
 	const wantsLlm = engine === "llm" || engine === "both";
@@ -619,6 +626,38 @@ export async function runLinkGeneration(
 			const contentHash = row.content_hash ?? "";
 			const plainText = articlePlainText(row);
 			const snapshot = await loadSnapshot(articleId);
+			const literalCitations = extractCitations(plainText, catalogue).resolved;
+			const grounding: ArticleLiteralGrounding = {
+				articleId: String(articleId),
+				sourceHash: articleSourceHash({
+					name: row.name,
+					abstract: row.abstract,
+					content: row.content,
+					authorId: row.author_id,
+				}),
+				coordinates: expandLiteralCitationCoordinates(literalCitations),
+				chapters: [
+					...new Set(literalCitations.map((citation) => citation.perekId)),
+				]
+					.sort((a, b) => a - b)
+					.map((id) => {
+						const perek = catalogue.perakim.find((perek) => perek.id === id);
+						if (!perek) throw new Error("Missing literal citation chapter");
+						return {
+							id,
+							fingerprint: createHash("sha256")
+								.update(
+									canonicalJson({
+										seferName: perek.seferName,
+										additionalLetter: perek.additionalLetter,
+										perekInContext: perek.perekInContext,
+										pasukCount: perek.pasukCount,
+									}),
+								)
+								.digest("hex"),
+						};
+					}),
+			};
 			const drafts: InsertableProposal[] = [];
 			const successfulGenerators = new Set<string>();
 
@@ -771,6 +810,48 @@ export async function runLinkGeneration(
 				successfulGenerators.add(generator);
 			}
 
+			const coverageChanges: ArticleLinkChangeInput[] = [];
+			for (const item of drafts) {
+				const draft = item.draft;
+				if (
+					draft.relationshipKey !== "coveringSources" ||
+					!["add", "replace"].includes(draft.action)
+				)
+					continue;
+				const coordinates =
+					"pasukCoordinates" in draft.target
+						? draft.target.pasukCoordinates
+						: undefined;
+				if (!coordinates?.length) {
+					if (
+						draft.action === "add" &&
+						item.generator !== HEURISTIC_GENERATOR_ID
+					)
+						throw new Error(
+							"Literal citations could not be resolved; no proposals were created",
+						);
+					continue;
+				}
+				const change = validateArticleLinkChange({
+					kind: "article_links",
+					targetId: String(articleId),
+					after: {
+						commands: [
+							{
+								relationshipKey: "coveringSources",
+								action: draft.action,
+								target: { pasukCoordinates: coordinates },
+							},
+						],
+					},
+				});
+				assertLiteralArticleCoverage(
+					change,
+					{ ...snapshot, sourceHash: grounding.sourceHash },
+					[grounding],
+				);
+				coverageChanges.push(change);
+			}
 			if (data.dryRun) {
 				outcomes.push({
 					articleId,
@@ -781,7 +862,15 @@ export async function runLinkGeneration(
 			}
 
 			const inserted = await transaction(async (conn) => {
+				await assertCurrentAgentArticleGrounding(conn, coverageChanges, {
+					people: [],
+					places: [],
+					entities: [],
+					targets: [],
+					articleGroundings: [grounding],
+				});
 				const count = await insertProposals(conn, drafts);
+				await promoteLegacyArticleLinkProposals(conn, articleId);
 				for (const generator of successfulGenerators) {
 					await upsertCheckpoint(
 						conn,
@@ -812,7 +901,11 @@ export async function runLinkGeneration(
 			});
 		}
 	}
-	return { runId, outcomes };
+	return {
+		runId,
+		outcomes,
+		prIds: data.dryRun ? [] : await articleLinkContributionIds(data.articleIds),
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -941,102 +1034,20 @@ export interface ReviewInput {
 	reviewNotes?: string;
 }
 
+/** Legacy review/apply URLs remain resolvable, but all decisions now belong to
+ * the ordinary PR. A caller-supplied old reviewer string cannot grant authority. */
 export async function reviewProposal(
 	data: ReviewInput,
-	reviewer: string,
+	_reviewer: string,
 ): Promise<{ id: string; status: LinkProposalStatus }> {
+	const { legacyArticleLinkContribution } = await import(
+		"./tanahpedia/contribution-article-import.server"
+	);
 	await ensureLinkSchema();
-	return await transaction(async (conn) => {
-		const row = await txQueryOne<ProposalRow>(
-			conn,
-			"SELECT * FROM tanah_article_link_proposal WHERE id = ? FOR UPDATE",
-			[data.id],
-		);
-		if (!row) throw new Error("ההצעה לא נמצאה");
-		if (row.status === "applied") {
-			throw new Error("לא ניתן לשנות הצעה שכבר יושמה");
-		}
-		if (row.status === "rejected" && data.decision === "reject") {
-			return { id: data.id, status: "rejected" as const };
-		}
-		const liveHash = await liveContentHash(row.article_id);
-		const stale =
-			row.base_content_hash !== "" &&
-			liveHash !== "" &&
-			liveHash !== row.base_content_hash;
-
-		if (data.decision === "reject") {
-			await txExecute(
-				conn,
-				`UPDATE tanah_article_link_proposal
-						 SET status = 'rejected', reviewer = ?, reviewed_at = UTC_TIMESTAMP(6),
-						     review_notes = ?
-						 WHERE id = ?`,
-				[reviewer, data.reviewNotes?.slice(0, 1000) ?? null, data.id],
-			);
-			return { id: data.id, status: "rejected" as const };
-		}
-
-		// Uploaded attribution is authoritative, including for legacy drafts.
-		if (row.relationship_key === "author") {
-			throw new Error(AUTHOR_ATTRIBUTION_POLICY_REASON);
-		}
-		// approve — a stale article must be regenerated, not approved blind.
-		if (stale) {
-			throw new Error("תוכן המאמר השתנה מאז ההפקה — יש להפיק מחדש לפני אישור");
-		}
-		if (data.reviewPatch !== undefined) {
-			const catalogue = await loadTargetCatalogue();
-			const snapshot = await loadSnapshot(row.article_id);
-			const normalized = normalizeTarget(
-				row.relationship_key,
-				data.reviewPatch as unknown as Record<string, unknown>,
-				catalogue,
-				snapshot,
-			);
-			if (normalized.heldReason || !normalized.target) {
-				/* istanbul ignore next -- normalizeTarget failures always carry heldReason */
-				const reason = normalized.heldReason ?? "יעד לא נפתר";
-				throw new Error(`התיקון אינו חוקי: ${reason}`);
-			}
-			/* istanbul ignore next -- successful normalizations always carry a label */
-			const targetLabel = normalized.label ?? row.target_label;
-			await txExecute(
-				conn,
-				`UPDATE tanah_article_link_proposal
-						 SET status = 'approved', reviewer = ?, reviewed_at = UTC_TIMESTAMP(6),
-						     review_patch_json = ?, review_notes = ?, target_label = ?
-						 WHERE id = ?`,
-				[
-					reviewer,
-					JSON.stringify(normalized.target),
-					data.reviewNotes?.slice(0, 1000) ?? null,
-					targetLabel.slice(0, 500),
-					data.id,
-				],
-			);
-		} else {
-			if (row.status === "held") {
-				throw new Error("הצעה מוקפאת דורשת תיקון ידני לפני אישור");
-			}
-			await txExecute(
-				conn,
-				`UPDATE tanah_article_link_proposal
-						 SET status = 'approved', reviewer = ?, reviewed_at = UTC_TIMESTAMP(6),
-						     review_notes = ?
-						 WHERE id = ?`,
-				[reviewer, data.reviewNotes?.slice(0, 1000) ?? null, data.id],
-			);
-		}
-		return { id: data.id, status: "approved" as const };
-	});
+	const pr = await legacyArticleLinkContribution(data.id);
+	if (!pr) throw new Error("ההצעה לא נמצאה");
+	throw new Error(`יש לסקור את PR #${pr.number}: /?tab=prs&id=${pr.id}`);
 }
-
-// ---------------------------------------------------------------------------
-// Apply — approved patches only, through the shared write path. The
-// proposal row lock serializes concurrent applies; the mutation's own
-// freshness guards reject a write that raced an unseen edit.
-// ---------------------------------------------------------------------------
 
 export interface ApplyOutcome {
 	id: string;
@@ -1044,232 +1055,26 @@ export interface ApplyOutcome {
 	detail?: string;
 }
 
-/** Is the live state already what the proposal wanted — idempotent retry. */
-function alreadySatisfied(
-	relationshipKey: string,
-	action: string,
-	target: ProposalTarget,
-	snapshot: ArticleLinkSnapshot,
-): boolean {
-	const coords = (target as { pasukCoordinates?: PasukCoordinate[] })
-		.pasukCoordinates;
-	switch (relationshipKey) {
-		case "primaryPerek":
-			return (
-				action === "replace" &&
-				snapshot.perekId === (target as { perekId?: number }).perekId
-			);
-		case "coveringSources": {
-			const live = new Set(
-				snapshot.coveringSources.map((c) => `${c.perekId}:${c.pasuk}`),
-			);
-			const wanted = new Set(
-				(coords ?? []).map((c) => `${c.perekId}:${c.pasuk}`),
-			);
-			if (action === "add") return [...wanted].every((k) => live.has(k));
-			/* istanbul ignore next -- replace/clear always plan a mutation, so
-			   only add/remove intents can reach this cannot-apply check */
-			if (action !== "remove") return false;
-			return [...wanted].every((k) => !live.has(k));
-		}
-		case "dedicationAssignments": {
-			const dedicationId = (target as { dedicationId?: number }).dedicationId;
-			if (!Number.isInteger(dedicationId)) return false;
-			const has = snapshot.dedicationIds.includes(dedicationId as number);
-			return action === "add" ? has : action === "remove" ? !has : false;
-		}
-		default:
-			return false;
-	}
-}
-
-async function applyOne(id: string, reviewer: string): Promise<ApplyOutcome> {
-	return await transaction(async (conn) => {
-		const row = await txQueryOne<ProposalRow>(
-			conn,
-			"SELECT * FROM tanah_article_link_proposal WHERE id = ? FOR UPDATE",
-			[id],
-		);
-		if (!row) return { id, outcome: "error" as const, detail: "not found" };
-		if (row.status === "applied") {
-			return { id, outcome: "already-applied" as const };
-		}
-		if (row.status !== "approved") {
-			return {
-				id,
-				outcome: "error" as const,
-				detail: `status "${row.status}" is not applicable — approve first`,
-			};
-		}
-
-		const articleId = row.article_id;
-		const [liveHash, snapshot] = await Promise.all([
-			liveContentHash(articleId),
-			loadSnapshot(articleId),
-		]);
-		const stale =
-			row.base_content_hash !== "" &&
-			liveHash !== "" &&
-			liveHash !== row.base_content_hash;
-		if (stale) {
-			await txExecute(
-				conn,
-				`UPDATE tanah_article_link_proposal SET status = 'stale' WHERE id = ?`,
-				[id],
-			);
-			return {
-				id,
-				outcome: "stale" as const,
-				detail: "article content changed since generation — regenerate",
-			};
-		}
-
-		const proposal: Pick<
-			LinkProposal,
-			"relationshipKey" | "action" | "target" | "reviewPatch" | "id"
-		> = {
-			id: row.id,
-			relationshipKey: row.relationship_key,
-			action: row.action as LinkProposal["action"],
-			target:
-				parseJson<ProposalTarget>(row.target_json) ?? ({} as ProposalTarget),
-			reviewPatch: parseJson(row.review_patch_json),
-		};
-		const effectiveTarget = proposal.reviewPatch ?? proposal.target;
-		const plan = planProposalApply(proposal, snapshot, liveHash, reviewer);
-
-		if (plan.kind === "cannot-apply") {
-			if (
-				alreadySatisfied(
-					row.relationship_key,
-					row.action,
-					effectiveTarget,
-					snapshot,
-				)
-			) {
-				// A prior apply committed the write but crashed before marking —
-				// the retry recognizes the state and completes the record.
-				await txExecute(
-					conn,
-					`UPDATE tanah_article_link_proposal
-					 SET status = 'applied', applied_at = UTC_TIMESTAMP(6),
-					     applied_snapshot_json = ?
-					 WHERE id = ?`,
-					[JSON.stringify(snapshot), id],
-				);
-				return {
-					id,
-					outcome: "already-applied" as const,
-					detail: "live state already matched the proposal",
-				};
-			}
-			await txExecute(
-				conn,
-				`UPDATE tanah_article_link_proposal SET conflict = ? WHERE id = ?`,
-				[plan.reason.slice(0, 500), id],
-			);
-			return { id, outcome: "conflict" as const, detail: plan.reason };
-		}
-
-		let appliedSnapshot: ArticleLinkSnapshot;
-		if (plan.kind === "article-mutation") {
-			try {
-				const result = await updateArticleRelationships(articleId, plan.input);
-				appliedSnapshot = {
-					perekId: result.relationships.perekId,
-					authorId: result.relationships.authorId,
-					coverageVerified: result.relationships.coverageVerified,
-					coveringSources: result.relationships.coveringSources,
-					dedicationIds: snapshot.dedicationIds,
-				};
-			} catch (error) {
-				await txExecute(
-					conn,
-					`UPDATE tanah_article_link_proposal SET conflict = ? WHERE id = ?`,
-					[
-						`apply rejected by the write contract: ${error instanceof Error ? error.message : String(error)}`.slice(
-							0,
-							500,
-						),
-						id,
-					],
-				);
-				return {
-					id,
-					outcome: "conflict" as const,
-					detail: error instanceof Error ? error.message : String(error),
-				};
-			}
-		} else {
-			// dedication aggregate path — the dedication owns its target set.
-			const result = await applyArticleDedicationLink({
-				dedicationId: plan.dedicationId,
-				articleId,
-				op: plan.op,
-				expiresAt: plan.expiresAt,
-			});
-			if (!result.changed) {
-				/* istanbul ignore next -- the dedication plan's own preconditions
-				   exclude exactly the states alreadySatisfied accepts, so a
-				   refused write can never be already-satisfied */
-				if (
-					alreadySatisfied(
-						row.relationship_key,
-						row.action,
-						effectiveTarget,
-						snapshot,
-					)
-				) {
-					await txExecute(
-						conn,
-						`UPDATE tanah_article_link_proposal
-						 SET status = 'applied', applied_at = UTC_TIMESTAMP(6),
-						     applied_snapshot_json = ?
-						 WHERE id = ?`,
-						[JSON.stringify(snapshot), id],
-					);
-					return { id, outcome: "already-applied" as const };
-				}
-				await txExecute(
-					conn,
-					`UPDATE tanah_article_link_proposal SET conflict = ? WHERE id = ?`,
-					[(result.reason ?? "dedication write refused").slice(0, 500), id],
-				);
-				return {
-					id,
-					outcome: "conflict" as const,
-					detail: result.reason,
-				};
-			}
-			const refreshed = await loadSnapshot(articleId);
-			appliedSnapshot = refreshed;
-		}
-
-		await txExecute(
-			conn,
-			`UPDATE tanah_article_link_proposal
-			 SET status = 'applied', applied_at = UTC_TIMESTAMP(6),
-			     applied_snapshot_json = ?, conflict = NULL
-			 WHERE id = ?`,
-			[JSON.stringify(appliedSnapshot), id],
-		);
-		return { id, outcome: "applied" as const };
-	});
-}
-
 export async function applyProposals(
 	ids: string[],
-	reviewer: string,
+	_reviewer: string,
 ): Promise<{ outcomes: ApplyOutcome[] }> {
 	await ensureLinkSchema();
-	if (!articleApiConfigured()) {
-		throw new Error(
-			"ARTICLE_API_KEY אינו מוגדר - החלת הצעות דורשת את נתיב הכתיבה המאומת של ה-API",
-		);
-	}
+	const { legacyArticleLinkContribution } = await import(
+		"./tanahpedia/contribution-article-import.server"
+	);
 	const outcomes: ApplyOutcome[] = [];
 	for (const id of ids) {
-		outcomes.push(await applyOne(id, reviewer));
+		const pr = await legacyArticleLinkContribution(id);
+		outcomes.push(
+			pr
+				? {
+						id,
+						outcome: pr.state === "merged" ? "already-applied" : "conflict",
+						detail: `יש לסקור ולמזג את PR #${pr.number}: /?tab=prs&id=${pr.id}`,
+					}
+				: { id, outcome: "error", detail: "ההצעה לא נמצאה" },
+		);
 	}
 	return { outcomes };
 }
