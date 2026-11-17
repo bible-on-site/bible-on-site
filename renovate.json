@@ -94,9 +94,9 @@
 		{
 			"description": "Hold SDK feature-band updates pending MAUI/Xcode runner availability — 11.0.1xx servicing stays allowed; see https://github.com/bible-on-site/bible-on-site/issues/2566",
 			"matchManagers": [
-				"dotnet-sdk"
+				"nuget"
 			],
-			"matchDepNames": [
+			"matchDepTypes": [
 				"dotnet-sdk"
 			],
 			"allowedVersions": "<11.0.200"
@@ -115,7 +115,7 @@
 			"enabled": false
 		},
 		{
-			"description": "Driver tarballs bundle copies bun overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"description": "Driver tarballs bundle dependency copies that bun overrides cannot replace; review driver bumps for bundled-vuln regressions (shell-quote remains bundled; override pinned to 1.12.0). The Appium 3 compat holds were lifted with appium 4.0.0 in #3419. See https://github.com/bible-on-site/bible-on-site/issues/1995",
 			"matchManagers": [
 				"npm",
 				"bun"
@@ -148,6 +148,27 @@
 			]
 		},
 		{
+			"description": "html-flip-book-react's package.json pin and the NPM_VERSION restore constant in toggle-flip-book-dep.mjs must land in one PR or `flip-book:npm` silently downgrades (#3449).",
+			"matchPackageNames": [
+				"html-flip-book-react"
+			],
+			"groupName": "all non-major bun dependencies",
+			"groupSlug": "bun-minor-patch"
+		},
+		{
+			"description": "12.9.3.x ships no win_amd64 wheel and the win32/linux lines are a platform-marker split Renovate cannot express — bump manually when NVIDIA publishes Windows wheels again. See https://github.com/bible-on-site/bible-on-site/issues/3461",
+			"matchManagers": [
+				"pip_requirements"
+			],
+			"matchFileNames": [
+				"devops/transcription/requirements-cuda.txt"
+			],
+			"matchPackageNames": [
+				"nvidia-cublas-cu12"
+			],
+			"enabled": false
+		},
+		{
 			"description": "Regular cargo-make CLI updates require review for the upstream ZIP gap; vulnerability-alert updates retain the existing repository policy. https://github.com/bible-on-site/bible-on-site/issues/2826",
 			"matchDatasources": [
 				"crate"
@@ -177,6 +198,19 @@
 		"dependencies"
 	],
 	"customManagers": [
+		{
+			"customType": "regex",
+			"description": "Track the published-version constant restored by `flip-book:npm`; the regex-manager update groups with the package.json bump via the bun group rule.",
+			"managerFilePatterns": [
+				"/^web\\/bible-on-site\\/scripts\\/toggle-flip-book-dep\\.mjs$/"
+			],
+			"matchStrings": [
+				"NPM_VERSION = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+(?:-alpha\\.[0-9]+)?)\""
+			],
+			"depNameTemplate": "html-flip-book-react",
+			"datasourceTemplate": "npm",
+			"versioningTemplate": "semver"
+		},
 		{
 			"customType": "regex",
 			"description": "Track explicitly pinned cargo-make CLI installs; the unsupported upstream ZIP migration is recorded in https://github.com/bible-on-site/bible-on-site/issues/2826",

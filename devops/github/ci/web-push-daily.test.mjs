@@ -32,7 +32,7 @@ curl() {
 }
 `;
 
-function run(event, eventName = "workflow_dispatch") {
+function run(event, eventName = "workflow_dispatch", curl = mock) {
 	const directory = mkdtempSync(join(tmpdir(), "web-push-daily-"));
 	const eventPath = join(directory, "event.json");
 	const argsPath = join(directory, "curl-arguments");
@@ -43,7 +43,7 @@ function run(event, eventName = "workflow_dispatch") {
 	try {
 		const result = spawnSync(
 			shell,
-			["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", mock + script],
+			["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", curl + script],
 			{
 				encoding: "utf8",
 				env: {
@@ -123,6 +123,26 @@ test("rejects malformed event JSON before a network request", () => {
 	assert.deepEqual(result.args, []);
 	assert.equal(result.stdout, "");
 	assert.match(result.stderr, /parse error/);
+});
+
+test("fails the run when the route reports a failed broadcast (#3499)", () => {
+	// The route answers 502 on a total send failure; curl --fail-with-body
+	// exits 22 and the step must stay red, printing the counts body.
+	const result = run(
+		{},
+		"schedule",
+		`curl() {
+  printf '%s\\0' "$@" > "$CURL_ARGUMENTS"
+  printf '{"perekId":1,"sent":0,"removed":0,"failed":1}\\n'
+  return 22
+}
+`,
+	);
+	assert.equal(result.status, 22);
+	assert.equal(
+		result.stdout,
+		'{"perekId":1,"sent":0,"removed":0,"failed":1}\n',
+	);
 });
 
 test("retains the bodyless broadcast and arm gate for scheduled sends", () => {

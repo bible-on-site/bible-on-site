@@ -17,6 +17,14 @@ import {
 export function currentContributionApiContract(conn: PoolConnection) {
 	const adapters: AsyncApiVersionAdapter<unknown>[] = [
 		{
+			from: 4,
+			to: 5,
+			id: "article-link-operations",
+			// This adds executable vocabulary only. Existing reviewed operations
+			// and approvals stay unchanged; content rebases remain separate.
+			convert: (payload) => payload,
+		},
+		{
 			from: 3,
 			to: 4,
 			id: "existing-entry-title-operations",

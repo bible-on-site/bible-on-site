@@ -48,7 +48,19 @@ Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog lim
 
 When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
 
-Publish validation evidence only through pull-request descriptions/comments, issue attachments, CI artifacts or commit permalinks — never the repository-root `evidence/` directory, which CI rejects (#3319). Module-scoped evidence such as `docs/evidence/` remains allowed.
+Upload that evidence as issue/PR attachments or CI artifacts and link to it. Do not add the evidence files to Git.
+
+# Artifact and Evidence Approval
+
+Never commit or push artifacts or validation evidence into this repository without prior, explicit approval from **DoradSoft** for the particular materials and repository destination. This includes **before/after pictures**, other screenshots, recordings, traces, logs, generated reports, handoff bundles, downloadable archives and source/font snapshots. The restriction applies to every branch and directory, including module-scoped `docs/evidence/`; existing tracked evidence is not permission to add more.
+
+Use issue/PR attachments, CI artifact storage or the appropriate release assets instead. Do not create a branch or PR just to host artifacts or evidence. A request to implement work, validate it, provide evidence or hand it off does not by itself approve checking those materials into Git. When DoradSoft explicitly approves an exception, record the approval and its exact scope in the PR description; do not infer or manufacture approval.
+
+# Documentation Scope
+
+Repository documentation describes features, processes and other **current state**, or **plans for future state**. Do not add implementation diaries, PR/change summaries, historical before/after writeups, past-state diffs or delivery/test-run reports as repository documentation. Keep task history and validation results in the issue, PR or CI record.
+
+A historical comparison is allowed only when it is needed to explain an **important decision and why it was taken**. Keep it limited to that rationale. This documentation exception does not authorize committing artifacts, screenshots or other evidence; explicit DoradSoft approval is still required for those files.
 
 # Pull Request Merge Authorization
 

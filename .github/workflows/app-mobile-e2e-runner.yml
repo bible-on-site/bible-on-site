@@ -459,7 +459,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           verify-signature: true
 
       # iOS legs stay on the Xcode-27-compatible set; Android legs take the

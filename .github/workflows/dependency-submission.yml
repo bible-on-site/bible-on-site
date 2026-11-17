@@ -69,7 +69,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "17"
+          java-version: "25"
           verify-signature: true
       - name: 'Install MAUI Android workload'
         # Both snapshot trees resolve their own SDK through global.json. SDK
@@ -89,8 +89,45 @@ jobs:
               sudo rm -rf -- "$manifests"
             fi
           done
+          # Keep the deterministic workload-set pin when the band publishes
+          # sets (#3439): the flat container lists <sdk-patch>.<servicing>
+          # (10.404.0), which --version consumes as <sdk>.<servicing>
+          # (10.0.404.0). Only HTTP 404 means "no published set" and falls
+          # back to the SDK's implicit resolution; transport errors, other
+          # statuses and version-less bodies stay loud instead of silently
+          # downgrading the required check to an unpinned install.
+          feed_file=$(mktemp)
+          if ! feed_status=$(curl -sS -o "$feed_file" -w "%{http_code}" "https://api.nuget.org/v3-flatcontainer/microsoft.net.workloads.${feature_band}/index.json"); then
+            printf 'Workload-set feed request for band %s failed\n' "$feature_band" >&2
+            exit 1
+          fi
+          case "$feed_status" in
+            404)
+              workload_set=""
+              ;;
+            200)
+              workload_set=$(
+                grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' "$feed_file" \
+                  | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+)$/\1.0.\2.\3/' \
+                  | sort -uV | tail -n1 || true
+              )
+              if [ -z "$workload_set" ]; then
+                printf 'Workload-set feed for band %s listed no versions\n' "$feature_band" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              printf 'Workload-set feed lookup for band %s failed: HTTP %s\n' "$feature_band" "$feed_status" >&2
+              exit 1
+              ;;
+          esac
+          rm -f -- "$feed_file"
           dotnet workload update
-          dotnet workload install maui-android
+          if [ -n "$workload_set" ]; then
+            dotnet workload install "maui-android" --version "$workload_set"
+          else
+            dotnet workload install "maui-android"
+          fi
       - name: 'Restore NuGet projects'
         run: |
           # Read the Android TFM from whichever tree is checked out — the

@@ -126,6 +126,9 @@ describe("workstation generation leases", () => {
 		});
 		expect(mocks.item?.generation?.leaseHash).not.toBe(lease.token);
 		expect(mocks.query.mock.calls[0][1]).toContain("FOR UPDATE SKIP LOCKED");
+		expect(mocks.query.mock.calls[0][1]).toContain(
+			"JSON_EXTRACT(data, '$.generation.task') IS NULL",
+		);
 		expect(mocks.query.mock.calls[0][2]).toContain(id);
 	});
 	it("returns idle and bounds abandoned-job scanning without increasing inference deadlines", async () => {

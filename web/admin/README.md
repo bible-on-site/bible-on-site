@@ -5,9 +5,25 @@ It runs separately from the customer website.
 
 ## Features
 
+- Issues and reviewed PRs on the home page, with evidence and typed diffs.
+- Local and AWS agents that implement assigned issues and handle PR comments.
 - Article editing with TipTap, Perek navigation and automatic saving.
 - Rabbi profiles and images, Tanahpedia editing, daily bulletins and other editorial tools.
 - A private archive at `/archive`, with folders, file uploads, downloads and storage quotas.
+
+## Contribution workspace
+
+The home page opens the Issues and PR queues. Open an issue for work to investigate,
+or a typed PR for a proposed metadata or relationship change. PRs keep their
+description and evidence beside a visual changes view. Article-link proposals use
+the same queue and currently accept explicit biblical citations.
+
+Assign an enabled agent to an issue to implement it, or to a PR to handle its
+current feedback. New human comments schedule another pass on that same PR.
+Model-authored proposals require doradsoft approval before merging.
+
+See [Contribution workflow](../../docs/tanahpedia/contribution-workflow.md) for
+supported change types, approval and migration rules, and local worker setup.
 
 ## Archive access
 
