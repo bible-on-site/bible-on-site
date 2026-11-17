@@ -201,12 +201,14 @@ The reference [asset distribution](cloudformation/cloudfront-assets.yaml) and
 
 The build-only opt-in is the first consumer. Website/admin helpers already
 accept an optional assets origin, but changing ECS environment alone does not
-rewrite all Next.js static HTML or native hardcoded URLs. Website/admin rollout,
-build-time configuration and any image-host allowlist work require a separate
-approved change after candidate validation. Preserve S3 uploads, presigned
-operations and published S3 URLs. Query forwarding does not prove every signed
-request works: test signed headers/credentials before signed/private clients
-adopt the CDN.
+rewrite all Next.js static HTML or native hardcoded URLs. The separately
+gated `BROWSER_ASSETS_BASE_URL` mechanism — build-time baking plus a runtime
+image default — and its activation/rollback runbook are in
+[assets-cdn-browser-rollout-2026-11-17.md](assets-cdn-browser-rollout-2026-11-17.md);
+image-host allowlist work is already in `next.config.mjs`. Preserve S3
+uploads, presigned operations and published S3 URLs. Query forwarding does
+not prove every signed request works: test signed headers/credentials before
+signed/private clients adopt the CDN.
 
 ## Approval-gated creation and activation
 

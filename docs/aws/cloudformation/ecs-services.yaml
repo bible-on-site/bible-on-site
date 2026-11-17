@@ -360,9 +360,15 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
-            # ASSETS_BASE_URL is intentionally unset in production. Enable
-            # only after an approved additive CDN rollout passes the legacy
-            # S3 URL, CORS, Range and freshness checks in the cost risk audit.
+            # ASSETS_BASE_URL is intentionally unset here in production. The
+            # approved CDN origin arrives through the image itself: release
+            # builds bake the BROWSER_ASSETS_BASE_URL repository variable into
+            # static HTML and the container's runtime default, so an
+            # environment edit alone could never rewrite prerendered pages.
+            # This entry remains an emergency runtime override. Enable only
+            # after the approved rollout checks in
+            # docs/aws/s3-delivery-cost-2026-11-01.md pass (legacy S3 URL,
+            # CORS, Range and freshness).
             # VAPID_SUBJECT is the public contact URI advertised to browser
             # push services (web-push spec: mailto: or https:). Not a secret.
             - Name: VAPID_SUBJECT
@@ -599,8 +605,10 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
-            # Keep ASSETS_BASE_URL unset, matching the website. Existing S3
-            # asset URLs must remain public even after a future CDN rollout.
+            # Keep ASSETS_BASE_URL unset here, matching the website: the admin
+            # image bakes the same BROWSER_ASSETS_BASE_URL opt-in and this
+            # entry is only an emergency runtime override. Existing S3 asset
+            # URLs must remain public even after a future CDN rollout.
             # Admin reaches the website task over Cloud Map service discovery
             # (MULTIVALUE A records) to expire its content caches post-commit.
             - Name: VITE_WEBSITE_URL
