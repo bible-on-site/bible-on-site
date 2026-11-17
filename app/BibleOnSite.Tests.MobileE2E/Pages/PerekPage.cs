@@ -110,7 +110,14 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// rotation or a carousel re-snap moves the frame over several layout
     /// passes; measuring during the transition races the assertion.
     /// </summary>
-    public (Point Location, Size Size) WaitForStableFrame(string automationId)
+    public (Point Location, Size Size) WaitForStableFrame(string automationId) =>
+        WaitForStableFrame(automationId, _ => true);
+
+    /// <inheritdoc cref="WaitForStableFrame(string)"/>
+    /// <param name="condition">The accepted candidate's own poll supplies the
+    /// frame — on iOS it is the lookup's snapshot, so no live rect request
+    /// follows the wait and a recycled view cannot stale the read.</param>
+    public (Point Location, Size Size) WaitForStableFrame(string automationId, Func<AppiumElement, bool> condition)
     {
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(45);
@@ -120,18 +127,23 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var element = WaitFor(locator);
-                var actual = MobilePlatformAdapter.ReadFrame(element);
-                var current = new Rectangle(actual.Location, actual.Size);
-                if (current == frame)
+                var match = FindVisible(locator, condition).FirstOrDefault();
+                if (match != null)
                 {
-                    return (current.Location, current.Size);
+                    if (match.Frame == frame)
+                    {
+                        return (match.Frame.Location, match.Frame.Size);
+                    }
+                    frame = match.Frame;
                 }
-                frame = current;
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The carousel can replace its native views between lookup and inspection.
             }
             catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A straggler lookup or frame read retries within the budget.
+                // A straggler lookup retries within the budget.
             }
             Thread.Sleep(250);
         }
@@ -140,7 +152,57 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
-    public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
+    public void Tap(string automationId, Func<AppiumElement, bool> condition) =>
+        Tap(automationId, condition, TimeSpan.FromSeconds(45));
+
+    public void Tap(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
+        Tap(platform.AutomationId(automationId), element => condition(element) && platform.CanTap(element), timeout);
+
+    public void Tap(By locator) => Tap(locator, platform.CanTap, TimeSpan.FromSeconds(45));
+
+    private void Tap(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
+    {
+        // platform.Tap reads the live frame for the gesture, so a view
+        // recycled between the accepting poll and that read resolves again
+        // — inside this one budget, never a fresh wait per attempt (#3421).
+        var deadline = DateTime.UtcNow.Add(timeout);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            try
+            {
+                platform.Tap(driver, WaitFor(locator, condition,
+                    remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero));
+                return;
+            }
+            catch (StaleElementReferenceException) when (attempt < 2 && remaining > TimeSpan.Zero)
+            {
+                // The collection is mid-recycle; the next lookup sees a fresh tree.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Captures a live property inside the wait's own poll — the same pattern
+    /// WaitForText uses for text. Reading the returned element after the wait
+    /// races view recycling on iOS; the poll already retries staleness, and on
+    /// iOS its snapshot answers text/enabled/displayed/rect without another
+    /// device round-trip.
+    /// </summary>
+    public T WaitForObservation<T>(string automationId, Func<AppiumElement, T> observe) =>
+        WaitForObservation(automationId, observe, TimeSpan.FromSeconds(45));
+
+    /// <inheritdoc cref="WaitForObservation{T}(string, Func{AppiumElement, T})"/>
+    public T WaitForObservation<T>(string automationId, Func<AppiumElement, T> observe, TimeSpan timeout)
+    {
+        T observed = default!;
+        WaitFor(automationId, element =>
+        {
+            observed = observe(element);
+            return true;
+        }, timeout);
+        return observed;
+    }
 
     /// <summary>
     /// Scrolls the page's own scroll surface down until the element's center is
@@ -249,22 +311,14 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     public void AssertBottomNavigationLayout()
     {
-        var menu = WaitFor("CircularMenuButton");
-        var text = WaitFor("TextButton");
-        var fullScreen = WaitFor("FullScreenButton");
         var window = DriverTelemetry.WindowSize(driver);
-        // Every property access queries the device. Read each dimension once
-        // so layout assertions do not repeatedly snapshot the UI.
-        var buttons = new[] { menu, text, fullScreen }
-            .Select(button =>
-            {
-                var frame = MobilePlatformAdapter.ReadFrame(button);
-                return (Element: button, frame.Location, frame.Size);
-            })
+        // The accepting poll's snapshot supplies each button's frame and the
+        // enabled condition — no live property read follows the waits.
+        var buttons = new[] { "CircularMenuButton", "TextButton", "FullScreenButton" }
+            .Select(id => WaitForStableFrame(id, element => element.Enabled))
             .ToArray();
-        foreach (var (button, location, size) in buttons)
+        foreach (var (location, size) in buttons)
         {
-            Assert.True(button.Enabled);
             Assert.True(size.Width >= platform.Layout.MinimumButtonExtent);
             Assert.True(size.Height >= platform.Layout.MinimumButtonExtent);
             Assert.True(HasVisibleCenter(location, size, window), "The control's tap target must be inside the viewport.");
@@ -291,11 +345,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// path on iOS always carries the announced label).
     /// </summary>
     public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
-        RenderedElements(string automationId, Func<AppiumElement, string> text)
+        RenderedElements(string automationId, Func<AppiumElement, string> text) =>
+        RenderedElements(platform.AutomationId(automationId), text);
+
+    /// <inheritdoc cref="RenderedElements(string)"/>
+    public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
+        RenderedElements(By locator) =>
+        RenderedElements(locator, element => element.Text);
+
+    /// <inheritdoc cref="RenderedElements(string, Func{AppiumElement, string})"/>
+    public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
+        RenderedElements(By locator, Func<AppiumElement, string> text)
     {
         if (driver is IosSnapshotDriver snapshots)
         {
-            return snapshots.FindSnapshots(platform.AutomationId(automationId))
+            return snapshots.FindSnapshots(locator)
                 .Where(match => match.Snapshot.Displayed)
                 .Select(match => (match.Element, match.Snapshot.Text.Trim(),
                     (new System.Drawing.Point(Convert.ToInt32(match.Snapshot.X),
@@ -304,7 +368,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                         Convert.ToInt32(match.Snapshot.Height)))))
                 .ToArray();
         }
-        return driver!.FindElements(platform.AutomationId(automationId))
+        return driver!.FindElements(locator)
             .Where(element => element.Displayed)
             .Select(element => (element, text(element).Trim(),
                 MobilePlatformAdapter.ReadFrame(element)))
@@ -357,7 +421,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No visible element matching {locator} announced an accepted text within {timeout.TotalSeconds} seconds.");
     }
 
-    private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);
+    private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement, Rectangle Frame);
 
     private IEnumerable<VisibleMatch> FindVisible(By locator, Func<AppiumElement, bool>? condition = null)
     {
@@ -376,7 +440,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                     && match.Snapshot.Width > 0 && match.Snapshot.Height > 0
                     && (condition == null || condition(match.ConditionElement)))
                 .Where(match => match.Snapshot.IsVisibleIn(Window()))
-                .Select(match => new VisibleMatch(match.Element, match.ConditionElement));
+                .Select(match => new VisibleMatch(match.Element, match.ConditionElement,
+                    new Rectangle(Convert.ToInt32(match.Snapshot.X), Convert.ToInt32(match.Snapshot.Y),
+                        Convert.ToInt32(match.Snapshot.Width), Convert.ToInt32(match.Snapshot.Height))));
 
             Size Window()
             {
@@ -387,11 +453,27 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         // Android also reads the viewport once per lookup, lazily, so an empty
         // result does not request it and every new poll observes rotations.
         Size? viewport = null;
-        return driver.FindElements(locator)
-            .Where(element => element.Displayed && HasVisibleCenter(
-                element.Location, element.Size, Viewport()))
-            .Where(element => condition == null || condition(element))
-            .Select(element => new VisibleMatch(element, element));
+        return Enumerate();
+
+        IEnumerable<VisibleMatch> Enumerate()
+        {
+            foreach (var element in driver.FindElements(locator))
+            {
+                if (!element.Displayed)
+                {
+                    continue;
+                }
+                // The accepting poll's frame observation is kept on the match
+                // so callers never re-read a live rect after the wait.
+                var frame = new Rectangle(element.Location, element.Size);
+                if (!HasVisibleCenter(frame.Location, frame.Size, Viewport())
+                    || (condition != null && !condition(element)))
+                {
+                    continue;
+                }
+                yield return new VisibleMatch(element, element, frame);
+            }
+        }
 
         Size Viewport()
         {
