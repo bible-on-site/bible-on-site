@@ -668,6 +668,34 @@ describe("[slug] page", () => {
 			).toBeTruthy();
 		});
 
+		it("keeps authored blockquotes as semantic elements inside the article body (#3443)", async () => {
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				content:
+					"<p>לפני</p><blockquote><p>אמר רבי יצחק: <b>ומה טעם</b> פתח בבראשית</p>" +
+					"<blockquote><p>ציטוט מקונן</p></blockquote></blockquote><p>אחרי</p>",
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const articleView = container.querySelector("#article-view") as Element;
+			const quotes = articleView.querySelectorAll("blockquote");
+			expect(quotes).toHaveLength(2);
+			// The authored quote keeps its own content and nesting in the DOM.
+			expect(quotes[0].textContent).toContain("אמר רבי יצחק");
+			expect(quotes[0].querySelector("blockquote")?.textContent).toBe(
+				"ציטוט מקונן",
+			);
+			expect(quotes[0].querySelector("b")?.textContent).toBe("ומה טעם");
+			// The decorative mark is CSS-only: no glyph enters the DOM text,
+			// so copy/accessibility/excerpts read the authored quote alone.
+			expect(articleView.textContent).not.toContain("\u201C");
+			expect(articleView.textContent).not.toContain("\u201D");
+		});
+
 		it("renders all segment types (ktiv, qri+different, ptuha, stuma, maqaf)", async () => {
 			mockGetPerekByPerekId.mockReturnValue(allSegmentTypesPerek);
 
