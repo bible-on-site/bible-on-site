@@ -87,10 +87,14 @@ const interactions = platform === "ios" ? iosInteractionDiagnostics({
 }) : undefined;
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
   interactions.capture(command, request)) : undefined;
-const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
+const discoveryTrace = resolve(artifacts, "ios-discovery-spans.jsonl");
+if (platform === "ios") writeFileSync(discoveryTrace, "");
+const server = spawn(process.execPath, [...(platform === "ios"
+  ? ["--import", resolve(directory, "ios-discovery-trace.mjs")] : []), resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
+  env: { ...process.env, MOBILE_IOS_DISCOVERY_TRACE: platform === "ios" ? discoveryTrace : "" },
 });
 for (const stream of [server.stdout, server.stderr].filter(Boolean)) {
   stream.on("data", (chunk) => {
