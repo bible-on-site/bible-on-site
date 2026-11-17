@@ -348,14 +348,22 @@ jobs:
         env:
           DB_URL: ${{ steps.dump_prod.outputs.local_db_url || steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+          # Browser-facing asset CDN opt-in (#2576). Unset/empty keeps direct
+          # S3 asset URLs; the build downloads opt-in uses ASSETS_BASE_URL and
+          # stays a separate gate.
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           CACHE_ARGS=()
           LABEL_ARGS=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
             --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
+          ASSETS_ARGS=()
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
             BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
+            # The website Dockerfile bakes this into static HTML and the
+            # runner default; only the website consumes it.
+            ASSETS_ARGS+=(--build-arg ASSETS_BASE_URL="${BROWSER_ASSETS_BASE_URL}")
           else
             # type=gha cache needs the docker-container builder (docker driver cannot export it).
             CACHE_SCOPE="${MODULE_NAME}${{ inputs.image_arch == 'arm64' && '-arm64' || '' }}"
@@ -367,6 +375,7 @@ jobs:
             --network=host \
             "${LABEL_ARGS[@]}" \
             "${CACHE_ARGS[@]}" \
+            "${ASSETS_ARGS[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="${DB_URL}" \
             --build-arg MAPBOX_PUBLIC_KEY="${MAPBOX_PUBLIC_TOKEN}" \
@@ -390,6 +399,7 @@ jobs:
         timeout-minutes: 8
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url }}
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           # Exercise the cold release image at the deployed Fargate limits.
           # Its Dockerfile readiness check must pass before the first data request.
@@ -410,6 +420,16 @@ jobs:
           fi
           python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
             --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --check-playback --attempts 12 --interval 5
+          # Browser-facing assets opt-in (#2576): when the variable is set, the
+          # baked image must emit the CDN host in prerendered HTML (build-time
+          # resolution) and in the recitation payload (runtime default).
+          if [ -n "$BROWSER_ASSETS_BASE_URL" ]; then
+            CDN_HOST="$(node -e 'console.log(new URL(process.env.BROWSER_ASSETS_BASE_URL).host)')"
+            curl -sf http://127.0.0.1:3000/rabbis-blessing | grep -qF "$CDN_HOST" \
+              || { echo 'Prerendered HTML lacks the configured assets CDN host'; exit 1; }
+            curl -sf http://127.0.0.1:3000/api/recitation | grep -qF "$CDN_HOST" \
+              || { echo 'Recitation payload lacks the configured assets CDN host'; exit 1; }
+          fi
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
 
       - name: Publish website dependency cache (not a release image)
