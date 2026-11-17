@@ -141,6 +141,33 @@ Not evaluated — no verifiable Namespace pricing/usage evidence. The
 per-runner `job_duration_s` sums are the runner-minute basis if pricing
 becomes available.
 
+## Post-`f5f9dadb3` re-verification attempt (2026-11-17) — aborted
+
+Ten iterations of `app-mobile-e2e-ab.yml` were dispatched on frozen SHA
+`1c6da48393c5028e914757be23a8e63d59227bc2` (branch `exp/ios-runner-ab-1c6da48`;
+master at dispatch time, post-`f5f9dadb3`; the `#3421` snapshot-read sweep was
+still in PR review, so it is not part of the frozen code).
+
+**Zero shard pairs collected.** Iteration 1's `probe_namespace` job stayed
+`queued` continuously for over two hours (17:54Z until abort at ~19:56Z) while
+the same run's `xcode-27` `build_ios` job scheduled in ~1 minute and
+completed, and GitHub-hosted jobs on unrelated runs scheduled normally during
+the same window. The ~1-minute probe (historically scheduled in ~20 seconds)
+never received a `namespace-profile-mac-os` runner.
+
+Per the runbook abort criterion — `probe_namespace` queuing indefinitely means
+the `namespace-profile-mac-os` profile is no longer available to this repo —
+the experiment was stopped without substituting another runner label and all
+ten pending dispatches were cancelled (runs `44142032239`, `44142854448`,
+`44142909379`, `44142990293`, `44143063773`, `44143257919`, `44143697749`,
+`44144274156`, `44144424184`, `44144543350`).
+
+**Decision impact**: #2312 stays closed. The performance re-verification is
+blocked by runner availability, not by data. If the Namespace profile is
+restored for this repo, re-dispatch on then-current master (post-`f5f9dadb3`
+*and* post-#3421 — the #3421 sweep removes the remaining post-wait live reads
+the faster runner raced on) per the same runbook.
+
 ## Interpretation per the issue's decision rule
 
 1. **Reliability migration: not justified.** Namespace did not show
@@ -173,6 +200,9 @@ bounded re-verification rather than dropping the idea:
   reframe #2312 as a *performance* migration and flip
   `ios_runner` in `app-mobile-e2e.yml` (a one-line `runs-on` input change —
   runner selection is not AWS-impacting).
+  *(Attempted 2026-11-17 and aborted — `probe_namespace` queued >2h; see the
+  re-verification section above. Re-dispatch once the profile schedules
+  again.)*
 - In parallel, file the app/harness follow-ups the data points at:
   - convert remaining live-element reads (`ReadFrame`/`Enabled`/`.Location`
     after `WaitFor`) to the snapshot/condition-element pattern that
@@ -220,7 +250,9 @@ evidence) and [ab-legs.csv](ab-legs.csv) (40 leg rows incl. true queue).
   infra split is reported, not extrapolated.
 - **The frozen A/B SHA predates the `FirstPasuk` fix** (`f5f9dadb3`, master
   2026-11-13): the 5-leg Namespace stale-text cluster measures a code path
-  that no longer exists. Re-verification on current master is the open item.
+  that no longer exists. Re-verification on current master was attempted on
+  2026-11-17 and aborted on the runbook's probe-queue criterion (see above);
+  it remains the open item pending `namespace-profile-mac-os` availability.
 - Three rerun shard attempts and five mid-flight cancellations were excluded
   from the primary rate per protocol; the five cancelled shards belong to two
   run-level workflow cancellations (`41026307444`, `41226836955`), not
