@@ -425,9 +425,11 @@ jobs:
           # resolution) and in the recitation payload (runtime default).
           if [ -n "$BROWSER_ASSETS_BASE_URL" ]; then
             CDN_HOST="$(node -e 'console.log(new URL(process.env.BROWSER_ASSETS_BASE_URL).host)')"
-            curl -sf http://127.0.0.1:3000/rabbis-blessing | grep -qF "$CDN_HOST" \
+            # Drain each response: grep -q can close curl's pipe early and
+            # turn a successful hostname match into a pipefail error.
+            curl -sf http://127.0.0.1:3000/rabbis-blessing | grep -F "$CDN_HOST" > /dev/null \
               || { echo 'Prerendered HTML lacks the configured assets CDN host'; exit 1; }
-            curl -sf http://127.0.0.1:3000/api/recitation | grep -qF "$CDN_HOST" \
+            curl -sf http://127.0.0.1:3000/api/recitation | grep -F "$CDN_HOST" > /dev/null \
               || { echo 'Recitation payload lacks the configured assets CDN host'; exit 1; }
           fi
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
