@@ -1202,7 +1202,9 @@ describe("main", () => {
 
 	function commit(cwd: string, path: string) {
 		mkdirSync(dirname(join(cwd, path)), { recursive: true });
-		writeFileSync(join(cwd, path), `${path}\n`);
+		// A later commit may rewrite the same path (e.g. a README edit):
+		// unique content keeps every commit a real change.
+		writeFileSync(join(cwd, path), `${path} ${process.hrtime.bigint()}\n`);
 		git(cwd, "add", ".");
 		git(cwd, "commit", "--quiet", "-m", path);
 		return git(cwd, "rev-parse", "HEAD");
@@ -1223,8 +1225,9 @@ describe("main", () => {
 			head: string;
 		}) => object,
 		changedPath = "web/bible-on-site/src/page.tsx",
-		changeKind: "write" | "delete" = "write",
+		changeKind: "write" | "delete" | "rename" = "write",
 		ancestorPath = "web/api/src/main.rs",
+		options: { extraPaths?: string[]; renameFrom?: string } = {},
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -1246,10 +1249,13 @@ describe("main", () => {
 			if (eventName === "merge_group") {
 				git(work, "checkout", "--quiet", "-b", "gh-readonly-queue/master/tail");
 			}
-			const base = commit(work, ancestorPath);
+			// For renames the measured base creates the source path itself, so
+			// the tested diff stays a pure rename.
+			const base = commit(work, options.renameFrom ?? ancestorPath);
 			if (eventName === "pull_request") {
 				git(work, "checkout", "--quiet", "-b", "feature");
-				commit(work, "web/bible-on-site/src/page.tsx");
+				for (const path of [changedPath, ...(options.extraPaths ?? [])])
+					commit(work, path);
 				git(work, "checkout", "--quiet", "master");
 				commit(work, "web/admin/package.json");
 				commit(work, "web/bulletin/Cargo.toml");
@@ -1266,11 +1272,16 @@ describe("main", () => {
 				rmSync(join(work, changedPath));
 				git(work, "add", ".");
 				git(work, "commit", "--quiet", "-m", "Remove migration");
+			} else if (changeKind === "rename") {
+				mkdirSync(dirname(join(work, changedPath)), { recursive: true });
+				git(work, "mv", options.renameFrom ?? "", changedPath);
+				git(work, "commit", "--quiet", "-m", "Rename");
 			} else {
-				commit(work, changedPath);
+				for (const path of [changedPath, ...(options.extraPaths ?? [])])
+					commit(work, path);
 			}
 			const head = git(work, "rev-parse", "HEAD");
-			if (eventName === "merge_group") {
+			if (eventName === "merge_group" && !options.extraPaths?.length) {
 				assert.equal(git(work, "rev-parse", "master"), root);
 				assert.equal(git(work, "rev-parse", "HEAD^"), base);
 				assert.equal(git(work, "diff", "--name-only", base, head), changedPath);
@@ -1312,7 +1323,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 4,
+				Object.keys(MODULES).length * 2 + 5,
 			);
 			return { changes, output };
 		} finally {
@@ -1511,6 +1522,195 @@ describe("main", () => {
 		assert.match(output, /^admin_release_recovery=true$/m);
 		assert.match(output, /^bulletin_release_recovery=true$/m);
 	});
+
+	describe("docs-only classification (#3621)", () => {
+		const noChecks = (changes: ReturnType<typeof detectChanges>) => {
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, {
+					module_changed: false,
+					ci_changed: false,
+				});
+		};
+
+		for (const path of [
+			// Prose at the boundary's top level and in nested trees.
+			"docs/guide.md",
+			"docs/github/workflows/ci/ci.md",
+			// Nested non-prose assets still count as documentation.
+			"docs/website/bookshelf-first-render.evidence.json",
+			"docs/devops/ios-2635/ab-legs.csv",
+			"docs/architecture/service-map.puml",
+			"docs/website/images/screenshot.png",
+		]) {
+			test(`push of ${path} reports docs_only`, () => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				noChecks(changes);
+				assert.match(output, /^docs_only=true$/m);
+			});
+		}
+
+		test("a deleted documentation file stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/guide.md",
+				"delete",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a multi-commit docs-only push stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["docs/devops/e2e-test-selection.md"] },
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a docs-only pull request reports docs_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"docs/guide.md",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a docs-only merge group does not force module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"docs/guide.md",
+			);
+			// Without the docs-only bypass the queue forces every ci_changed on;
+			// the docs delta must keep them all off so heavy jobs stay skipped.
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a merge group mixing docs with source still validates the combined candidate", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["web/bible-on-site/src/page.tsx"] },
+			);
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, { module_changed: false, ci_changed: true });
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("a mixed docs plus source pull request is not docs_only", () => {
+			const { output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["web/bible-on-site/src/page.tsx"] },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("docs plus a workflow, manifest or shared action keeps validation", () => {
+			for (const extra of [
+				".github/workflows/ci.yml",
+				"web/bible-on-site/package.json",
+				".github/actions/setup-js/action.yml",
+				"devops/github/ci/determine-changes.ts",
+			]) {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"docs/guide.md",
+					"write",
+					undefined,
+					{ extraPaths: [extra] },
+				);
+				assert.match(output, /^docs_only=false$/m, extra);
+			}
+		});
+
+		for (const path of [
+			// The operational AWS source tree is never documentation (#3621):
+			// CloudFormation, Lambda and nginx inputs keep their routed checks.
+			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+			// Even prose or media under the operational tree stays validated.
+			"docs/aws/README.md",
+			"docs/aws/architecture/architecture.drawio",
+			// Source and manifest formats under docs/ are not documentation.
+			"docs/tests/app/device-tests-poc/MauiProgram.cs",
+			"docs/tests/app/device-tests-poc/DeviceTestApp.csproj",
+			"docs/tests/app/device-tests-poc/NuGet.config",
+			// An unknown extension fails safe toward validation.
+			"docs/tooling/helper.sh",
+			// A module-local docs directory is outside the boundary.
+			"web/bible-on-site/docs/guide.md",
+			// The repository-root README policy is a separate concern.
+			"README.md",
+		]) {
+			test(`push of ${path} is not docs_only`, () => {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				assert.match(output, /^docs_only=false$/m);
+			});
+		}
+
+		test("a rename inside docs/ stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/renamed-guide.md",
+				"rename",
+				undefined,
+				{ renameFrom: "docs/guide.md" },
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a rename into docs/ keeps the leaving source path's checks", () => {
+			const { output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/moved-page.md",
+				"rename",
+				undefined,
+				{ renameFrom: "web/bible-on-site/src/page.tsx" },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("a rename out of docs/ keeps the destination's checks", () => {
+			const { output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"web/bible-on-site/src/page.tsx",
+				"rename",
+				undefined,
+				{ renameFrom: "docs/page.md" },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+	});
 });
 
 describe("merge-group workflow contract", () => {
@@ -1670,6 +1870,10 @@ describe("merge-group workflow contract", () => {
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
 						return String(baselineAvailable);
+					// These scenarios exercise code/queue changes; docs_only stays
+					// false so the docs-gated suite checks still evaluate (#3621).
+					if (expression === "needs.determine_changes.outputs.docs_only")
+						return "false";
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
 			);

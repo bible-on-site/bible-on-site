@@ -2,7 +2,9 @@
  * Determines, in one job, which CI modules changed between the event's base
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
  * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
- * data deployment routing decision.
+ * data deployment routing decision and `docs_only` — true only when every
+ * touched path sits under the repository-root `docs/` tree and no module's
+ * checks fired, letting required checks resolve without heavy validation.
  *
  * Works on a shallow checkout. PRs compare the tested merge commit with its
  * first parent; the event payload's base can lag behind that tested base.
@@ -234,6 +236,8 @@ export const MODULES = {
 			"devops/package.json",
 			"devops/bun.lock",
 			"devops/github/ci/determine-changes.test.ts",
+			// The docs-only workflow contract guards the gating this router emits.
+			"devops/github/ci/docs-only-gating.test.mjs",
 			"devops/github/ci/publish-docstring.mts",
 			"devops/github/ci/publish-docstring-proof.py",
 		],
@@ -263,6 +267,16 @@ const isAt = (file: string, path: string) =>
 // enter Release Data: the perushim producer correctly skips those runs, so no
 // current-run SQL artifact exists to bind (#2730).
 const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+
+// Root docs/ counts as documentation only for inert prose, media and data
+// formats. Source, script, manifest and config extensions never qualify —
+// a docs-local executable (the device-tests POC project) or any unknown
+// format keeps its validation instead of inheriting the boundary. The
+// docs/aws tree is excluded regardless of format: CloudFormation stacks,
+// Lambda code and nginx config are deployment/runtime inputs consumed by
+// validation, and even its prose/media accompany live infrastructure.
+const DOCUMENTATION_PATH =
+	/^docs\/(?!aws\/).+\.(?:md|markdown|mdx|txt|rst|adoc|pdf|csv|tsv|json|gz|dbml|puml|drawio|png|jpe?g|gif|svg|webp|ico|bmp|avif|mp4|mov|webm|mp3|wav|m4a|zip|patch|diff)$/i;
 
 /** Release intent for data delivery tooling, separate from generic CI checks. */
 export function isDataDeployChange(changedFiles: string[]): boolean {
@@ -454,8 +468,18 @@ function changedFilesContext(base: BaseRevision, cwd?: string): ChangeContext {
 	baseSha = git("rev-parse", "--verify", baseSha + "^{commit}");
 	console.log("BASE_SHA: " + baseSha);
 	console.log("HEAD_SHA: " + headSha);
-	const diff = git("diff", "--name-only", baseSha, headSha);
-	return { baseSha, headSha, files: diff ? diff.split("\n") : [] };
+	// --name-status keeps a rename's source path alongside its destination:
+	// moving a file into docs/ still counts the leaving module path, and moving
+	// one out of docs/ keeps the docs/ source, so directory moves can never
+	// masquerade as documentation-only edits.
+	const diff = git("diff", "--name-status", "-M", baseSha, headSha);
+	const files = diff
+		? diff
+				.split("\n")
+				.flatMap((line) => line.split("\t").slice(1))
+				.filter((file) => file.length > 0)
+		: [];
+	return { baseSha, headSha, files };
 }
 
 export function listChangedFiles(base: BaseRevision, cwd?: string): string[] {
@@ -499,7 +523,20 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const mergeGroup = GITHUB_EVENT_NAME === "merge_group";
-	if (mergeGroup) {
+	// Changes confined to the repository-root docs/ tree request no automatic
+	// validation: every touched path (rename sources included) carries an inert
+	// documentation format under docs/ and nothing routed any module's checks
+	// (#3621). The merge-group diff already spans the combined candidate — a
+	// batched code entry keeps docs_only false — while a tail group's own
+	// docs-only delta may skip because ALLGREEN requires every earlier entry's
+	// checks green before this group can merge.
+	const docsOnly =
+		files.length > 0 &&
+		files.every((file) => DOCUMENTATION_PATH.test(file)) &&
+		!Object.values(changes).some(
+			(flags) => flags.module_changed || flags.ci_changed,
+		);
+	if (mergeGroup && !docsOnly) {
 		// A preceding queue entry may still have unfinished checks. Validate
 		// the combined head conservatively, without any release intent.
 		for (const flags of Object.values(changes)) {
@@ -515,6 +552,7 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	lines.push(`docs_only=${docsOnly}`);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(
 		`bulletin_release_recovery=${recoveryModules.includes("bulletin")}`,
