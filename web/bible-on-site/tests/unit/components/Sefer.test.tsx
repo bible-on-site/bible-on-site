@@ -226,9 +226,17 @@ jest.mock("@/app/929/[number]/components/use-daily-article-override", () => ({
 	useDailyArticleOverride: jest.fn(() => null),
 }));
 
-let capturedSeferPanelProps: { articles?: unknown[] }[] = [];
+type CapturedPanelProps = {
+	articles?: unknown[];
+	perekId?: number;
+	expandSlug?: string;
+	expandToken?: number;
+	expandNotePasuk?: number;
+	expandNoteIdx?: number;
+};
+let capturedSeferPanelProps: CapturedPanelProps[] = [];
 jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
-	SeferPanel: (props: { articles?: unknown[] }) => {
+	SeferPanel: (props: CapturedPanelProps) => {
 		capturedSeferPanelProps.push(props);
 		return <div data-testid="blank-page" />;
 	},
@@ -254,6 +262,7 @@ import {
 	saveSeferBookmarkSettings,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { CONTENT_OFFSET } from "@/app/929/[number]/components/sefer-page-utils";
 
 function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
 	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
@@ -1775,5 +1784,185 @@ describe("Sefer component", () => {
 		await act(async () => {
 			await summaries;
 		});
+	});
+
+	it("dispatches qa-widget-toggle from the toolbar button", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const events: Event[] = [];
+		document.addEventListener("qa-widget-toggle", (e) => events.push(e));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שאלה על הפרק" }),
+		);
+		expect(events).toHaveLength(1);
+	});
+
+	it("jumps to the answer chapter and pushes its route on qa-navigate-sefer", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2, 3]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "perush",
+						name: 'רש"י',
+						author: 'רש"י',
+						perekId: 2,
+						perushSlug: "rashi",
+						pasuk: 3,
+						noteIdx: 1,
+					},
+				}),
+			);
+		});
+		expect(mockJumpToPage).toHaveBeenCalledWith(1 * 2 + CONTENT_OFFSET + 1);
+		expect(window.location.pathname).toBe("/929/2");
+		expect(window.location.search).toBe("?book");
+	});
+
+	it("uses the article id as the slug for article answers", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2, 3]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "article",
+						name: "מאמר",
+						author: "author",
+						perekId: 3,
+						articleId: 42,
+					},
+				}),
+			);
+		});
+		expect(mockJumpToPage).toHaveBeenCalledWith(2 * 2 + CONTENT_OFFSET + 1);
+		expect(window.location.pathname).toBe("/929/3");
+	});
+
+	it("ignores qa-navigate-sefer for a chapter outside the book", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: { type: "perush", name: "x", author: "x", perekId: 99, perushSlug: "rashi" },
+				}),
+			);
+		});
+		expect(mockJumpToPage).not.toHaveBeenCalled();
+	});
+
+	it("expands the QA answer's commentary on the matching chapter panel only", async () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer: { ...original, perakim: [chapter, chapter] },
+		};
+		const view = render(<SeferContents {...props} />);
+		const lastPanelProps = (perekId: number) =>
+			capturedSeferPanelProps.filter((panel) => panel.perekId === perekId).at(-1);
+
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "perush",
+						name: 'רש"י',
+						author: 'רש"י',
+						perekId: 2,
+						perushSlug: "rashi",
+						pasuk: 3,
+						noteIdx: 1,
+					},
+				}),
+			);
+		});
+
+		// Only the cited chapter's panel receives the expand props; the token
+		// re-triggers expansion even when the slug repeats.
+		expect(lastPanelProps(2)).toMatchObject({
+			expandSlug: "rashi",
+			expandNotePasuk: 3,
+			expandNoteIdx: 1,
+		});
+		expect(lastPanelProps(2)?.expandToken).toEqual(expect.any(Number));
+		expect(lastPanelProps(1)).toMatchObject({
+			expandSlug: undefined,
+			expandToken: undefined,
+			expandNotePasuk: undefined,
+			expandNoteIdx: undefined,
+		});
+
+		// Losing the chapter list must clear every expansion target — the
+		// panels remount under idx keys and evaluate the ?? 0 fallbacks.
+		await act(async () =>
+			view.rerender(<SeferContents {...props} perekIds={undefined} />),
+		);
+		const remounted = capturedSeferPanelProps.slice(-2);
+		expect(remounted).toHaveLength(2);
+		for (const panel of remounted) {
+			expect(panel.expandSlug).toBeUndefined();
+			expect(panel.expandToken).toBeUndefined();
+			expect(panel.expandNotePasuk).toBeUndefined();
+			expect(panel.expandNoteIdx).toBeUndefined();
+		}
+	});
+
+	it("uses an empty expand slug when the QA source has no routable id", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "article",
+						name: "מאמר",
+						author: "author",
+						perekId: 1,
+					},
+				}),
+			);
+		});
+		const panel = capturedSeferPanelProps.at(-1);
+		expect(panel?.perekId).toBe(1);
+		expect(panel?.expandSlug).toBe("");
 	});
 });

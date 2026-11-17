@@ -1,7 +1,7 @@
 import Script from "next/script";
 import { isProduction } from "@/util/environment";
 
-const AHREFS_ANALYTICS_KEY = "G7ksy4fTmIqbChcszvHcDw";
+const AHREFS_ANALYTICS_KEY = "G7ksy4fTmIqbChcszvHcDw"; // gitleaks:allow - public Ahrefs analytics key, client-side by design
 
 /**
  * Ahrefs Web Analytics, direct async install (#2376). The script tracks
