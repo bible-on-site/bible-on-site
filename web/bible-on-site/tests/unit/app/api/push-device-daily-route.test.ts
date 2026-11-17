@@ -92,6 +92,37 @@ describe("POST /api/push/device/daily", () => {
 			expect(mockSend).toHaveBeenCalledWith(body.perekId, TOKEN);
 		});
 
+		it("returns 502 when every attempted send failed (#3499)", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 1 });
+			const response = await call("Bearer s3cret");
+			expect(response.status).toBe(502);
+			expect(await response.json()).toMatchObject({
+				sent: 0,
+				removed: 0,
+				failed: 1,
+			});
+		});
+
+		it("stays 200 when nothing was sent and nothing failed", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 0 });
+			expect((await call("Bearer s3cret")).status).toBe(200);
+		});
+
+		// The FCM sender always gets a verdict — sent, unregistered
+		// (removed) or failed — so a dead-token cleanup is the only
+		// reachable targeted miss; the web-push mirror's empty lookup is not.
+		it("returns 404 for a targeted check that matched no live device", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 1, failed: 0 });
+			const response = await call("Bearer s3cret", { token: TOKEN });
+			expect(response.status).toBe(404);
+		});
+
+		it("returns 502 for a targeted send that failed", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 1 });
+			const response = await call("Bearer s3cret", { token: TOKEN });
+			expect(response.status).toBe(502);
+		});
+
 		it("broadcasts when the supplied body is empty", async () => {
 			const response = await callRaw("Bearer s3cret", "");
 			const body = await response.json();
