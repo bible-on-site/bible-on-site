@@ -8,6 +8,6 @@
          as post-push Codacy annotations. Enabled rules and severities live
          in the repo-root .editorconfig ([*.cs] section). PrivateAssets keeps
          the analyzer out of any produced package/dependency graph. -->
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" PrivateAssets="all" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.36.0.15337" PrivateAssets="all" />
   </ItemGroup>
 </Project>

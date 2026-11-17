@@ -128,6 +128,50 @@ test.describe("Article page", () => {
 		await expect(articleView.getByText("חזרה לפרק →")).toHaveCount(0);
 	});
 
+	test("renders authored blockquotes with the RTL editorial treatment (#3443)", async ({
+		page,
+	}) => {
+		// Fixture article 2 carries a blockquote with a nested quote inside.
+		await page.goto("/929/1/2");
+
+		const articleView = page.locator("#article-view");
+		await expect(articleView).toBeVisible({ timeout: 10_000 });
+
+		const quote = articleView.locator("blockquote").first();
+		await expect(quote).toBeVisible();
+		await expect(quote).toContainText("אמר רבי יצחק");
+		await expect(quote.locator("blockquote")).toContainText("ציטוט מקונן");
+
+		const styles = await quote.evaluate((el) => {
+			const computed = getComputedStyle(el);
+			const mark = getComputedStyle(el, "::before");
+			return {
+				borderRightWidth: computed.borderRightWidth,
+				borderRightStyle: computed.borderRightStyle,
+				borderLeftWidth: computed.borderLeftWidth,
+				paddingRight: computed.paddingRight,
+				markContent: mark.content,
+				markFontSize: mark.fontSize,
+				markUserSelect: mark.userSelect,
+			};
+		});
+
+		// border-inline-start resolves to the right edge under the page's RTL
+		// direction — the accent rule hugs the quote's leading side.
+		expect(styles.borderRightStyle).toBe("solid");
+		expect(Number.parseFloat(styles.borderRightWidth)).toBeGreaterThan(0);
+		expect(Number.parseFloat(styles.borderLeftWidth)).toBe(0);
+		expect(Number.parseFloat(styles.paddingRight)).toBeGreaterThan(0);
+
+		// The decorative quotation mark is generated content only: present in
+		// the paint layer, absent from DOM text, and unselectable.
+		expect(styles.markContent).toContain("“");
+		expect(Number.parseFloat(styles.markFontSize)).toBeGreaterThan(30);
+		expect(styles.markUserSelect).toBe("none");
+		const copiedText = await quote.evaluate((el) => el.textContent ?? "");
+		expect(copiedText).not.toContain("“");
+	});
+
 	test("opening article from carousel shows same article content", async ({
 		page,
 	}) => {

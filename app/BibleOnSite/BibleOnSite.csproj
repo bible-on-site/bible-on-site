@@ -64,13 +64,16 @@
 		<DisablePush Condition="'$(DisablePush)' == ''">false</DisablePush>
 		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
 
-		<!-- #1097: stays false until the App ID's Push Notifications capability is
-		     enabled and the provisioning profiles regenerated (operator checklist in
-		     docs/app/push-notifications.md). While false, iOS device signing selects
-		     Entitlements.Base.plist (app groups only); pass
-		     -p:IosPushProvisioned=true — or flip this default — once aps-environment
-		     is authorized. -->
-		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">false</IosPushProvisioned>
+		<!-- #1097: the App ID's Push Notifications capability is enabled and the
+		     distribution profile authorizes aps-environment=production (production
+		     setup of November 11, 2026 — see docs/app/push-notifications.md). While
+		     true, iOS device signing selects Entitlements.App.plist (Debug:
+		     aps-environment=development) / Entitlements.Dist.plist (Release:
+		     production); a build whose profile does not authorize aps-environment —
+		     e.g. a local development profile that was not regenerated — passes
+		     -p:IosPushProvisioned=false to sign with Entitlements.Base.plist
+		     (app groups only). -->
+		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">true</IosPushProvisioned>
 
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -97,12 +100,12 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.1.23</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.1.27</ApplicationDisplayVersion>
 		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
 		     every store that accepts large integers: Android versionCode (continuing Play
 		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
 		     across marketing versions, including on minor bumps where the patch resets. -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100023</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100027</ApplicationVersion>
 		<!-- Windows MSIX merges the display version and this value into a 4-part version.
 		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
 		     packer also pins it); the leading marketing version keeps packages strictly
@@ -271,12 +274,13 @@
 	       Entitlements.Dist.plist so App Store validation and
 	       ios_signing_requirements.py (evaluated with Configuration=Release)
 	       both see `production`.
-	     - #1097: the App ID's Push Notifications capability is not enabled yet,
-	       so no provisioning profile authorizes `aps-environment` — signing with
-	       it fails codesign and CI validation alike. Until the operator enables
-	       the capability and regenerates the profiles, builds sign with
-	       Entitlements.Base.plist (app groups only). Pass
-	       -p:IosPushProvisioned=true to switch to the aps-environment plists. -->
+	     - #1097: the App ID's Push Notifications capability is enabled and the
+	       production distribution profile authorizes `aps-environment=production`.
+	       IosPushProvisioned defaults to true so signing-requirements discovery
+	       and signed packaging resolve the same plists; a device build whose
+	       profile does not authorize aps-environment (e.g. an unregenerated
+	       development profile) passes -p:IosPushProvisioned=false to keep
+	       Entitlements.Base.plist (app groups only). -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
@@ -435,7 +439,7 @@
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
-		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
+		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.101" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />

@@ -59,6 +59,10 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
+  # Every SQL-dialect engine (tsqllint and the generic parser alike) rejects
+  # this MySQL file's @-variables, PREPARE-driven DDL and INSERT IGNORE; it is
+  # exercised twice against real MySQL by bulletin-rollout-mysql.test.ts.
+  - "data/mysql/tanah_daily_bulletin_rollout_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_link_proposal_upgrade.sql"
   - "data/mysql/tanah_article_hebrew_date_upgrade.sql"
@@ -66,6 +70,9 @@ exclude_paths:
   - "data/mysql/tanah_article_index_upgrade.sql"
   - "data/mysql/tanah_reading_metrics_upgrade.sql"
   - "data/mysql/tanah_web_push_upgrade.sql"
+  # Same MySQL @-variable/PREPARE idiom as the sibling upgrade files above;
+  # exercised by test_lambda_parser.py, not by a T-SQL dialect check.
+  - "data/mysql/tanah_push_device_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
   - "data/mysql/tanah_moed_upgrade.sql"

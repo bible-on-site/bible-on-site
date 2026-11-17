@@ -5,6 +5,7 @@ import {
 	type ContributionCatalogue,
 	ContributionComposer,
 } from "~/components/tanahpedia/ContributionComposer";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
 import {
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
@@ -106,6 +107,314 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it("submits optional article scope separately from the issue's free text", async () => {
+		const { submit } = setup();
+		description();
+		fireEvent.change(screen.getByLabelText("סוג השינוי המבוקש"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר (רשות)"), {
+			target: { value: "123" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					description: "תיאור מבוסס ראיות",
+					scope: { kind: "article_links", targetId: "123" },
+					changes: [],
+				}),
+			),
+		);
+	});
+	it("retains an existing scope while editing and explicitly clears it when requested", async () => {
+		const initial = {
+			kind: "issue",
+			title: "Existing issue",
+			description: "Existing context",
+			assignee: { kind: "unassigned" },
+			evidence: [],
+			changes: [],
+			scope: { kind: "article_links", targetId: "123" },
+		} as unknown as Contribution;
+		const { submit } = setup("issue", { initial });
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenLastCalledWith(
+				expect.objectContaining({ scope: initial.scope }),
+			),
+		);
+		fireEvent.change(screen.getByLabelText("סוג השינוי המבוקש"), {
+			target: { value: "" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenLastCalledWith(
+				expect.objectContaining({ scope: null }),
+			),
+		);
+	});
+	it("keeps issue scope controls out of manual PR composition", () => {
+		setup("pr");
+		expect(screen.queryByText("הכוונה לסוכן (רשות)")).not.toBeInTheDocument();
+	});
+	it("retains structured evidence on note edits and drops stale offsets when its quote changes", async () => {
+		const articleSource = {
+			articleId: "17",
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			spanStart: 2,
+			spanEnd: 7,
+		};
+		const initial = {
+			id: ID,
+			kind: "issue",
+			title: "מקור",
+			description: "תיאור",
+			assignee: { kind: "unassigned" },
+			evidence: [
+				{
+					citation: "מאמר 17",
+					quote: "מקור ",
+					note: "",
+					url: null,
+					articleSource,
+				},
+			],
+			changes: [],
+			issueId: null,
+			closeIssue: true,
+		} as unknown as Contribution;
+		const { submit } = setup("issue", { initial });
+		fireEvent.change(screen.getByLabelText("מה המקור מוכיח?"), {
+			target: { value: "הסבר מעודכן" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					evidence: [
+						expect.objectContaining({ quote: "מקור ", articleSource }),
+					],
+				}),
+			),
+		);
+		submit.mockClear();
+		fireEvent.change(screen.getByLabelText("ציטוט רלוונטי"), {
+			target: { value: "ציטוט אחר" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					evidence: [
+						expect.objectContaining({
+							quote: "ציטוט אחר",
+							articleSource: undefined,
+						}),
+					],
+				}),
+			),
+		);
+		expect(initial.evidence[0].articleSource).toEqual(articleSource);
+	});
+	it("submits article links as an ordinary typed PR without converting numeric IDs to encyclopedia UUIDs", async () => {
+		const { submit } = setup("pr");
+		description();
+		fireEvent.change(screen.getByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
+			target: { value: "17" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "+ הוספת קישור מוצע" }));
+		fireEvent.change(screen.getByLabelText("פרק בקישור 1 פסוק 1"), {
+			target: { value: "1" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר פסוק בקישור 1 פסוק 1"), {
+			target: { value: "2" },
+		});
+		expect(
+			screen.getByRole("button", { name: "+ הוספת שינוי" }),
+		).toBeDisabled();
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					kind: "pr",
+					changes: [
+						{
+							kind: "article_links",
+							targetId: "17",
+							after: {
+								commands: [
+									{
+										relationshipKey: "coveringSources",
+										action: "add",
+										target: { pasukCoordinates: [{ perekId: 1, pasuk: 2 }] },
+									},
+								],
+							},
+						},
+					],
+				}),
+			),
+		);
+	});
+	it("retains a reviewed article-link command and expiry when editing the ordinary PR", async () => {
+		const change = {
+			kind: "article_links",
+			targetId: "17",
+			before: {},
+			after: {
+				commands: [
+					{
+						relationshipKey: "dedicationAssignments",
+						action: "replace",
+						target: { dedicationId: 3, expiresAt: "2030-01-02 03:04:05" },
+					},
+				],
+			},
+			labels: {},
+		};
+		const initial = {
+			id: ID,
+			kind: "pr",
+			title: "קישורי מאמר",
+			description: "תיאור",
+			assignee: { kind: "unassigned" },
+			evidence: [
+				{ citation: "בראשית א ב", quote: "מקור", note: "", url: null },
+			],
+			changes: [change],
+			issueId: null,
+			closeIssue: true,
+		} as unknown as Contribution;
+		const { submit } = setup("pr", { initial });
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
+		expect(screen.getByLabelText("תוקף הקדשה 1")).toHaveValue(
+			"2030-01-02T03:04:05",
+		);
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: [
+						{
+							kind: change.kind,
+							targetId: change.targetId,
+							after: change.after,
+						},
+					],
+				}),
+			),
+		);
+	});
+	it("offers an article aggregate only when there is one change in the PR", () => {
+		setup("pr");
+		fireEvent.click(screen.getByRole("button", { name: "+ הוספת שינוי" }));
+		expect(screen.getAllByRole("option", { name: "קישורי מאמר" })).toHaveLength(
+			2,
+		);
+		for (const option of screen.getAllByRole("option", { name: "קישורי מאמר" }))
+			expect(option).toBeDisabled();
+	});
+	it.each([undefined, "failed", "succeeded"] as const)(
+		"preserves an existing empty sequence only after a successful migration (%s)",
+		async (status) => {
+			const initial = {
+				id: ID,
+				kind: "pr",
+				title: "Migrated proposal",
+				description: "Keep the context",
+				assignee: { kind: "unassigned" },
+				evidence: [
+					{
+						citation: "בראשית א א",
+						quote: "Existing source",
+						url: null,
+						note: "",
+					},
+				],
+				issueId: OTHER,
+				closeIssue: true,
+				changes: [],
+				...(status
+					? {
+							apiMigration: {
+								status,
+								from: 1,
+								to: 4,
+								at: "now",
+								steps: [],
+								error: status === "failed" ? "Cannot migrate" : null,
+							},
+						}
+					: {}),
+			} as unknown as Contribution;
+			const { submit } = setup("pr", { initial });
+			expect(screen.queryByLabelText("סוג שינוי")).not.toBeInTheDocument();
+			fireEvent.change(screen.getByLabelText("תיאור"), {
+				target: { value: "Revised explanation" },
+			});
+			fireEvent.change(screen.getByLabelText("מה המקור מוכיח?"), {
+				target: { value: "Clarified evidence" },
+			});
+			fireEvent.submit(screen.getByRole("form"));
+			if (status === "succeeded") {
+				await waitFor(() =>
+					expect(submit).toHaveBeenCalledWith(
+						expect.objectContaining({
+							description: "Revised explanation",
+							evidence: [
+								expect.objectContaining({ note: "Clarified evidence" }),
+							],
+							changes: [],
+						}),
+					),
+				);
+			} else {
+				expect(await screen.findByRole("alert")).toHaveTextContent(
+					"A PR requires 1-40 typed changes",
+				);
+				expect(submit).not.toHaveBeenCalled();
+			}
+		},
+	);
+	it("preserves all four assignee kinds and submits the selected registered agent as the initial work trigger", async () => {
+		const agent = {
+			id: OTHER,
+			name: "My workstation",
+			provider: "local_llm",
+			enabled: true,
+		} as ContributionAgentSummary;
+		const { submit } = setup("issue", {
+			agents: [
+				agent,
+				{ ...agent, id: "disabled", name: "Disabled", enabled: false },
+				{ ...agent, id: "aws", name: "Cloud", provider: "aws_llm" },
+			],
+		});
+		description();
+		const assignee = screen.getByLabelText("אחראי", { exact: true });
+		expect(assignee.querySelectorAll("option")).toHaveLength(4);
+		fireEvent.change(assignee, { target: { value: "local_llm" } });
+		const picker = screen.getByLabelText("סוכן מטפל");
+		expect(picker.querySelectorAll("option")).toHaveLength(3);
+		expect(
+			screen.getByRole("option", { name: "Disabled (מושבת)" }),
+		).toBeDisabled();
+		fireEvent.change(picker, { target: { value: OTHER } });
+		expect(screen.getByRole("note")).toHaveTextContent(/שמירת/);
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					assignee: { kind: "local_llm", agentId: OTHER },
+				}),
+			),
+		);
+	});
 	it("edits an existing metadata proposal and independently controls linked-issue closure", async () => {
 		const initial = {
 			kind: "pr",

@@ -1,12 +1,18 @@
 import "@tanstack/react-start/server-only";
 import { createHash } from "node:crypto";
 import { SendMessageBatchCommand, type SQSClient } from "@aws-sdk/client-sqs";
+import { rolloutDelivers } from "~/lib/bulletin-rollout";
 import {
 	bulletinDatesForRun,
 	scheduledBulletinDate,
 } from "~/lib/bulletin-schedule";
 import { prepareBulletin } from "./daily-bulletins.server";
-import { enqueueBulletinEmail } from "./ses-delivery.server";
+import { getBulletinRolloutSummary } from "./rollout-state.server";
+import {
+	enqueueBulletinEmail,
+	enqueueBulletinRolloutEmail,
+	NoConfirmedRecipientsError,
+} from "./ses-delivery.server";
 import { readAudienceSettings } from "./ses-settings.server";
 import { enqueueBulletinTelegram } from "./telegram-delivery.server";
 import { readTelegramSettings } from "./telegram-settings.server";
@@ -80,10 +86,11 @@ export async function processScheduledBulletin(
 	)
 		return false;
 	const targetDate = payload.date;
-	const [email, telegram, whatsapp] = await Promise.all([
+	const [email, telegram, whatsapp, rollout] = await Promise.all([
 		readAudienceSettings(),
 		readTelegramSettings(),
 		readWhatsAppSettings(),
+		getBulletinRolloutSummary(),
 	]);
 	// Fixed rollout policy. An admin audience change pauses automation until reviewed.
 	if (
@@ -96,8 +103,8 @@ export async function processScheduledBulletin(
 	await prepareBulletin(targetDate);
 	if (signal.aborted) return false;
 	// Each channel retains its durable claim, frozen target and consent checks.
-	// One enqueue failure must not prevent the other two channels from being queued.
-	const results = await Promise.allSettled([
+	// One enqueue failure must not prevent the other channels from being queued.
+	const enqueues: Promise<unknown>[] = [
 		enqueueBulletinEmail(
 			targetDate,
 			scheduledBulletinRequestKey(targetDate, "email"),
@@ -121,7 +128,24 @@ export async function processScheduledBulletin(
 			},
 			{ refreshRealTarget: true },
 		),
-	]);
+	];
+	// The original-cohort rollout adds a second, limited 'real' email job once
+	// confirmed cohort members exist (#3382). The durable job/ledger contract
+	// keeps it cumulative and idempotent across redeliveries.
+	if (rollout && rolloutDelivers(rollout.state) && rollout.admitted > 0)
+		enqueues.push(
+			enqueueBulletinRolloutEmail(
+				targetDate,
+				scheduledBulletinRequestKey(targetDate, "email"),
+				email.revision,
+			).catch((error: unknown) => {
+				// A last admitted member may still opt out between the gate and the
+				// enqueue; an empty cohort is a skip, never a failed bulletin run.
+				if (error instanceof NoConfirmedRecipientsError) return null;
+				throw error;
+			}),
+		);
+	const results = await Promise.allSettled(enqueues);
 	if (results.some((result) => result.status === "rejected"))
 		throw new Error("Scheduled bulletin channel enqueue incomplete");
 	return true;

@@ -28,7 +28,20 @@ public sealed record HtmlRun
     /// target — e.g. generated note-list markers share the inline
     /// reference's color (#2723).</summary>
     public bool Accent { get; init; }
+    /// <summary>Number of enclosing &lt;blockquote&gt; elements — 0 for
+    /// ordinary text. Platforms map it onto their paragraph-level quote
+    /// decoration (#3443); the run's own text stays untouched.</summary>
+    public int QuoteDepth { get; init; }
 }
+
+/// <summary>
+/// A paragraph-aligned block-quote range inside a flattened run text:
+/// [Start, End) in the concatenated run characters plus the nesting
+/// <see cref="Depth"/> (1 = outermost quote). Break runs between quote
+/// paragraphs are folded into the range so paragraph-style spans and
+/// attributes always cover whole paragraphs (#3443).
+/// </summary>
+public readonly record struct HtmlQuoteBlock(int Start, int End, int Depth);
 
 /// <summary>
 /// Converts HTML fragments into styled text runs with a managed parser only.
@@ -104,6 +117,46 @@ public static class HtmlRuns
         return context.Runs;
     }
 
+    /// <summary>
+    /// Block-quote ranges over the concatenated run text, expanded outward
+    /// to whole-paragraph bounds: a quote paragraph is decorated even where
+    /// its own run never touches the line's edges, and a range ending mid-
+    /// paragraph would split the paragraph's style. Adjacent ranges of the
+    /// same depth merge so a multi-paragraph quote paints one continuous
+    /// accent (#3443). Empty when no run sits inside a &lt;blockquote&gt;.
+    /// </summary>
+    public static List<HtmlQuoteBlock> QuoteBlocks(IReadOnlyList<HtmlRun> runs)
+    {
+        var blocks = new List<HtmlQuoteBlock>();
+        var position = 0;
+        HtmlQuoteBlock? open = null;
+        string? text = null;
+        foreach (var run in runs)
+        {
+            var start = position;
+            position += run.Text.Length;
+            if (run.QuoteDepth <= 0)
+            {
+                continue;
+            }
+            text ??= string.Concat(runs.Select(r => r.Text));
+            var paragraphStart = start == 0 ? 0 : text.LastIndexOf('\n', start - 1) + 1;
+            var close = text.IndexOf('\n', position - 1);
+            var paragraphEnd = close < 0 ? text.Length : close + 1;
+            if (open is { } current && current.Depth == run.QuoteDepth && current.End >= paragraphStart)
+            {
+                open = current with { End = paragraphEnd };
+                blocks[^1] = open.Value;
+            }
+            else
+            {
+                open = new HtmlQuoteBlock(paragraphStart, paragraphEnd, run.QuoteDepth);
+                blocks.Add(open.Value);
+            }
+        }
+        return blocks;
+    }
+
     private sealed class Style
     {
         public bool Bold;
@@ -116,6 +169,7 @@ public static class HtmlRuns
         public string? Link;
         public bool Accent;
         public bool PreserveWhitespace;
+        public int QuoteDepth;
 
         public Style Clone() => (Style)MemberwiseClone();
     }
@@ -181,7 +235,8 @@ public static class HtmlRuns
                 FontScale = style.FontScale,
                 HeadingLevel = style.HeadingLevel,
                 Link = style.Link,
-                Accent = style.Accent
+                Accent = style.Accent,
+                QuoteDepth = style.QuoteDepth
             });
             _text.Clear();
         }
@@ -190,7 +245,8 @@ public static class HtmlRuns
             a.Bold == b.Bold && a.Italic == b.Italic && a.Underline == b.Underline &&
             a.Strikethrough == b.Strikethrough && a.BaselineShift == b.BaselineShift &&
             Math.Abs(a.FontScale - b.FontScale) < 0.0001 &&
-            a.HeadingLevel == b.HeadingLevel && a.Link == b.Link && a.Accent == b.Accent;
+            a.HeadingLevel == b.HeadingLevel && a.Link == b.Link && a.Accent == b.Accent &&
+            a.QuoteDepth == b.QuoteDepth;
     }
 
     private static void Walk(HtmlNode node, Style style, Context context)
@@ -392,6 +448,12 @@ public static class HtmlRuns
                 break;
             case "pre":
                 Mutated().PreserveWhitespace = true;
+                break;
+            case "blockquote":
+                /* Quote boundaries travel on the runs (a depth count, not
+                   markup): platform renderers paint each paragraph's own
+                   accent at its leading edge (#3443). */
+                Mutated().QuoteDepth = parent.QuoteDepth + 1;
                 break;
             case "a":
                 var href = node.GetAttributeValue("href", null);

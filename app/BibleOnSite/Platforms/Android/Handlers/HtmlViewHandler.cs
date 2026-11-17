@@ -67,8 +67,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     /// <summary>Style inputs baked into the rendered spans. Alignment, font size and
     /// line height are view-level (Gravity/TextSize/lineSpacing), so they are
-    /// deliberately not part of the render key — changing them never re-parses.</summary>
-    private readonly record struct RenderStyle(HtmlTextDirection Direction, double H1, double H2, double H3);
+    /// deliberately not part of the render key — changing them never re-parses.
+    /// Dark mode IS baked in: the quote accent color lands inside the cached
+    /// spans, so a theme flip must re-render rather than repaint (#3443).</summary>
+    private readonly record struct RenderStyle(HtmlTextDirection Direction, double H1, double H2, double H3, bool Dark);
 
     /// <summary>Cache key: the html plus everything that shapes its rendered spans.</summary>
     private readonly record struct RenderKey(string Html, RenderStyle Style);
@@ -127,6 +129,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
+        /* UiMode is in MainActivity's ConfigurationChanges, so this handler
+           survives a system theme flip — the quote accent and text colors
+           baked into the cached spans must re-render with it (#3443). */
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+        }
     }
 
     protected override void DisconnectHandler(TextView platformView)
@@ -141,11 +150,16 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         _measureContext = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            app.RequestedThemeChanged -= OnRequestedThemeChanged;
+        }
         base.DisconnectHandler(platformView);
     }
 
     private void OnHtmlContentChanged(object? sender, EventArgs e) => UpdateContent();
     private void OnStyleChanged(object? sender, EventArgs e) => UpdateContent();
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) => UpdateContent();
 
     /// <summary>
     /// Force the native TextView to measure with EXACTLY the full available width.
@@ -201,20 +215,20 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             Context.FromPixels(PlatformView.MeasuredHeight));
     }
 
-    private Android.Graphics.Color GetTextColor()
+    private bool IsDarkMode()
     {
-        if (Context?.Resources?.Configuration != null)
+        if (Context?.Resources?.Configuration is { } config)
         {
-            var nightMode = Context.Resources.Configuration.UiMode & Android.Content.Res.UiMode.NightMask;
-            var isDarkMode = nightMode == Android.Content.Res.UiMode.NightYes;
-
-            return isDarkMode
-                ? Android.Graphics.Color.ParseColor("#e0e0e0")
-                : Android.Graphics.Color.ParseColor("#1a1a1a");
+            var nightMode = config.UiMode & Android.Content.Res.UiMode.NightMask;
+            return nightMode == Android.Content.Res.UiMode.NightYes;
         }
-
-        return Android.Graphics.Color.ParseColor("#1a1a1a");
+        return false;
     }
+
+    private Android.Graphics.Color GetTextColor() =>
+        IsDarkMode()
+            ? Android.Graphics.Color.ParseColor("#e0e0e0")
+            : Android.Graphics.Color.ParseColor("#1a1a1a");
 
     private void UpdateContent()
     {
@@ -242,7 +256,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
         var style = new RenderStyle(virtualView.TextDirection,
             virtualView.H1FontSizeMultiplier, virtualView.H2FontSizeMultiplier,
-            virtualView.H3FontSizeMultiplier);
+            virtualView.H3FontSizeMultiplier, IsDarkMode());
         if (style == _renderedStyle && string.Equals(html, _renderedHtml, StringComparison.Ordinal))
         {
             return;
@@ -354,6 +368,21 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             if (span.Accent)
             {
                 builder.SetSpan(new AccentColorSpan(), span.Start, span.End, flags);
+            }
+        }
+        /* Quote paragraphs get the platform's own block-quote idiom: each
+           nesting level adds a QuoteSpan, whose stripe stacks at the
+           paragraph's leading edge — the right side under the RTL mark the
+           plan prepends (#3443). The translucent accent stays behind the
+           text and tracks the theme through the render key's Dark flag. */
+        var quoteColor = key.Style.Dark
+            ? Android.Graphics.Color.Argb(0x80, 0xAA, 0xCB, 0xFF)
+            : Android.Graphics.Color.Argb(0x80, 0x15, 0x52, 0xAC);
+        foreach (var block in plan.QuoteBlocks)
+        {
+            for (var level = 0; level < block.Depth; level++)
+            {
+                builder.SetSpan(new QuoteSpan(quoteColor), block.Start, block.End, SpanTypes.ExclusiveExclusive);
             }
         }
         return new RenderedContent(plan.Text, new SpannableString(builder));

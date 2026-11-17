@@ -9,6 +9,24 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
+        if (args is ["msstore-submission", var scenario, var submissionCode])
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            Console.Error.WriteLine("Retrieving Flight Submission...");
+            Console.Error.WriteLine("{\"listings\":{\"he-il\":{\"baseListing\":{\"releaseNotes\":\"stderr decoy\"}}}}");
+            Console.WriteLine(scenario switch
+            {
+                "valid" => "{\"id\":\"draft\",\"listings\":{\"he-il\":{\"baseListing\":{\"releaseNotes\":\"stdout notes\"}}}}",
+                "malformed" => "Retrieving is not JSON",
+                "null" => "null",
+                "array" => "[]",
+                "empty" => "",
+                _ => throw new ArgumentException("Unknown submission fixture", nameof(args))
+            });
+            Environment.ExitCode = int.Parse(submissionCode, System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+
         if (args is ["msstore-output", var code])
         {
             // Match the UTF-8 stream contract used by NUKE's CLI reader.

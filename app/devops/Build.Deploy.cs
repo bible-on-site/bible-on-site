@@ -361,30 +361,43 @@ partial class Build
         });
     }
 
-    // Pushes app/store-listing onto the app's own Hebrew listing inside an open
-    // edit. Play resolves Hebrew under the legacy "iw" tag, so the tag is read
-    // back from the edit rather than hardcoded.
+    // Pushes each locale directory under app/store-listing onto its Google Play
+    // listing inside an open edit. The directory name is the Play language tag,
+    // except "he": Play resolves Hebrew under the legacy "iw" tag, so the tag is
+    // read back from the edit rather than hardcoded. Screenshots stay on the
+    // default (Hebrew) listing — the other locales inherit its graphic assets.
     void SyncStoreListing(AndroidPublisherService service, string editId)
     {
         var listingDir = RootDirectory / "store-listing";
-        var description = ReadListingFile(listingDir / "he" / "description.txt", 4000);
-        var shortDescription = ReadListingFile(listingDir / "he" / "short-description.txt", 80);
         var screenshotsDir = listingDir / "screenshots" / "android";
         var screenshots = screenshotsDir.DirectoryExists()
             ? screenshotsDir.GlobFiles("*.png").OrderBy(p => p.Name).ToList()
             : [];
-        if (description is null && shortDescription is null && screenshots.Count == 0)
+        var localeDirs = listingDir.DirectoryExists()
+            ? listingDir.GlobDirectories("*").Where(d => d.Name != "screenshots").OrderBy(d => d.Name).ToList()
+            : [];
+        if (localeDirs.Count == 0 && screenshots.Count == 0)
         {
             Serilog.Log.Information("No store-listing content found under app/store-listing - skipping listing sync");
             return;
         }
 
         var listings = service.Edits.Listings.List(GooglePlayPackageName, editId).Execute().Listings ?? [];
-        var language = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
+        var hebrewLanguage = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
 
-        if (description is not null || shortDescription is not null)
+        foreach (var localeDir in localeDirs)
         {
+            var language = localeDir.Name == "he" ? hebrewLanguage : localeDir.Name;
+            var title = ReadListingFile(localeDir / "title.txt", 30);
+            var shortDescription = ReadListingFile(localeDir / "short-description.txt", 80);
+            var description = ReadListingFile(localeDir / "description.txt", 4000);
+            if (title is null && shortDescription is null && description is null)
+            {
+                continue;
+            }
+
             var listing = listings.FirstOrDefault(l => l.Language == language) ?? new Listing { Language = language };
+            listing.Title = title ?? listing.Title;
             listing.ShortDescription = shortDescription ?? listing.ShortDescription;
             listing.FullDescription = description ?? listing.FullDescription;
             service.Edits.Listings.Update(listing, GooglePlayPackageName, editId, language).Execute();
@@ -393,12 +406,12 @@ partial class Build
 
         if (screenshots.Count > 0)
         {
-            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, language,
+            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, hebrewLanguage,
                 EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum.PhoneScreenshots).Execute();
             foreach (var screenshot in screenshots)
             {
                 using var stream = File.OpenRead(screenshot);
-                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, language,
+                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, hebrewLanguage,
                     EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum.PhoneScreenshots, stream, "image/png").Upload();
                 if (uploadProgress.Status != UploadStatus.Completed)
                 {
@@ -406,7 +419,7 @@ partial class Build
                 }
             }
 
-            Serilog.Log.Information($"Replaced {language} phone screenshots ({screenshots.Count} files)");
+            Serilog.Log.Information($"Replaced {hebrewLanguage} phone screenshots ({screenshots.Count} files)");
         }
     }
 
@@ -503,23 +516,25 @@ partial class Build
 
             if (releaseNotes is not null)
             {
-                var applied = TrySetSubmissionReleaseNotes(flightId, releaseNotes, out var attempted);
                 // The binary must not stay stranded in a draft: commit the
                 // submission even when only the notes update failed.
                 var commitArguments = flightId is not null
                     ? $"flights submission publish \"{MsStoreAppId}\" \"{flightId}\""
                     : $"submission publish \"{MsStoreAppId}\"";
-                ProcessTasks.StartProcess("msstore", commitArguments)
-                    .AssertZeroExitCode();
-                // An attempted write the store did not persist must be a
-                // visible phase failure — a silent warning would record the
-                // deployment successful, advance the notes baseline and let
-                // the guard block a retry, so this audience would never see
-                // the announcements. A submission carrying no Hebrew
-                // releaseNotes field at all is a store limitation the notes
-                // manifest already records, not a delivery failure.
-                Assert.True(applied || !attempted,
-                    "Hebrew releaseNotes write was attempted but not persisted; the binary submission was still committed");
+                var scope = flightId is not null ? "flights submission" : "submission";
+                var target = flightId is not null
+                    ? $"\"{MsStoreAppId}\" \"{flightId}\""
+                    : $"\"{MsStoreAppId}\"";
+                var applied = MsStoreSubmission.PublishWithReleaseNotes(
+                    () => GetMsStoreSubmission(flightId),
+                    metadata =>
+                    {
+                        var escaped = metadata.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                        ProcessTasks.StartProcess("msstore", $"{scope} update {target} \"{escaped}\"")
+                            .AssertZeroExitCode();
+                    },
+                    () => ProcessTasks.StartProcess("msstore", commitArguments).AssertZeroExitCode(),
+                    releaseNotes, Serilog.Log.Logger);
                 if (applied)
                 {
                     Serilog.Log.Information("Microsoft Store Hebrew release notes published");
@@ -534,135 +549,14 @@ partial class Build
     /// stdout-captured like CreateMsStoreFlight — the CLI prints the machine
     /// JSON on stdout and diagnostics on stderr.
     /// </summary>
-    static JsonNode GetMsStoreSubmission(string? flightId)
+    static JsonObject GetMsStoreSubmission(string? flightId)
     {
         var arguments = flightId is not null
             ? $"flights submission get \"{MsStoreAppId}\" \"{flightId}\""
             : $"submission get \"{MsStoreAppId}\"";
-        var process = ProcessTasks.StartProcess(
-            "msstore", arguments, logOutput: false, logInvocation: true);
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"msstore could not read the pending submission (exit {process.ExitCode})");
-        }
-        return JsonNode.Parse(string.Join("\n", process.Output.Select(o => o.Text)))!;
-    }
-
-    /// <summary>
-    /// Case-insensitive property lookup — msstore/Partner Center serialize
-    /// the same submission contract with different casing across releases.
-    /// </summary>
-    static JsonNode? Child(JsonNode? node, params string[] names)
-    {
-        var current = node;
-        foreach (var name in names)
-        {
-            if (current is not JsonObject obj)
-            {
-                return null;
-            }
-            var property = obj.FirstOrDefault(p =>
-                string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-            if (property.Key is null)
-            {
-                return null;
-            }
-            current = property.Value;
-        }
-        return current;
-    }
-
-    static void SetChild(JsonObject obj, string name, string value)
-    {
-        var property = obj.FirstOrDefault(p =>
-            string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-        if (property.Key is null)
-        {
-            obj[name] = value;
-        }
-        else
-        {
-            obj[property.Key] = value;
-        }
-    }
-
-    /// <summary>
-    /// Writes the Hebrew releaseNotes into the draft submission the publish
-    /// just created — strictly inside that submission object, so a flight
-    /// without its own Hebrew listing can never edit the live production
-    /// listing by accident. A submission that structurally carries no
-    /// Hebrew releaseNotes field is skipped, not failed (no authorized
-    /// write path exists there); only an attempted write the store did not
-    /// persist is reported as failed, so the caller can fail the phase.
-    /// </summary>
-    bool TrySetSubmissionReleaseNotes(string? flightId, string notes, out bool attempted)
-    {
-        attempted = false;
-        var scope = flightId is not null ? "flights submission" : "submission";
-        var target = flightId is not null
-            ? $"\"{MsStoreAppId}\" \"{flightId}\""
-            : $"\"{MsStoreAppId}\"";
-        try
-        {
-            var submission = GetMsStoreSubmission(flightId);
-            if (Child(submission, "listings") is not JsonObject listings)
-            {
-                Serilog.Log.Warning("Pending submission exposes no listings — skipping releaseNotes (the production listing is never touched)");
-                return false;
-            }
-            var hebrewKey = listings
-                .Select(p => p.Key)
-                .Where(k => k.StartsWith("he", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-            if (hebrewKey is null)
-            {
-                Serilog.Log.Warning($"Pending submission has no Hebrew listing (locales: {string.Join(", ", listings.Select(p => p.Key))}) — skipping releaseNotes");
-                return false;
-            }
-            if (Child(submission, "listings", hebrewKey, "baseListing") is not JsonObject baseListing)
-            {
-                Serilog.Log.Warning($"Hebrew listing {hebrewKey} has no baseListing — skipping releaseNotes");
-                return false;
-            }
-            SetChild(baseListing, "releaseNotes", notes);
-            // System.Text.Json escapes Hebrew as \uXXXX, keeping the update
-            // payload pure ASCII inside the command-line argument.
-            var metadata = submission.ToJsonString();
-            // The write is attempted from here on — failures past this point
-            // (oversized payload, rejected update, readback mismatch) fail
-            // the notes phase rather than skip it.
-            attempted = true;
-            const int argLimit = 30000;
-            if (metadata.Length > argLimit)
-            {
-                Serilog.Log.Warning($"Submission metadata is {metadata.Length} chars, over the safe CLI argument size — releaseNotes update cannot be formed");
-                return false;
-            }
-            var escaped = metadata.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            ProcessTasks.StartProcess(
-                    "msstore", $"{scope} update {target} \"{escaped}\"")
-                .AssertZeroExitCode();
-
-            // Readback: the field is only set when the store echoes the
-            // exact text — never trust the write call alone.
-            var persisted = Child(GetMsStoreSubmission(flightId),
-                "listings", hebrewKey, "baseListing", "releaseNotes");
-            var accepted = persisted?.GetValue<string>() == notes;
-            if (!accepted)
-            {
-                Serilog.Log.Warning("Partner Center did not persist the exact Hebrew releaseNotes");
-            }
-            return accepted;
-        }
-        catch (Exception error) when (error is JsonException or InvalidOperationException
-            or ArgumentException or IOException or NotSupportedException or ProcessException)
-        {
-            Serilog.Log.Warning($"Hebrew releaseNotes update failed: {error.Message}");
-            return false;
-        }
+        // Force human progress to stderr even if MSSTORE_OUTPUT_STREAM was
+        // inherited as stdout. The machine JSON remains on stdout.
+        return MsStoreSubmission.Read("msstore", arguments + " --output-stream stderr");
     }
 
     string CreateMsStoreFlight()

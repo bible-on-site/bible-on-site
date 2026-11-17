@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
 	CONTRIBUTION_API_VERSION,
 	contributionApiVersion,
@@ -23,13 +24,14 @@ import {
 	contributionCitation,
 	reviewStatus,
 } from "~/lib/tanahpedia/contributions";
+import { generateLinkProposals } from "~/server/article-link-proposals";
 import {
 	createContributionItem,
 	editContributionItem,
-	generateIssuePrs,
 	getContribution,
+	getContributionAgents,
+	getContributionArticleLinkPreview,
 	getContributionCatalogue,
-	getContributionLlmStatus,
 	getContributionSession,
 	getContributions,
 	mergeContributionItem,
@@ -37,11 +39,20 @@ import {
 	updateContributionItem,
 } from "~/server/tanahpedia/contributions";
 import {
+	AgentCommentResponse,
+	AgentResponseLinks,
+	AgentWorkStatus,
+	isAgentAssigned,
+	latestAgentResponses,
+} from "./ContributionAgentWork";
+import { ContributionArticleLinkGenerator } from "./ContributionArticleLinkGenerator";
+import {
 	AssigneePicker,
 	type ComposeContribution,
 	ContributionComposer,
 } from "./ContributionComposer";
 import { ContributionDiff } from "./ContributionDiff";
+import { ContributionIssueScopeSummary } from "./ContributionIssueScope";
 
 export interface ContributionSearch {
 	id?: string;
@@ -49,6 +60,17 @@ export interface ContributionSearch {
 	q?: string;
 	state?: "open" | "closed" | "all";
 	assignee?: string;
+}
+export interface ContributionHomeSearch extends ContributionSearch {
+	tab?: "issues" | "prs";
+}
+export function validateContributionHomeSearch(
+	search: Record<string, unknown>,
+): ContributionHomeSearch {
+	return {
+		...validateContributionSearch(search),
+		tab: search.tab === "prs" ? "prs" : "issues",
+	};
 }
 export function validateContributionSearch(
 	search: Record<string, unknown>,
@@ -148,7 +170,8 @@ const EVENT_LABELS: Record<string, string> = {
 	reopened: "פתח מחדש",
 	merged: "מיזג את ההצעה",
 	generated: "יצר הצעות שינוי",
-	generation_queued: "שלח לעובד מקומי",
+	generation_queued: "שלח עבודה לסוכן",
+	agent_response: "פרסם התייחסות הסוכן",
 	rebased: "רענן את בסיס ההשוואה",
 };
 const REVIEW_LABELS = {
@@ -209,6 +232,7 @@ function RevisionSnapshot({
 			</summary>
 			<h3>{snapshot.title}</h3>
 			<p className="contribution-description">{snapshot.description}</p>
+			<ContributionIssueScopeSummary scope={snapshot.scope} />
 			<EvidenceList item={snapshot} />
 			<p>רצף הפעולות שנשמר בגרסה זו (API v{snapshot.apiVersion})</p>
 			<pre className="contribution-raw-sequence" dir="ltr">
@@ -310,89 +334,68 @@ function AssignmentForm({
 	item,
 	busy,
 	act,
+	agents,
 }: {
 	item: Contribution;
 	busy: boolean;
+	agents: ContributionAgentSummary[];
 	act: (action: string, extra?: Record<string, unknown>) => Promise<boolean>;
 }) {
-	const [assignee, setAssignee] = useState<Assignee>(item.assignee);
+	const [draft, setDraft] = useState<{
+		assignee: Assignee;
+		version: number;
+	} | null>(null);
+	const assignee = draft?.assignee ?? item.assignee;
+	const baseVersion = draft?.version ?? item.version;
+	const stale = baseVersion !== item.version;
 	return (
 		<form
 			onSubmit={async (event) => {
 				event.preventDefault();
-				await act("assign", { assignee });
+				if (stale || busy) return;
+				if (await act("assign", { assignee, version: baseVersion }))
+					setDraft(null);
 			}}
 		>
 			<AssigneePicker
+				agents={agents}
 				value={assignee}
-				onChange={setAssignee}
+				onChange={(next) => setDraft({ assignee: next, version: baseVersion })}
 				disabled={busy || item.state !== "open"}
 			/>
+			{stale && (
+				<div role="status" className="contribution-agent-response needs_input">
+					<p>
+						הדיון עודכן מאז עריכת השיוך. הטיוטה שלך נשמרה; יש לטעון את השיוך
+						העדכני לפני שמירה.
+					</p>
+					<button
+						type="button"
+						className="contribution-button"
+						disabled={busy}
+						onClick={() => setDraft(null)}
+					>
+						טעינת השיוך העדכני
+					</button>
+				</div>
+			)}
+			{(assignee.kind === "local_llm" || assignee.kind === "aws_llm") && (
+				<p className="contribution-muted">
+					שמירת השיוך מפעילה את הסוכן על הדיון והשינויים העדכניים.
+				</p>
+			)}
 			{item.state === "open" && (
-				<button className="contribution-button" disabled={busy} type="submit">
-					שמירת שיוך
+				<button
+					className="contribution-button"
+					disabled={busy || stale}
+					type="submit"
+				>
+					{assignee.kind === "local_llm" || assignee.kind === "aws_llm"
+						? "שמירת שיוך והפעלת סוכן"
+						: "שמירת שיוך"}
 				</button>
 			)}
 		</form>
-	);
-}
-
-function LocalGenerationStatus({ item }: { item: Contribution }) {
-	const job = item.generation;
-	if (!job) return null;
-	const disconnected =
-		job.status === "running" &&
-		!(Date.parse(job.leaseExpiresAt ?? "") > Date.now());
-	const labels = {
-		queued: "ממתין לעובד בתחנת העבודה",
-		running: "המודל המקומי מכין הצעות",
-		completed: "העובד המקומי יצר הצעות לסקירה",
-		failed: "ההפקה המקומית נכשלה",
-		cancelled: "בקשת ההפקה בוטלה",
-	};
-	return (
-		<section
-			className="contribution-card contribution-card-body"
-			aria-label="התקדמות העובד המקומי"
-		>
-			<strong role="status">
-				{disconnected
-					? "העובד המקומי התנתק - ניתן לשלוח שוב"
-					: labels[job.status]}
-			</strong>
-			{job.status === "queued" && (
-				<p className="contribution-muted">
-					הבקשה תישאר בתור עד שעובד מקומי יתחבר. לא מתבצעת הפקה בענן.
-				</p>
-			)}
-			{job.worker && (
-				<p>
-					<bdi>{job.worker}</bdi>
-					{job.model && (
-						<>
-							{" "}
-							· <bdi>{job.model}</bdi>
-						</>
-					)}
-				</p>
-			)}
-			{job.error && (
-				<p className="contribution-error" role="alert">
-					{job.error}
-				</p>
-			)}
-			{job.prIds.map((id, index) => (
-				<p key={id}>
-					<Link
-						className="contribution-link"
-						to="/pull-requests"
-						search={{ id }}
-					>
-						פתיחת הצעה {index + 1} לסקירה
-					</Link>
-				</p>
-			))}
-		</section>
 	);
 }
 
@@ -404,9 +407,11 @@ function Detail({
 	act,
 	edit,
 	refresh,
+	agents,
 }: {
 	item: Contribution;
 	all: Contribution[];
+	agents: ContributionAgentSummary[];
 	actor?: Contributor;
 	busy: boolean;
 	act: (action: string, extra?: Record<string, unknown>) => Promise<boolean>;
@@ -417,30 +422,25 @@ function Detail({
 		[comment, setComment] = useState("");
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
-	const localPending = Boolean(
+	const articlePr = item.changes.some(
+		(change) => change.kind === "article_links",
+	);
+	const articleMergePending =
+		item.state === "open" && Boolean(item.articleLinkMerge);
+	const agentPending = Boolean(
 		item.generation &&
 			(item.generation.status === "queued" ||
 				(item.generation.status === "running" &&
 					Date.parse(item.generation.leaseExpiresAt ?? "") > Date.now())),
 	);
-	const llm = useQuery({
-		queryKey: ["contributions", "llm-status"],
-		queryFn: () => getContributionLlmStatus(),
-		retry: false,
-	});
-	const generate = useMutation({
-		mutationFn: () =>
-			generateIssuePrs({ data: { id: item.id, version: item.version } }),
-		onSuccess: refresh,
-	});
+	const agentMergePending =
+		isAgentAssigned(item) &&
+		Boolean(
+			item.generation && ["queued", "running"].includes(item.generation.status),
+		);
 	const linked = all.filter((other) => other.issueId === item.id);
 	const linkedIssue = all.find((other) => other.id === item.issueId);
-	const providerReady =
-		item.assignee.kind === "local_llm"
-			? true
-			: item.assignee.kind === "aws_llm"
-				? llm.data?.aws.enabled
-				: false;
+	const commentResponses = latestAgentResponses(item.events);
 	return (
 		<>
 			<div className="contribution-heading">
@@ -464,7 +464,11 @@ function Detail({
 						</span>
 						{item.author.kind !== "human" && (
 							<span className="contribution-type">
-								{item.author.kind === "local_llm" ? "Local LLM" : "AWS LLM"}
+								{item.author.kind === "local_llm"
+									? "Local LLM"
+									: item.author.kind === "aws_llm"
+										? "AWS LLM"
+										: "כללים אוטומטיים"}
 							</span>
 						)}
 						<span>גרסה {item.revision}</span>
@@ -482,7 +486,7 @@ function Detail({
 						onClick={edit}
 						disabled={busy || incompatible}
 					>
-						עריכה
+						{articleMergePending ? "עריכה וסקירה מחדש" : "עריכה"}
 					</button>
 				)}
 			</div>
@@ -576,6 +580,9 @@ function Detail({
 								</header>
 								<div className="contribution-card-body">
 									<p>{item.description}</p>
+									{item.kind === "issue" && (
+										<ContributionIssueScopeSummary scope={item.scope} />
+									)}
 									<EvidenceList item={item} />
 								</div>
 							</article>
@@ -590,7 +597,11 @@ function Detail({
 								aria-label="היסטוריית הדיון"
 							>
 								{item.events.map((event) => (
-									<article className="contribution-event" key={event.id}>
+									<article
+										className="contribution-event"
+										key={event.id}
+										id={`contribution-event-${event.id}`}
+									>
 										<div>
 											<strong>
 												<bdi>{event.actor.name}</bdi>
@@ -606,6 +617,24 @@ function Detail({
 												)}
 										</div>
 										{event.body && <p>{event.body}</p>}
+										{event.actor.kind === "human" &&
+											["comment", "changes_requested"].includes(event.kind) && (
+												<AgentCommentResponse
+													response={commentResponses.get(event.id)}
+													pending={
+														item.kind === "pr" &&
+														item.state === "open" &&
+														isAgentAssigned(item)
+													}
+												/>
+											)}
+										<AgentResponseLinks event={event} />
+										{event.run && (
+											<p className="contribution-muted">
+												הוראות וכלים <bdi>{event.run.bundleVersion}</bdi> ·{" "}
+												<bdi>{event.run.model}</bdi>
+											</p>
+										)}
 										{event.snapshot && (
 											<RevisionSnapshot snapshot={event.snapshot} />
 										)}
@@ -635,6 +664,13 @@ function Detail({
 											placeholder="הוספת הקשר, שאלה או משוב"
 										/>
 									</label>
+									{item.kind === "pr" &&
+										isAgentAssigned(item) &&
+										item.state === "open" && (
+											<p className="contribution-muted">
+												תגובה חדשה תפעיל אוטומטית מעבר נוסף של הסוכן המטפל.
+											</p>
+										)}
 									<div className="contribution-form-actions">
 										<button
 											className="contribution-button primary"
@@ -650,17 +686,27 @@ function Detail({
 					)}
 					{item.kind === "pr" && (
 						<section
-							className={`contribution-merge ${!incompatible && !item.domainConflict && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
+							className={`contribution-merge ${!agentMergePending && !incompatible && !item.domainConflict && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
 						>
 							<h3>
 								{item.state === "merged"
 									? "ההצעה מוזגה בהצלחה"
-									: REVIEW_LABELS[status]}
+									: articleMergePending
+										? "מיזוג קישורי המאמר ממתין להשלמה"
+										: agentMergePending
+											? "ממתין לסיום הטיפול של הסוכן"
+											: REVIEW_LABELS[status]}
 							</h3>
 							<p>
 								{item.state === "merged"
 									? "השינויים והיסטוריית המיזוג נשמרו במסד הנתונים."
-									: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
+									: articleMergePending
+										? "ייתכן שחלק מהקישורים כבר נשמרו. אפשר להמשיך את אותו מיזוג, או לערוך את ההצעה לפי המצב הנוכחי ולסקור אותה מחדש."
+										: agentMergePending
+											? "המעבר שהתבקש מהסוכן עדיין פתוח. אפשר למזג לאחר סיומו או להסיר את השיוך לסוכן."
+											: articlePr
+												? "במיזוג ייבדק שהקישורים עדיין תואמים להשוואה. ההתקדמות נשמרת, ואם המיזוג נקטע אפשר להמשיך אותו בלי להחיל שוב קישורים שכבר נשמרו."
+												: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
 							</p>
 							{item.state === "open" && (
 								<div className="contribution-form-actions">
@@ -668,7 +714,7 @@ function Detail({
 										<>
 											<button
 												className="contribution-button"
-												disabled={busy}
+												disabled={busy || articleMergePending}
 												type="button"
 												onClick={() =>
 													void act("request_changes", { body: comment })
@@ -678,7 +724,9 @@ function Detail({
 											</button>
 											<button
 												className="contribution-button"
-												disabled={busy || status === "approved"}
+												disabled={
+													busy || articleMergePending || status === "approved"
+												}
 												type="button"
 												onClick={() => void act("approve", { body: comment })}
 											>
@@ -691,13 +739,18 @@ function Detail({
 										type="button"
 										disabled={
 											busy ||
+											agentMergePending ||
 											incompatible ||
 											Boolean(item.domainConflict) ||
 											!["approved", "exempt"].includes(status)
 										}
 										onClick={() => void act("merge")}
 									>
-										{busy ? "מעדכן..." : "מיזוג PR"}
+										{busy
+											? "מעדכן..."
+											: articleMergePending
+												? "המשך מיזוג PR"
+												: "מיזוג PR"}
 									</button>
 								</div>
 							)}
@@ -720,26 +773,15 @@ function Detail({
 							))}
 						</details>
 					)}
-					{generate.error && (
-						<div className="contribution-error" role="alert">
-							{generate.error.message}
-						</div>
-					)}
-					{item.kind === "issue" && <LocalGenerationStatus item={item} />}
-					{generate.data && (
-						<div role="status" className="contribution-card-body">
-							נוצרו {generate.data.length} הצעות שינוי. כל אחת ממתינה לאישור
-							doradsoft.
-						</div>
-					)}
+					<AgentWorkStatus item={item} agents={agents} />
 				</div>
 				<aside className="contribution-sidebar">
 					<section>
 						<h3>אחראי</h3>
 						<AssignmentForm
-							key={JSON.stringify(item.assignee)}
 							item={item}
-							busy={busy}
+							agents={agents}
+							busy={busy || articleMergePending}
 							act={act}
 						/>
 					</section>
@@ -758,54 +800,38 @@ function Detail({
 							)}
 						</section>
 					)}
+					{isAgentAssigned(item) && item.state === "open" && (
+						<section>
+							<h3>טיפול הסוכן</h3>
+							<p className="contribution-muted">
+								השיוך מפעיל עבודה אוטומטית. תגובות אנושיות חדשות ב-PR נשלחות
+								לסוכן להמשך טיפול.
+							</p>
+							<button
+								className="contribution-button"
+								type="button"
+								disabled={busy || agentPending || articleMergePending}
+								onClick={() => void act("run_agent")}
+							>
+								הפעלה נוספת
+							</button>
+							<p>
+								<Link className="contribution-link" to="/contribution-agents">
+									ניהול סוכנים
+								</Link>
+							</p>
+						</section>
+					)}
 					{item.kind === "issue" && item.state === "open" && (
 						<section>
 							<h3>פתרון הפנייה</h3>
 							<Link
-								to="/pull-requests"
-								search={{ id: "new", issueId: item.id }}
+								to="/"
+								search={{ id: "new", issueId: item.id, tab: "prs" }}
 								className="contribution-button"
 							>
 								פתיחת PR ידנית
 							</Link>
-							{["local_llm", "aws_llm"].includes(item.assignee.kind) && (
-								<>
-									<button
-										type="button"
-										className="contribution-button primary"
-										disabled={
-											busy ||
-											generate.isPending ||
-											localPending ||
-											!providerReady ||
-											item.evidence.length === 0
-										}
-										onClick={() =>
-											item.assignee.kind === "local_llm"
-												? void act("queue_generation")
-												: generate.mutate()
-										}
-									>
-										{item.assignee.kind === "local_llm"
-											? localPending
-												? "העובד המקומי מטפל בפנייה"
-												: "שליחה לעובד מקומי"
-											: generate.isPending
-												? "מכין הצעות..."
-												: `יצירת PRs עם ${assigneeLabel(item.assignee)}`}
-									</button>
-									{!providerReady && (
-										<p className="contribution-muted">
-											הספק שנבחר עדיין לא מוגדר בשרת.
-										</p>
-									)}
-									{item.evidence.length === 0 && (
-										<p className="contribution-muted">
-											נדרש לצרף מקור לפני יצירה.
-										</p>
-									)}
-								</>
-							)}
 						</section>
 					)}
 					{(linkedIssue || linked.length > 0) && (
@@ -814,8 +840,8 @@ function Detail({
 							{linkedIssue && (
 								<Link
 									className="contribution-link"
-									to="/issues"
-									search={{ id: linkedIssue.id }}
+									to="/"
+									search={{ id: linkedIssue.id, tab: "issues" }}
 								>
 									#{linkedIssue.number} {linkedIssue.title}
 								</Link>
@@ -824,8 +850,8 @@ function Detail({
 								<p key={pr.id}>
 									<Link
 										className="contribution-link"
-										to="/pull-requests"
-										search={{ id: pr.id }}
+										to="/"
+										search={{ id: pr.id, tab: "prs" }}
 									>
 										#{pr.number} {pr.title}
 									</Link>
@@ -838,7 +864,7 @@ function Detail({
 							<button
 								type="button"
 								className="contribution-button"
-								disabled={busy}
+								disabled={busy || articleMergePending}
 								onClick={() =>
 									void act(item.state === "open" ? "close" : "reopen")
 								}
@@ -860,7 +886,13 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const [editingItem, setEditingItem] = useState<Contribution | null>(null);
 	const editing = editingItem?.id === search.id ? editingItem : null;
 	const [actionError, setActionError] = useState("");
-	const path = kind === "issue" ? "/issues" : "/pull-requests";
+	const path = "/";
+	const queueSearch = (
+		next: ContributionSearch = {},
+	): ContributionHomeSearch => ({
+		...next,
+		tab: kind === "pr" ? "prs" : "issues",
+	});
 	const filters: ContributionListRequest =
 		search.id && search.id !== "new"
 			? { relatedTo: search.id }
@@ -896,15 +928,21 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				? 2000
 				: false,
 	});
+	const agents = useQuery({
+		queryKey: ["contributions", "agents"],
+		queryFn: () => getContributionAgents(),
+	});
 	const catalogue = useQuery({
 		queryKey: ["contributions", "catalogue"],
 		queryFn: () => getContributionCatalogue(),
 		enabled: search.id === "new" || Boolean(editing),
 	});
+	const needsLinkedIssue =
+		kind === "pr" && search.id === "new" && Boolean(search.issueId);
 	const issue = useQuery({
 		queryKey: ["contribution", search.issueId],
 		queryFn: () => getContribution({ data: search.issueId as string }),
-		enabled: Boolean(search.issueId),
+		enabled: needsLinkedIssue,
 	});
 	const refresh = () => {
 		void queryClient.invalidateQueries({ queryKey: ["contributions"] });
@@ -925,7 +963,16 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				? mergeContributionItem({ data })
 				: updateContributionItem({ data });
 		},
-		onSuccess: refresh,
+		onSuccess: (updated) => {
+			queryClient.setQueryData(["contribution", updated.id], updated);
+			refresh();
+		},
+		onError: async () => {
+			// A failed external merge can still have reserved a durable intent and
+			// a newer version. Keep the mutation busy until its detail is reread.
+			await queryClient.invalidateQueries({ queryKey: ["contribution"] });
+			void queryClient.invalidateQueries({ queryKey: ["contributions"] });
+		},
 	});
 	const act = async (action: string, extra?: Record<string, unknown>) => {
 		setActionError("");
@@ -948,8 +995,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			setEditingItem(null);
 			refresh();
 			await navigate({
-				to: item.kind === "issue" ? "/issues" : "/pull-requests",
-				search: { id: item.id },
+				to: "/",
+				search: { id: item.id, tab: item.kind === "pr" ? "prs" : "issues" },
 			});
 		},
 	});
@@ -967,16 +1014,16 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		<div className="contributions">
 			<div className="contribution-nav">
 				<Link
-					to="/issues"
-					search={{}}
+					to="/"
+					search={{ tab: "issues" }}
 					aria-current={kind === "issue" ? "page" : undefined}
 				>
 					<WorkflowIcon /> Issues{" "}
 					<span className="contribution-count">{counts.issues}</span>
 				</Link>
 				<Link
-					to="/pull-requests"
-					search={{}}
+					to="/"
+					search={{ tab: "prs" }}
 					aria-current={kind === "pr" ? "page" : undefined}
 				>
 					<WorkflowIcon kind="pr" /> Pull requests{" "}
@@ -986,12 +1033,20 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			{(list.error ||
 				detail.error ||
 				catalogue.error ||
+				(needsLinkedIssue && issue.error) ||
 				session.error ||
+				agents.error ||
 				actionError) && (
 				<div className="contribution-error" role="alert">
 					{actionError ||
-						(list.error ?? detail.error ?? catalogue.error ?? session.error)
-							?.message}
+						(
+							list.error ??
+							detail.error ??
+							catalogue.error ??
+							(needsLinkedIssue ? issue.error : null) ??
+							session.error ??
+							agents.error
+						)?.message}
 					<button
 						type="button"
 						className="contribution-button"
@@ -1005,7 +1060,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				<Link
 					className="contribution-link"
 					to={path}
-					search={{}}
+					search={queueSearch()}
 					onClick={() => setEditingItem(null)}
 				>
 					→ חזרה לרשימה
@@ -1029,29 +1084,36 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							</p>
 						</div>
 					</div>
-					{catalogue.data ? (
+					{catalogue.data && (!needsLinkedIssue || issue.data) ? (
 						<div className="contribution-card">
 							<div className="contribution-card-body">
 								<ContributionComposer
-									key={editing ? editing.id : `new:${kind}`}
+									key={
+										editing ? editing.id : `new:${kind}:${search.issueId ?? ""}`
+									}
 									kind={kind}
+									agents={agents.data ?? []}
 									initial={editing ?? undefined}
 									linkedIssue={issue.data}
 									catalogue={catalogue.data}
+									previewArticle={(id) =>
+										getContributionArticleLinkPreview({ data: id })
+									}
 									busy={save.isPending}
 									onSubmit={async (value) => {
 										await save.mutateAsync(value);
 									}}
 									onCancel={() => {
 										setEditingItem(null);
-										if (!editing) void navigate({ to: path, search: {} });
+										if (!editing)
+											void navigate({ to: path, search: queueSearch() });
 									}}
 								/>
 							</div>
 						</div>
-					) : (
+					) : !catalogue.error && !(needsLinkedIssue && issue.error) ? (
 						<p role="status">טוען נתונים לטופס...</p>
-					)}
+					) : null}
 				</>
 			) : search.id ? (
 				item ? (
@@ -1059,6 +1121,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						key={item.id}
 						item={item}
 						all={all}
+						agents={agents.data ?? []}
 						actor={session.data}
 						busy={mutation.isPending}
 						act={act}
@@ -1075,18 +1138,43 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							<h1>{kind === "issue" ? "פניות" : "הצעות שינוי"}</h1>
 							<p>
 								{kind === "issue"
-									? "מה צריך לחקור, לתקן או להוסיף לתנכפדיה"
-									: "סקירה, ראיות ומיזוג של שינויים מובנים בתנכפדיה"}
+									? "מה צריך לחקור, לתקן או להוסיף"
+									: "סקירה, ראיות ומיזוג של שינויים מובנים"}
 							</p>
 						</div>
 						<Link
 							className="contribution-button primary"
 							to={path}
-							search={{ id: "new" }}
+							search={queueSearch({ id: "new" })}
 						>
 							{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
 						</Link>
 					</div>
+					{kind === "pr" && (
+						<ContributionArticleLinkGenerator
+							generate={async (id) => {
+								const result = await generateLinkProposals({
+									data: {
+										articleIds: [Number(id)],
+										engine: "heuristic",
+										force: false,
+										dryRun: false,
+									},
+								});
+								const failure = result.outcomes.find(
+									(outcome) => outcome.outcome === "error",
+								);
+								if (failure)
+									throw new Error(
+										failure.error === "article not found"
+											? "לא נמצא מאמר במספר הזה."
+											: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
+									);
+								return result.prIds;
+							}}
+							openPr={(id) => navigate({ to: "/", search: { tab: "prs", id } })}
+						/>
+					)}
 					<div className="contribution-filters">
 						<input
 							className="contribution-input"
@@ -1096,7 +1184,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							onChange={(event) =>
 								void navigate({
 									to: path,
-									search: { ...search, q: event.target.value || undefined },
+									search: queueSearch({
+										...search,
+										q: event.target.value || undefined,
+									}),
 									replace: true,
 								})
 							}
@@ -1108,10 +1199,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							onChange={(event) =>
 								void navigate({
 									to: path,
-									search: {
+									search: queueSearch({
 										...search,
 										assignee: event.target.value || undefined,
-									},
+									}),
 								})
 							}
 						>
@@ -1136,7 +1227,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									key={state}
 									aria-pressed={(search.state ?? "open") === state}
 									onClick={() =>
-										void navigate({ to: path, search: { ...search, state } })
+										void navigate({
+											to: path,
+											search: queueSearch({ ...search, state }),
+										})
 									}
 								>
 									{label}{" "}
@@ -1178,7 +1272,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										<Link
 											className="contribution-row-title"
 											to={path}
-											search={{ id: row.id }}
+											search={queueSearch({ id: row.id })}
 										>
 											{row.title}
 										</Link>

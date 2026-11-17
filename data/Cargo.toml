@@ -5,6 +5,7 @@ members = [
     "mysql/db-populator",
     "reading-metrics",
     "s3/s3-populator",
+    "sefaria/mongo-config",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
     "sefaria/pipelines/perushim-view",
@@ -28,11 +29,12 @@ chrono = "0.4"
 chrono-tz = "0.10"
 icu_calendar = "2.3"
 dotenvy = "0.15"
-rusqlite = { version = "0.42", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 flate2 = "1"
 unicode-normalization = "0.1"
 unicode_categories = "0.1"
 sha2 = "0.11"
 reading-metrics = { path = "reading-metrics" }
+mongo-config = { path = "sefaria/mongo-config" }
 bson = "3"
 sunrise = "3"

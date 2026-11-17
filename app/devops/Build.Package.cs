@@ -119,11 +119,7 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                DotNetRestore(s => s
-                    .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net11.0-android")
-                    .SetProperty("RuntimeIdentifiers", "android-arm64")
-                    .SetRuntime("android-arm64"));
+                DotNetRestore(AndroidPackageRestoreSettings(MainProject, Configuration));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -138,6 +134,17 @@ partial class Build
                 DotNetRestore(s => s.SetProjectFile(MainProject));
             }
         });
+
+    internal static DotNetRestoreSettings AndroidPackageRestoreSettings(string project, string configuration) =>
+        new DotNetRestoreSettings()
+            .SetProjectFile(project)
+            // Android Release enables CoreCLR ReadyToRun. Restore must evaluate
+            // the same configuration as --no-restore publish to acquire Crossgen2.
+            // Let the SDK retain its normal Debug/Release compilation defaults.
+            .SetProperty("Configuration", configuration)
+            .SetProperty("TargetFramework", "net11.0-android")
+            .SetProperty("RuntimeIdentifiers", "android-arm64")
+            .SetRuntime("android-arm64");
 
     void PackageWindows()
     {
@@ -387,30 +394,39 @@ partial class Build
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
+    // #3444: public debug ELFs are cached here by GNU build ID and reused
+    // across local and CI builds; the workflows restore/save this path.
+    AbsolutePath PublicSymbolCacheDirectory => RootDirectory / ".cache" / "android-native-symbols";
+
     /// <summary>
     /// Produces the Play symbols archive beside a built AAB, then proves the
     /// file on disk — not just the intermediates — meets the contract the
     /// deploy target re-checks before any store write (#2970).
     /// </summary>
-    static void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
     {
-        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip);
+        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip,
+            symbolCacheDir: PublicSymbolCacheDirectory.ToString());
         LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
     }
 
     /// <summary>
-    /// Documents which bundled arm64 libraries ship without debug symbols —
-    /// .NET/Android runtime libraries are stripped-only upstream, and Play
-    /// accepts partial coverage. Reported honestly instead of claiming
-    /// complete symbol coverage (#2970).
+    /// Reports unavailable symbols separately from SDK-generated data stores.
+    /// Partial coverage remains explicit instead of claiming completeness (#2970).
     /// </summary>
     static void LogSymbolCoverage(IReadOnlyList<string> uncovered)
     {
-        if (uncovered.Count > 0)
+        var missing = uncovered.Where(name => !AndroidNativeSymbols.IsDataContainer(name)).ToArray();
+        if (missing.Length > 0)
         {
             Serilog.Log.Warning(
-                $"No debug symbols for {uncovered.Count} bundled arm64 libraries shipped stripped-only " +
-                $"by the .NET/Android runtime: {string.Join(", ", uncovered)}");
+                $"No matching native debug symbols supplied locally or by the public Microsoft symbol server " +
+                $"for {missing.Length} bundled arm64 libraries: {string.Join(", ", missing)}");
+        }
+        var data = uncovered.Where(AndroidNativeSymbols.IsDataContainer).ToArray();
+        if (data.Length > 0)
+        {
+            Serilog.Log.Information($"Excluded SDK assembly-store data from native debug symbols: {string.Join(", ", data)}");
         }
     }
 

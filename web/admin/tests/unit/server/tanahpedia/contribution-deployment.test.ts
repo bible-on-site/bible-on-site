@@ -1,6 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), migrate: vi.fn() }));
+vi.mock("~/server/tanahpedia/contribution-article-import.server", () => ({
+	importLegacyArticleLinkProposals: vi
+		.fn()
+		.mockResolvedValue({ articles: 0, prIds: [] }),
+}));
+
+const mocks = vi.hoisted(() => ({
+	verify: vi.fn(),
+	migrate: vi.fn(),
+	agents: vi.fn(),
+	work: vi.fn(),
+	notify: vi.fn(),
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
+	refreshRegisteredContributionAgents: mocks.agents,
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
+	reconcileContributionAgentAssignments: mocks.work,
+	notifyContributionAgentWork: mocks.notify,
+}));
 vi.mock("jose", () => ({
 	createRemoteJWKSet: () => "github-keys",
 	jwtVerify: mocks.verify,
@@ -33,6 +52,8 @@ function request(token = "valid", method = "POST") {
 beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.verify.mockResolvedValue({ payload });
+	mocks.agents.mockResolvedValue({ updated: 2, unchanged: 1 });
+	mocks.work.mockResolvedValue({ scanned: 3, queued: 1 });
 	mocks.migrate.mockResolvedValue({
 		apiVersion: 1,
 		scanned: 3,
@@ -51,6 +72,8 @@ describe("deployment migration authentication", () => {
 			migrated: 1,
 			failed: 1,
 			unchanged: 1,
+			articleLinks: { articles: 0, created: 0 },
+			agents: { updated: 2, unchanged: 1, scanned: 3, queued: 1 },
 		});
 		expect(mocks.verify).toHaveBeenCalledWith(
 			"valid",

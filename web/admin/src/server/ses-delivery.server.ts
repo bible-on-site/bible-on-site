@@ -13,6 +13,7 @@ import {
 	type EmailJobSummary,
 	validateEmailQueueRequest,
 } from "~/lib/bulletin-email";
+import { rolloutDelivers } from "~/lib/bulletin-rollout";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
 import { readBulletinEmailContent } from "./daily-bulletins.server";
 import {
@@ -24,6 +25,7 @@ import {
 	txQueryOne,
 } from "./db";
 import { runOutboxSweep } from "./outbox-deadline.server";
+import { rolloutDeliveryStateForUpdate } from "./rollout-state.server";
 import {
 	type SesAudience,
 	SesClient,
@@ -342,10 +344,45 @@ async function reconcileEmailOutbox(
 	});
 }
 
+/** The rollout enqueue saw an empty eligible cohort — a skip, not a failure. */
+export class NoConfirmedRecipientsError extends Error {
+	constructor() {
+		super("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		this.name = "NoConfirmedRecipientsError";
+	}
+}
+
 export async function enqueueBulletinEmail(
 	date: string,
 	requestKey: string,
 	expected: { audience: SesAudience; revision: number },
+): Promise<EmailJobSummary> {
+	return enqueueEmailJob(date, requestKey, expected, "settings");
+}
+
+/**
+ * The scheduled limited-cohort job (#3382): licensed by the rollout state, not
+ * the global audience switch. Produces the same durable 'real' job, reaching
+ * only confirmed subscribers — the admitted cohort and direct signups.
+ */
+export async function enqueueBulletinRolloutEmail(
+	date: string,
+	requestKey: string,
+	expectedRevision: number,
+): Promise<EmailJobSummary> {
+	return enqueueEmailJob(
+		date,
+		requestKey,
+		{ audience: "real", revision: expectedRevision },
+		"rollout",
+	);
+}
+
+async function enqueueEmailJob(
+	date: string,
+	requestKey: string,
+	expected: { audience: SesAudience; revision: number },
+	license: "settings" | "rollout",
 ): Promise<EmailJobSummary> {
 	validateEmailQueueRequest({
 		date,
@@ -370,12 +407,15 @@ export async function enqueueBulletinEmail(
 			connection,
 			"SELECT audience, revision FROM tanah_daily_bulletin_email_settings WHERE id = 1 FOR UPDATE",
 		);
-		if (
-			!settings ||
-			settings.audience !== expected.audience ||
-			Number(settings.revision) !== expected.revision
-		)
+		if (!settings || Number(settings.revision) !== expected.revision)
 			throw new SesSuppressedError();
+		if (license === "rollout") {
+			// Locked alongside settings so an operator disable cannot race the job.
+			if (!rolloutDelivers(await rolloutDeliveryStateForUpdate(connection)))
+				throw new SesSuppressedError();
+		} else if (settings.audience !== expected.audience) {
+			throw new SesSuppressedError();
+		}
 		const existing = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date, DATE_FORMAT(j.created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_at FROM tanah_daily_bulletin_email_job j WHERE bulletin_date = ? AND audience = ? AND idempotency_key = ?",
@@ -419,8 +459,7 @@ export async function enqueueBulletinEmail(
 			"SELECT COUNT(*) AS n FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed'",
 			[expected.audience],
 		);
-		if (!Number(confirmed?.n))
-			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		if (!Number(confirmed?.n)) throw new NoConfirmedRecipientsError();
 		const id = randomUUID();
 		await txExecute(
 			connection,
@@ -435,8 +474,7 @@ export async function enqueueBulletinEmail(
 			 WHERE s.audience = ? AND s.consent_status = 'confirmed' ORDER BY s.id`,
 			[id, expected.audience],
 		);
-		if (!enrolled.affectedRows)
-			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		if (!enrolled.affectedRows) throw new NoConfirmedRecipientsError();
 		await txExecute(
 			connection,
 			"UPDATE tanah_daily_bulletin_email_job SET cnt_queued = ? WHERE id = ?",
@@ -779,6 +817,17 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 						// A missing migration must not block the existing email consumer.
 						if (!signal.aborted)
 							console.error("Signup outbox reconciliation failed");
+					}
+					if (signal.aborted) break;
+					try {
+						const { reconcileRolloutAdmission } = await import(
+							"./rollout-admission.server"
+						);
+						await reconcileRolloutAdmission(signal);
+					} catch {
+						// A missing migration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("Rollout admission reconciliation failed");
 					}
 					if (signal.aborted) break;
 					try {

@@ -19,6 +19,8 @@ vi.mock("~/server/tanahpedia/contribution-worker.server", () => {
 		claimContributionGeneration: mocks.claim,
 		completeContributionGeneration: vi.fn(),
 		failContributionGeneration: vi.fn(),
+		getContributionWorkerBundle: vi.fn(),
+		readContributionWorkerContext: vi.fn(),
 	};
 });
 
@@ -40,12 +42,13 @@ it("loads the generation backend only after worker authorization and route valid
 	expect(
 		(await handleContributionWorkerRequest(new Request(`${base}claim`))).status,
 	).toBe(405);
-	for (const headers of [
+	const unauthorizedHeaderCases: Record<string, string>[] = [
 		{},
 		{ Cookie: "admin_session=owner" },
 		{ Authorization: "Bearer invalid-worker-token" },
 		{ Authorization: `Bearer ${"x".repeat(16001)}` },
-	])
+	];
+	for (const headers of unauthorizedHeaderCases)
 		expect(
 			(await handleContributionWorkerRequest(post("claim", headers))).status,
 		).toBe(401);

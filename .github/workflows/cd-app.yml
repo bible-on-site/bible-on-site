@@ -494,8 +494,16 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        # macos-15's image ships fastlane; install only when it is missing.
-        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
+        run: |
+          if ! command -v fastlane >/dev/null 2>&1; then
+            # Linux images can install gems outside PATH. Keep executables in
+            # a known runner-owned directory for this and subsequent steps.
+            FASTLANE_BIN_DIR="$RUNNER_TEMP/fastlane-bin"
+            gem install fastlane --user-install --bindir "$FASTLANE_BIN_DIR" --no-document
+            echo "$FASTLANE_BIN_DIR" >> "$GITHUB_PATH"
+            export PATH="$FASTLANE_BIN_DIR:$PATH"
+          fi
+          fastlane --version
 
       - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}

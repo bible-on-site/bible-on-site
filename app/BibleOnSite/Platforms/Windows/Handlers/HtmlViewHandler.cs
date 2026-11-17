@@ -294,6 +294,19 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                     inlines.Add(new LineBreak());
                     break;
 
+                case "BLOCKQUOTE":
+                    /* A hosted Border gives the quote the leading-edge bar —
+                       right under RTL — matching the other platforms'
+                       paragraph accent (#3443). It's a native element, so
+                       nothing enters the copied or accessibility text. */
+                    if (inlines.Count > 0)
+                    {
+                        inlines.Add(new LineBreak());
+                    }
+                    inlines.Add(new InlineUIContainer { Child = MakeQuoteBlock(child, inFootnotes) });
+                    inlines.Add(new LineBreak());
+                    break;
+
                 case "A":
                     var href = child.GetAttributeValue("href", string.Empty);
                     if (!string.IsNullOrEmpty(href))
@@ -431,6 +444,50 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
         var host = RaisedTextBlock(AccentBrush);
         host.Inlines.Add(new Run { Text = $"{marker} " });
         return new InlineUIContainer { Child = host };
+    }
+
+    /// <summary>The translucent accent for the blockquote bar — the same
+    /// brand-blue family the app text/link accents use.</summary>
+    private static WinBrush QuoteAccentBrush =>
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            Microsoft.UI.ColorHelper.FromArgb(0x80, 0x15, 0x52, 0xAC));
+
+    /// <summary>A bordered, inset host for &lt;blockquote&gt; content: the
+    /// accent bar sits on the view's leading edge (right under RTL, left
+    /// under LTR) with padding holding the text off it (#3443).</summary>
+    private Microsoft.UI.Xaml.Controls.Border MakeQuoteBlock(HtmlNode node, bool inFootnotes)
+    {
+        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
+        /* RichTextBlock, not TextBlock: InlineUIContainer children (nested
+           quotes, <sup> raised runs, generated footnote markers) only render
+           inside a rich block's paragraph — TextBlock inlines can't host
+           them (#3443). */
+        var paragraph = new Paragraph();
+        var text = new RichTextBlock
+        {
+            FontSize = VirtualView.EffectiveFontSize,
+            FontFamily = PlatformView.FontFamily,
+            Foreground = PlatformView.Foreground,
+            TextWrapping = WinTextWrapping.Wrap,
+            /* Hosted controls sit outside the outer RichTextBlock's own
+               selection, so the quote needs its own — otherwise its text
+               could no longer be copied (#3443). */
+            IsTextSelectionEnabled = true
+        };
+        text.Blocks.Add(paragraph);
+        ParseNode(node, paragraph.Inlines, inFootnotes);
+        return new Microsoft.UI.Xaml.Controls.Border
+        {
+            BorderThickness = rtl
+                ? new Microsoft.UI.Xaml.Thickness(0, 0, 3, 0)
+                : new Microsoft.UI.Xaml.Thickness(3, 0, 0, 0),
+            BorderBrush = QuoteAccentBrush,
+            Padding = rtl
+                ? new Microsoft.UI.Xaml.Thickness(0, 2, 12, 2)
+                : new Microsoft.UI.Xaml.Thickness(12, 2, 0, 2),
+            Margin = new Microsoft.UI.Xaml.Thickness(0, 4, 0, 4),
+            Child = text
+        };
     }
 
     /// <summary>A TextBlock hosted inline, shrunk and lifted off the text

@@ -233,13 +233,15 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 textColor.Dispose();
                 return;
             }
+            /* The factory applies the base paragraph style plus the quote
+               paragraph accents (#3443) — paragraph attributes must land
+               inside the attributed build, not as a later whole-range pass. */
             var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale,
-                textColor, accentColor, regularFont, boldFont);
+                textColor, accentColor, paragraphStyle, virtualView.TextDirection == HtmlTextDirection.Rtl,
+                regularFont, boldFont);
             var measuredHeight = -1.0;
             if (attributedString != null)
             {
-                var range = new NSRange(0, attributedString.Length);
-                attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
                 if (widthHint > 0)
                 {
                     var rect = attributedString.GetBoundingRect(new CGSize(widthHint, NFloat.MaxValue),

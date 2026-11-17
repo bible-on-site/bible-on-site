@@ -2193,6 +2193,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mongo-config"
+version = "0.1.3"
+
+[[package]]
 name = "mongocrypt"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2392,6 +2396,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "flate2",
+ "mongo-config",
  "mongodb",
  "reading-metrics",
  "rusqlite",
@@ -2717,9 +2722,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.42.0"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4edff0039f148731aee2fd80f76dbfeb12d204ab3d1c544838d34e02151049b"
+checksum = "f172c4812a19b26d1c23cdb0070e69db335503dfa378b910eb857386e5b8beba"
 dependencies = [
  "bitflags",
  "fallible-iterator",
@@ -2906,6 +2911,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dotenvy",
+ "mongo-config",
 ]
 
 [[package]]
@@ -3318,6 +3324,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "icu_calendar",
+ "mongo-config",
  "mongodb",
  "once_cell",
  "reading-metrics",

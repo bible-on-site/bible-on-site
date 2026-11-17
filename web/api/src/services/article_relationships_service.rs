@@ -582,7 +582,7 @@ pub async fn search_targets(
             moadim
                 .into_iter()
                 .map(|model| TargetHit {
-                    id: model.id,
+                    id: model.id as i32,
                     hint: Some(model.slug.clone()),
                     label: model.name,
                 })
@@ -617,7 +617,7 @@ pub struct UpdateOutcome {
 /// Omitted fields leave their relation untouched; an explicitly empty
 /// `coveringSources` clears only that relation — a single-link edit never
 /// replaces unrelated fields/links. `expectedContentHash` /
-/// `expectedCoveringSources` / `expectedMoedIds` are the freshness
+/// `expectedCoveringSources` / `expectedMoedIds` / `expectedCoverageVerified` are the freshness
 /// contract: supplied snapshots are compared under the article row lock,
 /// so a stale editor can never overwrite a newer link it never saw.
 pub async fn update_relationships(
@@ -686,6 +686,14 @@ pub async fn update_relationships(
                 "the article was changed since this edit loaded - reload its relationships and submit again",
             ));
         }
+    }
+
+    if let Some(expected) = input.expected_coverage_verified
+        && current.coverage_verified != expected
+    {
+        return Err(ServiceError::bad_request(
+            "the article's coverage verification changed since this edit loaded - reload and submit again",
+        ));
     }
 
     let previous_covering = load_covering_sources(&txn, article_id).await?;
@@ -1095,6 +1103,7 @@ mod tests {
             expected_content_hash: None,
             expected_covering_sources: None,
             expected_moed_ids: None,
+            expected_coverage_verified: None,
         };
         let input = input.clone();
         assert!(format!("{input:?}").contains("UpdateArticleRelationshipsInput"));
@@ -1178,6 +1187,7 @@ mod tests {
                 expected_content_hash: None,
                 expected_covering_sources: None,
                 expected_moed_ids: None,
+                expected_coverage_verified: None,
             }
         }
 
@@ -1193,9 +1203,17 @@ mod tests {
         /// The queries of the post-commit `load_relationships` reload
         /// (empty link sets for the fixture article).
         fn reload_results(mock: MockDatabase, article: article::Model) -> MockDatabase {
+            reload_with_covering(mock, article, vec![])
+        }
+
+        fn reload_with_covering(
+            mock: MockDatabase,
+            article: article::Model,
+            covering: Vec<article_covering_source::Model>,
+        ) -> MockDatabase {
             mock.append_query_results::<article::Model, Vec<_>, _>([vec![article]])
                 .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
-                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                .append_query_results([covering])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]])
                 .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
@@ -1225,6 +1243,63 @@ mod tests {
                     .into_transaction_log()
                     .is_empty()
             );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_stale_expected_coverage_verification_before_any_write() {
+            for expected in [true, false] {
+                let mut current = article_model(7);
+                current.coverage_verified = !expected;
+                let db = Database::from_connection(
+                    MockDatabase::new(DatabaseBackend::MySql)
+                        .append_query_results([vec![current]])
+                        // An unchanged contentHash cannot detect this flag-only race.
+                        .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                        .into_connection(),
+                );
+                let mut edit = input();
+                edit.expected_content_hash = Some("a".repeat(32));
+                edit.expected_coverage_verified = Some(expected);
+                let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                    .await
+                    .unwrap_err();
+                assert!(matches!(err, ServiceError::BadRequest(_)));
+                assert!(err.to_string().contains("coverage verification changed"));
+                let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+                assert!(log.contains("FOR UPDATE"), "{log}");
+                assert!(!log.contains("tanah_article_covering_source"), "{log}");
+                for verb in ["INSERT INTO", "UPDATE `", "DELETE FROM"] {
+                    assert!(!log.contains(verb), "unexpected write {verb}: {log}");
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn matching_coverage_preconditions_preserve_the_reviewed_flag_and_covering_set() {
+            for verified in [true, false] {
+                let mut current = article_model(7);
+                current.coverage_verified = verified;
+                let covering = covering_model(7, 1, 1);
+                let mock = MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results([vec![current.clone()]])
+                    .append_query_results([vec![covering.clone()]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                    .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+                let mock = reload_with_covering(mock, current, vec![covering]);
+                let db = Database::from_connection(mock.into_connection());
+                let mut edit = input();
+                edit.expected_coverage_verified = Some(verified);
+                let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                    .await
+                    .unwrap();
+                assert_eq!(outcome.previous.coverage_verified, verified);
+                assert_eq!(outcome.relationships.coverage_verified, verified);
+                assert_eq!(outcome.relationships.covering_sources.len(), 1);
+                assert_eq!(outcome.revalidation, "SKIPPED");
+                assert_no_writes(&db);
+            }
         }
 
         #[tokio::test]
@@ -1549,7 +1624,7 @@ mod tests {
             assert!(matches!(err, ServiceError::BadRequest(_)));
         }
 
-        fn moed_row(id: i32, slug: &str) -> moed::Model {
+        fn moed_row(id: u16, slug: &str) -> moed::Model {
             moed::Model {
                 id,
                 slug: slug.to_string(),
@@ -1562,14 +1637,15 @@ mod tests {
             }
         }
 
-        fn moed_link(moed_id: i32) -> article_moed::Model {
+        fn moed_link(moed_id: u16) -> article_moed::Model {
             article_moed::Model {
                 article_id: 7,
                 moed_id,
                 created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
                     .unwrap()
                     .and_hms_opt(0, 0, 0)
-                    .unwrap(),
+                    .unwrap()
+                    .and_utc(),
             }
         }
 

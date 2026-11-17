@@ -334,6 +334,14 @@
 	color: var(--hc-muted, #6b5835);
 }
 
+/* Selection scope under the deep-linked perush's title (#2607): the
+   reading-time badge beside it aggregates only the filtered notes, so
+   the narrowed scope stays explicit. */
+.deepScope {
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
 /* Reading-time estimate on the deep-linked perush header (#2607). */
 .deepMetric {
 	display: block;
@@ -490,6 +498,49 @@
 	color: var(--link-accent, #1552ac);
 	text-decoration: underline;
 	text-underline-offset: 0.1em;
+}
+
+/* The article-quote editorial treatment (#3443) — same design as the
+   blockquote rules in [slug]/page.module.css, repeated here because CSS
+   modules scope .noteContent per file: the accent rule sits on the logical
+   leading edge (right under RTL) and an oversized translucent quotation
+   mark crowns that corner behind the text. The mark is a ::before glyph
+   with an empty alternative, so it never enters DOM text — copy, screen
+   readers, excerpts and reading metrics only see the authored quote. */
+.noteContent blockquote {
+	position: relative;
+	isolation: isolate;
+	margin: 1.4em 0;
+	padding-block: 0.45em;
+	padding-inline: 1.2em 0.85em;
+	border-inline-start: 3px solid
+		color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 55%, transparent);
+	background: color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 5%, transparent);
+	border-radius: var(--radius-sm);
+}
+
+.noteContent blockquote::before {
+	content: "\201C" / ""; /* left double quotation mark */
+	position: absolute;
+	inset-block-start: -0.08em;
+	inset-inline-start: 0.16em;
+	font-size: 3.2em;
+	line-height: 1;
+	color: color-mix(in srgb, var(--pasuk-num-color, var(--accent-900)) 14%, transparent);
+	z-index: -1;
+	pointer-events: none;
+	user-select: none;
+}
+
+/* Nested quotes keep the identity without compounding the inset. */
+.noteContent blockquote blockquote {
+	margin-block: 1em;
+	padding-inline-start: 0.9em;
+}
+
+.noteContent blockquote blockquote::before {
+	font-size: 2.4em;
+	inset-block-start: -0.04em;
 }
 
 .noteContent + .noteContent {

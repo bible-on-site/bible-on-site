@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 	session: vi.fn(),
 	detail: vi.fn(),
 	catalogue: vi.fn(),
+	articlePreview: vi.fn(),
+	articleGenerate: vi.fn(),
 	status: vi.fn(),
+	agents: vi.fn(),
 	create: vi.fn(),
 	edit: vi.fn(),
 	update: vi.fn(),
@@ -33,18 +36,35 @@ vi.mock("@tanstack/react-router", () => ({
 		search?: Record<string, unknown>;
 		children: React.ReactNode;
 	}) => (
-		<a href={`${to}${search?.id ? `?id=${search.id}` : ""}`} {...props}>
+		<a
+			href={`${to}${
+				search
+					? `?${new URLSearchParams(
+							Object.entries(search)
+								.filter(([, value]) => value !== undefined)
+								.map(([key, value]) => [key, String(value)]),
+						)}`
+					: ""
+			}`}
+			{...props}
+		>
 			{children}
 		</a>
 	),
-	createFileRoute: () => (config: unknown) => config,
+	createFileRoute: () => (config: object) => ({
+		...config,
+		useSearch: () => mocks.search,
+	}),
+	redirect: (options: unknown) => options,
 }));
 vi.mock("~/server/tanahpedia/contributions", () => ({
 	getContributions: mocks.list,
 	getContributionSession: mocks.session,
 	getContribution: mocks.detail,
 	getContributionCatalogue: mocks.catalogue,
+	getContributionArticleLinkPreview: mocks.articlePreview,
 	getContributionLlmStatus: mocks.status,
+	getContributionAgents: mocks.agents,
 	createContributionItem: mocks.create,
 	editContributionItem: mocks.edit,
 	updateContributionItem: mocks.update,
@@ -52,11 +72,16 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 	recoverContributionItem: mocks.recover,
 	generateIssuePrs: mocks.generate,
 }));
+vi.mock("~/server/article-link-proposals", () => ({
+	generateLinkProposals: mocks.articleGenerate,
+}));
 
 import {
 	ContributionWorkspace,
+	validateContributionHomeSearch,
 	validateContributionSearch,
 } from "~/components/tanahpedia/ContributionWorkspace";
+import { Route as HomeRoute } from "~/routes/index";
 import { Route as IssueRoute } from "~/routes/issues";
 import { Route as PrRoute } from "~/routes/pull-requests";
 
@@ -114,6 +139,32 @@ function item(overrides: Partial<Contribution> = {}): Contribution {
 		...overrides,
 	};
 }
+function articleChange(): Contribution["changes"][number] {
+	return {
+		kind: "article_links",
+		targetId: "17",
+		before: {
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			perekId: 1,
+			authorId: 2,
+			coverageVerified: false,
+			coveringSources: [],
+			dedicationAssignments: [],
+			moedIds: [],
+		},
+		after: {
+			commands: [
+				{
+					relationshipKey: "coveringSources",
+					action: "add",
+					target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+				},
+			],
+		},
+		labels: { "article:17": "מאמר לדוגמה", "perek:1": "בראשית א" },
+	};
+}
 let issue: Contribution, pr: Contribution, client: QueryClient;
 function show(kind: "issue" | "pr" = "issue") {
 	client = new QueryClient({
@@ -127,6 +178,41 @@ function show(kind: "issue" | "pr" = "issue") {
 }
 
 describe("issues and PR administration", () => {
+	it("cancels editing back to the current discussion without navigating away", async () => {
+		mocks.search = { id: ID };
+		show();
+		fireEvent.click(await screen.findByRole("button", { name: "עריכה" }));
+		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
+		expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+			issue.title,
+		);
+		expect(mocks.navigate).not.toHaveBeenCalled();
+	});
+	it.each(["session", "agents"] as const)(
+		"shows a %s lookup failure with the queue still visible",
+		async (source) => {
+			mocks[source].mockRejectedValue(new Error(`${source} unavailable`));
+			show();
+			expect(await screen.findByRole("alert")).toHaveTextContent(
+				`${source} unavailable`,
+			);
+			expect(
+				screen.getByRole("button", { name: "ניסיון נוסף" }),
+			).toBeInTheDocument();
+		},
+	);
+	it.each(["new", PRID])(
+		"renders the ordinary %s view while agent configuration is still loading",
+		async (id) => {
+			mocks.search = { id };
+			mocks.agents.mockReturnValue(new Promise(() => {}));
+			show("pr");
+			expect(
+				await screen.findByRole("heading", { level: 1 }),
+			).toHaveTextContent(id === "new" ? "הצעת שינוי חדשה" : pr.title);
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		},
+	);
 	beforeEach(() => {
 		mocks.search = {};
 		for (const mock of [
@@ -135,7 +221,10 @@ describe("issues and PR administration", () => {
 			mocks.session,
 			mocks.detail,
 			mocks.catalogue,
+			mocks.articlePreview,
+			mocks.articleGenerate,
 			mocks.status,
+			mocks.agents,
 			mocks.create,
 			mocks.edit,
 			mocks.update,
@@ -214,10 +303,179 @@ describe("issues and PR administration", () => {
 		mocks.merge.mockResolvedValue({ ...pr, state: "merged" });
 		mocks.navigate.mockResolvedValue(undefined);
 		mocks.generate.mockResolvedValue([pr]);
+		mocks.agents.mockResolvedValue([]);
 	});
 	afterEach(() => {
 		client?.clear();
 	});
+	it("labels deterministic authors honestly and explains resumable article merges", async () => {
+		mocks.search = { id: PRID };
+		pr.author = {
+			id: "article-linker",
+			name: "article-linker",
+			kind: "system",
+			isDoradsoft: false,
+		};
+		pr.changes = [articleChange()];
+		show("pr");
+		expect(await screen.findByText("כללים אוטומטיים")).toBeInTheDocument();
+		expect(screen.getByText(/ההתקדמות נשמרת/)).toBeInTheDocument();
+		expect(screen.queryByText(/כל השינויים יוחלו יחד/)).not.toBeInTheDocument();
+	});
+	it("offers an interrupted article merge for retry or typed recovery while keeping other mutations disabled", async () => {
+		mocks.search = { id: PRID };
+		pr.articleLinkMerge = {
+			id: "intent",
+			revision: 1,
+			startedAt: pr.updatedAt,
+		};
+		pr.changes = [articleChange()];
+		pr.assignee = { kind: "local_llm" };
+		pr.events.push({
+			id: "approval",
+			kind: "approved",
+			actor: owner,
+			at: pr.updatedAt,
+			body: "reviewed",
+			revision: 1,
+		});
+		show("pr");
+		expect(
+			await screen.findByRole("heading", {
+				name: "מיזוג קישורי המאמר ממתין להשלמה",
+			}),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "המשך מיזוג PR" })).toBeEnabled();
+		expect(screen.getByRole("button", { name: "בקשת שינויים" })).toBeDisabled();
+		expect(
+			screen.getByRole("button", { name: "סגירה ללא מיזוג" }),
+		).toBeDisabled();
+		expect(screen.getByRole("button", { name: "הפעלה נוספת" })).toBeDisabled();
+		expect(screen.getByRole("combobox", { name: "אחראי" })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
+			target: { value: "הערה מותרת" },
+		});
+		expect(screen.getByRole("button", { name: "שליחת תגובה" })).toBeEnabled();
+		fireEvent.click(screen.getByRole("button", { name: "עריכה וסקירה מחדש" }));
+		expect(
+			await screen.findByRole("heading", { name: "עריכת הדיון" }),
+		).toBeInTheDocument();
+		expect(await screen.findByLabelText("מספר מאמר")).toHaveValue("17");
+	});
+	it("rereads a failed merge's newly reserved version before allowing a retry", async () => {
+		mocks.search = { id: PRID };
+		pr.author = owner;
+		mocks.merge.mockImplementationOnce(async () => {
+			pr = {
+				...pr,
+				version: 2,
+				articleLinkMerge: {
+					id: "intent",
+					revision: 1,
+					startedAt: pr.updatedAt,
+				},
+			};
+			throw new Error("Interrupted merge");
+		});
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("הוספת תגובה"), {
+			target: { value: "Retained draft" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "מיזוג PR" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Interrupted merge",
+		);
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("Retained draft");
+		fireEvent.click(screen.getByRole("button", { name: "המשך מיזוג PR" }));
+		await waitFor(() =>
+			expect(mocks.merge).toHaveBeenLastCalledWith({
+				data: { id: PRID, version: 2, action: "merge" },
+			}),
+		);
+	});
+	it("loads an authenticated one-article preview in the normal PR composer", async () => {
+		mocks.search = { id: "new" };
+		mocks.articlePreview.mockResolvedValue({
+			id: "17",
+			title: "מאמר לדוגמה",
+			state: { perekId: 1 },
+			labels: { "perek:1": "בראשית א" },
+			references: { dedication: [], moed: [] },
+			hasMore: { dedication: false, moed: false },
+		});
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
+			target: { value: "17" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "טעינת המאמר" }));
+		expect(
+			await screen.findByRole("link", { name: "מאמר לדוגמה" }),
+		).toBeInTheDocument();
+		expect(mocks.articlePreview).toHaveBeenCalledWith({ data: "17" });
+	});
+	it("opens a discovered article-link PR from the ordinary PR queue", async () => {
+		mocks.articleGenerate.mockResolvedValue({
+			runId: "discovery",
+			outcomes: [],
+			prIds: [PRID],
+		});
+		show("pr");
+		await screen.findByText("שינוי שם");
+		fireEvent.click(screen.getByText("איתור קישורים למאמר"));
+		fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+			target: { value: "17" },
+		});
+		fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+		await waitFor(() =>
+			expect(mocks.navigate).toHaveBeenCalledWith({
+				to: "/",
+				search: { tab: "prs", id: PRID },
+			}),
+		);
+		expect(mocks.articleGenerate).toHaveBeenCalledWith({
+			data: {
+				articleIds: [17],
+				engine: "heuristic",
+				force: false,
+				dryRun: false,
+			},
+		});
+	});
+	it.each([
+		{
+			prIds: [],
+			error: "article not found",
+			message: "לא נמצא מאמר במספר הזה.",
+		},
+		{
+			prIds: [PRID],
+			error: "generation failed",
+			message: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
+		},
+	])(
+		"reports discovery failure before opening any existing PR: $error",
+		async ({ prIds, error, message }) => {
+			mocks.articleGenerate.mockResolvedValue({
+				runId: "failed-discovery",
+				outcomes: [{ articleId: 17, outcome: "error", proposals: [], error }],
+				prIds,
+			});
+			show("pr");
+			await screen.findByText("שינוי שם");
+			fireEvent.click(screen.getByText("איתור קישורים למאמר"));
+			fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+				target: { value: "17" },
+			});
+			fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+			expect(await screen.findByRole("alert")).toHaveTextContent(message);
+			expect(screen.queryByRole("status")).not.toBeInTheDocument();
+			expect(mocks.navigate).not.toHaveBeenCalled();
+			expect(screen.getByLabelText("מספר מאמר לאיתור")).toHaveValue("17");
+		},
+	);
 	it("clears search and assignee filters without retaining empty URL values", async () => {
 		mocks.search = { q: "term", assignee: "human" };
 		show();
@@ -248,7 +506,9 @@ describe("issues and PR administration", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
 		expect(await screen.findByRole("alert")).toHaveTextContent("העדכון נכשל");
-		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("Retained comment");
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue(
+			"Retained comment",
+		);
 	});
 	it("shows migration history and raw sequences for a legacy proposal with no explicit API version", async () => {
 		mocks.search = { id: PRID };
@@ -281,34 +541,23 @@ describe("issues and PR administration", () => {
 		expect(screen.getByText("Original sequence")).toBeInTheDocument();
 		expect(screen.getByText("Recovered sequence")).toBeInTheDocument();
 	});
-	it("shows AWS generation progress until the explicit request completes", async () => {
+	it("never starts work from rendering or background reads", async () => {
 		mocks.search = { id: ID };
 		issue.assignee = { kind: "aws_llm" };
-		let finish: (value: Contribution[]) => void = () => {};
-		mocks.generate.mockReturnValue(
-			new Promise<Contribution[]>((resolve) => {
-				finish = resolve;
-			}),
-		);
 		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
 		expect(
-			await screen.findByRole("button", { name: "מכין הצעות..." }),
-		).toBeDisabled();
-		finish([pr]);
-		expect(await screen.findByText(/נוצרו 1/)).toBeInTheDocument();
+			await screen.findByRole("button", { name: "הפעלה נוספת" }),
+		).toBeEnabled();
+		expect(mocks.generate).not.toHaveBeenCalled();
+		expect(mocks.update).not.toHaveBeenCalled();
 	});
 	it("cancels a newly opened composer and returns to its queue", async () => {
 		mocks.search = { id: "new" };
 		show("pr");
 		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/pull-requests",
-			search: {},
+			to: "/",
+			search: { tab: "prs" },
 		});
 	});
 	it("navigates a newly saved PR to the PR discussion", async () => {
@@ -336,22 +585,18 @@ describe("issues and PR administration", () => {
 		fireEvent.click(screen.getByRole("button", { name: "פתיחת PR" }));
 		await waitFor(() =>
 			expect(mocks.navigate).toHaveBeenCalledWith({
-				to: "/pull-requests",
-				search: { id: PRID },
+				to: "/",
+				search: { id: PRID, tab: "prs" },
 			}),
 		);
 	});
 	it.each([
-		["queued", null, "ממתין לעובד בתחנת העבודה"],
-		[
-			"running",
-			new Date(Date.now() + 60000).toISOString(),
-			"המודל המקומי מכין הצעות",
-		],
-		["running", null, "העובד המקומי התנתק - ניתן לשלוח שוב"],
-		["completed", null, "העובד המקומי יצר הצעות לסקירה"],
-		["failed", null, "ההפקה המקומית נכשלה"],
-		["cancelled", null, "בקשת ההפקה בוטלה"],
+		["queued", null, "העבודה נמצאת בתור"],
+		["running", new Date(Date.now() + 60000).toISOString(), "הסוכן מטפל בדיון"],
+		["running", null, "ממתין לעובד זמין להמשך הטיפול"],
+		["completed", null, "הסוכן סיים את העבודה"],
+		["failed", null, "עבודת הסוכן נכשלה"],
+		["cancelled", null, "עבודת הסוכן בוטלה"],
 	])(
 		"shows durable workstation generation state %s",
 		async (status, leaseExpiresAt, label) => {
@@ -384,7 +629,7 @@ describe("issues and PR administration", () => {
 				expect(screen.getByText("local-model")).toBeInTheDocument();
 			if (status === "queued" || (status === "running" && leaseExpiresAt))
 				expect(
-					screen.getByRole("button", { name: "העובד המקומי מטפל בפנייה" }),
+					screen.getByRole("button", { name: "הפעלה נוספת" }),
 				).toBeDisabled();
 		},
 	);
@@ -519,7 +764,7 @@ describe("issues and PR administration", () => {
 		expect(screen.queryByText("שינוי שם")).not.toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "+ פנייה חדשה" })).toHaveAttribute(
 			"href",
-			"/issues?id=new",
+			"/?id=new&tab=issues",
 		);
 		fireEvent.change(screen.getByLabelText("חיפוש דיונים"), {
 			target: { value: "אברהם" },
@@ -703,7 +948,9 @@ describe("issues and PR administration", () => {
 		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
 			target: { value: "aws_llm" },
 		});
-		fireEvent.click(screen.getByRole("button", { name: "שמירת שיוך" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמירת שיוך והפעלת סוכן" }),
+		);
 		await waitFor(() =>
 			expect(mocks.update).toHaveBeenCalledWith({
 				data: expect.objectContaining({
@@ -759,6 +1006,54 @@ describe("issues and PR administration", () => {
 			}),
 		);
 	});
+	it.each([
+		["queued", null],
+		["running", "2099-01-01T00:00:00Z"],
+		["running", "2000-01-01T00:00:00Z"],
+	] as const)(
+		"blocks an approved PR while the assigned agent pass is %s even if its lease expired",
+		async (status, leaseExpiresAt) => {
+			mocks.search = { id: PRID };
+			pr.assignee = { kind: "local_llm" };
+			pr.events.push({
+				id: "approval",
+				kind: "approved",
+				actor: owner,
+				body: "Approved",
+				at: pr.createdAt,
+				revision: 1,
+			});
+			pr.generation = {
+				id: "job",
+				status,
+				leaseExpiresAt,
+				requestedAt: pr.createdAt,
+				requestedBy: owner.id,
+				attempts: 1,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			show("pr");
+			expect(
+				await screen.findByRole("heading", {
+					name: "ממתין לסיום הטיפול של הסוכן",
+				}),
+			).toBeInTheDocument();
+			const merge = screen.getByRole("button", { name: "מיזוג PR" });
+			expect(merge).toBeDisabled();
+			expect(merge.closest("section")).not.toHaveClass("ready");
+			const rerun = screen.getByRole("button", { name: "הפעלה נוספת" });
+			if (leaseExpiresAt?.startsWith("2000")) expect(rerun).toBeEnabled();
+			else expect(rerun).toBeDisabled();
+		},
+	);
 	it("hides owner approval actions from other editors", async () => {
 		mocks.search = { id: PRID };
 		mocks.session.mockResolvedValue(alice);
@@ -769,81 +1064,99 @@ describe("issues and PR administration", () => {
 		).not.toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
 	});
-	it("generates PRs only through the persisted LLM assignee", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
-		await waitFor(() =>
-			expect(mocks.generate).toHaveBeenCalledWith({
-				data: { id: ID, version: 1 },
-			}),
-		);
-		expect(await screen.findByRole("status")).toHaveTextContent("נוצרו 1");
-	});
-	it("queues workstation generation without invoking a server-side model", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "local_llm" };
-		show();
-		fireEvent.click(
-			await screen.findByRole("button", { name: "שליחה לעובד מקומי" }),
-		);
-		await waitFor(() =>
-			expect(mocks.update).toHaveBeenCalledWith({
-				data: expect.objectContaining({
-					id: ID,
-					version: 1,
-					action: "queue_generation",
+	it.each(["local_llm", "aws_llm"] as const)(
+		"offers a secondary rerun for the persisted %s assignment",
+		async (kind) => {
+			mocks.search = { id: ID };
+			issue.assignee = { kind };
+			show();
+			fireEvent.click(
+				await screen.findByRole("button", { name: "הפעלה נוספת" }),
+			);
+			await waitFor(() =>
+				expect(mocks.update).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						id: ID,
+						version: 1,
+						action: "run_agent",
+					}),
 				}),
-			}),
-		);
-		expect(mocks.generate).not.toHaveBeenCalled();
-	});
-	it("reports provider failures and unconfigured providers", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		mocks.status.mockResolvedValue({
-			local: { enabled: false },
-			aws: { enabled: false },
-		});
-		show();
-		expect(
-			await screen.findByText("הספק שנבחר עדיין לא מוגדר בשרת."),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: "יצירת PRs עם AWS LLM" }),
-		).toBeDisabled();
-	});
-	it("shows model errors without pretending PRs were generated", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		mocks.generate.mockRejectedValue(new Error("Invalid model output"));
-		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			"Invalid model output",
-		);
-	});
-	it("requires evidence before generation and exposes human PR creation", async () => {
+			);
+			expect(mocks.generate).not.toHaveBeenCalled();
+		},
+	);
+	it("keeps evidence and manual proposal creation available to an assigned issue", async () => {
 		mocks.search = { id: ID };
 		issue.evidence = [];
 		issue.assignee = { kind: "aws_llm" };
 		show();
 		expect(await screen.findByText(/טרם נוספו מקורות/)).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "יצירת PRs עם AWS LLM" }),
-		).toBeDisabled();
-		expect(
 			screen.getByRole("link", { name: "פתיחת PR ידנית" }),
-		).toHaveAttribute("href", "/pull-requests?id=new");
+		).toHaveAttribute("href", `/?id=new&issueId=${ID}&tab=prs`);
+		expect(
+			screen.queryByRole("button", { name: "יצירת PRs עם AWS LLM" }),
+		).not.toBeInTheDocument();
+	});
+	it("shows immutable comment-resolution receipts on a PR and keeps owner review required", async () => {
+		mocks.search = { id: PRID };
+		pr.assignee = { kind: "aws_llm" };
+		pr.events.push(
+			{
+				id: "human-comment",
+				kind: "comment",
+				actor: alice,
+				body: "Keep this original request",
+				at: pr.createdAt,
+				revision: 1,
+			},
+			{
+				id: "response",
+				kind: "agent_response",
+				actor: { ...alice, kind: "aws_llm", name: "Agent" },
+				body: "Updated proposal",
+				at: pr.createdAt,
+				revision: 2,
+				responses: [
+					{
+						commentId: "human-comment",
+						status: "addressed",
+						body: "Corrected the date in the proposal",
+					},
+				],
+				run: {
+					jobId: "job",
+					agentId: "agent",
+					bundleVersion: "v2",
+					model: "model",
+				},
+			},
+		);
+		show("pr");
+		expect(
+			await screen.findByText("Keep this original request"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("Corrected the date in the proposal"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "התייחסות להערה" }),
+		).toHaveAttribute("href", "#contribution-event-human-comment");
+		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
+		expect(screen.getByText(/תגובה חדשה תפעיל/)).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
+			target: { value: "Please check another source" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					action: "comment",
+					body: "Please check another source",
+				}),
+			}),
+		);
+		expect(mocks.generate).not.toHaveBeenCalled();
 	});
 	it("renders closed discussions and allows reopening", async () => {
 		mocks.search = { id: ID };
@@ -886,8 +1199,8 @@ describe("issues and PR administration", () => {
 		fireEvent.submit(screen.getByRole("form"));
 		await waitFor(() => expect(mocks.create).toHaveBeenCalled());
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/issues",
-			search: { id: ID },
+			to: "/",
+			search: { id: ID, tab: "issues" },
 		});
 	});
 	it("edits an issue using its current optimistic version", async () => {
@@ -916,6 +1229,130 @@ describe("issues and PR administration", () => {
 			expect(mocks.detail.mock.calls.length).toBeGreaterThan(1),
 		);
 		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("טיוטה שלא נשלחה");
+	});
+	it("waits for the linked issue before initializing a manual PR's title and evidence", async () => {
+		mocks.search = { id: "new", issueId: ID };
+		let finish: (value: Contribution) => void = () => {};
+		mocks.detail.mockReturnValue(
+			new Promise<Contribution>((resolve) => {
+				finish = resolve;
+			}),
+		);
+		show("pr");
+		expect(await screen.findByText("טוען נתונים לטופס...")).toBeInTheDocument();
+		expect(screen.queryByRole("form")).not.toBeInTheDocument();
+		await waitFor(() => expect(mocks.catalogue).toHaveBeenCalled());
+		finish(issue);
+		expect(await screen.findByLabelText("כותרת")).toHaveValue(issue.title);
+		expect(screen.getByLabelText("הפניה למקור")).toHaveValue("בראשית א א");
+		expect(screen.getByLabelText("ציטוט רלוונטי")).toHaveValue("ציטוט");
+		fireEvent.change(screen.getByLabelText("כותרת"), {
+			target: { value: "My manual draft" },
+		});
+		issue = { ...issue, version: 2, title: "Another editor's issue title" };
+		mocks.detail.mockResolvedValue(issue);
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		expect(screen.getByLabelText("כותרת")).toHaveValue("My manual draft");
+	});
+	it("exposes a linked-issue failure and retries without opening a contextless composer", async () => {
+		mocks.search = { id: "new", issueId: ID };
+		mocks.detail
+			.mockRejectedValueOnce(new Error("Linked issue unavailable"))
+			.mockResolvedValue(issue);
+		show("pr");
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Linked issue unavailable",
+		);
+		expect(screen.queryByRole("form")).not.toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "ניסיון נוסף" }));
+		expect(await screen.findByLabelText("כותרת")).toHaveValue(issue.title);
+		expect(screen.getByLabelText("הפניה למקור")).toHaveValue("בראשית א א");
+	});
+	it("preserves a dirty assignment and its base version through a concurrent assignment update", async () => {
+		mocks.search = { id: ID };
+		show();
+		fireEvent.change(await screen.findByLabelText("אחראי", { exact: true }), {
+			target: { value: "human" },
+		});
+		fireEvent.change(screen.getByLabelText("שם משתמש אחראי"), {
+			target: { value: "My unsaved editor" },
+		});
+		issue = { ...issue, version: 2, assignee: { kind: "local_llm" } };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		expect(
+			await screen.findByText(/הדיון עודכן מאז עריכת השיוך/),
+		).toBeInTheDocument();
+		expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+			"human",
+		);
+		expect(screen.getByLabelText("שם משתמש אחראי")).toHaveValue(
+			"My unsaved editor",
+		);
+		const save = screen.getByRole("button", { name: "שמירת שיוך" });
+		expect(save).toBeDisabled();
+		fireEvent.submit(save.closest("form") as HTMLFormElement);
+		expect(mocks.update).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "טעינת השיוך העדכני" }));
+		expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+			"local_llm",
+		);
+		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
+			target: { value: "aws_llm" },
+		});
+		mocks.update.mockImplementation(async ({ data }) => {
+			issue = { ...issue, version: 3, assignee: data.assignee };
+			return issue;
+		});
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמירת שיוך והפעלת סוכן" }),
+		);
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: {
+					id: ID,
+					version: 2,
+					action: "assign",
+					assignee: { kind: "aws_llm" },
+				},
+			}),
+		);
+		await waitFor(() =>
+			expect(
+				screen.queryByText(/הדיון עודכן מאז עריכת השיוך/),
+			).not.toBeInTheDocument(),
+		);
+	});
+	it("follows a refreshed assignment when untouched and keeps a rejected draft when edited", async () => {
+		mocks.search = { id: ID };
+		show();
+		await screen.findByLabelText("אחראי", { exact: true });
+		issue = { ...issue, version: 2, assignee: { kind: "local_llm" } };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		await waitFor(() =>
+			expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+				"local_llm",
+			),
+		);
+		expect(
+			screen.queryByText(/הדיון עודכן מאז עריכת השיוך/),
+		).not.toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
+			target: { value: "human" },
+		});
+		fireEvent.change(screen.getByLabelText("שם משתמש אחראי"), {
+			target: { value: "Keep this draft" },
+		});
+		mocks.update.mockRejectedValue(new Error("The saved version changed"));
+		fireEvent.click(screen.getByRole("button", { name: "שמירת שיוך" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"The saved version changed",
+		);
+		expect(screen.getByLabelText("שם משתמש אחראי")).toHaveValue(
+			"Keep this draft",
+		);
+		expect(mocks.update).toHaveBeenCalledWith({
+			data: expect.objectContaining({ version: 2 }),
+		});
 	});
 	it("retains a comment typed while an earlier comment is being submitted", async () => {
 		let complete: (value: Contribution) => void = () => {};
@@ -965,8 +1402,8 @@ describe("issues and PR administration", () => {
 		show("pr");
 		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/pull-requests",
-			search: {},
+			to: "/",
+			search: { tab: "prs" },
 		});
 	});
 	it("validates deep-link and filter state and exposes both routes", () => {
@@ -1000,9 +1437,77 @@ describe("issues and PR administration", () => {
 		expect(validateContributionSearch({ q: "a".repeat(600) }).q).toHaveLength(
 			500,
 		);
-		for (const route of [IssueRoute, PrRoute])
-			expect(
-				(route as unknown as { component: () => unknown }).component(),
-			).toBeTruthy();
+		expect(
+			validateContributionHomeSearch({ tab: "prs", id: PRID }),
+		).toMatchObject({ tab: "prs", id: PRID });
+		expect(validateContributionHomeSearch({ tab: "invalid" }).tab).toBe(
+			"issues",
+		);
+		for (const [route, tab] of [
+			[IssueRoute, "issues"],
+			[PrRoute, "prs"],
+		] as const) {
+			const beforeLoad = (
+				route as unknown as {
+					beforeLoad: (context: { search: Record<string, unknown> }) => never;
+				}
+			).beforeLoad;
+			expect(() =>
+				beforeLoad({ search: { id: PRID, q: "term", state: "all" } }),
+			).toThrow(
+				expect.objectContaining({
+					to: "/",
+					replace: true,
+					search: { id: PRID, q: "term", state: "all", tab },
+				}),
+			);
+		}
+	});
+	it("clears an issue action error when switching the home queue", async () => {
+		mocks.search = { tab: "issues", id: ID };
+		mocks.update.mockRejectedValue(new Error("Issue update failed"));
+		const Page = (HomeRoute as unknown as { component: () => React.ReactNode })
+			.component;
+		client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const view = render(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		fireEvent.change(await screen.findByLabelText("הוספת תגובה"), {
+			target: { value: "Retry later" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Issue update failed",
+		);
+		mocks.search = { tab: "prs" };
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		expect(
+			await screen.findByRole("link", { name: "שינוי שם" }),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Issue update failed")).not.toBeInTheDocument();
+	});
+	it.each([
+		["issues", "בדיקת מקורות"],
+		["prs", "שינוי שם"],
+	])("opens the %s queue directly on the homepage", async (tab, title) => {
+		mocks.search = { tab };
+		const Page = (HomeRoute as unknown as { component: () => React.ReactNode })
+			.component;
+		client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		render(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		expect(await screen.findByRole("link", { name: title })).toHaveAttribute(
+			"href",
+			`/?id=${tab === "prs" ? PRID : ID}&tab=${tab}`,
+		);
 	});
 });
