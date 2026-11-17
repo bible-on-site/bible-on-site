@@ -20,6 +20,7 @@ import {
 	traceMethods,
 	traceSelector,
 } from "./ios-discovery-trace.mjs";
+import { prepareDiscoveryEvidence } from "./ios-discovery-evidence.mjs";
 
 const nativeUrl =
 	"file:///test/node_modules/@appium/coresim/lib/src/native-simctl.js";
@@ -32,6 +33,49 @@ const nativeSource = `export class NativeSimctl {
 const xcodeSource = "export async function getVersion(parse) { return parse; }";
 
 describe("iOS discovery tracing", () => {
+	describe("with per-run evidence reservation", () => {
+		it("creates distinct traces without changing earlier evidence", (t) => {
+			const root = mkdtempSync(join(tmpdir(), "ios-discovery-evidence-"));
+			t.after(() => rmSync(root, { recursive: true, force: true }));
+			const oldFile = join(root, "ios-discovery-spans.jsonl");
+			writeFileSync(oldFile, "earlier spans");
+			const first = prepareDiscoveryEvidence(root);
+			const second = prepareDiscoveryEvidence(root);
+			assert.equal(first.status, "ready");
+			assert.equal(second.status, "ready");
+			assert.notEqual(first.path, second.path);
+			assert.equal(first.path, join(root, first.file));
+			assert.equal(readFileSync(first.path, "utf8"), "");
+			assert.equal(readFileSync(second.path, "utf8"), "");
+			assert.equal(readFileSync(oldFile, "utf8"), "earlier spans");
+		});
+		it("disables measurement on a collision without adopting or changing the old file", (t) => {
+			const root = mkdtempSync(join(tmpdir(), "ios-discovery-collision-"));
+			t.after(() => rmSync(root, { recursive: true, force: true }));
+			const options = { makeId: () => "owned-fixture" };
+			const first = prepareDiscoveryEvidence(root, options);
+			writeFileSync(first.path, "prior successful spans");
+			const second = prepareDiscoveryEvidence(root, options);
+			assert.deepEqual(second, {
+				status: "unavailable",
+				file: null,
+				path: null,
+			});
+			assert.equal(readFileSync(first.path, "utf8"), "prior successful spans");
+		});
+		it("reports unavailable evidence without exposing its creation error", () => {
+			const evidence = prepareDiscoveryEvidence(tmpdir(), {
+				reserve: () => {
+					throw new Error("private fixture failure");
+				},
+			});
+			assert.deepEqual(evidence, {
+				status: "unavailable",
+				file: null,
+				path: null,
+			});
+		});
+	});
 	describe("with naturally executed asynchronous methods", () => {
 		it("records nested spans with distinct identities and monotonic durations", async () => {
 			const events = [];
