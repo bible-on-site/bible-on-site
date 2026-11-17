@@ -232,8 +232,9 @@ function recordDeltas(records, latest) {
 	});
 }
 
-/** API v5 article commands change sets/assignments. Repeating an identical
- * adjacent command is idempotent. Never fold A -> B -> A or other change kinds. */
+/** API v5 set additions/removals commute within a run of the same action/key.
+ * Other known commands only compact adjacent identical repetitions. Never fold
+ * add -> remove -> add, replace A -> B -> A, or other change kinds. */
 function compactArticleCommands(output, apiVersion) {
 	if (apiVersion !== 5) return;
 	const proposals = [
@@ -254,7 +255,8 @@ function compactArticleCommands(output, apiVersion) {
 				!Array.isArray(change.after?.commands)
 			)
 				continue;
-			let previous;
+			let previous, group;
+			const seen = new Set();
 			change.after.commands = change.after.commands.filter((command) => {
 				if (
 					!object(command) ||
@@ -263,6 +265,8 @@ function compactArticleCommands(output, apiVersion) {
 					!actions[command.relationshipKey].includes(command.action)
 				) {
 					previous = undefined;
+					group = undefined;
+					seen.clear();
 					return true;
 				}
 				const target = { ...command.target };
@@ -273,7 +277,24 @@ function compactArticleCommands(output, apiVersion) {
 							canonical(a).localeCompare(canonical(b)),
 						);
 				const key = canonical({ ...command, target });
-				const duplicate = key === previous;
+				const field =
+					command.relationshipKey === "coveringSources"
+						? "pasukCoordinates"
+						: command.relationshipKey === "moadim"
+							? "moedIds"
+							: null;
+				const commuting =
+					field !== null &&
+					["add", "remove"].includes(command.action) &&
+					Object.keys(target).length === 1 &&
+					Array.isArray(target[field]);
+				const nextGroup = commuting
+					? `${command.relationshipKey}:${command.action}`
+					: undefined;
+				if (!commuting || nextGroup !== group) seen.clear();
+				const duplicate = key === previous || (commuting && seen.has(key));
+				group = nextGroup;
+				if (commuting) seen.add(key);
 				previous = key;
 				return !duplicate;
 			});
@@ -655,8 +676,12 @@ export function createContributionWorker(
 					recordDeltas(context.currentRecords, latestRecords);
 				let schema = job.schema,
 					promptTokens = 0;
+				const systemMessage = {
+					role: "system",
+					content: nativeAgentSystem(bundle, schema),
+				};
 				const messages = [
-					{ role: "system", content: nativeAgentSystem(bundle, schema) },
+					systemMessage,
 					{
 						role: "user",
 						content: canonical({
@@ -677,7 +702,7 @@ export function createContributionWorker(
 						},
 					}));
 				let evaluatedMessages = messages.length,
-					evaluatedSystem = messages[0].content;
+					evaluatedSystem = systemMessage.content;
 				agentResultSchema(schema);
 				const infer = async (history, declaration) => {
 					const remaining = remainingBudget();
@@ -715,7 +740,7 @@ export function createContributionWorker(
 					// not subtract cache hits when budgeting the next native turn.
 					promptTokens = body.prompt_eval_count;
 					evaluatedMessages = history.length;
-					evaluatedSystem = history[0].content;
+					evaluatedSystem = systemMessage.content;
 					return { body, message };
 				};
 				const finalize = async () => {
@@ -739,8 +764,8 @@ export function createContributionWorker(
 						"Invalid local model response",
 					);
 					if (!object(output)) throw new Error("Invalid local model response");
-					// The decoder cannot enforce uniqueItems. Only compact known,
-					// adjacent idempotent repeats; server validation remains mandatory.
+					// The decoder cannot enforce uniqueItems. Only compact known
+					// idempotent/commuting repeats; server validation remains mandatory.
 					compactArticleCommands(output, job.apiVersion);
 					remainingBudget();
 					const result = await api(
@@ -775,9 +800,9 @@ export function createContributionWorker(
 					if (
 						promptTokens &&
 						promptTokens +
-							(messages[0].content === evaluatedSystem
+							(systemMessage.content === evaluatedSystem
 								? 0
-								: Buffer.byteLength(messages[0].content, "utf8")) +
+								: Buffer.byteLength(systemMessage.content, "utf8")) +
 							Buffer.byteLength(canonical(additions), "utf8") +
 							128 * additions.length +
 							MODEL_OUTPUT >=
@@ -841,10 +866,7 @@ export function createContributionWorker(
 									: read.data;
 							// A trusted read can widen the result contract. Refresh its
 							// operation guide before the next research/final request.
-							messages[0] = {
-								role: "system",
-								content: nativeAgentSystem(bundle, schema),
-							};
+							systemMessage.content = nativeAgentSystem(bundle, schema);
 						}
 						messages.push({
 							role: "tool",

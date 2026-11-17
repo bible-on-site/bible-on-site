@@ -838,6 +838,86 @@ test("nonadjacent repeated article commands retain order and remain subject to s
 	assert.equal(fixture.releases.length, 1);
 });
 
+test("only same-action set runs commute; replacements and action/key boundaries retain intent", async () => {
+	const addA = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+		},
+		addB = {
+			...addA,
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 2 }] },
+		},
+		moedA = {
+			relationshipKey: "moadim",
+			action: "remove",
+			target: { moedIds: [1] },
+		},
+		moedB = { ...moedA, target: { moedIds: [2] } };
+	for (const [commands, expected] of [
+		[
+			[addA, addB, addA],
+			[addA, addB],
+		],
+		[
+			[moedA, moedB, moedA],
+			[moedA, moedB],
+		],
+		[
+			[addA, moedA, addA],
+			[addA, moedA, addA],
+		],
+		[
+			[
+				{ ...addA, action: "replace" },
+				{ ...addB, action: "replace" },
+				{ ...addA, action: "replace" },
+			],
+			[
+				{ ...addA, action: "replace" },
+				{ ...addB, action: "replace" },
+				{ ...addA, action: "replace" },
+			],
+		],
+		[
+			[
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+				addB,
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+			],
+			[
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+				addB,
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+			],
+		],
+	]) {
+		const output = {
+			outcome: "implemented",
+			summary: "Requested",
+			responses: [],
+			pullRequests: [
+				{
+					changes: [
+						{ kind: "article_links", targetId: "594", after: { commands } },
+					],
+				},
+			],
+		};
+		const fixture = agentFixture({
+			bundle: agentBundle({ apiVersion: 5 }),
+			job: { apiVersion: 5 },
+			replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.deepEqual(
+			JSON.parse(fixture.completed[0].content).pullRequests[0].changes[0].after
+				.commands,
+			expected,
+		);
+	}
+});
+
 test("command compaction never repairs other versions, creations, unknown actions or malformed fields", async () => {
 	const known = {
 			relationshipKey: "moadim",

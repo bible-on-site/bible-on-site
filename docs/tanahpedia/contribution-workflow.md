@@ -241,10 +241,12 @@ contracts retain the full guide. Final JSON requests omit optional indentation
 and keep generated prose concise while preserving exact human quotations.
 The local grammar cannot enforce JSON Schema `uniqueItems`; the server still
 validates the complete result. For API v5 article-link proposals only, the worker
-compacts adjacent repetitions of the same idempotent set/assignment command
-before submission. Coordinate and moed sets compare independently of item
-order. It preserves nonadjacent sequences such as add/remove/add, unknown
-actions, other operation kinds and other API versions. It never compacts human
+compacts adjacent repetitions of the same idempotent set/assignment command,
+and repeats inside a consecutive run of additions or removals for the same
+relationship. Coordinate and moed sets compare independently of item order.
+Action/key boundaries and replacements retain their order, including
+add/remove/add and replace A/B/A. Unknown actions, other operation kinds and
+other API versions retain their sequence. It never compacts human
 text or evidence; invalid output remains subject to the server's normal checks.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
