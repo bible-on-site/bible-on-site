@@ -7,6 +7,8 @@
  * matched surface as its evidence quote; ambiguous citations are surfaced
  * (never resolved by guessing).
  */
+
+import { toHebrewLetters } from "~/utils/hebrew";
 import {
 	cataloguePasukLabel,
 	cataloguePerekLabel,
@@ -37,6 +39,8 @@ export interface AmbiguousCitation {
 	spanStart: number;
 	spanEnd: number;
 	reason: string;
+	/** Known chapter rows whose identity or bounds determine this held result. */
+	dependencyPerekIds: number[];
 }
 
 export interface CitationExtraction {
@@ -320,12 +324,17 @@ function additionalLettersOf(
 	return letters;
 }
 
-function ambiguous(span: RawSpan, reason: string): AmbiguousCitation {
+function ambiguous(
+	span: RawSpan,
+	reason: string,
+	dependencyPerekIds: number[] = [],
+): AmbiguousCitation {
 	return {
 		quote: span.quote,
 		spanStart: span.spanStart,
 		spanEnd: span.spanEnd,
 		reason,
+		dependencyPerekIds,
 	};
 }
 
@@ -352,6 +361,17 @@ function interpret(
 			return ambiguous(
 				span,
 				`"${span.quote}" — ${span.sefer} has additionals and the citation does not pin one unambiguously`,
+				catalogue.perakim
+					.filter(
+						(p) =>
+							normalizeHebrewName(p.seferName) ===
+								normalizeHebrewName(canonicalSefer) &&
+							p.perekInContext ===
+								(span.bareForm
+									? parseHebrewNumber(span.leadToken ?? "")
+									: span.numbers[0]),
+					)
+					.map((p) => p.id),
 			);
 		}
 	} else if (span.bareForm && span.leadToken !== null) {
@@ -365,21 +385,33 @@ function interpret(
 
 	if (numbers.length < 2 || numbers.length > 3) return null;
 	const [perek, pasuk, pasukTo = pasuk] = numbers;
-	if (pasukTo < pasuk || pasukTo - pasuk >= MAX_CITATION_RANGE) {
-		return ambiguous(span, `implausible pasuk range in "${span.quote}"`);
-	}
-
 	const resolution = resolvePerekRef(catalogue, {
 		sefer: canonicalSefer,
 		additional,
 		perek,
 		pasuk,
 	});
+	const dependencies =
+		resolution.kind === "resolved"
+			? [resolution.perek.id]
+			: resolution.kind === "ambiguous"
+				? resolution.candidates
+						.filter((p) => p.perekInContext === perek)
+						.map((p) => p.id)
+				: [];
+	if (pasukTo < pasuk || pasukTo - pasuk >= MAX_CITATION_RANGE) {
+		return ambiguous(
+			span,
+			`implausible pasuk range in "${span.quote}"`,
+			dependencies,
+		);
+	}
 	if (resolution.kind === "not-found") return null;
 	if (resolution.kind === "ambiguous") {
 		return ambiguous(
 			span,
 			`"${span.quote}" matches ${resolution.candidates.length} perakim`,
+			dependencies,
 		);
 	}
 	const resolvedPerek = resolution.perek;
@@ -387,6 +419,7 @@ function interpret(
 		return ambiguous(
 			span,
 			`pasuk ${pasukTo} out of range for ${cataloguePerekLabel(resolvedPerek)} (1-${resolvedPerek.pasukCount})`,
+			[resolvedPerek.id],
 		);
 	}
 	return {
@@ -396,7 +429,7 @@ function interpret(
 		label:
 			pasukTo === pasuk
 				? cataloguePasukLabel(resolvedPerek, pasuk)
-				: `${cataloguePasukLabel(resolvedPerek, pasuk)}-${pasukTo}`,
+				: `${cataloguePasukLabel(resolvedPerek, pasuk)}-${toHebrewLetters(pasukTo)}`,
 		quote: span.quote,
 		spanStart: span.spanStart,
 		spanEnd: span.spanEnd,

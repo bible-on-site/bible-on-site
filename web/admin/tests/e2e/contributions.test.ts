@@ -15,11 +15,57 @@ import { expect, test } from "../util/test-fixture";
 
 async function capture(page: Page, info: TestInfo, name: string) {
 	const path = info.outputPath(`${name}.png`);
+	await page.evaluate(() => window.scrollTo(0, 0));
 	await page.screenshot({ path, fullPage: true });
 	await info.attach(name, { path, contentType: "image/png" });
 }
 
 test.describe("Issues and typed pull requests", () => {
+	test("registers and configures a versioned agent on an existing runtime", async ({
+		page,
+	}, testInfo) => {
+		const name = `סוכן בדיקה ${randomUUID()}`;
+		await page.goto("/contribution-agents");
+		await expect(
+			page.getByRole("article", { name: "Local LLM", exact: true }),
+		).toBeVisible();
+		const install = page.getByRole("form", {
+			name: "התקנת הגדרת סוכן",
+			exact: true,
+		});
+		await install.getByLabel("שם הסוכן", { exact: true }).fill(name);
+		await install.getByLabel("מודל", { exact: true }).fill("test-local");
+		await install
+			.getByRole("button", { name: "התקנת הגדרה", exact: true })
+			.click();
+		const agent = page.getByRole("article", { name, exact: true });
+		await expect(agent).toBeVisible();
+		await expect(
+			agent.getByText("ההוראות והכלים מעודכנים", { exact: true }),
+		).toBeVisible();
+		await agent.getByLabel("סוכן פעיל", { exact: true }).uncheck();
+		await agent
+			.getByRole("button", { name: "שמירת הגדרות הסוכן", exact: true })
+			.click();
+		await expect(
+			agent.getByText("הגדרת הסוכן עודכנה", { exact: true }),
+		).toBeVisible();
+		await page.reload();
+		await expect(agent.getByLabel("מודל", { exact: true })).toHaveValue(
+			"test-local",
+		);
+		await expect(
+			agent.getByLabel("סוכן פעיל", { exact: true }),
+		).not.toBeChecked();
+		await capture(page, testInfo, "versioned-agent-configuration");
+		await page.setViewportSize({ width: 390, height: 844 });
+		await capture(page, testInfo, "versioned-agent-configuration-mobile");
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= innerWidth,
+			),
+		).toBe(true);
+	});
 	test("reviews a cross-category proposal with dates, names, sources and alias routing", async ({
 		page,
 	}, testInfo) => {
@@ -196,7 +242,63 @@ test.describe("Issues and typed pull requests", () => {
 			page.getByRole("combobox", { name: "תפקיד ההורה", exact: true }),
 		).toBeVisible();
 	});
-	test("a workstation worker turns a queued issue into a model-authored PR requiring review", async ({
+	test("keeps optional issue targets in versioned history while retaining free-form editing", async ({
+		page,
+	}, testInfo) => {
+		await page.goto("/?tab=issues&id=new");
+		const title = `תחום פנייה לבדיקה ${randomUUID().slice(0, 8)}`;
+		const description = "הטקסט החופשי נשמר גם כשמגדירים סוג שינוי ויעד לסוכן.";
+		await page.getByRole("textbox", { name: "כותרת", exact: true }).fill(title);
+		await page
+			.getByRole("textbox", { name: "תיאור", exact: true })
+			.fill(description);
+		await page.getByText("הכוונה לסוכן (רשות)", { exact: true }).click();
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("article_links");
+		await page.getByLabel("מספר מאמר (רשות)", { exact: true }).fill("1");
+		await capture(page, testInfo, "optional-issue-scope-composer");
+		await page
+			.getByRole("button", { name: "פתיחת פנייה", exact: true })
+			.click();
+		await expect(
+			page.getByRole("region", { name: "תחום הפנייה" }),
+		).toContainText("מאמר 1");
+		await page.getByRole("button", { name: "עריכה", exact: true }).click();
+		await expect(
+			page.getByRole("textbox", { name: "תיאור", exact: true }),
+		).toHaveValue(description);
+		await expect(
+			page.getByLabel("מספר מאמר (רשות)", { exact: true }),
+		).toHaveValue("1");
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("");
+		await page
+			.getByRole("button", { name: "שמירת עדכון", exact: true })
+			.click();
+		await expect(page.getByRole("region", { name: "תחום הפנייה" })).toHaveCount(
+			0,
+		);
+		await expect(
+			page.getByText(description, { exact: true }).first(),
+		).toBeVisible();
+		await page
+			.getByText(/^הצגת גרסה /)
+			.first()
+			.click();
+		await expect(
+			page.getByRole("region", { name: "תחום הפנייה" }),
+		).toContainText("מאמר 1");
+		await capture(page, testInfo, "optional-issue-scope-history");
+		await page
+			.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+			.click();
+		await expect(
+			page.getByRole("button", { name: "פתיחה מחדש", exact: true }),
+		).toBeVisible();
+	});
+	test("assignment starts a workstation implementation and human PR comments trigger another reviewed pass", async ({
 		page,
 	}, testInfo) => {
 		const title = `הפקה מקומית ${randomUUID()}`;
@@ -205,6 +307,10 @@ test.describe("Issues and typed pull requests", () => {
 		await page
 			.getByLabel("תיאור", { exact: true })
 			.fill("נדרש ערך חדש לאברם עם מטא-נתונים בלבד, בהתבסס על המקור המצורף.");
+		await page.getByText("הכוונה לסוכן (רשות)", { exact: true }).click();
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("entry");
 		await page
 			.getByRole("combobox", { name: "אחראי", exact: true })
 			.selectOption("local_llm");
@@ -221,53 +327,120 @@ test.describe("Issues and typed pull requests", () => {
 		await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
 		const issueId = new URL(page.url()).searchParams.get("id");
 		if (!issueId) throw new Error("Created issue ID missing");
-		await page
-			.getByRole("button", { name: "שליחה לעובד מקומי", exact: true })
-			.click();
 		await expect(
-			page.getByText("ממתין לעובד בתחנת העבודה", { exact: true }),
+			page.getByText("העבודה נמצאת בתור", { exact: true }),
 		).toBeVisible();
 		let inferenceCalls = 0;
+		const generationModels: string[] = [];
+		const retentionDurations: unknown[] = [];
+		const unloadedModels: string[] = [];
 		const ollama = createServer(async (request, response) => {
 			const parts: Buffer[] = [];
 			for await (const chunk of request) parts.push(Buffer.from(chunk));
 			const input = JSON.parse(Buffer.concat(parts).toString("utf8"));
+			if (request.url !== "/api/chat" || request.headers.authorization) {
+				response.writeHead(400);
+				response.end();
+				return;
+			}
 			if (
-				request.url !== "/api/chat" ||
-				request.headers.authorization ||
-				!input.format
+				Array.isArray(input.messages) &&
+				input.messages.length === 0 &&
+				input.keep_alive === 0 &&
+				!input.format &&
+				!input.tools &&
+				!input.options
 			) {
+				unloadedModels.push(input.model);
+				response.setHeader("Content-Type", "application/json");
+				response.end(
+					JSON.stringify({
+						model: input.model,
+						done: true,
+						done_reason: "unload",
+					}),
+				);
+				return;
+			}
+			if (Boolean(input.format) === Array.isArray(input.tools)) {
 				response.writeHead(400);
 				response.end();
 				return;
 			}
 			inferenceCalls++;
+			generationModels.push(input.model);
+			retentionDurations.push(input.keep_alive);
+			const { context } = JSON.parse(input.messages[1].content);
+			const issue = context.item.kind === "issue";
+			const toolMessages = input.messages.filter(
+				(message: { role: string }) => message.role === "tool",
+			);
+			const result = issue
+				? {
+						outcome: "implemented",
+						summary: "נוצרה הצעה לסקירת אדם",
+						responses: [],
+						pullRequests: [
+							{
+								title: "ערך לאברם לפי המקור",
+								description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
+								evidenceIndexes: [0],
+								changes: [
+									{
+										kind: "entry",
+										after: {
+											title: "אברם",
+											uniqueName: `worker-${randomUUID()}`,
+											entityType: "PERSON",
+											displayName: "אברם",
+										},
+									},
+								],
+							},
+						],
+					}
+				: {
+						outcome: "revised",
+						summary: "תיאור ההצעה עודכן לפי ההערה",
+						responses: context.pendingCommentIds.map((commentId: string) => ({
+							commentId,
+							status: "addressed",
+							body: "תיאור ההצעה עודכן; ההערה המקורית נשמרת",
+						})),
+						draft: {
+							description:
+								"התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.",
+						},
+					};
+			if (!issue && toolMessages.length)
+				expect(JSON.stringify(toolMessages)).toContain(
+					"יש להסביר שההצעה עוסקת במטא-נתונים בלבד",
+				);
+			const message = Array.isArray(input.tools)
+				? !issue && toolMessages.length === 0
+					? {
+							role: "assistant",
+							content: "",
+							tool_calls: [
+								{
+									function: {
+										name: "discussion",
+										arguments: { source: "item" },
+									},
+								},
+							],
+						}
+					: { role: "assistant", content: "המידע זמין לניסוח התוצאה." }
+				: { role: "assistant", content: JSON.stringify(result) };
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
 					model: "doradsoft",
-					message: {
-						content: JSON.stringify({
-							pullRequests: [
-								{
-									title: "ערך לאברם לפי המקור",
-									description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
-									evidenceIndexes: [0],
-									changes: [
-										{
-											kind: "entry",
-											after: {
-												title: "אברם",
-												uniqueName: `worker-${randomUUID()}`,
-												entityType: "PERSON",
-												displayName: "אברם",
-											},
-										},
-									],
-								},
-							],
-						}),
-					},
+					done: true,
+					done_reason: "stop",
+					prompt_eval_count: 100,
+					eval_count: 20,
+					message,
 				}),
 			);
 		});
@@ -281,28 +454,32 @@ test.describe("Issues and typed pull requests", () => {
 			const script = fileURLToPath(
 				new URL("../../../../devops/contribution-worker.mjs", import.meta.url),
 			);
-			const { stdout } = await promisify(execFile)(
-				process.execPath,
-				[
-					script,
-					"--once",
-					"--dev",
-					"--origin",
-					"http://localhost:3101",
-					"--ollama",
-					`http://127.0.0.1:${address.port}`,
-					"--model",
-					"test-local",
-					"--issue",
-					issueId,
-				],
-				{ timeout: 15000, windowsHide: true },
-			);
+			const run = async (contributionId: string) =>
+				await promisify(execFile)(
+					process.execPath,
+					[
+						script,
+						"--once",
+						"--dev",
+						"--origin",
+						"http://localhost:3101",
+						"--ollama",
+						`http://127.0.0.1:${address.port}`,
+						"--model",
+						"test-local",
+						"--issue",
+						contributionId,
+					],
+					{ timeout: 15000, windowsHide: true },
+				);
+			const { stdout } = await run(issueId);
 			expect(stdout).toContain("completed");
 			expect(stdout).not.toContain("ויולד את אברם");
-			expect(inferenceCalls).toBe(1);
+			expect(inferenceCalls).toBe(2);
+			expect(unloadedModels).toEqual([generationModels[0]]);
+			expect(unloadedModels).not.toContain("doradsoft");
 			await expect(
-				page.getByText("העובד המקומי יצר הצעות לסקירה", { exact: true }),
+				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
 			await capture(page, testInfo, "workstation-generation-completed");
 			await page
@@ -317,6 +494,68 @@ test.describe("Issues and typed pull requests", () => {
 			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
 			await expect(page.getByRole("table")).toContainText("אברם");
 			await capture(page, testInfo, "workstation-model-pr-review-gate");
+			const prId = new URL(page.url()).searchParams.get("id");
+			if (!prId) throw new Error("Generated PR ID missing");
+			await page.getByLabel("אחראי", { exact: true }).selectOption("local_llm");
+			await page
+				.getByRole("button", { name: "שמירת שיוך והפעלת סוכן", exact: true })
+				.click();
+			await page.getByRole("tab", { name: /^תיאור ודיון/ }).click();
+			await page
+				.getByLabel("הוספת תגובה", { exact: true })
+				.fill("יש להסביר שההצעה עוסקת במטא-נתונים בלבד");
+			await page
+				.getByRole("button", { name: "שליחת תגובה", exact: true })
+				.click();
+			await expect(
+				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "הפעלה נוספת", exact: true }),
+			).toBeDisabled();
+			await expect(
+				page.getByRole("heading", {
+					name: "ממתין לסיום הטיפול של הסוכן",
+					exact: true,
+				}),
+			).toBeVisible();
+			await capture(page, testInfo, "agent-comment-pass-pending");
+			const revision = await run(prId);
+			expect(revision.stdout).toContain("completed");
+			await expect(
+				page.getByText("תיאור ההצעה עודכן; ההערה המקורית נשמרת", {
+					exact: true,
+				}),
+			).toBeVisible();
+			expect(inferenceCalls).toBe(5);
+			expect(unloadedModels).toEqual([
+				generationModels[0],
+				generationModels[2],
+			]);
+			expect(unloadedModels).not.toContain("doradsoft");
+			for (const duration of retentionDurations) {
+				expect(typeof duration).toBe("string");
+				expect(String(duration)).toMatch(/^\d+ms$/);
+				const remaining = Number.parseInt(String(duration), 10);
+				expect(remaining).toBeGreaterThan(0);
+				expect(remaining).toBeLessThanOrEqual(120000);
+			}
+			await expect(
+				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByText("התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await capture(page, testInfo, "agent-human-comment-resolution");
 			await page
 				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
 				.click();
@@ -361,11 +600,20 @@ test.describe("Issues and typed pull requests", () => {
 					.getByLabel("שם משתמש אחראי", { exact: true })
 					.fill("doradsoft");
 			await page
-				.getByRole("button", { name: "שמירת שיוך", exact: true })
+				.getByRole("button", {
+					name:
+						kind === "local_llm" || kind === "aws_llm"
+							? "שמירת שיוך והפעלת סוכן"
+							: "שמירת שיוך",
+					exact: true,
+				})
 				.click();
-			await expect(page.locator(".contribution-event").last()).toContainText(
-				"שינה שיוך",
-			);
+			await expect(
+				page
+					.locator(".contribution-event")
+					.filter({ hasText: "שינה שיוך" })
+					.last(),
+			).toBeVisible();
 			await page.reload();
 			await expect(page.getByLabel("אחראי", { exact: true })).toHaveValue(kind);
 		}
@@ -387,6 +635,155 @@ test.describe("Issues and typed pull requests", () => {
 		).toBeVisible();
 	});
 
+	test("uses ordinary PRs for manual and deterministic article-link changes", async ({
+		page,
+	}, testInfo) => {
+		const address = new URL(process.env.DB_URL ?? "");
+		if (
+			!["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) ||
+			!/^\/tanah_(?:test|e2e_[a-f0-9]{4,16})$/.test(address.pathname)
+		)
+			throw new Error(
+				"Article-link E2E requires a disposable loopback Tanah fixture",
+			);
+		address.searchParams.delete("ssl-mode");
+		const connection = await mysql.createConnection(address.toString());
+		const articleName = `מאמר קישורים לבדיקה ${randomUUID().slice(0, 8)}`;
+		const content = "<p>הפניה מפורשת לבראשית א א לצורך בדיקת קישורי המאמר.</p>";
+		let articleId: number | undefined, authorId: number | undefined;
+		try {
+			const [chapters] = await connection.execute<RowDataPacket[]>(
+				"SELECT id FROM tanah_perek WHERE pasuk_count > 0 ORDER BY id LIMIT 1",
+			);
+			if (!chapters.length) throw new Error("Canonical test chapter missing");
+			const chapter = Number(chapters[0].id);
+			const [author] = await connection.execute<mysql.ResultSetHeader>(
+				"INSERT INTO tanah_author (name,details) VALUES (?,?)",
+				[articleName, "מחבר לבדיקת ממשק מבודדת"],
+			);
+			authorId = author.insertId;
+			const [article] = await connection.execute<mysql.ResultSetHeader>(
+				"INSERT INTO tanah_article (perek_id,author_id,name,abstract,content,priority) VALUES (?,?,?,?,?,0)",
+				[chapter, authorId, articleName, "תקציר בדיקה", content],
+			);
+			articleId = article.insertId;
+			await page.goto("/?tab=prs&id=new");
+			await page
+				.getByLabel("כותרת", { exact: true })
+				.fill(`קישור מוצע - ${articleName}`);
+			await page
+				.getByLabel("תיאור", { exact: true })
+				.fill("הוספת כיסוי פסוק מתוך הפניה מפורשת, ללא עריכת גוף המאמר.");
+			await page
+				.getByRole("button", { name: "+ הוספת מקור", exact: true })
+				.click();
+			await page
+				.getByLabel("הפניה למקור", { exact: true })
+				.fill(`מאמר ${articleId}`);
+			await page
+				.getByLabel("ציטוט רלוונטי", { exact: true })
+				.fill("בראשית א א");
+			await page
+				.getByRole("combobox", { name: "סוג שינוי", exact: true })
+				.selectOption("article_links");
+			await page
+				.getByLabel("מספר מאמר", { exact: true })
+				.fill(String(articleId));
+			await page
+				.getByRole("button", { name: "טעינת המאמר", exact: true })
+				.click();
+			await expect(
+				page.getByRole("region", { name: "המאמר שנבחר" }),
+			).toContainText(articleName);
+			await page
+				.getByRole("button", { name: "+ הוספת קישור מוצע", exact: true })
+				.click();
+			await page
+				.getByLabel("פרק בקישור 1 פסוק 1", { exact: true })
+				.fill(String(chapter));
+			await page
+				.getByLabel("מספר פסוק בקישור 1 פסוק 1", { exact: true })
+				.fill("1");
+			await capture(page, testInfo, "article-link-ordinary-pr-composer");
+			await page.getByRole("button", { name: "פתיחת PR", exact: true }).click();
+			await expect(page.getByRole("heading", { level: 1 })).toContainText(
+				articleName,
+			);
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
+			await expect(
+				page.getByRole("region", { name: "השוואת קישורי המאמר" }),
+			).toContainText("בראשית א א");
+			await expect(page.locator(".contribution-diff tbody")).not.toContainText(
+				"contentHash",
+			);
+			await capture(page, testInfo, "article-link-ordinary-pr-diff");
+			await page
+				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+				.click();
+
+			// Discovery and a repeated checkpoint request open the very same PR.
+			const discover = async () => {
+				await page.goto("/?tab=prs");
+				await page.getByText("איתור קישורים למאמר", { exact: true }).click();
+				await page
+					.getByLabel("מספר מאמר לאיתור", { exact: true })
+					.fill(String(articleId));
+				await page
+					.getByRole("button", { name: "איתור ופתיחת PR", exact: true })
+					.click();
+				await expect(page).toHaveURL(
+					(url) =>
+						url.pathname === "/" &&
+						url.searchParams.get("tab") === "prs" &&
+						Boolean(url.searchParams.get("id")),
+				);
+				return new URL(page.url()).searchParams.get("id");
+			};
+			const generatedId = await discover();
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await expect(
+				page.getByText("נדרש אישור מ-doradsoft", { exact: true }).first(),
+			).toBeVisible();
+			await capture(page, testInfo, "deterministic-article-link-pr-review");
+			expect(await discover()).toBe(generatedId);
+			await page
+				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+				.click();
+			const [unchanged] = await connection.execute<RowDataPacket[]>(
+				"SELECT content,coverage_verified,(SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id=?) AS links FROM tanah_article WHERE id=?",
+				[articleId, articleId],
+			);
+			expect(unchanged[0]).toMatchObject({
+				content,
+				coverage_verified: 0,
+				links: 0,
+			});
+		} finally {
+			if (articleId !== undefined) {
+				await connection.execute(
+					"DELETE FROM tanah_article_link_proposal WHERE article_id=?",
+					[articleId],
+				);
+				await connection.execute(
+					"DELETE FROM tanah_article_link_checkpoint WHERE article_id=?",
+					[articleId],
+				);
+				await connection.execute("DELETE FROM tanah_article WHERE id=?", [
+					articleId,
+				]);
+			}
+			if (authorId !== undefined)
+				await connection.execute("DELETE FROM tanah_author WHERE id=?", [
+					authorId,
+				]);
+			await connection.end();
+		}
+	});
 	test("creates an evidence-backed metadata-only entry PR with a domain diff", async ({
 		page,
 	}, testInfo) => {

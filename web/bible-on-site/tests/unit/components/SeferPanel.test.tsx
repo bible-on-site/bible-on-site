@@ -123,6 +123,23 @@ const PROPS = {
 
 const flushAsync = () => act(async () => {});
 
+/** jsdom lacks the Range layout methods and ResizeObserver ReadingProgress calls. */
+const stubReadingProgressLayout = () => {
+	Range.prototype.getBoundingClientRect = () =>
+		({ top: 0, bottom: 10 }) as DOMRect;
+	Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+	global.ResizeObserver = jest.fn(() => ({
+		observe: jest.fn(),
+		unobserve: jest.fn(),
+		disconnect: jest.fn(),
+	})) as unknown as typeof ResizeObserver;
+	global.requestAnimationFrame = (cb: FrameRequestCallback) => {
+		cb(0);
+		return 0;
+	};
+	global.cancelAnimationFrame = jest.fn();
+};
+
 const renderPanel = async (ui: React.ReactElement) => {
 	let view!: ReturnType<typeof render>;
 	await act(async () => {
@@ -1036,6 +1053,133 @@ describe("reading metrics", () => {
 		);
 	});
 
+	it("aggregates the pasuk selection's stored note counts into the scope estimate", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [
+				{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" },
+				{ pasuk: 2, noteIdx: 0, noteContent: "<p>רשי ב</p>" },
+			],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 100, cumulativeWords: 100 },
+				{ key: "2:0", wordCount: 200, cumulativeWords: 300 },
+			],
+		});
+		toggleSeferPasuk(1, 1);
+		stubReadingProgressLayout();
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric: { wordCount: 500, estimatedSeconds: 137 } },
+					IBN_EZRA,
+				]}
+			/>,
+		);
+		await screen.findByText("רשי א");
+		// Whole-perek metric would read "3 דקות"; the selection aggregates
+		// pasuk 1's stored 100 words alone → under a minute (#2607).
+		expect(container.querySelector(".scopeMetric")?.textContent).toBe(
+			"זמן קריאה משוער: פחות מדקה",
+		);
+	});
+
+	it("scopes the deep perush estimate to the pasuk selection and labels it", async () => {
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [
+				{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" },
+				{ pasuk: 2, noteIdx: 0, noteContent: "<p>רשי ב</p>" },
+			],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 100, cumulativeWords: 100 },
+				{ key: "2:0", wordCount: 300, cumulativeWords: 400 },
+			],
+		});
+		toggleSeferPasuk(1, 2);
+		stubReadingProgressLayout();
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric: { wordCount: 500, estimatedSeconds: 137 } },
+					IBN_EZRA,
+				]}
+				initialSlug={'רש"י'}
+			/>,
+		);
+		await screen.findByText("רשי ב");
+		expect(container.querySelector(".deepScope")?.textContent).toBe(
+			"מסוננים: 1 פסוקים",
+		);
+		// 300 stored words over the selected pasuk → "2 דקות", not the
+		// whole-perek "3 דקות" (#2607).
+		expect(container.querySelector(".deepMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("aggregates each shown perush's own selection-scoped estimate", async () => {
+		setSeferPerushSelection("בראשית", [1, 2]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [
+				{ pasuk: 1, noteIdx: 0, noteContent: "<p>א</p>" },
+				{ pasuk: 2, noteIdx: 0, noteContent: "<p>ב</p>" },
+			],
+			2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>ג</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 100, cumulativeWords: 100 },
+				{ key: "2:0", wordCount: 200, cumulativeWords: 300 },
+			],
+			2: [{ key: "1:0", wordCount: 220, cumulativeWords: 220 }],
+		});
+		const metric = { wordCount: 500, estimatedSeconds: 137 };
+		toggleSeferPasuk(1, 1);
+		stubReadingProgressLayout();
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric },
+					{ ...IBN_EZRA, metric },
+				]}
+			/>,
+		);
+		await screen.findByText("א");
+		const badges = container.querySelectorAll(".commentaryPerushMetric");
+		// רש"י keeps only pasuk 1's 100 words → פחות מדקה; אבן עזרא's 220
+		// → דקה. The shared 500-word metric ("3 דקות") must not leak in.
+		expect(badges).toHaveLength(2);
+		expect(badges[0].textContent).toBe("זמן קריאה משוער: פחות מדקה");
+		expect(badges[1].textContent).toBe("זמן קריאה משוער: דקה");
+	});
+
+	it("omits the scope estimate while the selection's note counts are unknown", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		// Default note-units {} leaves no stored row for the rendered note —
+		// a partial estimate must never present as the selection's count.
+		toggleSeferPasuk(1, 1);
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric: { wordCount: 300, estimatedSeconds: 82 } },
+					IBN_EZRA,
+				]}
+			/>,
+		);
+		await screen.findByText("הערה");
+		expect(container.querySelector(".scopeMetric")).toBeNull();
+	});
+
 	it("shows stored reading times beside perush names and article cards", async () => {
 		setSeferPerushSelection("בראשית", [1, 2]);
 		mockGetPerushNotesBatch.mockResolvedValue({
@@ -1150,21 +1294,8 @@ describe("reading metrics", () => {
 				{ key: "9:9", wordCount: 5, cumulativeWords: 10 },
 			],
 		});
-		// The progress component measures rendered units: jsdom lacks the
-		// Range layout methods and ResizeObserver it calls.
-		Range.prototype.getBoundingClientRect = () =>
-			({ top: 0, bottom: 10 }) as DOMRect;
-		Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
-		global.ResizeObserver = jest.fn(() => ({
-			observe: jest.fn(),
-			unobserve: jest.fn(),
-			disconnect: jest.fn(),
-		})) as unknown as typeof ResizeObserver;
-		global.requestAnimationFrame = (cb: FrameRequestCallback) => {
-			cb(0);
-			return 0;
-		};
-		global.cancelAnimationFrame = jest.fn();
+		// The progress component measures rendered units via DOM layout APIs.
+		stubReadingProgressLayout();
 		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
 		expect(await screen.findByText("הערה")).toBeTruthy();
 		// Only the rendered note contributes: unit 9:9 is filtered out, so

@@ -420,8 +420,8 @@ function ArticleEditPage() {
 								))}
 							</div>
 							<p className="mt-1 text-xs text-gray-400">
-								קישור מפורש של המאמר למועד — נוסף לאיחוד ההתאמות לפי טווחי
-								המקרא של המועד
+								קישור מפורש של המאמר למועד - נוסף לאיחוד ההתאמות לפי טווחי המקרא
+								של המועד
 							</p>
 						</div>
 					)}
@@ -501,7 +501,7 @@ function ArticleEditPage() {
 						search={{ articleId }}
 						className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
 					>
-						🔗 הצעות קישור למאמר זה ←
+						PRs לקישורי מאמר זה ←
 					</Link>
 				</div>
 			)}

@@ -14,6 +14,10 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
+import {
+	prepareArticleLinkChange,
+	readArticleLinkState,
+} from "./contribution-article-links.server";
 import { resolveEntryCreations } from "./contribution-entry-resolution.server";
 import {
 	applyContributionRecord,
@@ -93,6 +97,8 @@ export async function readChangeState(
 	targetId: string,
 	context?: State | null,
 ): Promise<State | null> {
+	if (kind === "article_links")
+		return (await readArticleLinkState(conn, targetId)) as unknown as State;
 	if (isContributionRecordKind(kind))
 		return readContributionRecord(conn, kind, targetId);
 	if (kind === "alias_mapping")
@@ -208,6 +214,10 @@ export async function prepareChanges(
 		? await resolveEntryCreations(conn, inputs)
 		: inputs;
 	for (const input of resolved) {
+		if (input.kind === "article_links") {
+			changes.push(await prepareArticleLinkChange(conn, input, options));
+			continue;
+		}
 		const targetId = input.targetId ?? randomUUID();
 		const before = await readChangeState(
 			conn,
@@ -280,6 +290,10 @@ export async function applyChange(
 	change: ReviewedChange,
 	source: string,
 ): Promise<void> {
+	if (change.kind === "article_links")
+		throw new Error(
+			"Article-link operations require the guarded API merge executor",
+		);
 	const input = validateChange({
 		kind: change.kind,
 		targetId: change.targetId,

@@ -1,4 +1,8 @@
 import {
+	contributionArticleId,
+	validateArticleLinkState,
+} from "./contribution-article-links";
+import {
 	contributionIdentifierKey,
 	contributionRecordId,
 } from "./contribution-identifiers";
@@ -13,7 +17,7 @@ import {
 
 // Bump for a change to the typed operation contract, alongside an adapter from
 // the preceding version. Package/release versions do not change this contract.
-export const CONTRIBUTION_API_VERSION = 4;
+export const CONTRIBUTION_API_VERSION = 5;
 
 export interface ContributionApiMigration {
 	id: string;
@@ -44,16 +48,30 @@ export function migrationBlocked(item: Contribution): boolean {
 export function validateApiSequence(value: unknown): ReviewedChange[] {
 	if (!Array.isArray(value) || value.length > 40)
 		throw new Error("API sequence must contain at most 40 operations");
+	if (
+		value.some(
+			(raw) => raw && typeof raw === "object" && raw.kind === "article_links",
+		) &&
+		value.length !== 1
+	)
+		throw new Error("An article-link PR contains one article aggregate");
 	const targets = new Set<string>();
 	return value.map((raw) => {
 		const change = record(raw, "operation");
-		const targetId = contributionRecordId(change.targetId, "targetId");
+		const targetId =
+			change.kind === "article_links"
+				? contributionArticleId(change.targetId)
+				: contributionRecordId(change.targetId, "targetId");
 		const input = validateChange({
 			kind: change.kind,
 			targetId,
 			after: change.after,
 		});
-		if (change.before !== null) {
+		if (input.kind === "article_links") {
+			const base = validateArticleLinkState(change.before);
+			if (!sameState(base, change.before))
+				throw new Error("Article-link base contains noncanonical fields");
+		} else if (change.before !== null) {
 			if (input.kind === "entry")
 				throw new Error("A new-entry operation must have a null base");
 			const base = validateChange({

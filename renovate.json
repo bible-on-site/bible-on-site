@@ -156,6 +156,19 @@
 			"groupSlug": "bun-minor-patch"
 		},
 		{
+			"description": "12.9.3.x ships no win_amd64 wheel and the win32/linux lines are a platform-marker split Renovate cannot express — bump manually when NVIDIA publishes Windows wheels again. See https://github.com/bible-on-site/bible-on-site/issues/3461",
+			"matchManagers": [
+				"pip_requirements"
+			],
+			"matchFileNames": [
+				"devops/transcription/requirements-cuda.txt"
+			],
+			"matchPackageNames": [
+				"nvidia-cublas-cu12"
+			],
+			"enabled": false
+		},
+		{
 			"description": "Regular cargo-make CLI updates require review for the upstream ZIP gap; vulnerability-alert updates retain the existing repository policy. https://github.com/bible-on-site/bible-on-site/issues/2826",
 			"matchDatasources": [
 				"crate"
