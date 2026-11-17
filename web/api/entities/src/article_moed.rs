@@ -8,9 +8,11 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub article_id: i32,
+    /// SMALLINT UNSIGNED — sqlx refuses a signed decode for unsigned columns.
     #[sea_orm(primary_key, auto_increment = false)]
-    pub moed_id: i32,
-    pub created_at: DateTime,
+    pub moed_id: u16,
+    /// TIMESTAMP — sqlx refuses a DATETIME (`NaiveDateTime`) decode here.
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

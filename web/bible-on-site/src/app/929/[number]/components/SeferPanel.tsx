@@ -13,6 +13,7 @@ import type { Article, ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
+import { selectionScopedNoteMetric } from "@/lib/perushim/ranged-metrics";
 import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
 import {
 	resolveSeferPerushSelection,
@@ -528,6 +529,23 @@ export const SeferPanel = memo(function SeferPanel({
 		);
 	})();
 
+	/**
+	 * The displayed estimate scope follows the pasuk selection (#2607 —
+	 * "aggregate stored note counts when selections change"): with no
+	 * selection the stored perush×perek metric applies; under a selection
+	 * the *rendered* notes' stored counts aggregate instead — `undefined`
+	 * (unknown, no badge) while those units are still loading or partial.
+	 */
+	const scopedMetricFor = (perush: PerushSummary) =>
+		activePesukim
+			? selectionScopedNoteMetric(
+					noteUnitsByPerush[perush.id],
+					notesByPerush[perush.id]?.filter((note) =>
+						activePesukim.has(note.pasuk),
+					),
+				)
+			: perush.metric;
+
 	const loadingNotes = wantedIds
 		.split(",")
 		.filter(Boolean)
@@ -657,8 +675,17 @@ export const SeferPanel = memo(function SeferPanel({
 								<span className={styles.deepParshan}>
 									{deepPerush.parshanName}
 								</span>
+								{/* The estimate's scope stays explicit when a pasuk
+								 * selection narrows this view's notes (#2607). */}
+								{activePesukim && (
+									<span className={styles.deepScope}>
+										{`מסוננים: ${activePesukim.size} פסוקים`}
+									</span>
+								)}
 								<ReadingTime
-									estimatedSeconds={deepPerush.metric?.estimatedSeconds}
+									estimatedSeconds={
+										scopedMetricFor(deepPerush)?.estimatedSeconds
+									}
 									className={styles.deepMetric}
 								/>
 							</div>
@@ -705,7 +732,8 @@ export const SeferPanel = memo(function SeferPanel({
 									{displayPerushim.length === 1 && (
 										<ReadingTime
 											estimatedSeconds={
-												displayPerushim[0].metric?.estimatedSeconds
+												scopedMetricFor(displayPerushim[0])
+													?.estimatedSeconds
 											}
 											className={styles.scopeMetric}
 										/>
@@ -800,7 +828,9 @@ export const SeferPanel = memo(function SeferPanel({
 												<div className={styles.commentaryPerushName}>
 													{perush.name}
 													<ReadingTime
-														estimatedSeconds={perush.metric?.estimatedSeconds}
+														estimatedSeconds={
+															scopedMetricFor(perush)?.estimatedSeconds
+														}
 														className={styles.commentaryPerushMetric}
 													/>
 												</div>

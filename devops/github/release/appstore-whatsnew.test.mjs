@@ -14,14 +14,14 @@ const notes = "• אפשר ללמוד פרק חדש בקלות רבה.";
 
 const versionData = (version, id = "v1", state = "READY_FOR_SALE") => ({
 	id,
-	attributes: { versionString: version, appStoreState: state },
+	attributes: { versionString: version, platform: "IOS", appStoreState: state },
 });
 
 test("liveVersion returns the single ready-for-sale iOS version", async () => {
 	const read = async (pathName, params) => {
 		assert.equal(
-			params["filter[appStoreState]"],
-			"READY_FOR_SALE",
+			params["filter[appVersionState]"],
+			"READY_FOR_DISTRIBUTION",
 		);
 		assert.equal(params["filter[platform]"], "IOS");
 		return { data: [versionData("5.1.7")] };
@@ -171,5 +171,76 @@ test("publishWhatsNew enforces the Apple whatsNew limit", async () => {
 			write: async () => ({}),
 		}),
 		/4000/,
+	);
+});
+
+const modernVersion = (version, state, overrides = {}) => ({
+	id: version,
+	attributes: {
+		versionString: version,
+		platform: "IOS",
+		appVersionState: state,
+		...overrides,
+	},
+});
+
+test("liveVersion validates modern response states instead of trusting a server filter", async () => {
+	const records = [
+		modernVersion("5.1.7", "REPLACED_WITH_NEW_VERSION", {
+			appStoreState: "READY_FOR_SALE",
+		}),
+		modernVersion("5.1.8", "READY_FOR_DISTRIBUTION"),
+		modernVersion("5.1.9", "PREPARE_FOR_SUBMISSION"),
+		modernVersion("8.0.0", "READY_FOR_DISTRIBUTION", { platform: "MAC_OS" }),
+	];
+	assert.equal(
+		await liveVersion("app1", async () => ({ data: records })),
+		"5.1.8",
+	);
+});
+
+test("liveVersion excludes non-live and unknown states while preserving genuine ambiguity", async () => {
+	for (const state of [
+		"REPLACED_WITH_NEW_VERSION",
+		"PREPARE_FOR_SUBMISSION",
+		"UNKNOWN_FUTURE_STATE",
+	]) {
+		assert.equal(
+			await liveVersion("app1", async () => ({
+				data: [modernVersion("5.1.8", state)],
+			})),
+			null,
+			state,
+		);
+	}
+	await assert.rejects(
+		liveVersion("app1", async () => ({
+			data: [
+				modernVersion("5.1.8", "READY_FOR_DISTRIBUTION"),
+				modernVersion("5.1.9", "READY_FOR_DISTRIBUTION"),
+			],
+		})),
+		/more than one live/i,
+	);
+});
+
+test("editableVersion uses the current iOS state when legacy state disagrees", async () => {
+	const read = async () => ({
+		data: [
+			modernVersion("5.1.8", "PREPARE_FOR_SUBMISSION", { platform: "MAC_OS" }),
+			modernVersion("5.1.8", "READY_FOR_DISTRIBUTION", {
+				appStoreState: "PREPARE_FOR_SUBMISSION",
+			}),
+		],
+	});
+	assert.deepEqual(await editableVersion("app1", "5.1.8", read), {
+		id: null,
+		state: "READY_FOR_DISTRIBUTION",
+	});
+	assert.deepEqual(
+		await editableVersion("app1", "5.1.8", async () => ({
+			data: [modernVersion("5.1.8", "PREPARE_FOR_SUBMISSION")],
+		})),
+		{ id: "5.1.8", state: "PREPARE_FOR_SUBMISSION" },
 	);
 });
