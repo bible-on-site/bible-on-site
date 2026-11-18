@@ -86,12 +86,15 @@ export async function bootIos({
     const stat = async () => (await simulator.stat()).state;
     let state = await stat();
     if (state === "Booted") return;
+    // The session's readiness budget stays one absolute 300-second deadline
+    // across both the power-off wait and the re-boot: giving each its own
+    // window would double the recovery time a straddling shutdown can take.
+    const deadline = now() + 300000;
     if (state === "Shutting Down") {
       // The runner's cleanup is mid-flight: the native waitForBoot rejects
-      // 'Shutting Down', so give the power-off the same bounded window a boot
-      // gets, then boot the device once it is actually down.
+      // 'Shutting Down', so wait for the power-off inside the shared deadline,
+      // then boot the device once it is actually down.
       log(`Simulator ${primary.udid} is shutting down after the reported boot; waiting for the power-off.`);
-      const deadline = now() + 300000;
       while (state === "Shutting Down") {
         if (now() > deadline) {
           throw new Error(`Simulator ${primary.udid} stayed 'Shutting Down' past the boot deadline.`);
@@ -106,7 +109,11 @@ export async function bootIos({
     } else {
       log(`Simulator ${primary.udid} is still ${state ?? "unlisted"} after the reported boot; waiting for it.`);
     }
-    await simulator.waitForBoot(300000);
+    const remaining = deadline - now();
+    if (remaining <= 0) {
+      throw new Error(`Simulator ${primary.udid} spent its boot deadline shutting down before it could boot.`);
+    }
+    await simulator.waitForBoot(remaining);
     return;
   }
   // Every shard has its own runner and boots exactly one simulator.

@@ -360,6 +360,41 @@ test("heal waits out a mid-flight shutdown, then re-boots the device", async (t)
   assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
 });
 
+test("heal deducts the power-off wait from the recovery boot deadline", async (t) => {
+  // Shutdown polling and boot readiness share one absolute 300-second budget:
+  // the recovery boot may only use the time the power-off did not consume.
+  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  simQueue.push("Shutting Down", "Shutdown");
+  let tick = 0;
+  let waitBudget;
+  const loadDriver = options.loadDriver;
+  await bootIos({ ...options, mode: "heal", sleep: async () => {},
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    now: () => (tick += 100000),
+    loadDriver: async () => ({ getSimulator: async (...args) => {
+      const simulator = await (await loadDriver()).getSimulator(...args);
+      const waitForBoot = simulator.waitForBoot.bind(simulator);
+      simulator.waitForBoot = async (timeout) => { waitBudget = timeout; return waitForBoot(timeout); };
+      return simulator;
+    } }) });
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.equal(waitBudget, 100000);
+});
+
+test("heal fails without a recovery boot once the shared deadline is spent", async (t) => {
+  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  simQueue.push("Shutting Down");
+  let tick = 0;
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    sleep: async () => {}, now: () => (tick += 200000) }),
+    /spent its boot deadline/);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.equal(calls.filter(([kind]) => kind === "sim-wait").length, 0);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
 test("heal fails when the power-off outlives the boot deadline", async (t) => {
   const { options, calls, env, setSimState } = fixture(t);
   setSimState("Shutting Down");
