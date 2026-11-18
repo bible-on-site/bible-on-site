@@ -520,6 +520,11 @@ independent, including after an administrative merge. Unknown associations
 and incomplete queue visibility prevent cancellation. A durable intent
 journal precedes each normal cancel request; an uncertain result is read
 once and never retried or force-cancelled.
+GitHub can return HTTP 409 even for a run displayed as queued when its backend
+has not admitted the run yet. That run is recorded as deferred after the same
+identity-checked reconciliation, and the remaining candidates are processed.
+A later native event checks it again. Permission, transport and other provider
+errors remain failures; the controller does not force an unavailable transition.
 
 A candidate must belong to this exact repository and CI workflow, retain its
 original run/ref/head identity, have an absent queue ref, and appear in no
