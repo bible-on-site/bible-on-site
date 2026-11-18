@@ -212,19 +212,18 @@ function nativeAgentSystem(bundle, schema) {
 
 function finalReviewInstruction(task, context) {
 	if (task !== "pr_resolution") return "";
-	const review = {
-		required:
-			"Current PR review: required. Doradsoft approval is missing; do not claim this PR is ready to merge.",
-		changes_requested:
-			"Current PR review: changes_requested. Requested changes remain; do not claim this PR is ready to merge.",
-		approved:
-			"Current PR review: approved. Only the review requirement is satisfied; this does not prove other merge gates.",
-		exempt:
-			"Current PR review: exempt. The current revision is authored by doradsoft and requires no additional human approval; this does not prove other merge gates.",
-	};
-	return Object.hasOwn(review, context?.item?.reviewStatus)
-		? review[context.item.reviewStatus]
-		: "Current PR review is unknown. Do not infer approval or merge readiness.";
+	switch (context?.item?.reviewStatus) {
+		case "required":
+			return "Current PR review: required. Doradsoft approval is missing; do not claim this PR is ready to merge.";
+		case "changes_requested":
+			return "Current PR review: changes_requested. Requested changes remain; do not claim this PR is ready to merge.";
+		case "approved":
+			return "Current PR review: approved. Only the review requirement is satisfied; this does not prove other merge gates.";
+		case "exempt":
+			return "Current PR review: exempt. The current revision is authored by doradsoft and requires no additional human approval; this does not prove other merge gates.";
+		default:
+			return "Current PR review is unknown. Do not infer approval or merge readiness.";
+	}
 }
 
 /** Omit only repeated record values, never source pages or human feedback.

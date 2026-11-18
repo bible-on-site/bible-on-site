@@ -30,6 +30,9 @@ describe("explicit preservation instructions", () => {
 	it.each([
 		"If useful, preserve the description.",
 		"Should we preserve the description?",
+		"Keep description? Improve it if necessary.",
+		"Keep description？ Improve it if necessary.",
+		"יש לשמר את התיאור? שפר אותו אם צריך.",
 		"Do not preserve the description.",
 		"Preserve evidence and add quotes.",
 		"Keep evidence. Also add quotes.",
@@ -55,6 +58,22 @@ describe("explicit preservation instructions", () => {
 				{ id: "two", body: "Preserve evidence." },
 			]),
 		).toEqual([{ field: "evidence", commentIds: ["one", "two"] }]);
+	});
+	it.each([
+		"Is the description unchanged? Keep description.",
+		"האם התיאור השתנה? יש לשמר בדיוק את התיאור.",
+		"The description has one change. Keep description.",
+		"Review the description. Keep description.",
+	])(
+		"keeps a clear preservation instruction after a non-editing mention: %s",
+		(body) => {
+			expect(derive(body)).toEqual([
+				{ field: "description", commentIds: ["human-comment"] },
+			]);
+		},
+	);
+	it("does not let an opposing preservation directive establish a lock", () => {
+		expect(derive("Keep description. Do not keep description.")).toEqual([]);
 	});
 	it("handles comma-and lists without treating long unknown qualifiers as field names", () => {
 		expect(

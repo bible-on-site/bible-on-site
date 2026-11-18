@@ -96,6 +96,46 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it("a status question naming the description cannot cancel an explicit later lock", () => {
+		const current = item();
+		current.events[0].body = "Is the description unchanged? Keep description.";
+		expect(outcomeSchema(current, "revised")).toHaveProperty(
+			"properties.draft.properties.description.const",
+			current.description,
+		);
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "Done",
+					responses: [response],
+					draft: { description: "replaced" },
+				},
+				current,
+			),
+		).toThrow("preserving the current description");
+	});
+	it.each(["?", "？"])(
+		"a preservation question ending in %s grants no field lock",
+		(terminator) => {
+			const current = item();
+			current.events[0].body = `Keep description${terminator} Improve it if necessary.`;
+			expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+				"properties.draft.properties.description.const",
+			);
+			expect(
+				parse(
+					{
+						outcome: "revised",
+						summary: "Done",
+						responses: [response],
+						draft: { description: "improved" },
+					},
+					current,
+				).draft?.description,
+			).toBe("improved");
+		},
+	);
 	it("locks exact current fields for the live status request in both native schema and parsed output", () => {
 		const current = item();
 		current.description =
