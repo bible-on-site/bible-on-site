@@ -478,6 +478,41 @@ describe("Article link contribution transactions", () => {
 			(await conn.query("SELECT * FROM tanah_article_covering_source"))[0],
 		).toEqual([]);
 	});
+	it("preserves locked evidence after actual article reads without creating a revision or invalidating approval", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+		);
+		let prior = await proposed([
+			{ ...command, target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] } },
+		]);
+		prior = await service.updateContribution(action(prior, "approve"), owner);
+		const task = await claimedArticleTask(
+			prior,
+			"בדיקת מצב: מה חסר? יש לשמר בדיוק את התיאור, הראיות ורצף השינויים.",
+		);
+		const comment = task.item.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Missing status feedback");
+		await task.worker.completeContributionGeneration({
+			...task.identity,
+			receipts: task.receipts,
+			content: JSON.stringify({
+				outcome: "revised",
+				summary: "האישור נשמר",
+				responses: [
+					{ commentId: comment.id, status: "addressed", body: "האישור נשמר" },
+				],
+				draft: { evidenceIndexes: [0] },
+			}),
+		});
+		const revised = await fresh(prior);
+		expect(revised.description).toBe(prior.description);
+		expect(revised.evidence).toEqual(prior.evidence);
+		expect(revised.changes).toEqual(prior.changes);
+		expect(revised.revision).toBe(prior.revision);
+		expect(reviewStatus(revised)).toBe("approved");
+		expect(revised.generation?.status).toBe("completed");
+		expect(api.write).not.toHaveBeenCalled();
+	});
 	it("supplements evidence on the same reviewed PR and requires fresh approval while retaining the proposal", async () => {
 		await conn.execute(
 			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",

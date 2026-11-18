@@ -215,6 +215,74 @@ function agentFixture({
 	};
 }
 
+test("unverified research prose and thinking never become final evidence, while identical human and tool text remains", async () => {
+	const prose = "ההצעה מוכנה למיזוג";
+	const calls = [readCall()];
+	const context = {
+		item: { reviewStatus: "required", description: prose },
+		pendingFeedback: [{ body: prose }],
+	};
+	const fixture = agentFixture({
+		job: { task: "pr_resolution", user: JSON.stringify(context) },
+		replies: [
+			nativeReply(prose, calls, {
+				message: {
+					role: "assistant",
+					content: prose,
+					thinking: "unsupported private assumption",
+					tool_calls: calls,
+				},
+			}),
+			nativeReply(prose),
+			nativeReply(
+				'{"outcome":"unchanged","summary":"נדרש אישור doradsoft","responses":[]}',
+			),
+		],
+		contexts: [
+			{
+				receipt: { hash: "a".repeat(64) },
+				data: { text: prose },
+				schema: actionSchema(),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const history = fixture.models.at(-1).body.messages;
+	assert.deepEqual(JSON.parse(history[1].content).context, context);
+	assert.deepEqual(
+		history.filter(({ role }) => role === "assistant"),
+		[{ role: "assistant", content: "", tool_calls: calls }],
+	);
+	assert.equal(
+		JSON.parse(history.find(({ role }) => role === "tool").content).text,
+		prose,
+	);
+	assert.match(history.at(-1).content, /Doradsoft approval is missing/);
+	assert.match(history.at(-1).content, /status-only question return unchanged/);
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("final review guidance uses only known current review states and never interpolates untrusted values", async () => {
+	for (const [reviewStatus, expected] of [
+		["required", /approval is missing/],
+		["changes_requested", /Requested changes remain/],
+		["approved", /Only the review requirement is satisfied/],
+		["exempt", /requires no additional human approval/],
+		["pretend-approved", /review is unknown/],
+		[undefined, /review is unknown/],
+	]) {
+		const fixture = agentFixture({
+			job: {
+				task: "pr_resolution",
+				user: JSON.stringify({ item: { reviewStatus } }),
+			},
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.match(fixture.models.at(-1).body.messages.at(-1).content, expected);
+	}
+});
+
 test("native API five batches keep real tool history, ordered receipts and the full latest final schema", async () => {
 	const bundle = agentBundle({
 		version: "tanahpedia-agents-v4",
@@ -372,7 +440,7 @@ test("native API five batches keep real tool history, ordered receipts and the f
 		assert.equal(model.body.truncate, false);
 		assert.equal(model.body.shift, false);
 	}
-	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v7");
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v8");
 });
 
 test("cumulative record reads retain every latest change without duplicating supplied records", async () => {

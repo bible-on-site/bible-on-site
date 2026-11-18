@@ -2218,6 +2218,72 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 		);
 		expect(rows[0].name).toBe(`Current ${entityId}`);
 	});
+	it.each(["identical", "clobbered"])(
+		"enforces a status request's exact fields on an owner-authored PR (%s draft)",
+		async (mode) => {
+			const agent = await installedAgent(),
+				entityId = await isolatedEntity();
+			let pr = await service.createContribution(
+				{
+					kind: "pr",
+					title: "שאלת מצב",
+					description: "תיאור מקורי.  \nנשאר בדיוק.",
+					evidence,
+					changes: [
+						{
+							kind: "metadata",
+							targetId: entityId,
+							after: { displayName: "Proposed" },
+						},
+					],
+					assignee: { kind: "local_llm", agentId: agent.id },
+				},
+				owner,
+			);
+			const original = structuredClone(pr);
+			pr = await service.updateContribution(
+				{
+					id: pr.id,
+					version: pr.version,
+					action: "comment",
+					body: "מה חסר? יש לשמר בדיוק את התיאור, הראיות ורצף השינויים.",
+				},
+				alice,
+			);
+			const comment = pr.events.find((event) => event.kind === "comment");
+			if (!comment) throw new Error("Missing status feedback");
+			const job = await claim(pr);
+			const completion = worker.completeContributionGeneration({
+				...identity(job),
+				content: result("נבדק", comment.id, {
+					description:
+						mode === "identical"
+							? original.description
+							: "Copied issue background",
+					evidenceIndexes: [0],
+					changes: original.changes.map(({ kind, targetId, after }) => ({
+						kind,
+						targetId,
+						after,
+					})),
+				}),
+			});
+			if (mode === "clobbered")
+				await expect(completion).rejects.toThrow(
+					"preserving the current description",
+				);
+			else await completion;
+			const saved = await fresh(pr);
+			expect(saved.description).toBe(original.description);
+			expect(saved.evidence).toEqual(original.evidence);
+			expect(saved.changes).toEqual(original.changes);
+			expect(saved.revision).toBe(original.revision);
+			expect(reviewStatus(saved)).toBe("exempt");
+			expect(saved.generation?.status).toBe(
+				mode === "identical" ? "completed" : "failed",
+			);
+		},
+	);
 	it("retains an approved revision after a no-op pass and never queues model-authored comments", async () => {
 		const agent = await installedAgent(),
 			entityId = await isolatedEntity();
