@@ -245,9 +245,9 @@ test("wrong device, bundle, state, token and route cannot reserve a transition",
   }
   await assert.rejects(f.call("reserve", f.identity(), { environment: { ...f.observer.environment,
     MOBILE_IOS_PREPARATION_TOKEN: "0".repeat(64) } }), /rejected \(401\)/);
-  const base = `http://127.0.0.1:${f.observer.environment.MOBILE_IOS_PREPARATION_PORT}`;
-  assert.equal((await fetch(`${base}/other`)).status, 404);
-  assert.equal((await fetch(`${base}/prepare`)).status, 404);
+  const port = f.observer.environment.MOBILE_IOS_PREPARATION_PORT;
+  assert.equal((await fetch(`http://127.0.0.1:${port}/other`)).status, 404);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/prepare`)).status, 404);
   assert.equal(f.readers.length, 0);
   assert.equal((await f.call("reserve", f.identity())).transitionAllowed, true);
 });
@@ -307,8 +307,12 @@ test("client disconnection aborts the source verification and cannot obtain a bo
     entered.resolve();
     signal.addEventListener("abort", () => { cancelled.resolve(); reject(signal.reason); }, { once: true });
   }) });
-  const pending = f.call("reserve", f.identity(), { request: (url, options) => fetch(url,
-    { ...options, signal: AbortSignal.any([options.signal, client.signal]) }) });
+  const pending = f.call("reserve", f.identity(), { request: (url, options) => {
+    const port = f.observer.environment.MOBILE_IOS_PREPARATION_PORT;
+    assert.equal(url, `http://127.0.0.1:${port}/prepare`);
+    return fetch(`http://127.0.0.1:${port}/prepare`,
+      { ...options, signal: AbortSignal.any([options.signal, client.signal]) });
+  } });
   const rejected = assert.rejects(pending);
   await entered.promise;
   client.abort();

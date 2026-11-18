@@ -266,6 +266,7 @@ test("review mode accepts only the exact already-stopped simctl failure", async 
 for (const [name, options, message] of [
   ["wrong bundle", { info: { CFBundleIdentifier: "com.other" } }, /bundle\/platform/],
   ["device build", { info: { CFBundleSupportedPlatforms: ["iPhoneOS"] } }, /bundle\/platform/],
+  ["array-like platform object", { info: { CFBundleSupportedPlatforms: { 0: "iPhoneSimulator", length: 1 } } }, /bundle\/platform/],
   ["executable traversal", { info: { CFBundleExecutable: "../BibleOnSite" } }, /bundle\/platform/],
   ["wrong architecture", { cpu: 0x1000007 }, /thin arm64/],
   ["arm64 device Mach-O", { platform: 2 }, /iPhoneSimulator/],

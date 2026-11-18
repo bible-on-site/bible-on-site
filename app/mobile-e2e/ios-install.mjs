@@ -199,8 +199,9 @@ export async function prepareIosApp({
   const requestedAppPath = resolve(appPath);
   appPath = await realpath(requestedAppPath);
   const info = JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", join(appPath, "Info.plist")]));
-  if (info.CFBundleIdentifier !== bundleId || info.CFBundleSupportedPlatforms?.length !== 1 ||
-      info.CFBundleSupportedPlatforms[0] !== "iPhoneSimulator" ||
+  const supportedPlatforms = info.CFBundleSupportedPlatforms;
+  if (info.CFBundleIdentifier !== bundleId || !Array.isArray(supportedPlatforms) || supportedPlatforms.length !== 1 ||
+      supportedPlatforms.at(0) !== "iPhoneSimulator" ||
       typeof info.CFBundleExecutable !== "string" || !info.CFBundleExecutable ||
       basename(info.CFBundleExecutable) !== info.CFBundleExecutable || /[\\/]/.test(info.CFBundleExecutable)) {
     throw new Error("The iOS AUT has an unexpected bundle/platform/executable identity.");
@@ -260,8 +261,9 @@ export async function prepareIosApp({
     const containerRoot = join(await realpath(devicesRoot), udid, "data/Containers/Bundle/Application");
     const installedRealPath = await realpath(installedPath);
     const parts = relative(containerRoot, installedRealPath).split(sep);
+    const [containerId, containerApp] = parts;
     if (!isAbsolute(installedPath) || installedRealPath === appPath || parts.length !== 2 ||
-        !uuid.test(parts[0]) || parts[1] !== "BibleOnSite.app") {
+        !uuid.test(containerId) || containerApp !== "BibleOnSite.app") {
       throw new Error("iOS install did not identify this simulator's exact AUT container.");
     }
     if (await bundleDigest(installedPath, checkDeadline) !== expectedDigest ||
@@ -287,13 +289,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   await verifyNodeInterpreter(expectedNode);
   const artifacts = process.env.MOBILE_E2E_ARTIFACTS;
   if (!artifacts || !isAbsolute(artifacts)) throw new Error("An absolute parent-owned iOS artifact directory is required.");
-  const diagnostics = iosBootDiagnosticOutput({ udid, nonce, deadlineMs: Number(deadline) });
+  const { bootstatus, "host-resources": hostResources } = iosBootDiagnosticOutput({ udid, nonce, deadlineMs: Number(deadline) });
   console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
     keepData: keep === "keep", deadlineMs: Number(deadline),
     reserveTransition: identity => requestIosPreparation("reserve", identity),
     confirmReady: identity => requestIosPreparation("ready", identity),
-    bootOutput: diagnostics.bootstatus,
-    startResources: () => startIosResourceSampler(diagnostics["host-resources"], { deadlineMs: Number(deadline) }),
+    bootOutput: bootstatus,
+    startResources: () => startIosResourceSampler(hostResources, { deadlineMs: Number(deadline) }),
     report: event => appendFileSync(join(artifacts, "ios-preparation-commands.jsonl"),
       `${JSON.stringify({ kind: "ios-preparation-command/1", at: new Date().toISOString(), pid: process.pid, udid, nonce, ...event })}\n`),
   })));
