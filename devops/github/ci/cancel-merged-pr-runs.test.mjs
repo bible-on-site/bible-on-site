@@ -200,6 +200,43 @@ test("one cancellation attempt is reconciled, including completion and ambiguous
   await assert.rejects(execute(g, { dryRun: false }), /Reconciliation identity/);
 });
 
+test("a GitHub cancellation conflict defers that run without starving the rest of the sweep", async () => {
+  const f = fixture([run(1), run(2)]);
+  const cancel = f.api.cancelRun;
+  f.api.cancelRun = async id => {
+    if (id === 1) {
+      f.state.cancels.push(id);
+      throw Object.assign(new Error("Not queued yet"), { httpStatus: 409 });
+    }
+    return cancel(id);
+  };
+  const report = await execute(f, { dryRun: false });
+  assert.deepEqual(f.state.cancels, [1, 2]);
+  assert.equal(report.actions[0].outcome, "deferred");
+  assert.equal(report.actions[0].reason, "github-run-not-cancellable");
+  assert.equal(report.actions[0].httpStatus, 409);
+  assert.equal(report.actions[1].conclusion, "cancelled");
+  assert.equal(f.state.journal[1].requestAccepted, false);
+  // A later event gets a new snapshot; there is no retry inside the first pass.
+  f.api.cancelRun = cancel;
+  const next = await execute(f, { dryRun: false });
+  assert.equal(next.actions[0].conclusion, "cancelled");
+  assert.deepEqual(f.state.cancels, [1, 2, 1]);
+});
+
+test("permission, provider and transport failures still stop after one reconciliation", async () => {
+  for (const code of [403, 500, undefined]) {
+    const f = fixture([run(1), run(2)]);
+    f.api.cancelRun = async id => {
+      f.state.cancels.push(id);
+      throw Object.assign(new Error("cancel failed"), { httpStatus: code });
+    };
+    await assert.rejects(execute(f, { dryRun: false }), /cancel failed/);
+    assert.deepEqual(f.state.cancels, [1]);
+    assert.equal(f.state.journal.at(-1).outcome, "request-failed");
+  }
+});
+
 test("CLI adapter paginates and refuses truncated run inventories", async () => {
   const calls = [];
   const api = new GitHubCliApi((command, args, options) => {
@@ -236,6 +273,28 @@ test("CLI adapter uses fixed repository endpoints and one normal cancel POST", a
   assert.equal(calls[0].args[1], `repos/${POLICY.repository}/actions/runs/1`);
   assert.ok(calls[2].args.includes("--input")); assert.ok(calls[2].options.input.includes("mergeQueue"));
   assert.deepEqual(calls[3].args.slice(-2), ["--method", "POST"]);
+});
+
+test("CLI adapter preserves typed HTTP failures without treating process exit codes as HTTP status", async () => {
+  for (const [stdout, expected] of [
+    [JSON.stringify({ status: "409", message: "Cannot cancel a workflow run that has not been queued yet." }), 409],
+    [JSON.stringify({ status: 403 }), 403],
+    [JSON.stringify({ status: 500 }), 500],
+    [JSON.stringify({ status: 200 }), null],
+    [JSON.stringify({ status: [409] }), null],
+    [JSON.stringify({ status: null }), null],
+    [JSON.stringify({ status: "409.0" }), null],
+    [JSON.stringify({ status: "unknown" }), null],
+    ["not JSON", null], [undefined, null],
+  ]) {
+    const original = Object.assign(new Error("gh failed"), { status: 1, stdout });
+    const api = new GitHubCliApi(() => { throw original; });
+    await assert.rejects(api.cancelRun(1), error => {
+      assert.equal(error.httpStatus, expected);
+      assert.equal(error.cause, original);
+      return true;
+    });
+  }
 });
 
 test("commit-to-PR lookup is paginated without guessing branch ownership", async () => {
