@@ -16,7 +16,7 @@ const run = (id = 1, event = "merge_group") => ({ id, workflow_id: 100 + id, eve
 function fixture(runs = [run()]) {
   const state = { runs: structuredClone(runs), cancels: [], journal: [], open: new Set(), queue: [] };
   const api = {
-    async listRuns(event, status) { return structuredClone(state.runs.filter(r => r.event === event && r.status === status)); },
+    async listRuns(status) { return structuredClone(state.runs.filter(r => r.status === status)); },
     async getRun(id) { return structuredClone(state.runs.find(r => r.id === id)); },
     async getPullRequest(number) { return { number, base: { repo: repo() },
       state: state.open.has(number) ? "open" : "closed", merged: !state.open.has(number),
@@ -43,7 +43,7 @@ test("cancels all merged queue workflows, PR validation and native PR quality ru
   };
   const report = await execute(f, { dryRun: false });
   assert.equal(report.actions.length, 4);
-  assert.deepEqual(f.state.cancels, [3, 1, 2, 4]);
+  assert.deepEqual(f.state.cancels, [1, 2, 3, 4]);
   assert.equal(f.state.journal.filter(j => j.kind === "cancel-observed").length, 4);
 });
 
@@ -154,8 +154,8 @@ test("run and PR identity changes fail closed", async () => {
 test("deduplicates listing races but rejects a changed duplicate", async () => {
   for (const changed of [false, true]) {
     const f = fixture(); const read = f.api.listRuns;
-    f.api.listRuns = async (event, status) => event === "merge_group" && status === "in_progress"
-      ? [{ ...run(), ...(changed ? { head_sha: sha("d") } : {}) }] : read(event, status);
+    f.api.listRuns = async status => status === "in_progress"
+      ? [{ ...run(), ...(changed ? { head_sha: sha("d") } : {}) }] : read(status);
     if (changed) await assert.rejects(execute(f), /changed while listing/);
     else assert.equal((await execute(f)).actions.length, 1);
   }
@@ -206,14 +206,26 @@ test("CLI adapter paginates and refuses truncated run inventories", async () => 
     calls.push({ command, args, options });
     return JSON.stringify([{ total_count: 2, workflow_runs: [run()] }, { total_count: 2, workflow_runs: [run(2)] }]);
   });
-  assert.equal((await api.listRuns("merge_group", "queued")).length, 2);
+  assert.equal((await api.listRuns("queued")).length, 2);
   assert.ok(calls[0].args.includes("--paginate")); assert.ok(calls[0].args.includes("--slurp"));
   assert.equal(calls[0].options.timeout, POLICY.requestTimeoutMs);
-  await assert.rejects(api.listRuns("push", "queued"), /Invalid run filter/);
+  await assert.rejects(api.listRuns("unknown"), /Invalid run filter/);
   for (const pages of [null, [], [{}], [{ total_count: 101, workflow_runs: [run()] }]]) {
     const broken = new GitHubCliApi(() => JSON.stringify(pages));
-    await assert.rejects(broken.listRuns("pull_request", "queued"), /run pages/);
+    await assert.rejects(broken.listRuns("queued"), /run pages/);
   }
+});
+
+test("one inventory per status covers every workflow and all reads settle before mutations", async () => {
+  const f = fixture(); const read = f.api.listRuns; const calls = [];
+  f.api.listRuns = async status => { calls.push(status); return read(status); };
+  await execute(f);
+  assert.deepEqual(calls, ["queued", "in_progress", "pending", "waiting"]);
+  const g = fixture(); const settled = [];
+  g.api.listRuns = async status => { settled.push(status); if (status === "pending") throw new Error("inventory denied"); return []; };
+  await assert.rejects(execute(g, { dryRun: false }), /inventory denied/);
+  assert.equal(settled.length, 4);
+  assert.deepEqual(g.state.cancels, []);
 });
 
 test("CLI adapter uses fixed repository endpoints and one normal cancel POST", async () => {

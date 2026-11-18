@@ -512,7 +512,7 @@ superseded test jobs.
 
 `cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
 runs whose associated PRs have merged. It covers every workflow, paginates
-the complete active inventory and validates each immutable run again before
+the complete active inventory once per status and validates each immutable run again before
 cancellation. Master pushes, releases, dispatches, open PRs and commits still
 referenced by the live queue are preserved. A merged PR's unfinished checks
 are redundant validation; its normal master CI and deployment remain

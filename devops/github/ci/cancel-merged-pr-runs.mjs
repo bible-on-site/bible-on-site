@@ -55,13 +55,14 @@ function protectedHeads(response) {
 export async function cancelMergedRuns({ api, journal, dryRun = true }) {
   const report = { dryRun, actions: [] };
   const runs = new Map();
-  for (const event of events) {
-    for (const status of statuses) {
-      for (const run of await api.listRuns(event, status)) {
-        const key = identity(run);
-        requireValue(!runs.has(run.id) || sameRun(runs.get(run.id), key), "Run changed while listing");
-        runs.set(run.id, run);
-      }
+  const inventories = await Promise.allSettled(statuses.map(status => api.listRuns(status)));
+  for (const inventory of inventories) {
+    if (inventory.status === "rejected") throw inventory.reason;
+    for (const run of inventory.value) {
+      if (!events.includes(run.event)) continue;
+      const key = identity(run);
+      requireValue(!runs.has(run.id) || sameRun(runs.get(run.id), key), "Run changed while listing");
+      runs.set(run.id, run);
     }
   }
   // Confirm visibility before the first mutation, including an empty candidate set.
@@ -78,7 +79,7 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
     return result;
   }
   for (const listed of runs.values()) {
-    if (!events.includes(listed.event) || !statuses.includes(listed.status)) continue;
+    if (!statuses.includes(listed.status)) continue;
     const numbers = await pullNumbers(listed, api);
     if (!numbers.length) continue;
     let eligible = true;
@@ -123,9 +124,9 @@ export class GitHubCliApi {
       maxBuffer: 16 * 1024 * 1024, input: data ? JSON.stringify(data) : undefined });
     return text.trim() ? JSON.parse(text) : null;
   }
-  async listRuns(event, status) {
-    requireValue(events.includes(event) && statuses.includes(status), "Invalid run filter");
-    const pages = this.request(`repos/${POLICY.repository}/actions/runs?event=${event}&status=${status}&per_page=100`, { paginate: true });
+  async listRuns(status) {
+    requireValue(statuses.includes(status), "Invalid run filter");
+    const pages = this.request(`repos/${POLICY.repository}/actions/runs?status=${status}&per_page=100`, { paginate: true });
     requireValue(Array.isArray(pages) && pages.length > 0
       && pages.every(page => Array.isArray(page.workflow_runs) && Number.isSafeInteger(page.total_count)
         && page.total_count >= 0), "Invalid run pages");
