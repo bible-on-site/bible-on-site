@@ -308,18 +308,57 @@ const realWorldRecords = [
 	},
 ];
 
-test("liveVersion fails closed on the real multi-record response until one record proves the baseline", async () => {
-	// Two live records report the same version, so neither a plain read nor
-	// the public storefront match can select a unique record — the baseline
-	// stays blocked rather than guessed.
+test("liveVersion collapses the real duplicate live records into one baseline", async () => {
+	// The real response carries two live records reporting the same version —
+	// they describe one baseline, so they collapse to it and no public
+	// storefront lookup is needed at all.
 	const read = async () => ({ data: realWorldRecords });
-	await assert.rejects(
-		liveVersion("app1", read),
-		/more than one live iOS App Store version/i,
+	assert.equal(await liveVersion("app1", read), "5.1.23");
+	assert.equal(
+		await liveVersion("app1", read, async () => {
+			throw new Error("lookup must not run for a single-version baseline");
+		}),
+		"5.1.23",
+	);
+});
+
+test("liveVersion binds the baseline to the public storefront version among distinct live records", async () => {
+	const read = async () => ({
+		data: [
+			modernVersion("5.1.22", "READY_FOR_DISTRIBUTION"),
+			modernVersion("5.1.23", "READY_FOR_DISTRIBUTION"),
+		],
+	});
+	assert.equal(
+		await liveVersion("app1", read, async () => "5.1.23"),
+		"5.1.23",
 	);
 	await assert.rejects(
-		liveVersion("app1", read, async () => "5.1.23"),
-		/uniquely match/i,
+		liveVersion("app1", read, async () => "5.1.24"),
+		/does not match a live iOS App Store record/i,
+	);
+});
+
+test("liveVersion refuses unclassifiable rows instead of silently skipping them", async () => {
+	const live = modernVersion("5.1.23", "READY_FOR_DISTRIBUTION");
+	for (const [label, broken] of [
+		["missing version", { id: "u1", attributes: { platform: "IOS", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+		["missing platform", { id: "u2", attributes: { versionString: "5.1.23", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+		["missing state", { id: "u3", attributes: { versionString: "5.1.23", platform: "IOS" } }],
+		["missing identity", { attributes: { versionString: "5.1.23", platform: "IOS", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+	]) {
+		await assert.rejects(
+			liveVersion("app1", async () => ({ data: [live, broken] })),
+			/cannot be classified/,
+			label,
+		);
+	}
+	// A row proven non-iOS is still safely ignored rather than unverifiable.
+	assert.equal(
+		await liveVersion("app1", async () => ({
+			data: [live, { id: "mac", attributes: { platform: "MAC_OS" } }],
+		})),
+		"5.1.23",
 	);
 });
 
@@ -451,7 +490,7 @@ test("public inspection retains legacy, absent, replaced and malformed-version s
 	for (const [records, baseline, expectedError] of [
 		[[versionData("5.1.8")], "5.1.8", null],
 		[[modernVersion("5.1.8", "READY_FOR_DISTRIBUTION")], "5.1.8", null],
-		[[{ id: "absent" }], null, null],
+		[[{ id: "absent" }], null, /cannot be classified/],
 		[
 			[
 				modernVersion("5.1.7", "REPLACED_WITH_NEW_VERSION", {
@@ -758,10 +797,9 @@ test("ambiguous ready versions use the exact published Apple match rather than t
 	assert.equal(lookups, 2);
 });
 
-test("public baseline resolution fails closed for missing, duplicate, malformed and unavailable matches", async () => {
+test("public baseline resolution fails closed for missing, malformed and unavailable matches", async () => {
 	for (const [versions, published] of [
 		[["5.1.15", "5.0.217"], "5.1.25"],
-		[["5.1.15", "5.1.15"], "5.1.15"],
 		[["5.1.15", "invalid"], "invalid"],
 	]) {
 		await assert.rejects(
@@ -774,9 +812,24 @@ test("public baseline resolution fails closed for missing, duplicate, malformed 
 				}),
 				async () => published,
 			),
-			/uniquely match|not semver/,
+			/does not match a live iOS App Store record|not semver/,
 		);
 	}
+	// Duplicate records of one live version collapse to a single baseline
+	// rather than blocking on record-count ambiguity.
+	assert.equal(
+		await liveVersion(
+			"1045128150",
+			async () => ({
+				data: [
+					modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
+					{ ...modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"), id: "dup" },
+				],
+			}),
+			async () => "5.1.15",
+		),
+		"5.1.15",
+	);
 	const read = async () => ({
 		data: [
 			modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
