@@ -90,6 +90,8 @@ describe("explicit preservation instructions", () => {
 	);
 	it.each([
 		"Keep description. If necessary, update the description.",
+		"😀. Keep description.",
+		"Please. Keep description.",
 		"Keep description. Actually, replace the description.",
 		"Keep description. I want to update the description.",
 		"Keep description. If necessary, improve it.",

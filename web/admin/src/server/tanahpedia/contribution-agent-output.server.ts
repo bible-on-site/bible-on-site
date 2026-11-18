@@ -76,13 +76,13 @@ export function assertContributionAgentPreservationResult(
 		};
 	},
 ) {
+	const draft = result.draft;
+	const changes = draft?.changes;
+	const projectedChanges =
+		changes === undefined ? undefined : proposedOperations(changes);
 	for (const { field } of contributionAgentPreservationConstraints(item)) {
-		const proposed = result.draft?.[field];
-		if (proposed === undefined) continue;
-		const actual =
-			field === "changes"
-				? proposedOperations(result.draft?.changes ?? [])
-				: proposed;
+		const actual = field === "changes" ? projectedChanges : draft?.[field];
+		if (actual === undefined) continue;
 		const expected =
 			field === "changes" ? proposedOperations(item.changes) : item[field];
 		if (canonicalJson(actual) !== canonicalJson(expected))
