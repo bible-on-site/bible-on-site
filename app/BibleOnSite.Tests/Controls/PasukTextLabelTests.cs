@@ -84,7 +84,7 @@ public class PasukTextLabelTests
 
     // #2623: the shared scripture contract — every pasuk label renders Taamey
     // D. The ctor sets it as a local value so the implicit Label style's
-    // OpenSansRegular can never win; spans without their own family inherit it.
+    // AlHeperekRegular can never win; spans without their own family inherit it.
     [Fact]
     public void defaults_to_the_scripture_font_family()
     {
