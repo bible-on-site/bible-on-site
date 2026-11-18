@@ -57,13 +57,15 @@ function versionState(version) {
 	return version.attributes?.appVersionState ?? version.attributes?.appStoreState;
 }
 
-/** The version store users currently run — the honest public baseline. */
-export async function liveVersion(appId, read) {
-	const result = await read(`apps/${encodeURIComponent(appId)}/appStoreVersions`, {
+async function readLiveVersions(appId, read) {
+	return read(`apps/${encodeURIComponent(appId)}/appStoreVersions`, {
 		"filter[appVersionState]": "READY_FOR_DISTRIBUTION",
 		"filter[platform]": "IOS",
 		limit: "200",
 	});
+}
+
+function selectLiveVersion(result) {
 	const versions = result.data
 		.filter(
 			(v) =>
@@ -83,6 +85,35 @@ export async function liveVersion(appId, read) {
 			`Live App Store version is not semver: ${versions[0].version}`,
 		);
 	return versions[0].version;
+}
+
+/** The version store users currently run — the honest public baseline. */
+export async function liveVersion(appId, read) {
+	return selectLiveVersion(await readLiveVersions(appId, read));
+}
+
+/** Inspect exactly the publication query without writing metadata or selecting an ambiguous baseline. */
+export async function inspectLiveVersions(appId, read) {
+	const result = await readLiveVersions(appId, read);
+	const snapshot = {
+		kind: "app-store-public-version-inspection/1",
+		appId,
+		records: result.data.map((record) => ({
+			id: record.id,
+			version: record.attributes?.versionString ?? null,
+			platform: record.attributes?.platform ?? null,
+			appVersionState: record.attributes?.appVersionState ?? null,
+			appStoreState: record.attributes?.appStoreState ?? null,
+		})),
+		publicBaseline: null,
+		error: null,
+	};
+	try {
+		snapshot.publicBaseline = selectLiveVersion(result);
+	} catch (error) {
+		snapshot.error = error.message;
+	}
+	return snapshot;
 }
 
 /**
@@ -228,13 +259,29 @@ function parseArgs(argv) {
 	return args;
 }
 
-async function main() {
+export async function main() {
 	const [command, ...rest] = process.argv.slice(2);
-	if (command !== "publish")
-		throw new Error("Usage: appstore-whatsnew.mjs publish --version X --tag app-vX --out-dir dir");
+	if (command !== "publish" && command !== "inspect")
+		throw new Error(
+			"Usage: appstore-whatsnew.mjs publish --version X --tag app-vX --out-dir dir | inspect --out-dir dir",
+		);
 	const args = parseArgs(rest);
-	for (const required of ["version", "tag", "out-dir"])
+	for (const required of command === "inspect"
+		? ["out-dir"]
+		: ["version", "tag", "out-dir"])
 		if (!args[required]) throw new Error(`--${required} is required`);
+	if (command === "inspect") {
+		const read = appleReader(appleCredentials(), fetch, { retries: 3 });
+		const app = await findApp({ bundle: "com.tanah.daily929" }, read);
+		const snapshot = await inspectLiveVersions(app.id, read);
+		mkdirSync(args["out-dir"], { recursive: true });
+		writeFileSync(
+			path.join(args["out-dir"], "app-store-public-version-inspection.json"),
+			`${JSON.stringify(snapshot, null, 2)}\n`,
+		);
+		console.log(JSON.stringify(snapshot));
+		return;
+	}
 	const repo = process.env.GITHUB_REPOSITORY;
 	if (!repo) throw new Error("GITHUB_REPOSITORY is required");
 

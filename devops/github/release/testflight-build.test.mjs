@@ -1476,6 +1476,28 @@ test("verifies TestFlight metadata before recording delivery and distinguishes e
 	);
 	assert.equal(status.permissions.contents, "read");
 	assert.equal(status.jobs.inspect["timeout-minutes"], 60);
+	assert.deepEqual(
+		status.on.workflow_dispatch.inputs.inspection_scope.options,
+		["all", "public-version"],
+	);
+	const publicInspection = status.jobs.inspect.steps.find((step) =>
+		step.run?.includes("appstore-whatsnew.mjs inspect"),
+	);
+	assert(publicInspection);
+	assert.equal(
+		publicInspection.if,
+		"inputs.inspection_scope == 'public-version'",
+	);
+	for (const name of [
+		"Restore the published IPA for read-only inspection",
+		"Read the exact build state from Apple",
+		"Read configured group, review and Hebrew notes without changing Apple state",
+	]) {
+		assert.equal(
+			status.jobs.inspect.steps.find((step) => step.name === name)?.if,
+			"inputs.inspection_scope != 'public-version'",
+		);
+	}
 	assert(
 		status.jobs.inspect.steps.some((step) =>
 			step.run?.endsWith("distribution-inspect"),
