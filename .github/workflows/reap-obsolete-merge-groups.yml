@@ -13,7 +13,8 @@ on:
     types: [closed]
   workflow_run:
     workflows: [Continuous Integration, CodeQL, Dependency review, Dependency submission, Data Deployment Tests, Perek Image Tools]
-    types: [requested, completed]
+    # Re-runs do not emit requested; catch them when they start too.
+    types: [requested, in_progress, completed]
   delete:
 permissions:
   contents: read

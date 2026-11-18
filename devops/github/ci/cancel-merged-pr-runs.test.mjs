@@ -271,6 +271,7 @@ test("workflow only checks out trusted default-branch code and has no scheduler 
   assert.match(workflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
   assert.doesNotMatch(workflow, /schedule:|force-cancel|BOT_PAT|pull_request\.head\.sha/);
   assert.match(workflow, /cancel-in-progress: false/);
+  assert.match(workflow, /types: \[requested, in_progress, completed\]/);
   const legacy = workflow.split("- name: Cancel only obsolete merge-group runs after two fresh proofs")[1];
   assert.match(legacy, /workflow_run\.event == 'merge_group' &&\s+github.event.workflow_run.workflow_id == 105623149/);
 });

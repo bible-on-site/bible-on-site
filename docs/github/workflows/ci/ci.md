@@ -497,12 +497,13 @@ queue has rebuilt a replacement. CI currently assigns each merge-group run a
 unique concurrency key, so normal PR supersession does not remove these runs.
 
 `reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` when a
-PR closes, validation runs are requested/completed, or a queue branch is
+PR closes, validation runs are requested/started/completed, or a queue branch is
 deleted. It consumes trusted default-branch code and GitHub metadata, never a
 candidate checkout or artifact. The `pull_request_target: closed` event
 provides the privileged metadata context for fork PRs too; its checkout is
 always the trusted base commit. Run events reconcile validation that starts
-after the merge, without a scheduled polling job or a separate credential.
+after the merge, including re-runs that do not emit a `requested` event,
+without a scheduled polling job or a separate credential.
 
 `cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
 runs whose associated PRs have merged. It covers every workflow, paginates
