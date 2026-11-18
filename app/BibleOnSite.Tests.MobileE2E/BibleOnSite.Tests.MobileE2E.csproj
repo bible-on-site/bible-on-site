@@ -17,6 +17,7 @@
          the harness can never drift from the payload the app consumes. -->
     <Compile Include="..\BibleOnSite\Services\FirebaseEmulatorEndpoint.cs" Link="Services\FirebaseEmulatorEndpoint.cs" />
     <None Update="testconfig.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\mobile-e2e\ios-install.mjs" Link="ios-install.mjs" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Appium.WebDriver" Version="9.0.0" />

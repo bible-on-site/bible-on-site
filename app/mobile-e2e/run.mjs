@@ -13,6 +13,10 @@ import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, iosAutomationLogArguments, iosHostLogArguments, startIosClassicHostLog, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
+import { bundleDigest, iosNodeEnvironment } from "./ios-install.mjs";
+import { observeIosPreparations } from "./ios-preparation-observer.mjs";
+import { executeOwnedIosInstaller } from "./ios-install-process.mjs";
+import { resolveMobileAppPath } from "./app-path.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -20,13 +24,14 @@ import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diag
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 import { copyIosCrashReports } from "./ios-crash-reports.mjs";
 import { exitCode, phaseRecorder, remainingBudget } from "./shutdown-budget.mjs";
+import { prepareDiscoveryEvidence } from "./ios-discovery-evidence.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
 const platform = process.env.MOBILE_PLATFORM?.toLowerCase();
 if (!["android", "ios"].includes(platform)) throw new Error("Set MOBILE_PLATFORM to Android or iOS.");
 if (!process.env.MOBILE_UDID) throw new Error("Set MOBILE_UDID to the emulator/simulator identifier.");
-const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform);
+const artifacts = resolve(process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform));
 mkdirSync(artifacts, { recursive: true });
 // Coverage evidence is per-run state: a stale record from an earlier run must
 // never attribute its automation ids to tests of this run (#2085).
@@ -34,10 +39,7 @@ rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true }
 // Same for executable coverage dumps pulled from the instrumented app
 // process (#1232): a stale dump would merge another build's hits.
 rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
-const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
-  platform === "android"
-    ? "../BibleOnSite/bin/Debug/net11.0-android/android-x64/com.tanah.daily929-Signed.apk"
-    : "../BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app");
+const appPath = resolveMobileAppPath(directory, platform, process.env.MOBILE_APP_PATH);
 if (!existsSync(appPath)) throw new Error(`Build the app with bun run build:app first: ${appPath}`);
 if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
@@ -87,13 +89,16 @@ const interactions = platform === "ios" ? iosInteractionDiagnostics({
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
   interactions.capture(command, request),
   { pin: request => interactions.pin(request) }) : undefined;
-const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
+const discoveryEvidence = platform === "ios" ? prepareDiscoveryEvidence(artifacts) : undefined;
+const server = spawn(process.execPath, [...(discoveryEvidence?.status === "ready"
+  ? ["--import", resolve(directory, "ios-discovery-trace.mjs")] : []), resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   // Appium 4 defaults to info; the diagnostics below rely on the driver-level
   // debug surface v3 emitted implicitly, so keep it explicit (#3419 review).
   "--log-level", "debug",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
+  env: { ...process.env, MOBILE_IOS_DISCOVERY_TRACE: discoveryEvidence?.path ?? "" },
 });
 for (const stream of [server.stdout, server.stderr].filter(Boolean)) {
   stream.on("data", (chunk) => {
@@ -109,6 +114,8 @@ const readinessStarted = Date.now();
 const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.stringify({
   time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
 })}\n`);
+if (platform === "ios") observeReadiness({ phase: "discovery-evidence",
+  status: discoveryEvidence.status, file: discoveryEvidence.file });
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 const hostDiagnostics = resolve(artifacts, "test-host-diagnostics");
 rmSync(hostDiagnostics, { recursive: true, force: true });
@@ -120,14 +127,10 @@ let test;
 let diagnosticsFailed = false;
 const androidEmulator = platform === "android" && /^emulator-\d+$/.test(process.env.MOBILE_UDID);
 let nativeStream;
-let automationStream;
 let hostStream;
 let classicHostStream;
-if (platform === "ios") {
-  nativeStream = startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-    "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
-    resolve(artifacts, "device-live.log"));
-} else if (androidEmulator) {
+let iosPreparations;
+if (androidEmulator) {
   try {
     // Record before the first AUT launch so a process that dies between tests
     // still leaves its PID, lifecycle and native crash output in this run.
@@ -167,7 +170,7 @@ let failureObserverConfirmed = false;
 const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
 if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
 let failureMonitor;
-const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); automationStream?.kill(); hostStream?.kill(); classicHostStream?.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); iosPreparations?.kill(); hostStream?.kill(); classicHostStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
@@ -177,13 +180,44 @@ try {
     hostStream = startNativeLog("/usr/bin/log", iosHostLogArguments(),
       resolve(artifacts, "simulator-host-live.log"));
     classicHostStream = startIosClassicHostLog(resolve(artifacts, "simulator-host-classic-live.log"));
-    const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
-    writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
-      time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
-      udid: process.env.MOBILE_UDID, command: "xcrun", args,
-      artifact: "automation-live.log", observationOnly: true,
-    }, null, 2), { flag: "wx" });
-    automationStream = startNativeLog("xcrun", args, resolve(artifacts, "automation-live.log"));
+    iosPreparations = await observeIosPreparations({
+      udid: process.env.MOBILE_UDID,
+      appPath, keepData: process.env.MOBILE_KEEP_APP === "1",
+      expectedBundleSha256: signal => bundleDigest(appPath, () => signal.throwIfAborted()),
+      report: value => appendFileSync(resolve(artifacts, "ios-preparation-observer.jsonl"), `${JSON.stringify(value)}\n`),
+      installer: async ({ nonce, deadlineMs, keepData, signal, environment }) => {
+        try {
+          const output = await executeOwnedIosInstaller({ appPath, udid: process.env.MOBILE_UDID, nonce, deadlineMs, keepData, signal,
+            environment: { ...iosNodeEnvironment(process.env, process.execPath), ...environment, MOBILE_E2E_ARTIFACTS: artifacts },
+            report: value => appendFileSync(resolve(artifacts, "ios-preparation-process.jsonl"),
+              `${JSON.stringify({ kind: "ios-install-owner/1", at: new Date().toISOString(), ...value })}\n`),
+            retainDiagnostics: output => writeFileSync(resolve(artifacts, `ios-installer-${nonce}.stderr.log`), output),
+          });
+          writeFileSync(resolve(artifacts, `ios-installer-${nonce}.stdout.log`), output);
+          return output;
+        } catch (error) {
+          try { writeFileSync(resolve(artifacts, `ios-installer-${nonce}.error.log`),
+            `${String(error)}\n${JSON.stringify({ cleanupUncertain: error.cleanupUncertain ?? false,
+              processGroupId: error.processGroupId ?? null, joined: error.joined ?? false })}\n${error.stderr ?? ""}`); }
+          catch (retentionError) { throw new AggregateError([error, retentionError], "Installer failure diagnostics could not be retained."); }
+          throw error;
+        }
+      },
+      readerFactories: [
+        onOutput => startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+          "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
+          resolve(artifacts, "device-live.log"), { onOutput }),
+        onOutput => {
+          const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
+          writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
+            time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
+            udid: process.env.MOBILE_UDID, command: "xcrun", args,
+            artifact: "automation-live.log", observationOnly: true,
+          }, null, 2), { flag: "wx" });
+          return startNativeLog("xcrun", args, resolve(artifacts, "automation-live.log"), { onOutput });
+        },
+      ],
+    });
   }
   failureMonitor = interactions ? await listenScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
     const result = await interactions.failure(request, { signal });
@@ -198,11 +232,14 @@ try {
     : ["run", "--project", "devops", "--"];
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
+    env: { ...(platform === "ios" ? iosNodeEnvironment(process.env, process.execPath) : process.env),
+      ...iosPreparations?.environment,
+      MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
       MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}),
       ...(platform === "android" ? { MOBILE_APP_PREINSTALLED: "1" } : {}),
+      ...(platform === "ios" ? { MOBILE_APP_PREINSTALLED: "" } : {}),
       APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
@@ -241,8 +278,12 @@ try {
     console.error("Could not finish native hang capture:", error);
   }
   try {
-    await phase("native-log-stream", () => platform === "ios"
-      ? stopNativeLogStreams([nativeStream, automationStream, hostStream, classicHostStream]) : nativeStream?.stop());
+    await phase("native-log-stream", async () => {
+      if (platform !== "ios") return nativeStream?.stop();
+      const joined = await Promise.allSettled([iosPreparations?.stop(), stopNativeLogStreams([hostStream, classicHostStream])]);
+      const errors = joined.filter(result => result.status === "rejected").map(result => result.reason);
+      if (errors.length) throw new AggregateError(errors, "Could not finish iOS native log ownership.");
+    });
   } catch (error) {
     if (platform === "ios") diagnosticsFailed = true;
     else writeFileSync(resolve(artifacts, "android-native-log-stop-error.txt"), String(error));

@@ -306,3 +306,91 @@ for (const sdk of ["not-a-version", "27.0\nEXTRA=value"]) {
     assert.equal(existsSync(env.GITHUB_ENV), false);
   });
 }
+
+test("bootstrap evidence captures pre-restore and pre-boot state without extra device commands", async t => {
+  const stages = [];
+  const { options, calls, env } = fixture(t);
+  const evidence = { ...env, MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" };
+  const snapshot = value => stages.push([value.stage, value.udid]);
+  await bootIos({ ...options, mode: "resolve", env: evidence, snapshot });
+  await bootIos({ ...options, mode: "start", env: evidence, snapshot });
+  assert.deepEqual(stages, [["before-cache", UDID], ["before-boot", UDID]]);
+  assert.equal(calls.filter(([kind, , command]) => kind === "sync" && command === "boot").length, 1);
+  assert(!calls.some(([kind]) => kind === "async"));
+});
+
+test("boot failure remains primary after bounded diagnostic teardown and never exports readiness", async t => {
+  const { options, env } = fixture(t);
+  const stages = [];
+  const failure = new Error("original bootstatus deadline");
+  let stopped = false;
+  await assert.rejects(bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" },
+    execute: async (_command, _args, config) => { assert.equal(config.timeout, 300000); throw failure; },
+    observe: () => ({ snapshot: stage => stages.push(stage), async stop() { stopped = true; throw new Error("reader teardown failure"); } }),
+  }), error => error === failure);
+  assert.equal(stopped, true);
+  assert.deepEqual(stages, ["wait-start", "wait-failed"]);
+  assert(!existsSync(env.GITHUB_ENV));
+});
+
+test("successful boot joins diagnostic readers before exporting readiness", async t => {
+  const { options, env } = fixture(t);
+  const stages = [];
+  let stopped = false;
+  await bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" },
+    observe: () => ({ snapshot: stage => stages.push(stage), async stop() { assert(!existsSync(env.GITHUB_ENV)); stopped = true; } }),
+  });
+  assert(stopped);
+  assert.deepEqual(stages, ["wait-start", "wait-ready"]);
+  assert(existsSync(env.GITHUB_ENV));
+});
+
+test("CI identity selection exports only ownership and never starts a normal boot or reader", async t => {
+  const { options, env, calls } = fixture(t);
+  await bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0\n`);
+  assert.equal(readFileSync(env.GITHUB_OUTPUT, "utf8"), `udid=${UDID}\nversion=27.0\n`);
+  assert(!calls.some(([kind, , command]) => kind === "async" || kind === "driver" || kind === "native" || command === "boot"));
+});
+
+test("identity cannot silently switch to another device after optional cache restore", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+    { udid: OTHER_UDID, name: "iPhone 17", isAvailable: true, state: "Shutdown" },
+  ] });
+  await assert.rejects(bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /identity changed/);
+  assert(!existsSync(env.GITHUB_ENV));
+  assert(!calls.some(([kind, , command]) => kind === "download" || command === "boot"));
+});
+
+test("missing handed-off identity fails without downloading or booting a substitute", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({});
+  await assert.rejects(bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /identity disappeared/);
+  assert(!calls.some(([kind, , command]) => kind === "download" || command === "boot"));
+  assert(!existsSync(env.GITHUB_ENV));
+});
+
+test("identity retains missing-runtime installation without claiming a booted device", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({});
+  await bootIos({ ...options, mode: "identify", downloadPlatform: () => {
+    calls.push(["download"]);
+    setDevices({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+      { udid: UDID, name: "iPhone 17", isAvailable: true, state: "Shutdown" },
+    ] });
+  } });
+  assert.equal(calls.filter(([kind]) => kind === "download").length, 1);
+  assert(!calls.some(([kind, , command]) => kind === "async" || command === "boot"));
+  assert(existsSync(env.GITHUB_ENV));
+});
+
+test("CI gives the installer sole normal boot ownership and never captures a failed pilot", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/app-mobile-e2e-runner.yml", import.meta.url), "utf8");
+  assert(!/ios:boot:(?:start|wait)\b/.test(workflow));
+  assert.match(workflow, /ios:boot:identify/);
+  assert.match(workflow, /Quiesce iOS simulator[\s\S]*?steps\.pilot-ios\.outcome == 'success'/);
+  assert.match(workflow, /Wait for iOS automation artifacts\s+wait-all:/);
+});

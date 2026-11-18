@@ -1,0 +1,302 @@
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { appendFileSync, createReadStream } from "node:fs";
+import { lstat, open, readlink, readdir, realpath } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { iosBootDiagnosticOutput, startIosResourceSampler, withIosResourceSampler } from "./ios-boot-diagnostics.mjs";
+
+const executeFile = promisify(execFile);
+export function executeIosCommand(command, args, { input, onOutput, ...options } = {}) {
+  const pending = executeFile(command, args, options);
+  let inputError, outputError;
+  if (onOutput) for (const [stream, pipe] of [["stdout", pending.child.stdout], ["stderr", pending.child.stderr]]) {
+    pipe.on("data", chunk => {
+      try { onOutput(stream, chunk); } catch (error) { outputError ??= error; }
+    });
+  }
+  // A child that rejects its arguments may exit before consuming stdin.
+  // Retain its exit code/stderr rather than crashing on an unhandled EPIPE.
+  pending.child.stdin.on("error", error => { inputError = error; });
+  pending.child.stdin.end(input);
+  return pending.then(result => {
+    if (inputError) throw new Error("Could not deliver the complete iOS command input.", { cause: inputError });
+    if (outputError) throw new Error("Could not retain iOS command diagnostics.", { cause: outputError });
+    return result;
+  }, failure => {
+    if (outputError) throw new AggregateError([failure, outputError], "iOS command and output retention failed.");
+    throw failure;
+  });
+}
+const bundleId = "com.tanah.daily929";
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function requestIosPreparation(phase, identity, {
+  environment = process.env, request = fetch, now = Date.now,
+} = {}) {
+  const port = environment.MOBILE_IOS_PREPARATION_PORT;
+  const token = environment.MOBILE_IOS_PREPARATION_TOKEN;
+  const remaining = identity.deadlineMs - now();
+  if (!/^\d{1,5}$/.test(port ?? "") || Number(port) < 1 || Number(port) > 65535 ||
+      !/^[0-9a-f]{64}$/.test(token ?? "") || !["reserve", "ready"].includes(phase) ||
+      !Number.isFinite(remaining) || remaining <= 0 || remaining > 300000) {
+    throw new Error("A live parent-owned iOS preparation observer and original deadline are required.");
+  }
+  const response = await request(`http://127.0.0.1:${port}/prepare`, {
+    method: "POST", redirect: "error", signal: AbortSignal.timeout(Math.max(1, Math.floor(remaining))),
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json",
+      "X-Ios-Preparation-Deadline": String(identity.deadlineMs) },
+    body: JSON.stringify({ kind: "ios-preparation/1", phase, ...identity }),
+  });
+  if (response.status !== 200) throw new Error(`Parent iOS preparation ${phase} rejected (${response.status}).`);
+  const ack = await response.json();
+  const kind = phase === "reserve" ? "ios-preparation-reservation/1" : "ios-preparation-ack/1";
+  if (now() >= identity.deadlineMs || ack.kind !== kind || ack.udid !== identity.udid || ack.nonce !== identity.nonce ||
+      (phase === "reserve" && typeof ack.transitionAllowed !== "boolean")) {
+    throw new Error("The parent iOS preparation acknowledgement is stale or mismatched.");
+  }
+  return ack;
+}
+
+export function iosNodeEnvironment(environment, nodeExecutable) {
+  const entries = Object.entries(environment);
+  const inheritedPath = entries.find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
+  return { ...Object.fromEntries(entries.filter(([key]) => key.toLowerCase() !== "path")),
+    PATH: `${dirname(nodeExecutable)}${delimiter}${inheritedPath}`, MOBILE_NODE_EXECUTABLE: nodeExecutable };
+}
+
+export async function verifyNodeInterpreter(expectedPath) {
+  if (typeof expectedPath !== "string" || !isAbsolute(expectedPath) ||
+      await realpath(expectedPath) !== await realpath(process.execPath)) {
+    throw new Error("iOS preparation did not use the exact parent Node interpreter.");
+  }
+}
+
+// Read the small Mach-O header directly. Starting lipo/uname for this same
+// immutable executable delayed a measured Appium session by 199 seconds.
+export async function verifySimulatorExecutable(path) {
+  const file = await open(path, "r");
+  try {
+    const header = Buffer.alloc(32);
+    if ((await file.read(header, 0, 32, 0)).bytesRead !== 32 ||
+        header.readUInt32LE(0) !== 0xfeedfacf || header.readUInt32LE(4) !== 0x100000c ||
+        header.readUInt32LE(12) !== 2) {
+      throw new Error("The iOS AUT must be a thin arm64 Mach-O executable.");
+    }
+    const count = header.readUInt32LE(16);
+    const size = header.readUInt32LE(20);
+    if (count > 4096 || size > 16 * 1024 * 1024) throw new Error("Invalid Mach-O load commands.");
+    const commands = Buffer.alloc(size);
+    if ((await file.read(commands, 0, size, 32)).bytesRead !== size) throw new Error("Truncated Mach-O load commands.");
+    let offset = 0;
+    let simulator = false;
+    for (let index = 0; index < count; index++) {
+      if (offset + 8 > size) throw new Error("Invalid Mach-O load command.");
+      const command = commands.readUInt32LE(offset);
+      const bytes = commands.readUInt32LE(offset + 4);
+      if (bytes < 8 || offset + bytes > size) throw new Error("Invalid Mach-O load command size.");
+      if (command === 0x32) {
+        if (bytes < 24 || commands.readUInt32LE(offset + 8) !== 7) {
+          throw new Error("The iOS AUT was not built for iPhoneSimulator.");
+        }
+        simulator = true;
+      }
+      offset += bytes;
+    }
+    if (!simulator || offset !== size) throw new Error("Missing iPhoneSimulator Mach-O build identity.");
+  } finally { await file.close(); }
+}
+
+// Every file participates, including the woven IL/recorder and native AOT
+// payload. Checking only the launcher would accept a different managed build.
+export async function bundleDigest(root, checkDeadline = () => {}) {
+  root = await realpath(root);
+  const hash = createHash("sha256");
+  async function visit(directory) {
+    for (const name of (await readdir(directory)).sort()) {
+      checkDeadline();
+      const path = join(directory, name);
+      const entry = await lstat(path);
+      const key = relative(root, path).split(sep).join("/");
+      if (entry.isSymbolicLink()) {
+        const target = await readlink(path);
+        const resolved = relative(root, await realpath(path));
+        if (isAbsolute(target) || resolved === ".." || resolved.startsWith(`..${sep}`) || isAbsolute(resolved)) {
+          throw new Error(`Bundle symlink escapes its app: ${key}`);
+        }
+        hash.update(JSON.stringify([key, "link", target]));
+      } else if (entry.isDirectory()) {
+        hash.update(JSON.stringify([key, "directory"]));
+        await visit(path);
+      } else if (entry.isFile()) {
+        const content = createHash("sha256");
+        for await (const chunk of createReadStream(path)) {
+          checkDeadline();
+          content.update(chunk);
+        }
+        hash.update(JSON.stringify([key, "file", entry.size, content.digest("hex")]));
+      } else throw new Error(`Unsupported bundle entry: ${key}`);
+    }
+  }
+  await visit(root);
+  return hash.digest("hex");
+}
+
+export async function prepareIosApp({
+  appPath, udid, nonce, keepData = false, deadlineMs,
+  execute = executeIosCommand, now = Date.now, platform = process.platform,
+  devicesRoot = join(homedir(), "Library/Developer/CoreSimulator/Devices"),
+  reserveTransition, confirmReady, report = () => {}, bootOutput, startResources,
+}) {
+  const started = now();
+  if (platform !== "darwin") throw new Error("iOS installation requires macOS.");
+  if (!uuid.test(udid ?? "") || !/^[0-9a-f]{32}$/i.test(nonce ?? "")) {
+    throw new Error("Missing exact simulator/session identity.");
+  }
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= started || deadlineMs - started > 300000) {
+    throw new Error("iOS preparation must share the existing 300 second session deadline.");
+  }
+  if (typeof reserveTransition !== "function" || typeof confirmReady !== "function") {
+    throw new Error("iOS preparation requires the parent's run-scoped transition and reader acknowledgement.");
+  }
+  const checkDeadline = () => {
+    if (now() >= deadlineMs) throw new Error("iOS preparation exhausted the 300 second session deadline.");
+  };
+  const run = async (command, args, options = {}) => {
+    checkDeadline();
+    // Only the helper's fixed command vocabulary is retained; never stdin,
+    // process environment, observer token or arbitrary subprocess output.
+    const allowed = command === "plutil" && args[0] === "-convert" ||
+      command === "xcrun" && args[0] === "simctl" &&
+      ["list", "boot", "bootstatus", "listapps", "terminate", "uninstall", "install", "get_app_container", "spawn"].includes(args[1]);
+    if (!allowed || args.some(argument => typeof argument !== "string")) throw new Error("Unrecognized iOS preparation command.");
+    const commandStarted = now();
+    const commandIdentity = { command, argv: [...args] };
+    report({ phase: "command-start", ...commandIdentity, elapsedMs: now() - started, remainingMs: deadlineMs - now() });
+    checkDeadline();
+    let result, commandFailure;
+    try {
+      result = await execute(command, args, {
+        ...options, timeout: Math.max(1, Math.floor(deadlineMs - now())), killSignal: "SIGKILL",
+        maxBuffer: 8 * 1024 * 1024, encoding: "utf8", windowsHide: true,
+        ...(command === "xcrun" && args[0] === "simctl" && args[1] === "bootstatus" ? { onOutput: bootOutput } : {}),
+      });
+    } catch (error) { commandFailure = error; }
+    try {
+      report({ phase: "command-end", ...commandIdentity, success: !commandFailure,
+        elapsedMs: now() - started, commandMs: now() - commandStarted, remainingMs: deadlineMs - now(),
+        ...(commandFailure ? { code: commandFailure.code ?? null, signal: commandFailure.signal ?? null } : {}) });
+    } catch (traceFailure) {
+      if (commandFailure) throw new AggregateError([commandFailure, traceFailure], "iOS command and diagnostic retention both failed.");
+      throw traceFailure;
+    }
+    if (commandFailure) throw commandFailure;
+    checkDeadline();
+    return result.stdout;
+  };
+  const requestedAppPath = resolve(appPath);
+  appPath = await realpath(requestedAppPath);
+  const info = JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", join(appPath, "Info.plist")]));
+  const supportedPlatforms = info.CFBundleSupportedPlatforms;
+  if (info.CFBundleIdentifier !== bundleId || !Array.isArray(supportedPlatforms) || supportedPlatforms.length !== 1 ||
+      supportedPlatforms.at(0) !== "iPhoneSimulator" ||
+      typeof info.CFBundleExecutable !== "string" || !info.CFBundleExecutable ||
+      basename(info.CFBundleExecutable) !== info.CFBundleExecutable || /[\\/]/.test(info.CFBundleExecutable)) {
+    throw new Error("The iOS AUT has an unexpected bundle/platform/executable identity.");
+  }
+  await verifySimulatorExecutable(join(appPath, info.CFBundleExecutable));
+  const expectedDigest = await bundleDigest(appPath, checkDeadline);
+  const currentDevice = async () => {
+    const devices = JSON.parse(await run("xcrun", ["simctl", "list", "devices", "--json"])).devices;
+    const matching = Object.entries(devices).flatMap(([runtime, list]) =>
+      list.filter(device => device.udid === udid).map(device => ({ ...device, runtime })));
+    if (matching.length !== 1 || matching[0].isAvailable !== true ||
+        !matching[0].runtime.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-") ||
+        !["Shutdown", "Booting", "Booted"].includes(matching[0].state)) {
+      throw new Error(`The selected iOS simulator is not uniquely available: ${JSON.stringify({ udid, matching })}`);
+    }
+    return matching[0];
+  };
+  const initial = await currentDevice();
+  const identity = { udid, nonce, bundleId, bundleSha256: expectedDigest, deadlineMs };
+  const reservation = await reserveTransition({ ...identity, state: initial.state });
+  checkDeadline();
+  const receipt = await withIosResourceSampler(async () => {
+    const bootStarted = now();
+    if (initial.state !== "Booted") {
+      if (reservation.transitionAllowed !== true) throw new Error("The run already claimed its normal iOS boot; later readiness loss is fatal.");
+      if (initial.state === "Shutdown") await run("xcrun", ["simctl", "boot", udid]);
+      await run("xcrun", ["simctl", "bootstatus", udid]);
+      const current = await currentDevice();
+      if (current.state !== "Booted") throw new Error(`Normal iOS boot did not establish readiness: ${JSON.stringify(current)}`);
+    }
+    const bootMs = now() - bootStarted;
+    const installedApps = async () => {
+      const listing = await run("xcrun", ["simctl", "listapps", udid]);
+      return JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", "-"], { input: listing }));
+    };
+    if (Object.hasOwn(await installedApps(), bundleId)) {
+      if (keepData) {
+        // simctl reports an exact error when this app is already stopped.
+        // Any other failure leaves process ownership uncertain and is fatal.
+        try { await run("xcrun", ["simctl", "terminate", udid, bundleId]); }
+        catch (error) {
+          const report = String(error.stderr ?? "");
+          if (error.code !== 3 || !report.includes("domain=NSPOSIXErrorDomain, code=3") ||
+              !report.includes("found nothing to terminate")) throw error;
+          checkDeadline();
+        }
+      } else {
+        await run("xcrun", ["simctl", "uninstall", udid, bundleId]);
+        if (Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS reset left the AUT installed.");
+      }
+    }
+    const installStarted = now();
+    await run("xcrun", ["simctl", "install", udid, appPath]);
+    const installMs = now() - installStarted;
+    if (!Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS install did not register the AUT.");
+    const installedPath = (await run("xcrun", ["simctl", "get_app_container", udid, bundleId, "app"])).trim();
+    const containerRoot = join(await realpath(devicesRoot), udid, "data/Containers/Bundle/Application");
+    const installedRealPath = await realpath(installedPath);
+    const parts = relative(containerRoot, installedRealPath).split(sep);
+    const [containerId, containerApp] = parts;
+    if (!isAbsolute(installedPath) || installedRealPath === appPath || parts.length !== 2 ||
+        !uuid.test(containerId) || containerApp !== "BibleOnSite.app") {
+      throw new Error("iOS install did not identify this simulator's exact AUT container.");
+    }
+    if (await bundleDigest(installedPath, checkDeadline) !== expectedDigest ||
+        await bundleDigest(appPath, checkDeadline) !== expectedDigest) {
+      throw new Error("Installed iOS AUT bytes differ from the exact input bundle.");
+    }
+    // A persisted Booted plist is not a current SimLaunchHost session. This
+    // single owned-device probe is immediately before reader attachment/launch.
+    await run("xcrun", ["simctl", "spawn", udid, "launchctl", "list"]);
+    await confirmReady({ ...identity, state: "Booted" });
+    checkDeadline();
+    return { kind: "ios-verified-install/1", udid, appPath: requestedAppPath, canonicalAppPath: appPath, nonce,
+      bundleId, bundleSha256: expectedDigest, keepData, installMs, preparationMs: now() - started,
+      bootMs, initialState: initial.state, observerAcknowledged: true };
+  }, startResources);
+  checkDeadline();
+  return { ...receipt, preparationMs: now() - started };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [appPath, udid, nonce, keep, deadline, expectedNode] = process.argv.slice(2);
+  if (process.argv.length !== 8 || !["reset", "keep"].includes(keep)) throw new Error("Invalid iOS installation arguments.");
+  await verifyNodeInterpreter(expectedNode);
+  const artifacts = process.env.MOBILE_E2E_ARTIFACTS;
+  if (!artifacts || !isAbsolute(artifacts)) throw new Error("An absolute parent-owned iOS artifact directory is required.");
+  const { bootstatus, "host-resources": hostResources } = iosBootDiagnosticOutput({ udid, nonce, deadlineMs: Number(deadline) });
+  console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
+    keepData: keep === "keep", deadlineMs: Number(deadline),
+    reserveTransition: identity => requestIosPreparation("reserve", identity),
+    confirmReady: identity => requestIosPreparation("ready", identity),
+    bootOutput: bootstatus,
+    startResources: () => startIosResourceSampler(hostResources, { deadlineMs: Number(deadline) }),
+    report: event => appendFileSync(join(artifacts, "ios-preparation-commands.jsonl"),
+      `${JSON.stringify({ kind: "ios-preparation-command/1", at: new Date().toISOString(), pid: process.pid, udid, nonce, ...event })}\n`),
+  })));
+}

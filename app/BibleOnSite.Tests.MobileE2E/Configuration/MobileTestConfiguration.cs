@@ -13,6 +13,8 @@ public sealed record MobileTestConfiguration(
     public string? PrebuiltWdaPath { get; init; }
     public int? WdaLocalPort { get; init; }
     public bool KeepAppForReview { get; init; }
+    internal string? NodeExecutable { get; init; }
+    internal VerifiedIosApp? VerifiedIosApp { get; init; }
 
     /// <summary>
     /// run.mjs already installed the Android package itself — the session must
@@ -55,6 +57,7 @@ public sealed record MobileTestConfiguration(
                 : null,
             KeepAppForReview = Environment.GetEnvironmentVariable("MOBILE_KEEP_APP") == "1",
             AppPreinstalled = Environment.GetEnvironmentVariable("MOBILE_APP_PREINSTALLED") == "1",
+            NodeExecutable = platform == MobilePlatform.IOS ? Required("MOBILE_NODE_EXECUTABLE") : null,
             FirebaseEmulator = Environment.GetEnvironmentVariable("MOBILE_FIREBASE_EMULATOR"),
             PrebuiltWdaPath = platform == MobilePlatform.IOS ? Required("MOBILE_WDA_PATH") : null
         };

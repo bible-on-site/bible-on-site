@@ -220,13 +220,20 @@ public abstract class MobilePlatformAdapter
         IReadOnlyDictionary<string, string>? environment)
     {
         var android = configuration.Platform == MobilePlatform.Android;
+        configuration.VerifiedIosApp?.VerifyIdentity(configuration);
+        var verifiedIos = !android && configuration.VerifiedIosApp != null;
         var options = new AppiumOptions
         {
             PlatformName = android ? "Android" : "iOS",
             AutomationName = android ? "UiAutomator2" : "XCUITest",
-            DeviceName = configuration.DeviceId,
-            App = configuration.AppPath
+            DeviceName = configuration.DeviceId
         };
+        // An owned, verified iOS install avoids Appium's redundant executable
+        // metadata subprocesses and reinstall. Android keeps its existing path.
+        if (!verifiedIos)
+        {
+            options.App = configuration.AppPath;
+        }
         options.AddAdditionalAppiumOption("udid", configuration.DeviceId);
         if (!string.IsNullOrWhiteSpace(configuration.PlatformVersion))
         {
@@ -237,10 +244,10 @@ public abstract class MobilePlatformAdapter
         // must reuse it under noReset — a driver-initiated reinstall has
         // no incremental opt-out and would reintroduce the libmonodroid
         // open_from_bundles SIGSEGV (#2773).
-        var reuseInstalledApp = configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
+        var reuseInstalledApp = verifiedIos || configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
         options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
-        // Android fully uninstalls the app. iOS resets and reinstalls it through
-        // noReset=false and enforceAppInstall=true while the device stays booted.
+        // Verified iOS preparation owns the fresh install of this exact AUT.
+        // keep Appium from repeating it or performing a warning-only scrub.
         options.AddAdditionalAppiumOption("fullReset", android && !reuseInstalledApp);
         // noReset keeps a leftover app process alive across sessions, and
         // UiAutomator2's session-start short-circuits the launch when the
@@ -249,7 +256,7 @@ public abstract class MobilePlatformAdapter
         // start on the deterministic fresh launch the suite relies on.
         // iOS must apply the scenario environment even if a prior process is
         // still alive (for example after session recovery or review reuse).
-        options.AddAdditionalAppiumOption("forceAppLaunch", android ? reuseInstalledApp : environment != null);
+        options.AddAdditionalAppiumOption("forceAppLaunch", android ? reuseInstalledApp : verifiedIos || environment != null);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
@@ -276,7 +283,10 @@ public abstract class MobilePlatformAdapter
             // Coverage scenarios handle any alerts explicitly for the whole
             // session: re-enabling requires a selector that changes acceptance.
             options.AddAdditionalAppiumOption("autoAcceptAlerts", !coverageEnabled);
-            options.AddAdditionalAppiumOption("enforceAppInstall", true);
+            if (!verifiedIos)
+            {
+                options.AddAdditionalAppiumOption("enforceAppInstall", true);
+            }
             options.AddAdditionalAppiumOption("isHeadless", true);
             // run.mjs exports device/lifecycle/crash logs independently. Appium's
             // duplicate live stream can stall cold simulator session startup.
@@ -336,12 +346,6 @@ public abstract class MobilePlatformAdapter
                 // every gesture. Explicit polls and settle loops verify state.
                 ["animationCoolOffTimeout"] = 0.5
             });
-            // The instrumented e2e build never goes quiescent at launch: the
-            // coverage recorder and the search-index warmup keep worker threads
-            // churning well past XCTest's launch window ("Timed out attempting
-            // to launch app"). The suite's explicit WaitFor polling does the
-            // real synchronization, so skipping the idle gate is safe.
-            options.AddAdditionalAppiumOption("waitForQuiescence", false);
             // The suite marker reaches the app through processArguments on the
             // session's own launch; per-scenario restarts pass it through
             // launchApp because XCUITest does not merge the two.
