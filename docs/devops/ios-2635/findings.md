@@ -141,6 +141,20 @@ Not evaluated — no verifiable Namespace pricing/usage evidence. The
 per-runner `job_duration_s` sums are the runner-minute basis if pricing
 becomes available.
 
+## Post-`f5f9dadb3` re-verification attempt (2026-11-17) — aborted
+
+A re-verification dispatch on frozen SHA `1c6da483` (post-`f5f9dadb3` master;
+pre-#3421 merge) aborted on the runbook's probe-queue criterion: the
+`namespace-profile-mac-os` profile did not schedule a runner for the
+`probe_namespace` job for over two hours while the same run's `xcode-27` jobs
+scheduled normally — the profile is not currently available to this repo.
+
+**Decision impact**: #2312 stays closed. The performance migration is blocked
+by runner availability, not by data; re-run ≥10 iterations on then-current
+master (post-`f5f9dadb3` and post-#3421) if the profile is restored. Full
+execution detail is on
+[#3422](https://github.com/bible-on-site/bible-on-site/issues/3422).
+
 ## Interpretation per the issue's decision rule
 
 1. **Reliability migration: not justified.** Namespace did not show
@@ -173,6 +187,8 @@ bounded re-verification rather than dropping the idea:
   reframe #2312 as a *performance* migration and flip
   `ios_runner` in `app-mobile-e2e.yml` (a one-line `runs-on` input change —
   runner selection is not AWS-impacting).
+  *(Attempted 2026-11-17; aborted on the probe-queue criterion — see the
+  re-verification section above.)*
 - In parallel, file the app/harness follow-ups the data points at:
   - convert remaining live-element reads (`ReadFrame`/`Enabled`/`.Location`
     after `WaitFor`) to the snapshot/condition-element pattern that
@@ -220,7 +236,9 @@ evidence) and [ab-legs.csv](ab-legs.csv) (40 leg rows incl. true queue).
   infra split is reported, not extrapolated.
 - **The frozen A/B SHA predates the `FirstPasuk` fix** (`f5f9dadb3`, master
   2026-11-13): the 5-leg Namespace stale-text cluster measures a code path
-  that no longer exists. Re-verification on current master is the open item.
+  that no longer exists. Re-verification on current master was attempted on
+  2026-11-17 and aborted on the runbook's probe-queue criterion (see above);
+  it remains the open item pending `namespace-profile-mac-os` availability.
 - Three rerun shard attempts and five mid-flight cancellations were excluded
   from the primary rate per protocol; the five cancelled shards belong to two
   run-level workflow cancellations (`41026307444`, `41226836955`), not
