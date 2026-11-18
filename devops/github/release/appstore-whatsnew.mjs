@@ -9,10 +9,10 @@
  * generated notes still ship as an immutable release manifest so the text
  * can be applied by the next manual submission without re-deriving it.
  *
- * The public baseline is the version Apple reports READY_FOR_DISTRIBUTION — the
- * truth about what store users actually run, including versions released
- * outside this automation. Features skip/failed TestFlight rounds still fall
- * inside the announcement range.
+ * Ready-for-distribution records can include older available versions. When
+ * several match, bind the Hebrew notes baseline to Apple's public Israeli
+ * storefront version and require one exact matching Connect record. Releases
+ * outside this automation and skipped TestFlight rounds stay in the notes range.
  *
  * Usage:
  *   node appstore-whatsnew.mjs publish --version 5.1.8 --tag app-v5.1.8 \
@@ -65,7 +65,7 @@ async function readLiveVersions(appId, read) {
 	});
 }
 
-function selectLiveVersion(result) {
+async function selectLiveVersion(result, lookupPublicVersion) {
 	const versions = result.data
 		.filter(
 			(v) =>
@@ -77,23 +77,77 @@ function selectLiveVersion(result) {
 			version: v.attributes?.versionString,
 		}))
 		.filter((v) => typeof v.version === "string");
-	if (versions.length > 1)
-		throw new Error("More than one live iOS App Store version reported");
 	if (versions.length === 0) return null;
-	if (!/^\d+\.\d+\.\d+$/.test(versions[0].version))
+	let selected = versions[0];
+	if (versions.length > 1) {
+		if (!lookupPublicVersion)
+			throw new Error("More than one live iOS App Store version reported");
+		const published = await lookupPublicVersion();
+		const matches = versions.filter((version) => version.version === published);
+		if (matches.length !== 1)
+			throw new Error(
+				"Public Apple version does not uniquely match a live iOS App Store record",
+			);
+		selected = matches[0];
+	}
+	if (!/^\d+\.\d+\.\d+$/.test(selected.version))
 		throw new Error(
-			`Live App Store version is not semver: ${versions[0].version}`,
+			`Live App Store version is not semver: ${selected.version}`,
 		);
-	return versions[0].version;
+	return selected.version;
 }
 
 /** The version store users currently run — the honest public baseline. */
-export async function liveVersion(appId, read) {
-	return selectLiveVersion(await readLiveVersions(appId, read));
+export async function liveVersion(appId, read, lookupPublicVersion) {
+	return selectLiveVersion(
+		await readLiveVersions(appId, read),
+		lookupPublicVersion && (() => lookupPublicVersion(appId)),
+	);
+}
+
+/** Resolve the current Israeli storefront version for Hebrew release notes, without credentials. */
+export async function publicStoreVersion(appId, fetcher = fetch) {
+	if (
+		typeof appId !== "string" ||
+		!/^[1-9]\d*$/.test(appId) ||
+		!Number.isSafeInteger(Number(appId))
+	)
+		throw new Error("Invalid public Apple app identity");
+	const url = new URL("https://itunes.apple.com/lookup");
+	url.search = new URLSearchParams({
+		id: appId,
+		country: "il",
+		entity: "software",
+	}).toString();
+	const response = await fetcher(url, {
+		method: "GET",
+		redirect: "error",
+		signal: AbortSignal.timeout(15000),
+	});
+	if (!response.ok)
+		throw new Error(`Public Apple lookup failed: HTTP ${response.status}`);
+	const result = await response.json();
+	const record = result?.results?.[0];
+	if (
+		result?.resultCount !== 1 ||
+		!Array.isArray(result.results) ||
+		result.results.length !== 1 ||
+		!Number.isSafeInteger(record?.trackId) ||
+		String(record.trackId) !== appId ||
+		record.bundleId !== "com.tanah.daily929" ||
+		record.kind !== "software" ||
+		record.wrapperType !== "software" ||
+		typeof record.version !== "string" ||
+		!/^\d+\.\d+\.\d+$/.test(record.version)
+	)
+		throw new Error(
+			"Public Apple app/version identity is missing or ambiguous",
+		);
+	return record.version;
 }
 
 /** Inspect exactly the publication query without writing metadata or selecting an ambiguous baseline. */
-export async function inspectLiveVersions(appId, read) {
+export async function inspectLiveVersions(appId, read, lookupPublicVersion) {
 	const result = await readLiveVersions(appId, read);
 	const snapshot = {
 		kind: "app-store-public-version-inspection/1",
@@ -106,10 +160,18 @@ export async function inspectLiveVersions(appId, read) {
 			appStoreState: record.attributes?.appStoreState ?? null,
 		})),
 		publicBaseline: null,
+		publicLookupVersion: null,
 		error: null,
 	};
 	try {
-		snapshot.publicBaseline = selectLiveVersion(result);
+		snapshot.publicBaseline = await selectLiveVersion(
+			result,
+			lookupPublicVersion &&
+				(async () => {
+					snapshot.publicLookupVersion = await lookupPublicVersion(appId);
+					return snapshot.publicLookupVersion;
+				}),
+		);
 	} catch (error) {
 		snapshot.error = error.message;
 	}
@@ -273,7 +335,11 @@ export async function main() {
 	if (command === "inspect") {
 		const read = appleReader(appleCredentials(), fetch, { retries: 3 });
 		const app = await findApp({ bundle: "com.tanah.daily929" }, read);
-		const snapshot = await inspectLiveVersions(app.id, read);
+		const snapshot = await inspectLiveVersions(
+			app.id,
+			read,
+			publicStoreVersion,
+		);
 		mkdirSync(args["out-dir"], { recursive: true });
 		writeFileSync(
 			path.join(args["out-dir"], "app-store-public-version-inspection.json"),
@@ -297,7 +363,7 @@ export async function main() {
 		const app = await findApp({ bundle: "com.tanah.daily929" }, read);
 		// The public baseline is Apple's own ready-for-distribution version —
 		// including releases this automation never touched.
-		const baseline = await liveVersion(app.id, read);
+		const baseline = await liveVersion(app.id, read, publicStoreVersion);
 		outcome.publicBaseline = baseline;
 		const manifest = generateNotes({
 			repo,
