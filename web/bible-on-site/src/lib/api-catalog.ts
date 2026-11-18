@@ -10,8 +10,6 @@
 import { NextResponse } from "next/server";
 import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 
-export const dynamic = "force-static";
-
 const CATALOG_TYPE =
 	'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"';
 
@@ -23,7 +21,9 @@ const LINKSET = {
 				{
 					href: `${SITE_ORIGIN}/api/search`,
 					type: "application/json",
-					"title-info": [{ title: "Public corpus search", "title-language": "en" }],
+					"title-info": [
+						{ title: "Public corpus search", "title-language": "en" },
+					],
 				},
 			],
 			"service-desc": [
