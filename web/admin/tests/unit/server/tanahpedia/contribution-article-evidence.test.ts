@@ -126,6 +126,43 @@ it("attaches actual read spans to selected article links and retains all existin
 	expect(original).toHaveLength(1);
 	expect(read).toHaveBeenCalledWith({}, "123", { current: true });
 });
+it("attaches replacement coverage evidence while excluding removed coverage", async () => {
+	const catalogue = literalCatalogue();
+	const grounding = catalogue.articleGroundings?.[0];
+	if (!grounding?.citations) throw new Error("Missing fixture citations");
+	grounding.citations.push({
+		...grounding.citations[0],
+		pasuk: 30,
+		pasukTo: 30,
+		label: "בראשית א ל",
+	});
+	const result = await appendAgentArticleEvidence(
+		{} as never,
+		[
+			{
+				...literalChange,
+				after: {
+					commands: [
+						{
+							relationshipKey: "coveringSources",
+							action: "replace",
+							target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] },
+						},
+						{
+							relationshipKey: "coveringSources",
+							action: "remove",
+							target: { pasukCoordinates: [{ perekId: 1, pasuk: 30 }] },
+						},
+					],
+				},
+			},
+		],
+		catalogue,
+		[],
+	);
+	expect(result).toHaveLength(1);
+	expect(result[0].citation).toBe("בראשית א כו-כז");
+});
 it("keeps repeated pages and repeated revisions idempotent while preserving an editor's evidence notes", async () => {
 	const catalogue = literalCatalogue();
 	catalogue.articleGroundings?.push(

@@ -57,9 +57,11 @@ export async function appendAgentArticleEvidence(
 		const wanted = new Set(
 			points.map((point) => `${point.perekId}:${point.pasuk}`),
 		);
-		const groundings = (catalogue.articleGroundings ?? []).filter(
+		const groundings = (catalogue.articleGroundings ?? []).flatMap(
 			(grounding) =>
-				grounding.articleId === change.targetId && grounding.citations?.length,
+				grounding.articleId === change.targetId && grounding.citations?.length
+					? [{ ...grounding, citations: grounding.citations }]
+					: [],
 		);
 		if (!groundings.length) continue;
 		const article = await readArticleLinkContext(conn, change.targetId, {
@@ -70,7 +72,7 @@ export async function appendAgentArticleEvidence(
 				throw new Error(
 					"The article source changed before attaching its evidence",
 				);
-			for (const citation of grounding.citations ?? []) {
+			for (const citation of grounding.citations) {
 				if (
 					!expandLiteralCitationCoordinates([citation]).some((point) =>
 						wanted.has(`${point.perekId}:${point.pasuk}`),
