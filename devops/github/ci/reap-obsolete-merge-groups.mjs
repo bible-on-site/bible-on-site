@@ -59,7 +59,7 @@ function fullRunPage(page) {
     && page.total_count === page.workflow_runs.length, "INCOMPLETE_RUN_PAGE");
   return page.workflow_runs;
 }
-function fullQueue(response) {
+export function fullQueue(response) {
   const repo = response?.repository;
   requireValue(repo?.databaseId === POLICY.repositoryId
     && repo.nameWithOwner === POLICY.repository, "QUEUE_REPOSITORY");
