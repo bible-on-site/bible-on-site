@@ -63,6 +63,7 @@ describe("explicit preservation instructions", () => {
 		"Is the description unchanged? Keep description.",
 		"האם התיאור השתנה? יש לשמר בדיוק את התיאור.",
 		"Review the description. Keep description.",
+		"Please review the description. Keep description.",
 	])(
 		"keeps a clear preservation instruction after a non-editing mention: %s",
 		(body) => {

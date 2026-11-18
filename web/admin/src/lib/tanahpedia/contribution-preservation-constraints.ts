@@ -13,8 +13,12 @@ const EDIT_WORDS = new Set(
 		" ",
 	),
 );
-const READ_ONLY_ACTION =
-	/^(?:(?:please|נא|אנא|יש)\s+)?(?:read|review|inspect|check|explain|describe|report|answer|קרא|בדוק|סקור|עיין|בחן|תאר|דווח|ענה)(?![\p{L}\p{N}_])/iu;
+const POLITE_WORDS = new Set(["please", "נא", "אנא", "יש"]);
+const READ_ONLY_WORDS = new Set(
+	"read review inspect check explain describe report answer קרא בדוק סקור עיין בחן תאר דווח ענה".split(
+		" ",
+	),
+);
 const OPAQUE_LABELS = new Set([
 	"",
 	"example:",
@@ -39,7 +43,8 @@ function knownReadOnly(clause: string, question: boolean) {
 			EDIT_WORDS.has(word) ||
 			(word.startsWith("ו") && EDIT_WORDS.has(word.slice(1))),
 	);
-	return !editing && (question || READ_ONLY_ACTION.test(clause));
+	const command = words[POLITE_WORDS.has(words[0] ?? "") ? 1 : 0] ?? "";
+	return !editing && (question || READ_ONLY_WORDS.has(command));
 }
 
 function fieldName(name: string): PreservedContributionField {
@@ -68,7 +73,7 @@ function instructionClauses(body: string) {
 		if (
 			clause.includes("[quoted data]") &&
 			OPAQUE_LABELS.has(
-				clause.replaceAll("[quoted data]", "").trim().toLowerCase(),
+				clause.split("[quoted data]").join("").trim().toLowerCase(),
 			)
 		)
 			return [];
