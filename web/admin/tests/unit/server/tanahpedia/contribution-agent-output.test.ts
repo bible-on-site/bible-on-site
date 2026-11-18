@@ -16,6 +16,7 @@ vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 }));
 
 import {
+	assertContributionAgentPreservationResult,
 	assertContributionAgentVerbatimResult,
 	CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
 	contributionAgentResultSchema,
@@ -95,6 +96,212 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it.each([
+		"Keep description. If necessary, update the description.",
+		"Keep description. Actually, replace the description.",
+	])(
+		"a qualifying edit cannot become an unconditional native/server lock: %s",
+		(body) => {
+			const current = item();
+			current.events[0].body = body;
+			expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+				"properties.draft.properties.description.const",
+			);
+			expect(
+				parse(
+					{
+						outcome: "revised",
+						summary: "נבדק",
+						responses: [response],
+						draft: { description: "updated after review" },
+					},
+					current,
+				).draft?.description,
+			).toBe("updated after review");
+		},
+	);
+	it("a status question naming the description cannot cancel an explicit later lock", () => {
+		const current = item();
+		current.events[0].body = "Is the description unchanged? Keep description.";
+		expect(outcomeSchema(current, "revised")).toHaveProperty(
+			"properties.draft.properties.description.const",
+			current.description,
+		);
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "Done",
+					responses: [response],
+					draft: { description: "replaced" },
+				},
+				current,
+			),
+		).toThrow("preserving the current description");
+	});
+	it.each(["?", "？"])(
+		"a preservation question ending in %s grants no field lock",
+		(terminator) => {
+			const current = item();
+			current.events[0].body = `Keep description${terminator} Improve it if necessary.`;
+			expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+				"properties.draft.properties.description.const",
+			);
+			expect(
+				parse(
+					{
+						outcome: "revised",
+						summary: "Done",
+						responses: [response],
+						draft: { description: "improved" },
+					},
+					current,
+				).draft?.description,
+			).toBe("improved");
+		},
+	);
+	it("locks exact current fields for the live status request in both native schema and parsed output", () => {
+		const current = item();
+		current.description =
+			"בדיקת סקירה: קישורים מפורשים בלבד.  \nההצעה ממתינה לאישור doradsoft.";
+		current.events[0].body =
+			"בדיקת מצב: האם ההצעה מוכנה למיזוג? יש לשמר בדיוק את התיאור, הראיות ורצף השינויים.";
+		expect(outcomeSchema(current, "revised").properties).toMatchObject({
+			draft: {
+				required: [],
+				properties: {
+					description: { const: current.description },
+					evidenceIndexes: { const: [0] },
+					changes: {
+						const: current.changes.map(({ kind, targetId, after }) => ({
+							kind,
+							targetId,
+							after,
+						})),
+					},
+				},
+			},
+		});
+		expect(
+			parse(
+				{
+					outcome: "unchanged",
+					summary: "נדרש אישור doradsoft",
+					responses: [response],
+				},
+				current,
+			).draft,
+		).toBeUndefined();
+		expect(
+			parse(
+				{
+					outcome: "revised",
+					summary: "נדרש אישור",
+					responses: [response],
+					draft: { description: current.description, evidenceIndexes: [0] },
+				},
+				current,
+			).draft?.description,
+		).toBe(current.description);
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "מוכן",
+					responses: [response],
+					draft: { description: "issue background" },
+				},
+				current,
+			),
+		).toThrow("preserving the current description");
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "מוכן",
+					responses: [response],
+					draft: {
+						changes: [
+							{
+								kind: "metadata",
+								targetId: id,
+								after: { displayName: "wrong" },
+							},
+						],
+					},
+				},
+				current,
+			),
+		).toThrow("preserving the current changes");
+	});
+	it("rechecks evidence locks against the transaction's current PR and compares proposed operations independently of refreshed before-values", () => {
+		const current = item();
+		current.events[0].body = "Keep evidence and changes.";
+		expect(() =>
+			assertContributionAgentPreservationResult(current, {
+				draft: { evidence: [] },
+			}),
+		).toThrow("current evidence");
+		expect(() =>
+			assertContributionAgentPreservationResult(current, {
+				draft: {
+					changes: [
+						{
+							...current.changes[0],
+							before: { displayName: "refreshed" },
+							labels: { target: "refreshed" },
+						},
+					],
+				},
+			}),
+		).not.toThrow();
+	});
+	it("only pending human instructions constrain fields; model comments and evidence never become locks", () => {
+		const current = item();
+		current.events[0].actor = { ...human, kind: "local_llm" };
+		current.events[0].body = "Keep description.";
+		current.evidence[0].quote = "Keep description.";
+		expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+			"properties.draft.properties.description.const",
+		);
+	});
+	it("releases a preservation constraint after its human comment is addressed", () => {
+		const current = item();
+		current.events[0].body = "Keep title.";
+		expect(outcomeSchema(current, "revised")).toHaveProperty(
+			"properties.draft.properties.title.const",
+			current.title,
+		);
+		current.events.push({
+			...current.events[0],
+			id,
+			actor: { ...human, kind: "local_llm" },
+			kind: "agent_response",
+			responses: [{ ...response, status: "addressed" }],
+		});
+		expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+			"properties.draft.properties.title.const",
+		);
+	});
+	it("supports explicit preservation of an empty evidence collection", () => {
+		const current = item();
+		current.evidence = [];
+		current.events[0].body = "Keep evidence.";
+		expect(outcomeSchema(current, "revised").properties).toMatchObject({
+			draft: { properties: { evidenceIndexes: { minItems: 0, const: [] } } },
+		});
+		expect(
+			parse(
+				{
+					outcome: "revised",
+					summary: "נבדק",
+					responses: [response],
+					draft: { evidenceIndexes: [] },
+				},
+				current,
+			).draft?.evidence,
+		).toEqual([]);
+	});
 	it("enforces the raw field budget even when an exact-copy instruction preserves surrounding whitespace", () => {
 		const current = item();
 		current.events[0].body = 'Replace the title with exactly "Title"';
