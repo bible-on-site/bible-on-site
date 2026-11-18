@@ -44,6 +44,7 @@ import {
 	visualTextRuns,
 } from "./bidi-text";
 import {
+	embedUiFont,
 	getBoldFontBytes,
 	getLogoBytes,
 	getRegularFontBytes,
@@ -500,8 +501,8 @@ export async function generateCalendarPdf(
 	doc.registerFontkit(fontkit);
 	const ctx: RenderCtx = {
 		doc,
-		font: memoizeGlyphEncoding(await doc.embedFont(getRegularFontBytes())),
-		bold: memoizeGlyphEncoding(await doc.embedFont(getBoldFontBytes())),
+		font: memoizeGlyphEncoding(await embedUiFont(doc, getRegularFontBytes())),
+		bold: memoizeGlyphEncoding(await embedUiFont(doc, getBoldFontBytes())),
 		logo: await doc.embedJpg(getLogoBytes()),
 		input,
 	};
