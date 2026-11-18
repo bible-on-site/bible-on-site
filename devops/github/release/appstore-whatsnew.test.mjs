@@ -254,6 +254,200 @@ test("editableVersion uses the current iOS state when legacy state disagrees", a
 	);
 });
 
+// --- #3610: multi-record resolution beyond synthetic rows ---
+
+/**
+ * The sanitized shape of the real 5.1.23 failure (run 44034434746): the
+ * legacy-state query returned more than one record. A superseded version can
+ * retain a stale legacy live flag, and the same live version can appear on
+ * more than one record — so no single record can prove the public baseline.
+ */
+const realWorldRecords = [
+	{
+		id: "rec-superseded",
+		attributes: {
+			versionString: "5.1.22",
+			platform: "IOS",
+			appVersionState: "REPLACED_WITH_NEW_VERSION",
+			appStoreState: "READY_FOR_SALE",
+		},
+	},
+	{
+		id: "rec-live-a",
+		attributes: {
+			versionString: "5.1.23",
+			platform: "IOS",
+			appVersionState: "READY_FOR_DISTRIBUTION",
+			appStoreState: "READY_FOR_SALE",
+		},
+	},
+	{
+		id: "rec-live-b",
+		attributes: {
+			versionString: "5.1.23",
+			platform: "IOS",
+			appVersionState: "READY_FOR_DISTRIBUTION",
+		},
+	},
+	{
+		id: "rec-mac",
+		attributes: {
+			versionString: "8.0.0",
+			platform: "MAC_OS",
+			appVersionState: "READY_FOR_DISTRIBUTION",
+		},
+	},
+	{
+		id: "rec-draft",
+		attributes: {
+			versionString: "5.1.24",
+			platform: "IOS",
+			appVersionState: "PREPARE_FOR_SUBMISSION",
+			appStoreState: "READY_FOR_SALE",
+		},
+	},
+];
+
+test("liveVersion collapses the real duplicate live records into one baseline", async () => {
+	// The real response carries two live records reporting the same version —
+	// they describe one baseline, so they collapse to it and no public
+	// storefront lookup is needed at all.
+	const read = async () => ({ data: realWorldRecords });
+	assert.equal(await liveVersion("app1", read), "5.1.23");
+	assert.equal(
+		await liveVersion("app1", read, async () => {
+			throw new Error("lookup must not run for a single-version baseline");
+		}),
+		"5.1.23",
+	);
+});
+
+test("liveVersion binds the baseline to the public storefront version among distinct live records", async () => {
+	const read = async () => ({
+		data: [
+			modernVersion("5.1.22", "READY_FOR_DISTRIBUTION"),
+			modernVersion("5.1.23", "READY_FOR_DISTRIBUTION"),
+		],
+	});
+	assert.equal(
+		await liveVersion("app1", read, async () => "5.1.23"),
+		"5.1.23",
+	);
+	await assert.rejects(
+		liveVersion("app1", read, async () => "5.1.24"),
+		/does not match a live iOS App Store record/i,
+	);
+});
+
+test("liveVersion refuses unclassifiable rows instead of silently skipping them", async () => {
+	const live = modernVersion("5.1.23", "READY_FOR_DISTRIBUTION");
+	for (const [label, broken] of [
+		["missing version", { id: "u1", attributes: { platform: "IOS", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+		["missing platform", { id: "u2", attributes: { versionString: "5.1.23", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+		["missing state", { id: "u3", attributes: { versionString: "5.1.23", platform: "IOS" } }],
+		["missing identity", { attributes: { versionString: "5.1.23", platform: "IOS", appVersionState: "READY_FOR_DISTRIBUTION" } }],
+	]) {
+		await assert.rejects(
+			liveVersion("app1", async () => ({ data: [live, broken] })),
+			/cannot be classified/,
+			label,
+		);
+	}
+	// A row proven non-iOS is still safely ignored rather than unverifiable.
+	assert.equal(
+		await liveVersion("app1", async () => ({
+			data: [live, { id: "mac", attributes: { platform: "MAC_OS" } }],
+		})),
+		"5.1.23",
+	);
+});
+
+test("liveVersion ambiguity names the conflicting candidates and the corrective action", async () => {
+	const error = await liveVersion("app1", async () => ({
+		data: [
+			modernVersion("5.1.22", "READY_FOR_DISTRIBUTION"),
+			modernVersion("5.1.23", "READY_FOR_DISTRIBUTION"),
+		],
+	})).then(
+		() => assert.fail("expected an ambiguity rejection"),
+		(e) => e,
+	);
+	assert.match(error.message, /more than one live iOS App Store version/i);
+	assert.match(error.message, /5\.1\.22/);
+	assert.match(error.message, /5\.1\.23/);
+	assert.match(error.message, /App Store Connect/);
+});
+
+test("liveVersion refuses truncated or paginated responses instead of guessing", async () => {
+	await assert.rejects(
+		liveVersion("app1", async () => ({
+			data: [versionData("5.1.7")],
+			links: { next: "https://api.appstoreconnect.apple.com/v1/cursor" },
+		})),
+		/incomplete/i,
+	);
+	await assert.rejects(
+		liveVersion("app1", async () => ({
+			data: [versionData("5.1.7")],
+			meta: { paging: { total: 2 } },
+		})),
+		/incomplete/i,
+	);
+	await assert.rejects(
+		liveVersion("app1", async () => ({ data: "nope" })),
+		/malformed/i,
+	);
+});
+
+test("editableVersion refuses paginated and unclassifiable responses", async () => {
+	await assert.rejects(
+		editableVersion("app1", "5.1.8", async () => ({
+			data: [versionData("5.1.8", "vid", "PREPARE_FOR_SUBMISSION")],
+			links: { next: "https://api.appstoreconnect.apple.com/v1/cursor" },
+		})),
+		/incomplete/i,
+	);
+	await assert.rejects(
+		editableVersion("app1", "5.1.8", async () => ({
+			data: [
+				versionData("5.1.8", "vid", "PREPARE_FOR_SUBMISSION"),
+				{ attributes: { versionString: "5.1.8" } },
+			],
+		})),
+		/cannot be classified/i,
+	);
+	// A row proven different on either axis is still safely ignored.
+	assert.equal(
+		await editableVersion("app1", "5.1.8", async () => ({
+			data: [
+				versionData("5.1.8", "vid", "PREPARE_FOR_SUBMISSION"),
+				{ id: "ghost", attributes: { platform: "IOS", versionString: "5.1.7" } },
+			],
+		})).then((v) => v.id),
+		"vid",
+	);
+});
+
+test("publishWhatsNew refuses a truncated localization list instead of writing blind", async () => {
+	const writes = [];
+	await assert.rejects(
+		publishWhatsNew({
+			versionId: "vid",
+			notes,
+			read: async () => ({
+				data: [],
+				links: { next: "https://api.appstoreconnect.apple.com/v1/cursor" },
+			}),
+			write: async (pathName, options) => {
+				writes.push(pathName);
+				return { data: { id: "loc1" } };
+			},
+		}),
+		/incomplete/i,
+	);
+	assert.equal(writes.length, 0, "no write may happen on unverifiable state");
+});
+
 test("public version inspection preserves the exact queried identities without choosing an ambiguous baseline", async () => {
 	let calls = 0;
 	const records = [
@@ -296,7 +490,7 @@ test("public inspection retains legacy, absent, replaced and malformed-version s
 	for (const [records, baseline, expectedError] of [
 		[[versionData("5.1.8")], "5.1.8", null],
 		[[modernVersion("5.1.8", "READY_FOR_DISTRIBUTION")], "5.1.8", null],
-		[[{ id: "absent" }], null, null],
+		[[{ id: "absent" }], null, /cannot be classified/],
 		[
 			[
 				modernVersion("5.1.7", "REPLACED_WITH_NEW_VERSION", {
@@ -603,10 +797,9 @@ test("ambiguous ready versions use the exact published Apple match rather than t
 	assert.equal(lookups, 2);
 });
 
-test("public baseline resolution fails closed for missing, duplicate, malformed and unavailable matches", async () => {
+test("public baseline resolution fails closed for missing, malformed and unavailable matches", async () => {
 	for (const [versions, published] of [
 		[["5.1.15", "5.0.217"], "5.1.25"],
-		[["5.1.15", "5.1.15"], "5.1.15"],
 		[["5.1.15", "invalid"], "invalid"],
 	]) {
 		await assert.rejects(
@@ -619,9 +812,24 @@ test("public baseline resolution fails closed for missing, duplicate, malformed 
 				}),
 				async () => published,
 			),
-			/uniquely match|not semver/,
+			/does not match a live iOS App Store record|not semver/,
 		);
 	}
+	// Duplicate records of one live version collapse to a single baseline
+	// rather than blocking on record-count ambiguity.
+	assert.equal(
+		await liveVersion(
+			"1045128150",
+			async () => ({
+				data: [
+					modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
+					{ ...modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"), id: "dup" },
+				],
+			}),
+			async () => "5.1.15",
+		),
+		"5.1.15",
+	);
 	const read = async () => ({
 		data: [
 			modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
