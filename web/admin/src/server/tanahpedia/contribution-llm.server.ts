@@ -34,6 +34,7 @@ import {
 	agentArticleLinkVariant,
 	assertAgentArticleLinkReferences,
 } from "./contribution-agent-article-links.server";
+import { appendAgentArticleEvidence } from "./contribution-article-evidence.server";
 import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import {
@@ -993,7 +994,13 @@ export async function createGeneratedContributionPrs(
 			modelCatalogue,
 		);
 		const prs: Contribution[] = [];
-		for (const draft of drafts)
+		for (const draft of drafts) {
+			draft.evidence = await appendAgentArticleEvidence(
+				conn,
+				draft.changes,
+				modelCatalogue,
+				draft.evidence,
+			);
 			prs.push(
 				await createContribution(
 					draft,
@@ -1011,6 +1018,7 @@ export async function createGeneratedContributionPrs(
 					conn,
 				),
 			);
+		}
 		addEvent(
 			issue,
 			hooks.actor ?? {
