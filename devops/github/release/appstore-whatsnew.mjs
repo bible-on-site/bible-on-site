@@ -9,7 +9,7 @@
  * generated notes still ship as an immutable release manifest so the text
  * can be applied by the next manual submission without re-deriving it.
  *
- * The public baseline is the version Apple reports READY_FOR_SALE — the
+ * The public baseline is the version Apple reports READY_FOR_DISTRIBUTION — the
  * truth about what store users actually run, including versions released
  * outside this automation. Features skip/failed TestFlight rounds still fall
  * inside the announcement range.
@@ -36,7 +36,7 @@ import {
 import { apiToken, appleReader, findApp } from "./testflight-build.mjs";
 
 /**
- * Version records Apple accepts metadata edits on. READY_FOR_SALE and
+ * Version records Apple accepts metadata edits on. Live distribution and
  * in-flight review states are deliberately excluded — whatsNew edits there
  * are rejected or unsafe.
  */
@@ -51,14 +51,25 @@ export const EDITABLE_STATES = [
 const LOCALE = "he";
 const WHATS_NEW_LIMIT = 4000;
 
+// Apple replaced appStoreState with appVersionState; a present modern state
+// takes precedence over a stale legacy value.
+function versionState(version) {
+	return version.attributes?.appVersionState ?? version.attributes?.appStoreState;
+}
+
 /** The version store users currently run — the honest public baseline. */
 export async function liveVersion(appId, read) {
 	const result = await read(`apps/${encodeURIComponent(appId)}/appStoreVersions`, {
-		"filter[appStoreState]": "READY_FOR_SALE",
+		"filter[appVersionState]": "READY_FOR_DISTRIBUTION",
 		"filter[platform]": "IOS",
 		limit: "200",
 	});
 	const versions = result.data
+		.filter(
+			(v) =>
+				v.attributes?.platform === "IOS" &&
+				["READY_FOR_DISTRIBUTION", "READY_FOR_SALE"].includes(versionState(v)),
+		)
 		.map((v) => ({
 			id: v.id,
 			version: v.attributes?.versionString,
@@ -85,12 +96,15 @@ export async function editableVersion(appId, version, read) {
 		limit: "200",
 	});
 	const versions = result.data.filter(
-		(v) => v.id && v.attributes?.versionString === version,
+		(v) =>
+			v.id &&
+			v.attributes?.platform === "IOS" &&
+			v.attributes?.versionString === version,
 	);
 	if (versions.length > 1)
 		throw new Error("App Store Connect version identity is ambiguous");
 	if (!versions.length) return null;
-	const state = versions[0].attributes?.appStoreState;
+	const state = versionState(versions[0]);
 	return EDITABLE_STATES.includes(state)
 		? { id: versions[0].id, state }
 		: { id: null, state };
@@ -234,7 +248,7 @@ async function main() {
 	};
 	try {
 		const app = await findApp({ bundle: "com.tanah.daily929" }, read);
-		// The public baseline is Apple's own READY_FOR_SALE version —
+		// The public baseline is Apple's own ready-for-distribution version —
 		// including releases this automation never touched.
 		const baseline = await liveVersion(app.id, read);
 		outcome.publicBaseline = baseline;

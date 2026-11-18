@@ -43,7 +43,7 @@ pub struct MoedAggregate {
 impl From<MoedAggregate> for Moed {
     fn from(value: MoedAggregate) -> Self {
         Self {
-            id: value.moed.id,
+            id: value.moed.id as i32,
             slug: value.moed.slug,
             name: value.moed.name,
             summary: value.moed.summary,
@@ -55,13 +55,13 @@ impl From<MoedAggregate> for Moed {
                 .sections
                 .into_iter()
                 .map(|(section, ranges)| MoedSection {
-                    id: section.id,
+                    id: section.id as i32,
                     label: section.label,
                     position: section.position as i32,
                     ranges: ranges
                         .into_iter()
                         .map(|range| MoedRange {
-                            id: range.id,
+                            id: range.id as i32,
                             position: range.position as i32,
                             perek_id_start: range.perek_id_start,
                             pasuk_start: range.pasuk_start as i32,
@@ -79,7 +79,7 @@ impl From<MoedAggregate> for Moed {
 /// Loads the ordered sections+ranges of one moed, in display order.
 async fn load_sections(
     conn: &impl ConnectionTrait,
-    moed_id: i32,
+    moed_id: u16,
 ) -> Result<Vec<(moed_section::Model, Vec<moed_range::Model>)>, ServiceError> {
     let sections = moed_section::Entity::find()
         .filter(moed_section::Column::MoedId.eq(moed_id))
@@ -90,7 +90,7 @@ async fn load_sections(
     if sections.is_empty() {
         return Ok(Vec::new());
     }
-    let section_ids: Vec<i32> = sections.iter().map(|s| s.id).collect();
+    let section_ids: Vec<u32> = sections.iter().map(|s| s.id).collect();
     let ranges = moed_range::Entity::find()
         .filter(moed_range::Column::SectionId.is_in(section_ids))
         .order_by_asc(moed_range::Column::SectionId)
@@ -98,7 +98,7 @@ async fn load_sections(
         .all(conn)
         .await
         .map_err(db_error)?;
-    let mut by_section: HashMap<i32, Vec<moed_range::Model>> = HashMap::new();
+    let mut by_section: HashMap<u32, Vec<moed_range::Model>> = HashMap::new();
     for range in ranges {
         by_section.entry(range.section_id).or_default().push(range);
     }
@@ -115,7 +115,7 @@ async fn load_sections(
 /// range-matched side is computed by the union read).
 async fn load_explicit_article_ids(
     conn: &impl ConnectionTrait,
-    moed_id: i32,
+    moed_id: u16,
 ) -> Result<Vec<i32>, ServiceError> {
     let links = article_moed::Entity::find()
         .filter(article_moed::Column::MoedId.eq(moed_id))
@@ -152,7 +152,7 @@ pub async fn load_by_slug(
 /// The moed aggregate by id (admin path — drafts included).
 async fn load_by_id(
     conn: &impl ConnectionTrait,
-    moed_id: i32,
+    moed_id: u16,
 ) -> Result<Option<MoedAggregate>, ServiceError> {
     let Some(model) = moed::Entity::find_by_id(moed_id)
         .one(conn)
@@ -294,10 +294,13 @@ struct UnionRow {
 /// Coverage semantics (mirrors the website's `getArticleSummariesForRanges`):
 /// a `coverage_verified` article matches when any covering row lands inside
 /// a slice; an unverified one falls back to its primary perek. Explicit
-/// links always match. Ordering mirrors the website range matcher: the
-/// article's FIRST matched slice order, editorial priority within that
-/// slice, then id — explicit-only links (no matched slice) follow all
-/// range matches under the same priority/id tie-breakers.
+/// links match only while the article's primary perek is a routable public
+/// one (1-929) — an explicit link cannot resurrect a dead route, the
+/// same bound the website applies in `getMoedArticleSummaries`. Ordering
+/// mirrors the website range matcher: the article's FIRST matched slice
+/// order, editorial priority within that slice, then id — explicit-only
+/// links (no matched slice) follow all range matches under the same
+/// priority/id tie-breakers.
 pub async fn articles_for_moed(db: &Database, dto: &Moed) -> Result<Vec<Article>, ServiceError> {
     let conn = db.get_connection();
     let ranges = all_ranges(dto);
@@ -324,8 +327,9 @@ pub async fn articles_for_moed(db: &Database, dto: &Moed) -> Result<Vec<Article>
     let (sql, params) = if slices.is_empty() {
         (
             "SELECT a.id FROM tanah_article a \
-             WHERE EXISTS (SELECT 1 FROM tanah_article_moed am \
-                 WHERE am.moed_id = ? AND am.article_id = a.id) \
+             WHERE a.perek_id BETWEEN 1 AND 929 \
+                 AND EXISTS (SELECT 1 FROM tanah_article_moed am \
+                     WHERE am.moed_id = ? AND am.article_id = a.id) \
              ORDER BY a.priority ASC, a.id ASC"
                 .to_string(),
             vec![dto.id.into()],
@@ -343,9 +347,10 @@ pub async fn articles_for_moed(db: &Database, dto: &Moed) -> Result<Vec<Article>
                          AND cs.pasuk BETWEEN sm.start_pasuk AND sm.end_pasuk)) \
                      OR (a.coverage_verified = FALSE AND a.perek_id BETWEEN 1 AND 929 \
                          AND a.perek_id = sm.perek_id)) \
-                 WHERE sm.perek_id IS NOT NULL OR EXISTS (\
+                 WHERE sm.perek_id IS NOT NULL OR (a.perek_id BETWEEN 1 AND 929 \
+                     AND EXISTS (\
                      SELECT 1 FROM tanah_article_moed am \
-                     WHERE am.moed_id = ? AND am.article_id = a.id) \
+                     WHERE am.moed_id = ? AND am.article_id = a.id)) \
                  GROUP BY a.id, a.priority \
                  ORDER BY (MIN(sm.slice_order) IS NULL) ASC, \
                      MIN(sm.slice_order) ASC, a.priority ASC, a.id ASC"
@@ -546,6 +551,9 @@ pub async fn upsert_moed(
     )?;
     let txn = db.get_connection().begin().await.map_err(db_error)?;
     let previous = if let Some(id) = input.id {
+        // The PK is SMALLINT UNSIGNED — a caller id outside u16 can only miss.
+        let id = u16::try_from(id)
+            .map_err(|_| ServiceError::not_found(MOED_NOT_FOUND, None::<sea_orm::DbErr>))?;
         moed::Entity::find_by_id(id)
             .lock_exclusive()
             .one(&txn)
@@ -559,7 +567,11 @@ pub async fn upsert_moed(
     validate_write(&txn, &input, &slug).await?;
 
     let model = moed::ActiveModel {
-        id: input.id.map(sea_orm::Set).unwrap_or(sea_orm::NotSet),
+        // The locked row's PK — proven to fit the SMALLINT UNSIGNED column.
+        id: previous
+            .as_ref()
+            .map(|model| sea_orm::Set(model.id))
+            .unwrap_or(sea_orm::NotSet),
         slug: sea_orm::Set(slug.clone()),
         name: sea_orm::Set(input.name.trim().to_string()),
         summary: sea_orm::Set(input.summary.clone().filter(|s| !s.trim().is_empty())),
@@ -613,7 +625,7 @@ pub async fn upsert_moed(
         .ok_or_else(|| ServiceError::not_found(MOED_NOT_FOUND, None::<sea_orm::DbErr>))?;
     let dto: Moed = aggregate.into();
     let revalidation = revalidator
-        .invalidate_moed(saved.id, &slug, previous_slug.as_deref())
+        .invalidate_moed(saved.id as i32, &slug, previous_slug.as_deref())
         .await
         .as_str();
     Ok((dto, revalidation))
@@ -628,14 +640,17 @@ pub async fn delete_moed(
     moed_id: i32,
 ) -> Result<&'static str, ServiceError> {
     let txn = db.get_connection().begin().await.map_err(db_error)?;
-    let model = moed::Entity::find_by_id(moed_id)
+    // The PK is SMALLINT UNSIGNED — a caller id outside u16 can only miss.
+    let moed_pk = u16::try_from(moed_id)
+        .map_err(|_| ServiceError::not_found(MOED_NOT_FOUND, None::<sea_orm::DbErr>))?;
+    let model = moed::Entity::find_by_id(moed_pk)
         .lock_exclusive()
         .one(&txn)
         .await
         .map_err(db_error)?
         .ok_or_else(|| ServiceError::not_found(MOED_NOT_FOUND, None::<sea_orm::DbErr>))?;
     let slug = model.slug.clone();
-    moed::Entity::delete_by_id(moed_id)
+    moed::Entity::delete_by_id(moed_pk)
         .exec(&txn)
         .await
         .map_err(db_error)?;
@@ -661,19 +676,19 @@ pub async fn load_article_moed_links(
     if links.is_empty() {
         return Ok(Vec::new());
     }
-    let moed_ids: Vec<i32> = links.iter().map(|link| link.moed_id).collect();
+    let moed_ids: Vec<u16> = links.iter().map(|link| link.moed_id).collect();
     let moadim = moed::Entity::find()
         .filter(moed::Column::Id.is_in(moed_ids))
         .all(conn)
         .await
         .map_err(db_error)?;
-    let by_id: HashMap<i32, moed::Model> = moadim.into_iter().map(|m| (m.id, m)).collect();
+    let by_id: HashMap<u16, moed::Model> = moadim.into_iter().map(|m| (m.id, m)).collect();
     Ok(links
         .into_iter()
         .filter_map(|link| {
             by_id.get(&link.moed_id).map(|moed| {
                 crate::dtos::article_relationships::ArticleMoedLink {
-                    moed_id: link.moed_id,
+                    moed_id: link.moed_id as i32,
                     slug: moed.slug.clone(),
                     name: moed.name.clone(),
                 }
@@ -697,7 +712,7 @@ pub async fn replace_article_moed_links(
         .all(conn)
         .await
         .map_err(db_error)?;
-    let existing_ids: BTreeSet<i32> = existing.into_iter().map(|m| m.id).collect();
+    let existing_ids: BTreeSet<i32> = existing.into_iter().map(|m| m.id as i32).collect();
     for id in moed_ids {
         if !existing_ids.contains(id) {
             return Err(ServiceError::bad_request(&format!(
@@ -710,7 +725,7 @@ pub async fn replace_article_moed_links(
         .all(conn)
         .await
         .map_err(db_error)?;
-    let current_ids: BTreeSet<i32> = current.iter().map(|link| link.moed_id).collect();
+    let current_ids: BTreeSet<i32> = current.iter().map(|link| link.moed_id as i32).collect();
     let wanted: BTreeSet<i32> = moed_ids.iter().copied().collect();
     let to_add: Vec<i32> = wanted.difference(&current_ids).copied().collect();
     let to_remove: Vec<i32> = current_ids.difference(&wanted).copied().collect();
@@ -730,7 +745,8 @@ pub async fn replace_article_moed_links(
             .into_iter()
             .map(|moed_id| article_moed::ActiveModel {
                 article_id: sea_orm::Set(article_id),
-                moed_id: sea_orm::Set(moed_id),
+                // Proven live PK above, so the i32 -> u16 conversion fits.
+                moed_id: sea_orm::Set(moed_id as u16),
                 created_at: sea_orm::NotSet,
             })
             .collect();
@@ -757,7 +773,7 @@ pub async fn moed_id_slugs(
         .await
         .map_err(db_error)?;
     moadim.sort_by_key(|m| m.id);
-    Ok(moadim.into_iter().map(|m| (m.id, m.slug)).collect())
+    Ok(moadim.into_iter().map(|m| (m.id as i32, m.slug)).collect())
 }
 
 #[cfg(test)]
@@ -836,7 +852,7 @@ mod db_tests {
         Database::from_connection(mock.into_connection())
     }
 
-    fn moed_model(id: i32) -> moed::Model {
+    fn moed_model(id: u16) -> moed::Model {
         moed::Model {
             id,
             slug: format!("slug-{id}"),
@@ -849,7 +865,7 @@ mod db_tests {
         }
     }
 
-    fn section_model(id: i32, moed_id: i32, position: i16) -> moed_section::Model {
+    fn section_model(id: u32, moed_id: u16, position: i16) -> moed_section::Model {
         moed_section::Model {
             id,
             moed_id,
@@ -858,14 +874,14 @@ mod db_tests {
         }
     }
 
-    fn range_model(id: i32, section_id: i32) -> moed_range::Model {
+    fn range_model(id: u32, section_id: u32) -> moed_range::Model {
         moed_range::Model {
             id,
             section_id,
             position: id as i16,
-            perek_id_start: 100 + id,
+            perek_id_start: 100 + id as i32,
             pasuk_start: 1,
-            perek_id_end: 100 + id,
+            perek_id_end: 100 + id as i32,
             pasuk_end: 5,
         }
     }
@@ -888,11 +904,11 @@ mod db_tests {
         }
     }
 
-    fn article_link(article_id: i32, moed_id: i32) -> article_moed::Model {
+    fn article_link(article_id: i32, moed_id: u16) -> article_moed::Model {
         article_moed::Model {
             article_id,
             moed_id,
-            created_at: chrono::Utc::now().naive_utc(),
+            created_at: chrono::Utc::now(),
         }
     }
 
@@ -1248,6 +1264,22 @@ mod db_tests {
     }
 
     #[tokio::test]
+    async fn upsert_moed_id_outside_smallint_unsigned_is_not_found() {
+        // i32 caller ids outside u16 can never match the PK — not found,
+        // no lookup issued.
+        for id in [-1i32, 70000] {
+            let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+            let mut input = upsert_input();
+            input.id = Some(id);
+            let err = upsert_moed(&db, &skipped_revalidator(), input)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::NotFound(_)), "id {id}: {err:?}");
+            assert_no_writes(&db);
+        }
+    }
+
+    #[tokio::test]
     async fn upsert_moed_rejects_blank_name_and_bad_annual_order() {
         let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
         let mut input = upsert_input();
@@ -1401,6 +1433,16 @@ mod db_tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::NotFound(_)));
+
+        // Caller ids outside u16 can never match the SMALLINT UNSIGNED PK —
+        // not found without a lookup.
+        for id in [-1i32, 70000] {
+            let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+            let err = delete_moed(&db, &skipped_revalidator(), id)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::NotFound(_)), "id {id}: {err:?}");
+        }
     }
 
     #[tokio::test]

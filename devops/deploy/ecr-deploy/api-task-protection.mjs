@@ -305,8 +305,9 @@ export class APITaskProtection {
 		} catch (error) {
 			if (error.name !== "InvalidParameterException") throw error;
 			// Clearing protection lets ECS retire the source immediately. Its tag
-			// APIs then reject the task; verify terminal state instead of trying
-			// another tag write or rolling back a healthy replacement.
+			// APIs can reject it while it is still stopping. Verify exact ownership
+			// and retirement intent; the rollout separately waits for STOPPED
+			// before completing. Do not retry tag writes or roll back for this race.
 			assert.ok(this.clearConfirmed, "Task protection clear is unconfirmed");
 			const result = await this.call("DescribeTasks", {
 				cluster: API_CLUSTER,
@@ -321,14 +322,24 @@ export class APITaskProtection {
 				`arn:aws:ecs:${API_REGION}:${API_ACCOUNT}:cluster/${API_CLUSTER}`,
 			);
 			assert.equal(task.group, `service:${API_SERVICE}`);
-			assert.equal(task.lastStatus, "STOPPED", "Source task has not retired");
+			assert.ok(
+				["DEACTIVATING", "STOPPING", "DEPROVISIONING", "STOPPED"].includes(
+					task.lastStatus,
+				),
+				"Source task has not begun retirement",
+			);
 			assert.equal(task.desiredStatus, "STOPPED");
-			this.record("protection-marker-retired", {
-				task: this.task,
-				key: this.key,
-				clearConfirmed: true,
-				lastStatus: task.lastStatus,
-			});
+			this.record(
+				task.lastStatus === "STOPPED"
+					? "protection-marker-retired"
+					: "protection-marker-retiring",
+				{
+					task: this.task,
+					key: this.key,
+					clearConfirmed: true,
+					lastStatus: task.lastStatus,
+				},
+			);
 		}
 		this.released = true;
 		this.record("protection-released", { task: this.task, key: this.key });

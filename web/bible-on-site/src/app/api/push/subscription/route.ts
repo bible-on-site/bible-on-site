@@ -4,6 +4,11 @@ import {
 	readBoundedJson,
 } from "@/lib/bounded-json";
 import {
+	pushRegistrationAllowed,
+	requestClientKey,
+} from "@/lib/rate-limit";
+import {
+	SubscriptionStoreFullError,
 	deleteSubscription,
 	getVapidPublicKey,
 	isPushServiceEndpoint,
@@ -34,6 +39,15 @@ export function GET() {
 
 export async function POST(request: Request) {
 	if (!isWebPushConfigured()) return notConfigured();
+	// Anonymous endpoint: bound writes per client address (#3500). The
+	// store cap in saveSubscription is the backstop for a distributed
+	// flood.
+	if (!pushRegistrationAllowed(requestClientKey(request))) {
+		return NextResponse.json(
+			{ error: "Too many requests" },
+			{ status: 429 },
+		);
+	}
 	const body = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
 	if (body.status === "unreadable") {
 		console.warn("Push subscription body read failed");
@@ -49,8 +63,12 @@ export async function POST(request: Request) {
 	}
 	try {
 		await saveSubscription(subscription);
-	} catch {
-		console.error("Failed to save push subscription");
+	} catch (error) {
+		console.error(
+			error instanceof SubscriptionStoreFullError
+				? "Push subscription store is full"
+				: "Failed to save push subscription",
+		);
 		return NextResponse.json({ error: "Unavailable" }, { status: 503 });
 	}
 	return NextResponse.json({ subscribed: true }, { status: 201 });
