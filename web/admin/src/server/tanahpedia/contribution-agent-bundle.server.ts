@@ -14,7 +14,7 @@ import {
 } from "./family-api-spec";
 
 /** Bump when instructions or tool semantics change, independently of API data migrations. */
-export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v11";
+export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v13";
 const object = (properties: Record<string, unknown>, required: string[]) => ({
 	type: "object",
 	additionalProperties: false,
@@ -43,7 +43,10 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			"For edits/deletions supply the exact existing targetId; for new rows omit it. Never output before states, labels, SQL, credentials, URLs for tools or authority claims.",
 			"When revising an existing PR, retain its already-owned target IDs, including unmerged creations. An existing entry title change uses entry_title and after:{title}; entry creates a new empty entry and must never substitute for a title edit.",
 			"Cite evidenceIndexes from the supplied evidence. Do not fabricate citations or article content. If evidence or identity is insufficient, return clarification with a precise request for missing information.",
+			"For article-link PRs, the server also attaches exact resolved citation quotes from your actual article_text reads, with source hashes and UTF-16 spans. To supplement evidence on an existing PR, read the relevant source pages and return revised with draft.evidenceIndexes preserving the existing evidence. Do not claim a requested edit was applied when returning unchanged.",
 			"For pr_resolution respond to each pending human comment using its commentId and addressed/needs_input status. Preserve original comments. A response without a content change uses unchanged or clarification and does not create a new revision.",
+			"A status question asks for a response, not a replacement draft: use unchanged and answer from this PR's actual current state. item.reviewStatus is authoritative for human review: required means doradsoft approval is missing; changes_requested means requested changes remain; approved and exempt satisfy only the review requirement, not every merge gate. Open does not mean approved or ready to merge. Readiness to finish research is unrelated to readiness to merge.",
+			"An explicit human request to preserve current title, description, evidence or changes constrains those draft fields to their exact current values. Omit unchanged fields. Respect decoder const values for these locks and do not add evidence when evidence must be preserved. Do not copy linked-issue background into the PR description or treat old discussion as the current review decision.",
 			"Read the supplied pendingFeedback bodies before deciding an outcome. If nextCursor is present, use its discussion readLocator with that cursor to read the remaining pending feedback; use full discussion/history for additional context. Do not ask for feedback text already supplied in the context.",
 			"A requested field correction on an existing PR uses outcome revised and draft with that correction. Keep the PR's existing target IDs and unrequested operation fields. Clarification means missing evidence or unresolved identity after reading the available feedback; it has no draft or pullRequests. Never combine a clarification outcome with proposed edits.",
 			"Write titles, descriptions and responses in Hebrew. Use plain Hebrew source references separated by spaces, ASCII hyphens/quotes, and integer YYYYMMDD dates.",

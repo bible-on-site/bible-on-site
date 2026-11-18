@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.199",
+	"version": "0.1.203",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -38,14 +38,14 @@
 		"node": ">=26.10.0 <27"
 	},
 	"dependencies": {
-		"@aws-sdk/client-bedrock-runtime": "3.1169.0",
-		"@aws-sdk/client-cognito-identity-provider": "3.1169.0",
-		"@aws-sdk/client-lambda": "3.1169.0",
-		"@aws-sdk/client-s3": "3.1169.0",
-		"@aws-sdk/client-sesv2": "3.1169.0",
-		"@aws-sdk/client-sqs": "3.1169.0",
-		"@aws-sdk/s3-request-presigner": "3.1169.0",
-		"@tanstack/react-query": "5.107.1",
+		"@aws-sdk/client-bedrock-runtime": "3.1170.0",
+		"@aws-sdk/client-cognito-identity-provider": "3.1170.0",
+		"@aws-sdk/client-lambda": "3.1170.0",
+		"@aws-sdk/client-s3": "3.1170.0",
+		"@aws-sdk/client-sesv2": "3.1170.0",
+		"@aws-sdk/client-sqs": "3.1170.0",
+		"@aws-sdk/s3-request-presigner": "3.1170.0",
+		"@tanstack/react-query": "5.107.2",
 		"@tanstack/react-router": "1.170.46",
 		"@tanstack/react-router-devtools": "1.167.3",
 		"@tanstack/react-start": "1.169.5",
@@ -72,7 +72,7 @@
 		"tiptap-footnotes": "4.0.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.7",
+		"@biomejs/biome": "2.6.8",
 		"@playwright/test": "1.65.1",
 		"@tailwindcss/vite": "4.3.5",
 		"@testing-library/dom": "10.4.2",
@@ -105,7 +105,7 @@
 		"@emnapi/runtime": "1.11.3",
 		"@emnapi/wasi-threads": "2.2.0",
 		"@napi-rs/wasm-runtime": "1.2.7",
-		"@tybys/wasm-util": "0.10.4"
+		"@tybys/wasm-util": "0.10.5"
 	},
 	"packageManager": "bun@1.4.4",
 	"overrides": {

@@ -18,7 +18,9 @@ public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSession
     public void RightEdgeSwipeOpensAndScrimTapClosesTheFlyout() => Scenario(() =>
     {
         Platform.OpenFlyoutViaRightEdgeSwipe(Driver!);
-        Assert.True(Page.WaitFor("FlyoutPreferences", element => element.Enabled).Displayed);
+        // The wait's own condition already proves the flyout renders enabled
+        // inside the viewport — no property read follows the wait (#3421).
+        Page.WaitFor("FlyoutPreferences", element => element.Enabled);
         Platform.DismissFlyoutViaScrim(Driver!);
         Page.WaitForHidden("FlyoutPreferences");
         Assert.NotEmpty(Page.Source);

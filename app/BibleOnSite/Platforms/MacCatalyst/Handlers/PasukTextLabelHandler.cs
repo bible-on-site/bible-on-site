@@ -1,6 +1,7 @@
 using BibleOnSite.Controls;
 using Foundation;
 using Microsoft.Maui.Handlers;
+using Microsoft.Maui.Platform;
 using UIKit;
 
 namespace BibleOnSite.Handlers;
@@ -17,11 +18,18 @@ namespace BibleOnSite.Handlers;
 /// English-locale device the last/short lines of a justified RTL pasuk flush
 /// left. Pasuk text is a single uniform paragraph, so one merged style
 /// covers the whole string.
+///
+/// Pinning the style is necessary but not sufficient: UILabel's own
+/// typesetter still resolves the justified last line by the app's preferred
+/// language, so PasukUILabel draws the attributed text through TextKit —
+/// the engine that actually honors BaseWritingDirection (#3380).
 /// </summary>
 public sealed class PasukTextLabelHandler : LabelHandler
 {
     private static readonly IPropertyMapper<ILabel, PasukTextLabelHandler> PasukMapper =
         CreateMapper();
+
+    protected override MauiLabel CreatePlatformView() => new PasukUILabel();
 
     private static IPropertyMapper<ILabel, PasukTextLabelHandler> CreateMapper()
     {

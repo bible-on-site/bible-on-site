@@ -100,12 +100,12 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.1.27</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.1.31</ApplicationDisplayVersion>
 		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
 		     every store that accepts large integers: Android versionCode (continuing Play
 		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
 		     across marketing versions, including on minor bumps where the patch resets. -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100027</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100031</ApplicationVersion>
 		<!-- Windows MSIX merges the display version and this value into a 4-part version.
 		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
 		     packer also pins it); the leading marketing version keeps packages strictly
@@ -197,20 +197,24 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg">
+			<ForegroundScale Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">0.66</ForegroundScale>
+		</MauiIcon>
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="320,98" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
-		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
+		<MauiImage Include="Resources\AppIcon\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
 
 		<!-- Custom Fonts -->
 		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
 		<EmbeddedResource Include="Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
+		<MauiAsset Include="Resources\Fonts\AlHeperek-license.txt" LogicalName="AlHeperek-license.txt" />
+		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
 		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
 		     attribution inside the package too (#2623). -->
 		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />

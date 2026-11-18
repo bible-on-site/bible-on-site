@@ -3,7 +3,7 @@
  *
  * Produces a well-formatted PDF with:
  * - Each perek starts on a fresh page
- * - Proper Hebrew text with nikud (Frank Ruhl Libre static font)
+ * - Al Heperek UI prose and complete Taamey D scripture clusters
  * - Perek title + descriptive header
  * - Available perushim listed per perek
  * - Related article titles per perek
@@ -29,12 +29,16 @@ import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
 import {
 	bidiRunsWidth,
-	bidiTextWidth,
 	drawBidiRuns,
 	memoizeGlyphEncoding,
+	type VisualTextRun,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
+import {
+	getBoldFontBytes,
+	getRegularFontBytes,
+	getScriptureFontBytes,
+} from "./pdf-fonts";
 import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { SemanticPageInfo } from "./types";
 
@@ -146,6 +150,7 @@ interface DrawContext {
 	doc: Awaited<ReturnType<typeof PDFDocument.create>>;
 	font: PDFFont;
 	boldFont: PDFFont;
+	scriptureFont: PDFFont;
 	y: number;
 	pageNum: number;
 }
@@ -163,6 +168,42 @@ function currentPage(ctx: DrawContext) {
 	return pages[pages.length - 1];
 }
 
+interface FontRun extends VisualTextRun {
+	font: PDFFont;
+}
+
+const SCRIPTURE_MARK = /[\u0591-\u05af\u05bd\u05c0\u05c3-\u05c6]/u;
+
+function textRuns(
+	ctx: DrawContext,
+	text: string,
+	preferred: PDFFont,
+): FontRun[] {
+	return visualTextRuns(text).flatMap((run) => {
+		if (preferred === ctx.scriptureFont || !SCRIPTURE_MARK.test(run.text)) {
+			return [{ ...run, font: preferred }];
+		}
+		// Keep complete Hebrew clusters on the scripture face. Bullets, dashes,
+		// ellipses and other surrounding prose retain their UI glyphs.
+		const chunks = Array.from(
+			run.text.matchAll(/[\u0590-\u05ff\s]+|[^\u0590-\u05ff\s]+/gu),
+			([text]) => ({
+				text,
+				rtl: run.rtl,
+				font: SCRIPTURE_MARK.test(text) ? ctx.scriptureFont : preferred,
+			}),
+		);
+		return run.rtl ? chunks.reverse() : chunks;
+	});
+}
+
+function runsWidth(runs: FontRun[], size: number): number {
+	return runs.reduce(
+		(width, run) => width + bidiRunsWidth(run.font, [run], size),
+		0,
+	);
+}
+
 function drawRtlLine(
 	ctx: DrawContext,
 	text: string,
@@ -173,10 +214,14 @@ function drawRtlLine(
 ): void {
 	const page = currentPage(ctx);
 	// One UAX #9 pass per line — reused for both width and draw.
-	const runs = visualTextRuns(text);
-	const textWidth = bidiRunsWidth(font, runs, size);
+	const runs = textRuns(ctx, text, font);
+	const textWidth = runsWidth(runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	drawBidiRuns(page, runs, font, size, Math.max(MARGIN, x), ctx.y, color);
+	let cursor = Math.max(MARGIN, x);
+	for (const run of runs) {
+		drawBidiRuns(page, [run], run.font, size, cursor, ctx.y, color);
+		cursor += bidiRunsWidth(run.font, [run], size);
+	}
 }
 
 function drawRtlWrapped(
@@ -189,7 +234,8 @@ function drawRtlWrapped(
 ): void {
 	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
 	const measuringFont = {
-		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(font, t, s),
+		widthOfTextAtSize: (t: string, s: number) =>
+			runsWidth(textRuns(ctx, t, font), s),
 	};
 	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
@@ -235,8 +281,18 @@ export async function buildTanachPdfForPerekRange(
 	const boldFont = memoizeGlyphEncoding(
 		await doc.embedFont(boldBytes, { subset: true }),
 	);
+	const scriptureFont = memoizeGlyphEncoding(
+		await doc.embedFont(getScriptureFontBytes(), { subset: true }),
+	);
 
-	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
+	const ctx: DrawContext = {
+		doc,
+		font,
+		boldFont,
+		scriptureFont,
+		y: 0,
+		pageNum: 0,
+	};
 
 	for (let i = 0; i < perekIds.length; i++) {
 		const perekId = perekIds[i];
@@ -260,7 +316,7 @@ export async function buildTanachPdfForPerekRange(
 		for (const pasuk of perek.pesukim) {
 			const text = stripTaamim(segmentsToText(pasuk.segments));
 			if (!text) continue;
-			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
+			drawRtlWrapped(ctx, text, scriptureFont, BODY_SIZE, BODY_LINE_HEIGHT);
 			ctx.y -= 2; // tiny inter-pasuk gap
 		}
 

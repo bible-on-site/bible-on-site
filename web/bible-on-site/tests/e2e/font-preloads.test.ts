@@ -1,60 +1,49 @@
 import { expect, test } from "../util/playwright/test-fixture";
 
-/**
- * Geist Sans is consumed only by the pedia family tree (#2734). Home and
- * reader routes must not preload or fetch the Geist font files; the pedia
- * family-tree section carries the scoped --font-geist-sans variable itself.
- */
-
-const GEIST_PATTERN = /geist/i;
-const JACOB_URL = `/pedia/${encodeURIComponent("יעקב")}`;
-
-test.describe("Geist font loading", () => {
-	for (const path of ["/", "/929/1"]) {
-		test(`${path} neither preloads nor fetches Geist fonts`, async ({
-			page,
-		}) => {
-			const geistRequests: string[] = [];
+test.describe("Al Heperek font loading", () => {
+	for (const path of ["/", "/929/1", `/pedia/${encodeURIComponent("יעקב")}`]) {
+		test(`${path} uses the shared brand font`, async ({ page }) => {
+			const legacyRequests: string[] = [];
 			page.on("request", (request) => {
-				if (GEIST_PATTERN.test(request.url())) {
-					geistRequests.push(request.url());
-				}
+				if (/geist/i.test(request.url())) legacyRequests.push(request.url());
 			});
-
 			await page.goto(path);
-			await page.waitForLoadState("domcontentloaded");
-
-			await expect(
-				page.locator('link[rel="preload"][href*="Geist"]'),
-			).toHaveCount(0);
-			expect(geistRequests).toHaveLength(0);
+			await page.evaluate(() => document.fonts.ready);
+			const typography = await page.evaluate(() => {
+				const brand = getComputedStyle(document.documentElement)
+					.getPropertyValue("--font-al-heperek")
+					.trim();
+				const primary = brand.split(",")[0].replace(/"/g, "");
+				return {
+					brand,
+					body: getComputedStyle(document.body).fontFamily,
+					loaded: Array.from(document.fonts).some(
+						(face) =>
+							face.family.replace(/"/g, "") === primary &&
+							face.weight === "400" &&
+							face.status === "loaded",
+					),
+				};
+			});
+			expect(typography.brand).not.toBe("");
+			expect(typography.body).toContain(
+				typography.brand.split(",")[0].replace(/"/g, ""),
+			);
+			expect(typography.loaded).toBe(true);
+			expect(legacyRequests).toHaveLength(0);
 		});
 	}
-
-	test("pedia family tree resolves the scoped Geist Sans variable", async ({
-		page,
-	}) => {
-		const fontRequests: string[] = [];
-		page.on("request", (request) => {
-			if (GEIST_PATTERN.test(request.url())) {
-				fontRequests.push(request.url());
-			}
+	for (const weight of ["Regular", "SemiBold", "Bold"]) {
+		test(`public ${weight} face can load in email clients across origins`, async ({
+			request,
+		}) => {
+			const response = await request.get(`/fonts/AlHeperekUI-${weight}.woff2`, {
+				headers: { Origin: "https://mail.example" },
+			});
+			expect(response.ok()).toBe(true);
+			expect(response.headers()["access-control-allow-origin"]).toBe("*");
+			expect(response.headers()["content-type"]).toContain("font/woff2");
+			expect((await response.body()).subarray(0, 4).toString()).toBe("wOF2");
 		});
-
-		await page.goto(JACOB_URL);
-
-		const section = page.locator(
-			'section[aria-labelledby="person-family-heading"]',
-		);
-		await expect(section).toBeVisible();
-
-		// The variable is scoped on the pedia layout wrapper: --font-geist-sans
-		// must resolve to a generated font family so .section's font-family
-		// applies it through inheritance.
-		const resolvedVar = await section.evaluate((el) =>
-			getComputedStyle(el).getPropertyValue("--font-geist-sans").trim(),
-		);
-		expect(resolvedVar.length).toBeGreaterThan(0);
-		expect(resolvedVar).not.toBe("initial");
-	});
+	}
 });

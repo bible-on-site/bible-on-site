@@ -27,10 +27,22 @@ public sealed class FlyoutReaderDestinationTests(ITestOutputHelper output, Mobil
         // iOS exposes the row as one accessible element and folds its child
         // labels into the announced heading. Target that actual tap surface,
         // retaining a single snapshot lookup and the existing tap deadline.
-        var bereshit = Page.RenderedElements("ParashaRow",
-            element => Platform.SemanticDescription(element) ?? element.Text)
-            .First(element => element.Text == "בראשית");
-        Platform.Tap(Driver!, bereshit.Element);
+        // The gesture re-resolves when the row recycles between lookup and tap.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                var bereshit = Page.RenderedElements("ParashaRow",
+                    element => Platform.SemanticDescription(element) ?? element.Text)
+                    .First(element => element.Text == "בראשית");
+                Platform.Tap(Driver!, bereshit.Element);
+                break;
+            }
+            catch (StaleElementReferenceException) when (attempt < 2)
+            {
+                // The flyout recycled the row between lookup and tap; rescan.
+            }
+        }
         Page.WaitFor("ParashaSource", element => !string.IsNullOrEmpty(element.Text));
         SaveDiagnostics("ParashaReaderOpen", "passed");
 

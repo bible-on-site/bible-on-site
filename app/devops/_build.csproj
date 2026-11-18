@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.78.0.4316" />
+    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.78.0.4333" />
     <PackageReference Include="Nuke.Common" Version="10.1.0" />
     <!-- Match the NuGet.Frameworks assembly used by .NET SDK 11.0.100's MSBuild. -->
     <PackageReference Include="NuGet.Packaging" Version="8.0.0" />

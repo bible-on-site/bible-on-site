@@ -51,8 +51,9 @@ public static class MauiProgram
 #pragma warning restore CA1416
             .ConfigureFonts(fonts =>
             {
-                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-                fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                fonts.AddFont("AlHeperekUI-Regular.ttf", "AlHeperekRegular");
+                fonts.AddFont("AlHeperekUI-SemiBold.ttf", "AlHeperekSemibold");
+                fonts.AddFont("AlHeperekUI-Bold.ttf", "AlHeperekBold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
                 // The native pasuk face (#2623) — packaged offline via MauiFont
                 // (Resources\Fonts\*.ttf glob), license beside the file.

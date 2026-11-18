@@ -4076,10 +4076,16 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish Cross Module Coverage To Codacy
-        uses: codacy/codacy-coverage-reporter-action@master
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: |
+          REPORTER_DIRECTORY=$(mktemp -d "$RUNNER_TEMP/codacy-coverage.XXXXXX")
+          curl --fail --silent --show-error --location \
+            https://coverage.codacy.com/get.sh --output "$REPORTER_DIRECTORY/get.sh"
+          CODACY_REPORTER_TMP_FOLDER="$REPORTER_DIRECTORY/cli" \
+            CODACY_REPORTER_SKIP_CHECKSUM=false \
+            bash "$REPORTER_DIRECTORY/get.sh" download
+          node devops/github/ci/codacy-coverage.mjs "$REPORTER_DIRECTORY/cli" "$CROSS_MODULE_COVERAGE_REPORT"
 
       - name: Verify Coverage 3rd Party Reporting
         run: |

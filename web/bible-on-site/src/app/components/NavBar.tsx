@@ -4,11 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import packageJson from "../../../package.json";
 import { appPlatforms } from "./appPlatforms";
 import styles from "./navbar.module.css";
 
-export const NavBar = () => {
+export const NavBar = ({ version }: { version: string }) => {
 	const [open, setOpen] = useState(false);
 	const pathname = usePathname();
 	const [lastPathname, setLastPathname] = useState(pathname);
@@ -265,7 +264,7 @@ export const NavBar = () => {
 						className={styles.versionItem}
 						style={
 							{
-								"--version-content": `"- ${packageJson.version} -"`,
+								"--version-content": `"- ${version} -"`,
 							} as React.CSSProperties
 						}
 					/>

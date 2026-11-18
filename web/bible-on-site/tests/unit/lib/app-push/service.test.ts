@@ -2,8 +2,14 @@
 jest.mock("server-only", () => ({}));
 
 const mockQuery = jest.fn();
+const mockLockedTransaction = jest.fn();
+const mockTxQuery = jest.fn();
+const mockTxExecute = jest.fn();
 jest.mock("@/lib/api-client", () => ({
 	query: (...args: unknown[]) => mockQuery(...args),
+	lockedTransaction: (...args: unknown[]) => mockLockedTransaction(...args),
+	txQuery: (...args: unknown[]) => mockTxQuery(...args),
+	txExecute: (...args: unknown[]) => mockTxExecute(...args),
 }));
 
 import { generateKeyPairSync } from "node:crypto";
@@ -189,9 +195,30 @@ describe("app-push service", () => {
 	});
 
 	describe("persistence", () => {
+		beforeEach(() => {
+			mockQuery.mockResolvedValue([]);
+			mockTxQuery.mockResolvedValue([]);
+			mockLockedTransaction.mockImplementation((_lock, fn) => fn({}));
+		});
+
 		it("upserts the full registration tuple by user id", async () => {
 			await service.saveDevice(validDevice);
-			const [sql, params] = mockQuery.mock.calls[0];
+			// New identity: existence probe, then the locked re-check, the
+			// capacity count and the insert inside one transaction.
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"SELECT user_id FROM tanah_push_device WHERE user_id = ?",
+			);
+			expect(mockLockedTransaction).toHaveBeenCalledWith(
+				"tanah_push_device:save",
+				expect.any(Function),
+			);
+			expect(mockTxQuery.mock.calls[0][1]).toContain(
+				"SELECT user_id FROM tanah_push_device WHERE user_id = ?",
+			);
+			expect(mockTxQuery.mock.calls[1][1]).toContain(
+				"SELECT COUNT(*) AS total FROM tanah_push_device",
+			);
+			const [, sql, params] = mockTxExecute.mock.calls[0];
 			expect(sql).toContain("INSERT INTO tanah_push_device");
 			expect(sql).toContain("ON DUPLICATE KEY UPDATE");
 			expect(params).toEqual([
@@ -220,6 +247,45 @@ describe("app-push service", () => {
 				"DELETE FROM tanah_push_device WHERE token",
 			);
 			expect(mockQuery.mock.calls[1][1]).toEqual([TOKEN]);
+		});
+
+		it("refuses a new registration when the store is at its bound (#3500)", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([]) // userId not yet stored
+				.mockResolvedValueOnce([{ total: 25_000 }]);
+
+			await expect(service.saveDevice(validDevice)).rejects.toBeInstanceOf(
+				service.DeviceStoreFullError,
+			);
+			expect(mockTxExecute).not.toHaveBeenCalled();
+		});
+
+		it("still upserts an existing identity at the store bound", async () => {
+			mockQuery
+				.mockReset()
+				.mockResolvedValueOnce([{ user_id: validDevice.userId }])
+				.mockResolvedValue([]);
+
+			await service.saveDevice(validDevice);
+
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+			expect(mockQuery.mock.calls[1][0]).toContain(
+				"INSERT INTO tanah_push_device",
+			);
+			expect(mockLockedTransaction).not.toHaveBeenCalled();
+		});
+
+		it("upserts an identity claimed while waiting for the store lock", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([{ user_id: validDevice.userId }]);
+
+			await service.saveDevice(validDevice);
+
+			// Claimed inside the lock: no capacity count, straight to insert.
+			expect(mockTxQuery).toHaveBeenCalledTimes(1);
+			expect(mockTxExecute).toHaveBeenCalledTimes(1);
 		});
 	});
 
