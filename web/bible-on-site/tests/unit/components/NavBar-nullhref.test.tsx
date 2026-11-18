@@ -42,7 +42,7 @@ import { NavBar } from "@/app/components/NavBar";
 
 describe("NavBar (null platform href)", () => {
 	it("renders platform link without href when platform.href is null", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 		const link = screen.getByText("Future Store").closest("a");
 		expect(link).toBeTruthy();
 		// href attribute should not be set (null → undefined)

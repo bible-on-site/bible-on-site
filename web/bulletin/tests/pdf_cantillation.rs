@@ -1,5 +1,5 @@
 //! #2961: daily bulletin articles must render cantillated scripture quotes.
-//! The daily article face (Frank Ruhl Libre) has zero glyphs for
+//! The daily article face (Al Heperek Font UI) has zero glyphs for
 //! U+0591–U+05AF (and U+05C4–U+05C6); quotes must run through a bundled
 //! cantillation-capable face so marks stay attached to their bases.
 //!
@@ -16,15 +16,15 @@ fn fonts_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts")
 }
 
-/// Every mark Frank Ruhl Libre lacks, per its bundled cmap.
-const FRL_MISSING_MARKS: [char; 34] = [
+/// Every mark Al Heperek Font UI lacks, per its bundled cmap.
+const FRL_MISSING_MARKS: [char; 35] = [
     // All taamim U+0591–U+05AF …
     '\u{0591}', '\u{0592}', '\u{0593}', '\u{0594}', '\u{0595}', '\u{0596}', '\u{0597}', '\u{0598}',
     '\u{0599}', '\u{059A}', '\u{059B}', '\u{059C}', '\u{059D}', '\u{059E}', '\u{059F}', '\u{05A0}',
     '\u{05A1}', '\u{05A2}', '\u{05A3}', '\u{05A4}', '\u{05A5}', '\u{05A6}', '\u{05A7}', '\u{05A8}',
     '\u{05A9}', '\u{05AA}', '\u{05AB}', '\u{05AC}', '\u{05AD}', '\u{05AE}', '\u{05AF}',
     // … plus the rare upper/lower marks U+05C4–U+05C6.
-    '\u{05C4}', '\u{05C5}', '\u{05C6}',
+    '\u{05C4}', '\u{05C5}', '\u{05C6}', '\u{05BD}',
 ];
 
 fn is_missing_mark(c: char) -> bool {
@@ -308,7 +308,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
     );
 
     // Every FRL-missing mark must be drawn — and only by cantillation fonts:
-    // Taamey Frank CLM (article) or Taamey D (perek), never Frank Ruhl Libre.
+    // Taamey Frank CLM (article) or Taamey D (perek), never Al Heperek Font UI.
     let clm_text: String = shown
         .iter()
         .filter(|s| s.font.contains("TaameyFrankCLM"))
@@ -325,7 +325,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         );
     }
     for s in &shown {
-        if s.font.contains("FrankRuhlLibre") {
+        if s.font.contains("AlHeperekUI") {
             assert!(
                 !s.text.chars().any(is_missing_mark),
                 "{} drew a mark it has no glyph for: {:?}",
@@ -388,7 +388,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
     // Visual-order decoding may flip multi-glyph words — accept both.
     let frl_text: String = shown
         .iter()
-        .filter(|s| s.font.contains("FrankRuhlLibre"))
+        .filter(|s| s.font.contains("AlHeperekUI"))
         .map(|s| s.text.as_str())
         .collect();
     for prose in ["מלכים", "לה", "יג", "307", "perek"] {
@@ -410,6 +410,109 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         taamey_text.chars().any(is_missing_mark),
         "perek scripture must keep Taamey D cantillation: {taamey_text:?}"
     );
+}
+
+#[test]
+fn adjacent_citations_compile_in_sefer_and_daily_exports() {
+    for quote in ["אֹתָֽם׃", "וַיֹּאמֶ֞ר"] {
+        let req = melachim_request(format!("<p>{quote}(בראשית א כז)</p>"));
+        for bytes in [
+            pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+            pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+        ] {
+            let doc = Document::load_mem(&bytes).unwrap();
+            let shown = shown_texts(&doc);
+            assert!(shown.iter().all(|run| run.notdef == 0));
+            assert!(
+                shown.iter().all(|run| !run.text.contains(';')),
+                "Typst expression terminators must never become article punctuation: {shown:?}"
+            );
+            let citation: String = shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .map(|run| run.text.as_str())
+                .collect();
+            assert!(citation.contains("בראשית") || citation.contains("תישארב"));
+        }
+    }
+}
+
+#[test]
+fn pointed_chapter_headings_use_complete_scripture_runs() {
+    let mut req = melachim_request(String::new());
+    req.perakim[0].header = "אֹתָֽם׃".into();
+    req.perakim[0].pesukim.clear();
+    req.perakim[0].articles.clear();
+    for bytes in [
+        pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+        pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+    ] {
+        let doc = Document::load_mem(&bytes).unwrap();
+        let shown = shown_texts(&doc);
+        assert!(shown.iter().all(|run| run.notdef == 0));
+        assert!(
+            shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .all(|run| !run
+                    .text
+                    .chars()
+                    .any(|c| ('\u{05B0}'..='\u{05BD}').contains(&c))),
+            "a pointed scripture heading must shape as one run: {shown:?}"
+        );
+    }
+}
+
+#[test]
+fn marked_article_titles_shape_on_the_cantillation_face() {
+    // A cantillated quote inside an article h1 becomes the PDF heading. The
+    // sefer exporter once escaped that text on the UI-first stack, so Typst
+    // per-glyph fallback re-shaped bases and duplicated glyphs; marked runs
+    // must travel the article cantillation face like the body does (#2961).
+    let mut req = melachim_request(String::new());
+    req.perakim[0].pesukim.clear();
+    req.perakim[0].articles.clear();
+    req.perakim[0].articles.push((
+        "unused".into(),
+        "הרב צבי שוויגר".into(),
+        "<h1>וַיֹּאמֶ֞ר אֵלָ֑יו</h1><p>טקסט רגיל.</p>".into(),
+    ));
+    for bytes in [
+        pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+        pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+    ] {
+        let doc = Document::load_mem(&bytes).unwrap();
+        let shown = shown_texts(&doc);
+        assert!(shown.iter().all(|run| run.notdef == 0));
+        // The defect mechanism: a mark the UI face lacks drawn on that face.
+        assert!(
+            shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .all(|run| !run.text.chars().any(is_missing_mark)),
+            "article title marks must not shape on the UI face: {shown:?}"
+        );
+        // The whole marked run survives on the article cantillation face.
+        let clm_text: String = shown
+            .iter()
+            .filter(|run| run.font.contains("TaameyFrankCLM"))
+            .map(|run| run.text.as_str())
+            .collect();
+        assert!(
+            clm_text.contains('֞') && clm_text.contains('֑'),
+            "title marks missing from TaameyFrankCLM output: {clm_text:?}"
+        );
+        // The unpointed author suffix stays on the article font.
+        let ui_text: String = shown
+            .iter()
+            .filter(|run| run.font.contains("AlHeperekUI"))
+            .map(|run| run.text.as_str())
+            .collect();
+        assert!(
+            ui_text.contains("שוויגר") || ui_text.contains("רגיווש"),
+            "title author missing from UI-face output: {ui_text:?}"
+        );
+    }
 }
 
 #[test]

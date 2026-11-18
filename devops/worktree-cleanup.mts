@@ -367,16 +367,27 @@ const REGENERABLE_NAMES = new Set([
 	".nyc_output",
 	".hypothesis",
 	".dart_tool",
+	".swc",
+	".playwright-report",
+	"monocart-report",
+	".output",
+	".artifacts",
+	"ExtensionPacks",
+	"generated",
+	"DerivedData",
+	"xcuserdata",
 ]);
 const REGENERABLE_FILE_RE =
-	/\.(tsbuildinfo|py[co]|log|tmp|swp|swo)$|^(Thumbs\.db|\.DS_Store|desktop\.ini)$/i;
+	/\.(tsbuildinfo|py[co]|log|tmp|swp|swo|generated\.[^.]+)$|\.tanah_view\.(json|sqlite)(\.br|\.gz)?$|\.perushim_notes\.sqlite(\.gz)?$|(?:^|\/)(?:Thumbs\.db|\.DS_Store|desktop\.ini|next-env\.d\.ts)$/i;
+const REGENERABLE_PATH_RE = /(?:^|\/)\.nuke\/temp(?:\/|$)/;
 
 /** Porcelain `--ignored` path → true when it is provably regenerable. */
 export function isRegenerableIgnored(ignoredPath: string): boolean {
 	const p = ignoredPath.replace(/^"|"$/g, "").replace(/\/+$/, "");
 	return (
 		p.split("/").some((s) => REGENERABLE_NAMES.has(s)) ||
-		REGENERABLE_FILE_RE.test(p)
+		REGENERABLE_FILE_RE.test(p) ||
+		REGENERABLE_PATH_RE.test(p)
 	);
 }
 

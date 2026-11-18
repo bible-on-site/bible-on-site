@@ -2,6 +2,7 @@ import { FlipBook } from "html-flip-book-react";
 import type { FlipBookHandle, PageSemantics } from "html-flip-book-react";
 import {
 	ActionButton,
+	type CommandOptions,
 	FirstPageButton,
 	LastPageButton,
 	NextButton,
@@ -33,6 +34,17 @@ import "html-flip-book-react/styles.css";
 import "./calendar-flip-book.css";
 
 /**
+ * Vertical turn hotkeys (#3615): ArrowUp lifts the next sheet over the
+ * binding, ArrowDown pulls the turned sheet back — the axis-aware directions
+ * the toolbar chevrons already show. PageDown/PageUp and Space keep their
+ * usual reading roles; editable targets are excluded by the command system.
+ */
+const VERTICAL_COMMAND_OPTIONS: Record<string, CommandOptions> = {
+	flipNext: { hotkeys: [{ key: "ArrowUp" }, { key: "PageDown" }, { key: " " }] },
+	flipPrev: { hotkeys: [{ key: "ArrowDown" }, { key: "PageUp" }] },
+};
+
+/**
  * Vertical spiral "Sefer-style" calendar book (#2993): one readable month
  * sheet per visible face, bound at the top with the upstream flip engine's
  * vertical axis. The component is loaded lazily by LearningCalendar only
@@ -49,6 +61,9 @@ import "./calendar-flip-book.css";
  * History is disabled (`enableHistory={false}`): the host owns the `?month=`
  * query contract through `onMonthChange`/`requestedMonth`, so no stale
  * `#page` hashes or duplicate history entries appear.
+ * Covered-face exposure is engine-owned (#3615): the vertical axis marks
+ * every `.page` outside the visible pair inert + aria-hidden at mount and
+ * on each navigation, and restores authored values at teardown.
  */
 export function CalendarFlipBook({
 	months,
@@ -92,7 +107,6 @@ export function CalendarFlipBook({
 	pdfUnavailableReason?: string;
 }) {
 	const flipBookRef = useRef<FlipBookHandle>(null);
-	const containerRef = useRef<HTMLDivElement>(null);
 	const pagesCount = flipBookPageCount(months.length);
 
 	// Computed once per mount: the engine only reads initialTurnedLeaves at
@@ -185,37 +199,7 @@ export function CalendarFlipBook({
 		scopeDetail,
 	]);
 
-	/**
-	 * Covered faces must not duplicate tab stops or screen-reader content.
-	 * The engine only masks dormant (out-of-buffer) content; faces inside the
-	 * active buffer stay painted under the turning leaf, so we mark every
-	 * `.page` that is neither the visible spread nor mid-flip as inert +
-	 * aria-hidden. `inert`/`aria-hidden` never affect painting, so the stack
-	 * visuals are untouched and the state re-syncs on each committed turn.
-	 */
-	const syncPageExposure = useCallback(() => {
-		const root = containerRef.current;
-		/* istanbul ignore next -- defensive: the callback only fires after
-		   mount, when the wrapper ref is already attached */
-		if (!root) {
-			return;
-		}
-		for (const page of root.querySelectorAll<HTMLElement>(".page")) {
-			const exposed =
-				page.classList.contains("current-page") ||
-				page.classList.contains("page--flipping");
-			if (exposed) {
-				page.removeAttribute("inert");
-				page.removeAttribute("aria-hidden");
-			} else {
-				page.setAttribute("inert", "");
-				page.setAttribute("aria-hidden", "true");
-			}
-		}
-	}, []);
-
 	const handlePageFlipped = useCallback(() => {
-		syncPageExposure();
 		const book = flipBookRef.current;
 		if (!book) {
 			return;
@@ -225,13 +209,7 @@ export function CalendarFlipBook({
 		if (month) {
 			onMonthChange(month);
 		}
-	}, [months, onMonthChange, syncPageExposure]);
-
-	// Runs after every render so engine class/buffer updates that do not emit
-	// a flip event (initial layout, jumps, buffer refreshes) stay consistent.
-	useEffect(() => {
-		syncPageExposure();
-	});
+	}, [months, onMonthChange]);
 
 	// `requestedMonth` anchors the book at mount through initialTurnedLeaves;
 	// afterwards the engine owns its position. A changed request is always an
@@ -252,12 +230,11 @@ export function CalendarFlipBook({
 		const current = flipMonthAtPageIndex(months, book.getCurrentPageIndex());
 		if (current === null || compareMonths(current, clamped) !== 0) {
 			book.jumpToPage(pageIndex);
-			syncPageExposure();
 		}
-	}, [requestedMonth, months, syncPageExposure]);
+	}, [requestedMonth, months]);
 
 	return (
-		<div className="cal-book-wrap" ref={containerRef} dir="rtl">
+		<div className="cal-book-wrap" dir="rtl">
 			<div className="cal-book-area">
 				<FlipBook
 					ref={flipBookRef}
@@ -293,6 +270,7 @@ export function CalendarFlipBook({
 				flipBookRef={flipBookRef}
 				direction="rtl"
 				pageSemantics={pageSemantics}
+				commandOptions={VERTICAL_COMMAND_OPTIONS}
 			>
 				<div className="flipbook-toolbar-start">
 					<ActionButton onClick={onToday} ariaLabel="חזור להיום">

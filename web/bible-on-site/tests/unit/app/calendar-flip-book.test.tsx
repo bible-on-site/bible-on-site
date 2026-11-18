@@ -17,12 +17,19 @@ const engineStub: {
 		of?: number;
 		initialTurnedLeaves?: number[];
 	} | null;
+	lastToolbarProps: {
+		commandOptions?: Record<
+			string,
+			{ hotkeys?: { key: string }[]; disableHotkeys?: boolean }
+		>;
+	} | null;
 } = {
 	currentPageIndex: 0,
 	jumpToPage: jest.fn(),
 	attachHandle: true,
 	lastHandlers: null,
 	lastProps: null,
+	lastToolbarProps: null,
 };
 
 jest.mock(
@@ -79,8 +86,16 @@ jest.mock("html-flip-book-react/toolbar", () => {
 				children as React.ReactNode,
 			);
 	return {
-		Toolbar: ({ children }: { children: React.ReactNode }) =>
-			React.createElement("div", { role: "toolbar" }, children),
+		Toolbar: (props: {
+			children: React.ReactNode;
+			commandOptions?: Record<
+				string,
+				{ hotkeys?: { key: string }[]; disableHotkeys?: boolean }
+			>;
+		}) => {
+			engineStub.lastToolbarProps = props;
+			return React.createElement("div", { role: "toolbar" }, props.children);
+		},
 		ActionButton: button("action"),
 		FirstPageButton: button("first"),
 		LastPageButton: button("last"),
@@ -181,16 +196,17 @@ describe("CalendarFlipBook", () => {
 		expect(baseProps.onMonthChange).not.toHaveBeenCalled();
 	});
 
-	it("marks covered faces inert and exposes only the visible pair", () => {
-		const { container } = render(<CalendarFlipBook {...baseProps} />);
-		const pages = container.querySelectorAll<HTMLElement>(".page");
-		pages[0].classList.add("current-page");
-		pages[1].classList.add("page--flipping");
-		act(() => engineStub.lastHandlers?.onPageFlipped?.());
-		expect(pages[0]).not.toHaveAttribute("inert");
-		expect(pages[1]).not.toHaveAttribute("inert");
-		expect(pages[2]).toHaveAttribute("inert");
-		expect(pages[2]).toHaveAttribute("aria-hidden", "true");
+	// Covered-face exposure is owned by the published vertical engine since
+	// alpha.121 — no app-side inert/aria-hidden pass runs here. The real
+	// engine's exposure contract is covered by the e2e calendar tests.
+	it("binds vertical turn hotkeys through the toolbar command API", () => {
+		render(<CalendarFlipBook {...baseProps} />);
+		expect(
+			engineStub.lastToolbarProps?.commandOptions?.flipNext?.hotkeys,
+		).toEqual([{ key: "ArrowUp" }, { key: "PageDown" }, { key: " " }]);
+		expect(
+			engineStub.lastToolbarProps?.commandOptions?.flipPrev?.hotkeys,
+		).toEqual([{ key: "ArrowDown" }, { key: "PageUp" }]);
 	});
 
 	it("moves to a same-scope externally selected month (e.g. the cycle picker staying in the displayed year)", () => {

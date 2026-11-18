@@ -81,7 +81,21 @@ export async function POST(request: Request) {
 	}
 	try {
 		const result = await sendDailyPerek(day.perekId, endpoint);
-		return NextResponse.json({ perekId: day.perekId, ...result });
+		// `curl --fail-with-body` is the only signal the scheduled workflow
+		// has: a run where every attempted send failed must come back
+		// non-2xx (#3499), and a targeted delivery check that matched
+		// nothing live (unknown or just-pruned endpoint) reports the miss
+		// rather than a green `{sent: 0}`.
+		const status =
+			result.sent === 0 && result.failed > 0
+				? 502
+				: endpoint !== undefined && result.sent === 0
+					? 404
+					: 200;
+		return NextResponse.json(
+			{ perekId: day.perekId, ...result },
+			{ status },
+		);
 	} catch {
 		console.error("Daily web push failed");
 		return NextResponse.json({ error: "Send failed" }, { status: 500 });

@@ -1,6 +1,11 @@
 import "server-only";
 import { createHash, createSign, timingSafeEqual } from "node:crypto";
-import { query } from "@/lib/api-client";
+import {
+	lockedTransaction,
+	query,
+	txExecute,
+	txQuery,
+} from "@/lib/api-client";
 import { dailyPerekPayload } from "@/lib/web-push/payload";
 
 /**
@@ -180,30 +185,71 @@ export function isDeviceToken(value: unknown): value is string {
 }
 
 /**
+ * Hard bound on stored registrations (#3500): the endpoint is anonymous,
+ * so a per-IP limit alone cannot stop a flood spread over many addresses.
+ * Well above the real device count; upserts of an existing `userId` stay
+ * allowed past the cap so re-syncs and token rotation never break — only
+ * brand-new identities are refused.
+ */
+const MAX_STORED_DEVICES = 25_000;
+
+/** The registration table hit its bound; only existing keys may update. */
+export class DeviceStoreFullError extends Error {}
+
+/**
  * Upsert by `userId`: the row carries one current (installationId, token)
  * pair — token rotation replaces the token, a reinstall re-links a new
  * installation id to the durable identity.
  */
 export async function saveDevice(device: PushDevice): Promise<void> {
 	const topics = JSON.stringify(device.topics);
-	await query(
-		`INSERT INTO tanah_push_device (user_id, installation_id, token, platform, topics, app_version)
+	const params = [
+		device.userId,
+		device.installationId,
+		device.token,
+		device.platform,
+		topics,
+		device.appVersion,
+		device.installationId,
+		device.token,
+		device.platform,
+		topics,
+		device.appVersion,
+	];
+	const upsert = `INSERT INTO tanah_push_device (user_id, installation_id, token, platform, topics, app_version)
 		 VALUES (?, ?, ?, ?, ?, ?)
-		 ON DUPLICATE KEY UPDATE installation_id = ?, token = ?, platform = ?, topics = ?, app_version = ?`,
-		[
-			device.userId,
-			device.installationId,
-			device.token,
-			device.platform,
-			topics,
-			device.appVersion,
-			device.installationId,
-			device.token,
-			device.platform,
-			topics,
-			device.appVersion,
-		],
+		 ON DUPLICATE KEY UPDATE installation_id = ?, token = ?, platform = ?, topics = ?, app_version = ?`;
+	// Fast path: an existing identity's upsert needs no capacity check.
+	const existing = await query(
+		"SELECT user_id FROM tanah_push_device WHERE user_id = ?",
+		[device.userId],
 	);
+	if (existing.length > 0) {
+		await query(upsert, params);
+		return;
+	}
+	// New identity: the capacity check and the insert hold a table-wide
+	// named lock together, so concurrent registrations cannot read the
+	// same remaining capacity and overshoot the bound.
+	await lockedTransaction("tanah_push_device:save", async (conn) => {
+		// Another transaction may have claimed this userId while waiting
+		// for the lock — then it is an upsert and the cap does not apply.
+		const claimed = await txQuery(
+			conn,
+			"SELECT user_id FROM tanah_push_device WHERE user_id = ?",
+			[device.userId],
+		);
+		if (claimed.length === 0) {
+			const rows = await txQuery<{ total: number }>(
+				conn,
+				"SELECT COUNT(*) AS total FROM tanah_push_device",
+			);
+			if (Number(rows[0]?.total ?? 0) >= MAX_STORED_DEVICES) {
+				throw new DeviceStoreFullError();
+			}
+		}
+		await txExecute(conn, upsert, params);
+	});
 }
 
 export async function deleteDevice(userId: string): Promise<void> {
