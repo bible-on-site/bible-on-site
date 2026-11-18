@@ -17,7 +17,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v7";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v8";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -204,10 +204,26 @@ function nativeAgentSystem(bundle, schema) {
 		),
 		"Operation guide:",
 		...operationGuideForSchema(bundle, schema),
-		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
+		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, respond READS_COMPLETE; this ends research only and says nothing about PR approval or merge readiness. The next phase requests the typed final result. Read functions cannot write, approve or merge.",
 		"Tool records arrays omit only records identical to their latest value already supplied in currentRecords or earlier tool messages. Reuse those earlier values; omission is never deletion. Changed records are supplied again. Text, citations, discussions and page cursors are retained in full.",
 		"Plan source reads from their totals. For a short article that fits a single declared article_text page, request its complete plainTextLength when practical instead of defaulting to a partial 4000-character page. Never claim unread source text was checked.",
 	].join("\n");
+}
+
+function finalReviewInstruction(task, context) {
+	if (task !== "pr_resolution") return "";
+	switch (context?.item?.reviewStatus) {
+		case "required":
+			return "Current PR review: required. Doradsoft approval is missing; do not claim this PR is ready to merge.";
+		case "changes_requested":
+			return "Current PR review: changes_requested. Requested changes remain; do not claim this PR is ready to merge.";
+		case "approved":
+			return "Current PR review: approved. Only the review requirement is satisfied; this does not prove other merge gates.";
+		case "exempt":
+			return "Current PR review: exempt. The current revision is authored by doradsoft and requires no additional human approval; this does not prove other merge gates.";
+		default:
+			return "Current PR review is unknown. Do not infer approval or merge readiness.";
+	}
 }
 
 /** Omit only repeated record values, never source pages or human feedback.
@@ -763,8 +779,13 @@ export function createContributionWorker(
 							...messages,
 							{
 								role: "user",
-								content:
+								content: [
 									"Now return only the final result object matching the supplied JSON response schema, as minified JSON without indentation or optional whitespace. Keep generated titles, descriptions and summaries concise; do not repeat the same explanation in several fields. Emit each command once. Group article coordinates with the same relationship/action into one command when their order has no effect. When revising a PR, omit optional unchanged draft fields instead of reproducing them. Preserve every required change, evidence and comment response, the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft, preserving all whitespace inside that text.",
+									finalReviewInstruction(job.task, context),
+									"For a status-only question return unchanged with the answer in responses; do not rewrite the proposal. Explicit preserve-current field constraints are exact, not suggestions.",
+								]
+									.filter(Boolean)
+									.join("\n"),
 							},
 						],
 						{ format: agentResultSchema(schema) },
@@ -822,8 +843,15 @@ export function createContributionWorker(
 					)
 						return await finalize();
 					const { message } = await infer(messages, { tools });
-					messages.push(message);
 					if (!message.tool_calls?.length) return await finalize();
+					// Research prose is an unverified model assertion. Retain the
+					// actual calls, human context and tool results, never that prose
+					// (including thinking) as evidence for the final result.
+					messages.push({
+						role: "assistant",
+						content: "",
+						tool_calls: message.tool_calls,
+					});
 					let repeated = true;
 					for (const call of message.tool_calls) {
 						remainingBudget();

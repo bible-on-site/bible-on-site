@@ -109,6 +109,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     protected override TextView CreatePlatformView()
     {
         var textView = new TextView(Context);
+        textView.Typeface = this.GetRequiredService<IFontManager>()
+            .GetTypeface(Microsoft.Maui.Font.OfSize(BrandFonts.RegularFamily, 14));
         textView.SetTextColor(GetTextColor());
         // Required for the TanahLinkSpan spans installed at apply time.
         textView.MovementMethod = LinkMovementMethod.Instance;
