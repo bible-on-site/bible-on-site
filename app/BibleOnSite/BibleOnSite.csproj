@@ -197,20 +197,24 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg">
+			<ForegroundScale Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">0.66</ForegroundScale>
+		</MauiIcon>
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="320,98" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
-		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
+		<MauiImage Include="Resources\AppIcon\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
 
 		<!-- Custom Fonts -->
 		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
 		<EmbeddedResource Include="Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
+		<MauiAsset Include="Resources\Fonts\AlHeperek-license.txt" LogicalName="AlHeperek-license.txt" />
+		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
 		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
 		     attribution inside the package too (#2623). -->
 		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />

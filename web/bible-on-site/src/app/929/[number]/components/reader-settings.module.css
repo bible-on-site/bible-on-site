@@ -54,9 +54,8 @@
 	background: #fff;
 	color: var(--accent-900);
 	box-shadow: 0 14px 48px #1c2c5d30;
-	font:
-		14px Arial,
-		sans-serif;
+	font-family: inherit;
+	font-size: 14px;
 }
 .panel::backdrop {
 	background: #1c2c5d18;

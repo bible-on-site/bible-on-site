@@ -44,5 +44,3 @@ dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 [tasks.version]
 command = "echo"
 args = ["${CARGO_MAKE_CRATE_VERSION}"]
-
-

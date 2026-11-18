@@ -1,5 +1,5 @@
 /**
- * Shared Frank Ruhl Libre font loading for the PDF generators.
+ * Shared Al Heperek font loading for the PDF generators.
  *
  * Extracted from tanach-pdf.ts (#2608) so the calendar renderer and the
  * offline artifact generator do not pull scripture/DB modules (perushim,
@@ -15,6 +15,7 @@ import { resolve } from "node:path";
 
 let regularFontCache: Uint8Array | null = null;
 let boldFontCache: Uint8Array | null = null;
+let scriptureFontCache: Uint8Array | null = null;
 
 function loadFont(filename: string): Uint8Array {
 	const fontPath = resolve(
@@ -29,14 +30,18 @@ function loadFont(filename: string): Uint8Array {
 }
 
 export function getRegularFontBytes(): Uint8Array {
-	if (!regularFontCache)
-		regularFontCache = loadFont("FrankRuhlLibre-Regular.ttf");
+	if (!regularFontCache) regularFontCache = loadFont("AlHeperekUI-Regular.ttf");
 	return regularFontCache;
 }
 
 export function getBoldFontBytes(): Uint8Array {
-	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
+	if (!boldFontCache) boldFontCache = loadFont("AlHeperekUI-Bold.ttf");
 	return boldFontCache;
+}
+
+export function getScriptureFontBytes(): Uint8Array {
+	if (!scriptureFontCache) scriptureFontCache = loadFont("TaameyD-Regular.ttf");
+	return scriptureFontCache;
 }
 
 let logoCache: Uint8Array | null = null;

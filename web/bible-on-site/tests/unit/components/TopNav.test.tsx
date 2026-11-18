@@ -53,11 +53,11 @@ describe("TopNav", () => {
 		expect(search).not.toHaveTextContent(/\S/);
 	});
 
-	it("serves a real DPR3 header bitmap directly while other images remain optimized", async () => {
-		const bitmap = await sharp(
+	it("serves the responsive vector wordmark directly while other images remain optimized", async () => {
+		const vector = await sharp(
 			resolve(
 				__dirname,
-				"../../../public/images/logos/logo-white-letters-69.webp",
+				"../../../public/images/logos/header-logo-reversed.svg",
 			),
 		).metadata();
 		render(
@@ -71,33 +71,17 @@ describe("TopNav", () => {
 				/>
 			</>,
 		);
-
 		const logo = screen.getByRole("img", { name: 'תנ"ך על הפרק' });
 		expect(logo).toHaveAttribute(
 			"src",
-			"/images/logos/logo-white-letters-69.webp",
+			"/images/logos/header-logo-reversed.svg",
 		);
 		expect(logo).not.toHaveAttribute("srcset");
 		expect(logo).toHaveAttribute("loading", "eager");
-		expect(logo).toHaveAttribute("width", "69");
-		expect(logo).toHaveAttribute("height", "50");
-		expect(logo).toHaveStyle({ width: "72px", height: "auto" });
+		expect(logo).toHaveAttribute("width", String(vector.width));
+		expect(logo).toHaveAttribute("height", String(vector.height));
 		expect(logo.closest("a")).toHaveAttribute("href", "/");
-
-		// Inspect the actual served bitmap: a responsive srcset alone cannot
-		// provide detail if the encoded source still contains only 69 pixels.
-		const displayedWidth = Number.parseFloat(logo.style.width);
-		const displayedHeight =
-			(displayedWidth * Number(logo.getAttribute("height"))) /
-			Number(logo.getAttribute("width"));
-		expect(bitmap.format).toBe("webp");
-		expect(bitmap.width ?? 0).toBeGreaterThanOrEqual(
-			Math.ceil(displayedWidth * 3),
-		);
-		expect(bitmap.height ?? 0).toBeGreaterThanOrEqual(
-			Math.ceil(displayedHeight * 3),
-		);
-
+		expect(vector.format).toBe("svg");
 		const control = screen.getByRole("img", { name: "Optimizer control" });
 		expect(control.getAttribute("src")).toContain("/_next/image?");
 		expect(control).toHaveAttribute("srcset");

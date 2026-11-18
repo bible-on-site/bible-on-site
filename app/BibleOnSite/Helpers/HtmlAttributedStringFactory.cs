@@ -37,7 +37,8 @@ internal static class HtmlAttributedStringFactory
     public static NSMutableAttributedString? FromHtml(
         string html, double fontSize, double h1Scale, double h2Scale, double h3Scale,
         UIColor textColor, UIColor accentColor,
-        NSMutableParagraphStyle baseStyle, bool rtl)
+        NSMutableParagraphStyle baseStyle, bool rtl,
+        UIFont regularFont, UIFont boldFont)
     {
         try
         {
@@ -53,7 +54,7 @@ internal static class HtmlAttributedStringFactory
                     _ => 1.0
                 };
                 var size = (NFloat)(fontSize * run.FontScale * headingScale);
-                var font = ResolveFont(size, run.Bold, run.Italic);
+                var font = ResolveFont(size, run.Bold ? boldFont : regularFont, run.Italic);
 
                 var keys = new List<NSString>
                 {
@@ -154,24 +155,15 @@ internal static class HtmlAttributedStringFactory
         }
     }
 
-    private static UIFont ResolveFont(NFloat size, bool bold, bool italic)
+    private static UIFont ResolveFont(NFloat size, UIFont face, bool italic)
     {
-        // SystemFontOfSize is annotated nullable but only fails on bad input.
-        var font = UIFont.SystemFontOfSize(size)!;
-        UIFontDescriptorSymbolicTraits traits = 0;
-        if (bold)
-        {
-            traits |= UIFontDescriptorSymbolicTraits.Bold;
-        }
-        if (italic)
-        {
-            traits |= UIFontDescriptorSymbolicTraits.Italic;
-        }
-        if (traits == 0)
+        var font = face.WithSize(size) ?? face;
+        if (!italic)
         {
             return font;
         }
-        var descriptor = font.FontDescriptor.CreateWithTraits(traits);
+        var descriptor = font.FontDescriptor.CreateWithTraits(
+            font.FontDescriptor.SymbolicTraits | UIFontDescriptorSymbolicTraits.Italic);
         return descriptor != null ? (UIFont.FromDescriptor(descriptor, size) ?? font) : font;
     }
 }
