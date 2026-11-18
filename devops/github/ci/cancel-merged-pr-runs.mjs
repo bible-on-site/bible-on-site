@@ -15,7 +15,14 @@ function identity(run) {
   requireValue(positive(run?.id) && positive(run.workflow_id) && ownRepository(run.repository)
     && positive(run.head_repository?.id) && sha(run.head_sha)
     && typeof run.head_branch === "string", "Invalid run identity");
-  return JSON.stringify([run.id, run.workflow_id, run.event, run.head_sha, run.head_branch, run.head_repository.id]);
+  return run;
+}
+function sameRun(left, right) {
+  identity(left);
+  identity(right);
+  return left.id === right.id && left.workflow_id === right.workflow_id && left.event === right.event
+    && left.head_sha === right.head_sha && left.head_branch === right.head_branch
+    && left.head_repository.id === right.head_repository.id;
 }
 
 async function pullNumbers(run, api) {
@@ -52,7 +59,7 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
     for (const status of statuses) {
       for (const run of await api.listRuns(event, status)) {
         const key = identity(run);
-        requireValue(!runs.has(run.id) || identity(runs.get(run.id)) === key, "Run changed while listing");
+        requireValue(!runs.has(run.id) || sameRun(runs.get(run.id), key), "Run changed while listing");
         runs.set(run.id, run);
       }
     }
@@ -78,8 +85,10 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
     for (const number of numbers) if (!(await isMerged(number))) eligible = false;
     if (!eligible) continue;
     const current = await api.getRun(listed.id);
-    requireValue(identity(current) === identity(listed)
-      && JSON.stringify(await pullNumbers(current, api)) === JSON.stringify(numbers), "Run identity changed");
+    requireValue(sameRun(current, listed), "Run identity changed");
+    const currentNumbers = await pullNumbers(current, api);
+    requireValue(currentNumbers.length === numbers.length
+      && currentNumbers.every((number, index) => number === numbers[index]), "Run PR identity changed");
     if (!statuses.includes(current.status)) continue;
     // A queue commit can still be a base of another live group after its PR merges.
     if (protectedHeads(await api.getQueue()).has(current.head_sha)) continue;
@@ -93,7 +102,7 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
     catch (error) { requestError = error; }
     // Reconcile an uncertain POST once. Never retry a cancellation or force it.
     const after = await api.getRun(current.id);
-    requireValue(identity(after) === identity(current), "Reconciliation identity changed");
+    requireValue(sameRun(after, current), "Reconciliation identity changed");
     action.status = after.status;
     action.conclusion = after.conclusion;
     action.outcome = after.status === "completed" ? "completed" : "cancellation-requested";

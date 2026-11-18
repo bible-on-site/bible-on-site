@@ -141,9 +141,12 @@ test("run and PR identity changes fail closed", async () => {
     const f = fixture(); change(f.state.runs[0]);
     await assert.rejects(execute(f, { dryRun: false }), /identity/); assert.deepEqual(f.state.cancels, []);
   }
-  const f = fixture(); const read = f.api.getRun;
-  f.api.getRun = async id => ({ ...await read(id), head_sha: sha("d") });
-  await assert.rejects(execute(f, { dryRun: false }), /identity changed/);
+  for (const changed of [{ id: 2 }, { workflow_id: 999 }, { event: "push" }, { head_sha: sha("d") },
+    { head_branch: "different-branch" }, { head_repository: { id: 999 } }]) {
+    const f = fixture(); const read = f.api.getRun;
+    f.api.getRun = async id => ({ ...await read(id), ...changed });
+    await assert.rejects(execute(f, { dryRun: false }), /identity changed/);
+  }
   const g = fixture(); g.api.getPullRequest = async () => ({ number: 11, base: { repo: repo() }, state: "closed" });
   await assert.rejects(execute(g, { dryRun: false }), /PR identity/);
 });
@@ -164,7 +167,10 @@ test("completed runs and runs with changed PR associations are never cancelled",
   assert.deepEqual((await execute(f, { dryRun: false })).actions, []);
   const g = fixture([run(1, "pull_request")]); const get = g.api.getRun;
   g.api.getRun = async id => ({ ...await get(id), pull_requests: [association(20)] });
-  await assert.rejects(execute(g, { dryRun: false }), /identity changed/);
+  await assert.rejects(execute(g, { dryRun: false }), /PR identity changed/);
+  const h = fixture([run(1, "pull_request")]); const getH = h.api.getRun;
+  h.api.getRun = async id => ({ ...await getH(id), pull_requests: [association(10), association(20)] });
+  await assert.rejects(execute(h, { dryRun: false }), /PR identity changed/);
 });
 
 test("missing/failed journal prevents cancellation", async () => {
