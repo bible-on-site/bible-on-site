@@ -601,7 +601,7 @@ export const deleteDedication = createServerFn({ method: "POST" })
 		return { id };
 	});
 
-// The link-proposal aggregate write path (`applyArticleDedicationLink`)
+// The reviewed article-link aggregate write path (`setReviewedArticleDedicationTarget`)
 // and the shared target-row helpers (`normalizeExpiry`,
 // `validateReferenceTargets`, `deleteTargetRows`, `insertTarget`) live in
 // `dedication-targets.server.ts`: plain functions exported from this

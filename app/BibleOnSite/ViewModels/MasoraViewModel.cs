@@ -176,6 +176,9 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
+#if MAUI
+        InitializePerushimController();
+#endif
         _articlesLoader = articlesLoader;
         _hasPerekAudio = hasPerekAudio ?? (static perekId => RecitationService.Instance.HasAudio(perekId));
         _getTrack = getTrack ?? (static perekId => RecitationService.Instance.GetTrack(perekId));

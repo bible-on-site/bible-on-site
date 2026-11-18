@@ -6,11 +6,27 @@ on:
       ios_artifact_name:
         required: true
         type: string
+      expected_notes_sha256:
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
     inputs:
+      inspection_scope:
+        description: "Inspect the published TestFlight build or only the public App Store version records"
+        type: choice
+        default: all
+        options:
+          - all
+          - public-version
       module_version:
         description: "Published app release version to inspect (e.g., 5.0.126)"
         required: true
+        type: string
+      expected_notes_sha256:
+        description: "Optional SHA256 of the intended Hebrew notes (trimmed, LF line endings)"
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -25,7 +41,15 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
+      - name: Read public App Store version identities without changing Apple state
+        if: inputs.inspection_scope == 'public-version'
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: node devops/github/release/appstore-whatsnew.mjs inspect --out-dir "$RUNNER_TEMP/app-store-inspect"
       - name: Restore the published IPA for read-only inspection
+        if: inputs.inspection_scope != 'public-version'
         env:
           GH_TOKEN: ${{ github.token }}
           MODULE_VERSION: ${{ inputs.module_version }}
@@ -47,8 +71,27 @@ jobs:
           echo "MODULE_VERSION=$MODULE_VERSION" >> "$GITHUB_ENV"
           echo "IPA_FILE=$(find "$RUNNER_TEMP/testflight-inspect" -name '*.ipa' -type f | head -1)" >> "$GITHUB_ENV"
       - name: Read the exact build state from Apple
+        if: inputs.inspection_scope != 'public-version'
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: node devops/github/release/testflight-build.mjs inspect
+      - name: Read configured group, review and Hebrew notes without changing Apple state
+        if: inputs.inspection_scope != 'public-version'
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          EXPECTED_TESTFLIGHT_NOTES_SHA256: ${{ inputs.expected_notes_sha256 }}
+          TESTFLIGHT_RECEIPT_PATH: ${{ runner.temp }}/testflight-distribution-inspection.json
+        run: node devops/github/release/testflight-build.mjs distribution-inspect
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: testflight-distribution-inspection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/testflight-distribution-inspection.json
+            ${{ runner.temp }}/app-store-inspect/app-store-public-version-inspection.json
+          retention-days: 14

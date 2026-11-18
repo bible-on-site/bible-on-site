@@ -11,6 +11,7 @@ jest.mock("@/lib/seo/jsonld", () => ({
 }));
 
 import {
+	dynamic as catalogDynamic,
 	GET as catalogGET,
 	HEAD as catalogHEAD,
 } from "@/app/.well-known/api-catalog/route";
@@ -102,6 +103,8 @@ describe("/llms.txt (issue #3257)", () => {
 describe("/.well-known/api-catalog (RFC 9727)", () => {
 	it("GET returns a linkset document with the RFC profile", async () => {
 		const response = catalogGET();
+		expect(catalogDynamic).toBe("force-static");
+		expect(response.headers.get("cache-control")).toBe("public, max-age=3600");
 		expect(response.headers.get("content-type")).toBe(
 			'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"',
 		);
@@ -130,6 +133,7 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 
 	it("HEAD returns the api-catalog Link header and no body", async () => {
 		const response = catalogHEAD();
+		expect(response.headers.get("cache-control")).toBe("public, max-age=3600");
 		expect(response.headers.get("link")).toBe(
 			'<https://canonical.example/.well-known/api-catalog>; rel="api-catalog"',
 		);

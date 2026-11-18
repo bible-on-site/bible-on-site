@@ -19,11 +19,12 @@ const AUDIT_TIMING_BUDGETS_MS = {
 	// localhost responses measure 3-7ms, so a 5% percentage boundary is
 	// sub-millisecond runner noise (alerted #2971).
 	"server-response-time": 100,
-	// FID — deprecated and known-failing its 0.9-score bound (~130ms p10) on
-	// throttled CI (known-issues/lighthouse/max-potential-fid.yml), so the
-	// audit's own 0.5-score median of 250ms is the meaningful degradation
-	// signal.
-	"max-potential-fid": 250,
+	// Observed (pre-simulation) largest top-level task, in on-runner
+	// milliseconds. A real tripwire bound: ordinary framework bootstrap
+	// measures ~25-40ms here, so a >250ms observed task means a genuine
+	// main-thread regression, not modeled-device noise. Replaces the
+	// retired Lantern-modeled FID proxy (max-potential-fid, #3605).
+	"largest-observed-task": 250,
 };
 
 /**

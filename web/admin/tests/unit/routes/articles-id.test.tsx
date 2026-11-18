@@ -136,7 +136,7 @@ describe("ArticleEditPage", () => {
 			(link) => link.to === "/link-proposals",
 		);
 		expect(proposalsLink?.search).toEqual({ articleId: 7 });
-		expect(screen.getByText("🔗 הצעות קישור למאמר זה ←")).toBeInTheDocument();
+		expect(screen.getByText("PRs לקישורי מאמר זה ←")).toBeInTheDocument();
 
 		// The panel receives the live form values for its managed entries.
 		await waitFor(() => expect(server.panelProps.length).toBeGreaterThan(0));
@@ -157,9 +157,7 @@ describe("ArticleEditPage", () => {
 			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
 		);
 
-		expect(
-			screen.queryByText("🔗 הצעות קישור למאמר זה ←"),
-		).not.toBeInTheDocument();
+		expect(screen.queryByText("PRs לקישורי מאמר זה ←")).not.toBeInTheDocument();
 		expect(screen.queryByTestId("relationships-panel")).not.toBeInTheDocument();
 		expect(server.links.some((link) => link.to === "/link-proposals")).toBe(
 			false,

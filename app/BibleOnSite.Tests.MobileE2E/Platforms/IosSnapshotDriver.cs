@@ -75,6 +75,8 @@ internal sealed class IosSnapshotDriver : IOSDriver
         public override string Text => snapshot.Text;
         public override bool Enabled => snapshot.Enabled;
         public override bool Displayed => snapshot.Displayed;
+        public override Point Location => new(Convert.ToInt32(snapshot.X), Convert.ToInt32(snapshot.Y));
+        public override Size Size => new(Convert.ToInt32(snapshot.Width), Convert.ToInt32(snapshot.Height));
         // Snapshot-backed attributes avoid a second /attribute round-trip per
         // poll; anything not captured falls through to the live endpoint.
         public override string? GetAttribute(string attributeName) =>

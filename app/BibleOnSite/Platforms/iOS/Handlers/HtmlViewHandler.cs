@@ -58,6 +58,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
     protected override ViewportTextView CreatePlatformView()
     {
         var viewport = new ViewportTextView();
+        viewport.TextView.Font = this.GetRequiredService<IFontManager>()
+            .GetFont(Microsoft.Maui.Font.OfSize(BrandFonts.RegularFamily, 14));
         viewport.TextView.Delegate = new HtmlLinkDelegate(() => VirtualView);
         return viewport;
     }
@@ -209,6 +211,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
            reference color the note-list letters must match. Read on the main
            thread: UIKit views must not be touched from the parse task. */
         var accentColor = platformView.TintColor ?? UIColor.SystemBlue;
+        // Resolve registered faces on the UI thread before building native runs.
+        var fontManager = this.GetRequiredService<IFontManager>();
+        var regularFont = fontManager.GetFont(Microsoft.Maui.Font.OfSize(BrandFonts.RegularFamily, fontSize));
+        var boldFont = fontManager.GetFont(Microsoft.Maui.Font.OfSize(BrandFonts.BoldFamily, fontSize));
 
         // Clear recycled content before the parsed result arrives. Skipping the
         // assignment on an already-empty storage avoids a textStorage edit +
@@ -227,13 +233,15 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 textColor.Dispose();
                 return;
             }
+            /* The factory applies the base paragraph style plus the quote
+               paragraph accents (#3443) — paragraph attributes must land
+               inside the attributed build, not as a later whole-range pass. */
             var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale,
-                textColor, accentColor);
+                textColor, accentColor, paragraphStyle, virtualView.TextDirection == HtmlTextDirection.Rtl,
+                regularFont, boldFont);
             var measuredHeight = -1.0;
             if (attributedString != null)
             {
-                var range = new NSRange(0, attributedString.Length);
-                attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
                 if (widthHint > 0)
                 {
                     var rect = attributedString.GetBoundingRect(new CGSize(widthHint, NFloat.MaxValue),

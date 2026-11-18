@@ -38,7 +38,7 @@ import { NavBar } from "@/app/components/NavBar";
 
 describe("NavBar", () => {
 	it("renders menu with main nav links", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 		expect(screen.getByRole("link", { name: "על הפרק" })).toHaveAttribute(
 			"href",
 			"/929",
@@ -66,14 +66,14 @@ describe("NavBar", () => {
 	});
 
 	it("renders home link with correct href", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 		const homeLink = screen.getByRole("link", { name: "עמוד ראשי" });
 		expect(homeLink).toBeInTheDocument();
 		expect(homeLink).toHaveAttribute("href", "/");
 	});
 
 	it("serves the small sidebar logo directly while preserving its size and lazy loading", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 
 		const logo = screen.getByRole("img", { name: "עמוד ראשי" });
 		expect(logo).toHaveAttribute("src", "/images/logos/logo192.webp");
@@ -85,7 +85,7 @@ describe("NavBar", () => {
 	});
 
 	it("renders app and daily bulletin links", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 		expect(screen.getByRole("link", { name: /יישומון/ })).toHaveAttribute(
 			"href",
 			"/app",
@@ -101,12 +101,26 @@ describe("NavBar", () => {
 	});
 
 	it("keeps the accessibility statement out of the side nav (#2396)", () => {
-		render(<NavBar />);
+		render(<NavBar version="1.2.3" />);
 		// The entry point moved to the top-bar accessibility menu; the footer
 		// link (Footer.tsx) remains the secondary access route.
 		expect(
 			screen.queryByRole("link", { name: /הצהרת נגישות/ }),
 		).not.toBeInTheDocument();
+	});
+
+	it("displays and updates the version supplied by the server", () => {
+		const { container, rerender } = render(<NavBar version="8.9.10" />);
+		const versionItem = () =>
+			container.querySelector("li[style]") as HTMLElement;
+		expect(versionItem().style.getPropertyValue("--version-content")).toBe(
+			'"- 8.9.10 -"',
+		);
+
+		rerender(<NavBar version="8.9.11" />);
+		expect(versionItem().style.getPropertyValue("--version-content")).toBe(
+			'"- 8.9.11 -"',
+		);
 	});
 
 	describe("menu toggle", () => {
@@ -118,7 +132,7 @@ describe("NavBar", () => {
 		});
 
 		it("starts closed and inert, opens on trigger click", () => {
-			render(<NavBar />);
+			render(<NavBar version="1.2.3" />);
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
 			expect(getTrigger()).toHaveAttribute("aria-controls", "main-menu");
 			expect(getMenu()).toHaveAttribute("inert");
@@ -128,7 +142,7 @@ describe("NavBar", () => {
 		});
 
 		it("closes on Escape and returns focus to the trigger", () => {
-			render(<NavBar />);
+			render(<NavBar version="1.2.3" />);
 			fireEvent.click(getTrigger());
 			fireEvent.keyDown(document, { key: "Enter" });
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
@@ -138,7 +152,7 @@ describe("NavBar", () => {
 		});
 
 		it("closes on overlay click and returns focus to the trigger", () => {
-			const { container } = render(<NavBar />);
+			const { container } = render(<NavBar version="1.2.3" />);
 			fireEvent.click(getTrigger());
 			fireEvent.click(
 				container.querySelector('[aria-hidden="true"]') as Element,
@@ -148,7 +162,7 @@ describe("NavBar", () => {
 		});
 
 		it("closes when a menu link is clicked but not on other menu clicks", () => {
-			render(<NavBar />);
+			render(<NavBar version="1.2.3" />);
 			fireEvent.click(getTrigger());
 			fireEvent.click(getMenu());
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
@@ -157,10 +171,10 @@ describe("NavBar", () => {
 		});
 
 		it("closes on route change", () => {
-			const { rerender } = render(<NavBar />);
+			const { rerender } = render(<NavBar version="1.2.3" />);
 			fireEvent.click(getTrigger());
 			mockPathname = "/929/authors";
-			rerender(<NavBar />);
+			rerender(<NavBar version="1.2.3" />);
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
 		});
 	});

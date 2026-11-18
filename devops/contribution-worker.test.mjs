@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import test from "node:test";
-import { inspect } from "node:util";
+import { fileURLToPath } from "node:url";
+import { inspect, promisify } from "node:util";
 import {
 	createContributionWorker,
+	runContributionWorker,
+	validateWorkerBundle,
 	workerAwsCredentials,
 	workerOptions,
 	workerTokenProvider,
-	runContributionWorker,
 } from "./contribution-worker.mjs";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -30,6 +34,2485 @@ const options = workerOptions(
 	["--origin", "http://127.0.0.1:3101", "--dev", "--model", "local-test"],
 	{},
 );
+
+const canonicalFixture = (value) =>
+	Array.isArray(value)
+		? `[${value.map(canonicalFixture).join(",")}]`
+		: value && typeof value === "object"
+			? `{${Object.keys(value)
+					.sort()
+					.map(
+						(key) => `${JSON.stringify(key)}:${canonicalFixture(value[key])}`,
+					)
+					.join(",")}}`
+			: JSON.stringify(value);
+function agentBundle(overrides = {}) {
+	const payload = {
+		protocolVersion: 2,
+		version: "fixture-v1",
+		apiVersion: 1,
+		system: "Never approve or merge",
+		operationGuide: ["Only typed data"],
+		tools: [
+			{
+				name: "discussion",
+				description: "Read all pages",
+				inputSchema: { type: "object" },
+			},
+		],
+		...overrides,
+	};
+	return {
+		...payload,
+		hash: createHash("sha256").update(canonicalFixture(payload)).digest("hex"),
+	};
+}
+
+function actionSchema(
+	result = {
+		type: "object",
+		oneOf: [
+			{ type: "object", properties: { outcome: { const: "unchanged" } } },
+		],
+	},
+) {
+	return {
+		type: "object",
+		oneOf: [
+			{
+				type: "object",
+				additionalProperties: false,
+				required: ["action", "result"],
+				properties: { action: { const: "complete" }, result },
+			},
+		],
+	};
+}
+function nativeReply(content = "Ready", calls, overrides = {}) {
+	return {
+		done: true,
+		done_reason: "stop",
+		prompt_eval_count: 100,
+		model: "local-test",
+		message: {
+			role: "assistant",
+			content,
+			...(calls ? { tool_calls: calls } : {}),
+		},
+		...overrides,
+	};
+}
+const readCall = (name = "discussion", args = {}, callId = "read-1") => ({
+	id: callId,
+	function: { name, arguments: args },
+});
+const readRejection = (code = "invalid_arguments") => ({
+	error: {
+		type: "invalid_tool_arguments",
+		code,
+		message:
+			code === "invalid_arguments"
+				? "The read tool arguments are invalid. Use only its declared fields, kinds and page limits."
+				: "Use the numeric article ID from currentRecords or an article lookup. A PR or discussion UUID is not an article ID.",
+	},
+});
+function agentFixture({
+	bundle = agentBundle(),
+	job = {},
+	replies,
+	contexts = [],
+	intercept,
+	now,
+	onLog,
+	signal,
+} = {}) {
+	const calls = [],
+		models = [],
+		releases = [],
+		reads = [],
+		completed = [],
+		failed = [],
+		logs = [];
+	const result = { outcome: "unchanged", summary: "Checked", responses: [] };
+	const request = async (url, request) => {
+		const target = String(url),
+			body = JSON.parse(request.body);
+		calls.push({ target, body, signal: request.signal });
+		const release =
+			target.endsWith("/api/chat") &&
+			body.keep_alive === 0 &&
+			Array.isArray(body.messages) &&
+			body.messages.length === 0;
+		if (release) releases.push({ body, signal: request.signal });
+		const custom = await intercept?.(target, body, request);
+		if (custom !== undefined) return custom;
+		if (release) return Response.json({ done: true, done_reason: "unload" });
+		if (target.endsWith("/claim"))
+			return Response.json({
+				...claim,
+				user: "{}",
+				protocolVersion: 2,
+				task: "issue_implementation",
+				bundleHash: bundle.hash,
+				bundleVersion: bundle.version,
+				schema: actionSchema(),
+				...job,
+			});
+		if (target.endsWith("/bundle")) return Response.json(bundle);
+		if (target.endsWith("/api/chat")) {
+			models.push({ body, signal: request.signal });
+			const response =
+				typeof replies === "function"
+					? await replies(body, models.length, request)
+					: (replies?.[models.length - 1] ??
+						nativeReply(body.format ? JSON.stringify(result) : "Ready"));
+			return response instanceof Response ? response : Response.json(response);
+		}
+		if (target.endsWith("/context")) {
+			reads.push(body);
+			return Response.json(
+				Object.hasOwn(contexts, reads.length - 1)
+					? contexts[reads.length - 1]
+					: {
+							receipt: {
+								hash: "b".repeat(64),
+								name: body.name,
+								arguments: body.arguments,
+							},
+							data: { items: [] },
+							schema: actionSchema(),
+						},
+			);
+		}
+		if (target.endsWith("/complete")) {
+			completed.push(body);
+			return Response.json({ prIds: [] });
+		}
+		if (target.endsWith("/fail")) {
+			failed.push(body);
+			return Response.json({ updated: true });
+		}
+		throw new Error("Unexpected worker fixture endpoint");
+	};
+	return {
+		run: createContributionWorker(options, {
+			request,
+			...(now ? { now } : {}),
+			signal,
+			log: (...args) => {
+				logs.push(args);
+				onLog?.(...args);
+			},
+		}),
+		calls,
+		models,
+		releases,
+		reads,
+		completed,
+		failed,
+		logs,
+		bundle,
+	};
+}
+
+test("unverified research prose and thinking never become final evidence, while identical human and tool text remains", async () => {
+	const prose = "ההצעה מוכנה למיזוג";
+	const calls = [readCall()];
+	const context = {
+		item: { reviewStatus: "required", description: prose },
+		pendingFeedback: [{ body: prose }],
+	};
+	const fixture = agentFixture({
+		job: { task: "pr_resolution", user: JSON.stringify(context) },
+		replies: [
+			nativeReply(prose, calls, {
+				message: {
+					role: "assistant",
+					content: prose,
+					thinking: "unsupported private assumption",
+					tool_calls: calls,
+				},
+			}),
+			nativeReply(prose),
+			nativeReply(
+				'{"outcome":"unchanged","summary":"נדרש אישור doradsoft","responses":[]}',
+			),
+		],
+		contexts: [
+			{
+				receipt: { hash: "a".repeat(64) },
+				data: { text: prose },
+				schema: actionSchema(),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const history = fixture.models.at(-1).body.messages;
+	assert.deepEqual(JSON.parse(history[1].content).context, context);
+	assert.deepEqual(
+		history.filter(({ role }) => role === "assistant"),
+		[{ role: "assistant", content: "", tool_calls: calls }],
+	);
+	assert.equal(
+		JSON.parse(history.find(({ role }) => role === "tool").content).text,
+		prose,
+	);
+	assert.match(history.at(-1).content, /Doradsoft approval is missing/);
+	assert.match(history.at(-1).content, /status-only question return unchanged/);
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("final review guidance uses only known current review states and never interpolates untrusted values", async () => {
+	for (const [reviewStatus, expected] of [
+		["required", /approval is missing/],
+		["changes_requested", /Requested changes remain/],
+		["approved", /Only the review requirement is satisfied/],
+		["exempt", /requires no additional human approval/],
+		["pretend-approved", /review is unknown/],
+		[undefined, /review is unknown/],
+	]) {
+		const fixture = agentFixture({
+			job: {
+				task: "pr_resolution",
+				user: JSON.stringify({ item: { reviewStatus } }),
+			},
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.match(fixture.models.at(-1).body.messages.at(-1).content, expected);
+	}
+});
+
+test("native API five batches keep real tool history, ordered receipts and the full latest final schema", async () => {
+	const bundle = agentBundle({
+		version: "tanahpedia-agents-v4",
+		apiVersion: 5,
+		operationGuide: ["article_links never edits prose or grants approval"],
+		tools: ["record", "article_text"].map((name) => ({
+			name,
+			description: "Read current versioned data",
+			inputSchema: { type: "object", additionalProperties: false },
+		})),
+	});
+	const finalSchema = {
+		type: "object",
+		oneOf: [
+			{
+				type: "object",
+				additionalProperties: false,
+				required: ["outcome"],
+				properties: {
+					outcome: { const: "implemented" },
+					target: { type: "integer", minimum: 1, maximum: 999 },
+				},
+			},
+		],
+	};
+	const result = {
+		outcome: "implemented",
+		summary: "קישור מוצע",
+		responses: [],
+		pullRequests: [
+			{
+				changes: [
+					{
+						kind: "article_links",
+						targetId: "27",
+						after: {
+							commands: [
+								{
+									relationshipKey: "coveringSources",
+									action: "add",
+									target: { pasukCoordinates: [{ perekId: 99, pasuk: 26 }] },
+								},
+							],
+						},
+					},
+				],
+			},
+		],
+	};
+	const receipt1 = { hash: "a".repeat(64) },
+		receipt2 = { hash: "b".repeat(64) },
+		receipt3 = { hash: "c".repeat(64) };
+	const fixture = agentFixture({
+		bundle,
+		job: { apiVersion: 5 },
+		replies: [
+			nativeReply("", [
+				readCall("record", { kind: "target:article_links", id: "27" }),
+				readCall("article_text", { id: "27" }, "read-2"),
+			]),
+			nativeReply("", [
+				readCall("record", { kind: "perek", id: 99 }, "read-3"),
+			]),
+			nativeReply(),
+			nativeReply(JSON.stringify(result)),
+		],
+		contexts: [
+			{
+				receipt: receipt1,
+				data: { record: { id: "27" } },
+				schema: actionSchema(),
+			},
+			{
+				receipt: receipt2,
+				data: {
+					text: "בראשית א כו",
+					sourceHash: "d".repeat(64),
+					total: 11,
+					nextCursor: null,
+				},
+				schema: actionSchema(),
+			},
+			{
+				receipt: receipt3,
+				data: { record: { id: 99 } },
+				schema: actionSchema(finalSchema),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 4);
+	assert.deepEqual(
+		fixture.models[0].body.tools,
+		bundle.tools.map((tool) => ({
+			type: "function",
+			function: {
+				name: tool.name,
+				description: tool.description,
+				parameters: tool.inputSchema,
+			},
+		})),
+	);
+	assert.equal(fixture.models[0].body.format, undefined);
+	assert.match(fixture.models[0].body.messages[0].content, /article_links/);
+	assert.deepEqual(
+		fixture.models[1].body.messages.map((message) => message.role),
+		["system", "user", "assistant", "tool", "tool"],
+	);
+	assert.equal(fixture.models[1].body.messages[3].tool_call_id, "read-1");
+	assert.equal(fixture.models[1].body.messages[4].tool_name, "article_text");
+	assert.equal(
+		JSON.parse(fixture.models[1].body.messages[4].content).sourceHash,
+		"d".repeat(64),
+	);
+	assert.deepEqual(
+		fixture.reads.map((read) => read.receipts),
+		[[], [receipt1], [receipt1, receipt2]],
+	);
+	assert.deepEqual(fixture.models.at(-1).body.format, finalSchema);
+	assert.equal(fixture.models.at(-1).body.tools, undefined);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/Ground facts in actual source\/tool data and original human feedback/,
+	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/Copy requested verbatim text directly from the original human text rather than your research draft/,
+	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/minified JSON without indentation or optional whitespace/,
+	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/preserving all whitespace inside that text/,
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [
+		receipt1,
+		receipt2,
+		receipt3,
+	]);
+	assert.deepEqual(JSON.parse(fixture.completed[0].content), result);
+	assert.equal(fixture.completed[0].protocolVersion, 2);
+	assert.equal(fixture.completed[0].apiVersion, 5);
+	for (const model of fixture.models) {
+		assert.equal(model.signal, fixture.models[0].signal);
+		assert.deepEqual(model.body.options, {
+			temperature: 0,
+			num_predict: 4096,
+			num_ctx: 16384,
+		});
+		assert.match(model.body.keep_alive, /^\d+ms$/);
+		assert.ok(Number.parseInt(model.body.keep_alive, 10) <= 120000);
+		assert.equal(model.body.think, false);
+		assert.equal(model.body.truncate, false);
+		assert.equal(model.body.shift, false);
+	}
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v8");
+});
+
+test("cumulative record reads retain every latest change without duplicating supplied records", async () => {
+	const original = { kind: "perek", id: 1, current: { name: "בראשית א" } },
+		changed = { ...original, current: { name: "עדכון" } },
+		missing = { kind: "perek", id: "1", current: null },
+		unknown = { ...original, extra: "Keep this unknown record shape" };
+	const feedback = { body: 'יש לשמר בדיוק "  נוסח אדם  "', id: "human" };
+	const fixture = agentFixture({
+		job: {
+			user: JSON.stringify({
+				currentRecords: [original],
+				pendingFeedback: feedback,
+			}),
+		},
+		replies: [
+			nativeReply("", [readCall("discussion", { cursor: 0 })]),
+			nativeReply("", [readCall("discussion", { cursor: 1 })]),
+			nativeReply("", [readCall("discussion", { cursor: 2 })]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "one" },
+				schema: actionSchema(),
+				data: {
+					records: [original, missing, unknown],
+					text: "Exact page",
+					nextCursor: 1,
+				},
+			},
+			{
+				receipt: { id: "two" },
+				schema: actionSchema(),
+				data: {
+					records: [changed, missing],
+					text: "Exact page",
+					nextCursor: 2,
+				},
+			},
+			{
+				receipt: { id: "three" },
+				schema: actionSchema(),
+				data: {
+					records: [original, missing],
+					text: "Final page",
+					nextCursor: null,
+				},
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const history = fixture.models.at(-1).body.messages;
+	assert.deepEqual(
+		JSON.parse(history[1].content).context.pendingFeedback,
+		feedback,
+	);
+	assert.deepEqual(
+		history
+			.filter(({ role }) => role === "tool")
+			.map(({ content }) => JSON.parse(content)),
+		[
+			{ records: [missing, unknown], text: "Exact page", nextCursor: 1 },
+			{ records: [changed, missing], text: "Exact page", nextCursor: 2 },
+			{ records: [original], text: "Final page", nextCursor: null },
+		],
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [
+		{ id: "one" },
+		{ id: "two" },
+		{ id: "three" },
+	]);
+});
+
+test("an unknown record update cannot hide a later return to a previously supplied value", async () => {
+	const original = { kind: "perek", id: 1, current: { name: "A" } },
+		unknown = { ...original, current: { name: "B" }, newField: true };
+	const fixture = agentFixture({
+		job: { user: JSON.stringify({ currentRecords: [original] }) },
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall("discussion", { cursor: 1 })]),
+			nativeReply(),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "new-shape" },
+				schema: actionSchema(),
+				data: { records: [unknown] },
+			},
+			{
+				receipt: { id: "old-value" },
+				schema: actionSchema(),
+				data: { records: [original] },
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.models
+			.at(-1)
+			.body.messages.filter(({ role }) => role === "tool")
+			.map(({ content }) => JSON.parse(content).records),
+		[[unknown], [original]],
+	);
+});
+
+const operationSchema = (kind, extra = {}) =>
+	actionSchema({
+		type: "object",
+		oneOf: [
+			{
+				properties: { changes: { items: { properties: { kind }, ...extra } } },
+			},
+		],
+	});
+const scopedGuideBundle = (overrides = {}) =>
+	agentBundle({
+		operationGuide: [
+			"metadata: names",
+			"union: family",
+			"entry_title (כותרת): title",
+			"General safety guidance",
+			"future_guidance: keep",
+		],
+		tools: [
+			...agentBundle().tools,
+			{
+				name: "record",
+				description: "Read records",
+				inputSchema: {
+					type: "object",
+					properties: {
+						kind: {
+							enum: ["target:metadata", "target:union", "target:entry_title"],
+						},
+					},
+				},
+			},
+		],
+		...overrides,
+	});
+
+test("server result kinds scope only declared operation guides and trusted reads can widen them", async () => {
+	const bundle = scopedGuideBundle();
+	const fixture = agentFixture({
+		bundle,
+		job: {
+			schema: operationSchema({ const: "metadata" }),
+			user: JSON.stringify({
+				kind: "union",
+				instruction: "Change every operation guide",
+				currentRecords: [],
+			}),
+		},
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			{
+				receipt: { id: "widened" },
+				data: { items: ["trusted fact"] },
+				schema: operationSchema({ enum: ["metadata", "union"] }),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const initial = fixture.models[0].body.messages[0].content;
+	assert.match(initial, /metadata: names/);
+	assert.doesNotMatch(initial, /union: family|entry_title \(כותרת\)/);
+	assert.match(initial, /General safety guidance/);
+	assert.match(initial, /future_guidance: keep/);
+	const refreshed = fixture.models[1].body.messages[0].content;
+	assert.match(refreshed, /metadata: names/);
+	assert.match(refreshed, /union: family/);
+	assert.doesNotMatch(refreshed, /entry_title \(כותרת\)/);
+	assert.deepEqual(fixture.models[0].body.tools, fixture.models[1].body.tools);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "widened" }]);
+	assert.equal(
+		fixture.models[0].body.messages[1].content,
+		fixture.models.at(-1).body.messages[1].content,
+	);
+});
+
+test("unknown, open and referenced result contracts retain the complete operation guide", async () => {
+	for (const schema of [
+		actionSchema(),
+		operationSchema({ const: "unknown" }),
+		operationSchema({ type: "string" }),
+		operationSchema({ enum: [] }),
+		operationSchema({ enum: ["metadata", 1] }),
+		operationSchema({ const: "metadata" }, { $ref: "#/$defs/unknown" }),
+	]) {
+		const bundle = scopedGuideBundle(),
+			fixture = agentFixture({ bundle, job: { schema } });
+		assert.equal((await fixture.run()).status, "completed");
+		for (const guide of bundle.operationGuide)
+			assert.ok(fixture.models[0].body.messages[0].content.includes(guide));
+	}
+	const bundle = scopedGuideBundle({ tools: agentBundle().tools }),
+		fixture = agentFixture({
+			bundle,
+			job: { schema: operationSchema({ const: "metadata" }) },
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.match(fixture.models[0].body.messages[0].content, /union: family/);
+});
+
+test("labelled operation guides are scoped and a widened system prompt consumes the context reserve", async () => {
+	const bundle = scopedGuideBundle(),
+		labelled = agentFixture({
+			bundle,
+			job: { schema: operationSchema({ const: "entry_title" }) },
+		});
+	assert.equal((await labelled.run()).status, "completed");
+	assert.match(
+		labelled.models[0].body.messages[0].content,
+		/entry_title \(כותרת\): title/,
+	);
+	assert.doesNotMatch(
+		labelled.models[0].body.messages[0].content,
+		/metadata: names|union: family/,
+	);
+	const wideBundle = scopedGuideBundle({
+		operationGuide: ["metadata: names", `union: ${"x".repeat(5000)}`],
+	});
+	const fixture = agentFixture({
+		bundle: wideBundle,
+		job: { schema: operationSchema({ const: "metadata" }) },
+		replies: (body, number) => {
+			assert.ok(number <= 2);
+			if (number === 1)
+				return nativeReply("", [readCall()], { prompt_eval_count: 8000 });
+			assert.ok(body.format);
+			assert.match(body.messages[0].content, /union: x/);
+			return nativeReply('{"outcome":"unchanged"}');
+		},
+		contexts: [
+			{
+				receipt: { id: "expanded" },
+				data: { items: [] },
+				schema: operationSchema({ enum: ["metadata", "union"] }),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 2);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "expanded" }]);
+});
+
+test("full cached prompt usage selects final output before another overflowing research turn", async () => {
+	const text = "Source evidence ".repeat(100),
+		latest = actionSchema();
+	const fixture = agentFixture({
+		job: {
+			user: JSON.stringify({
+				pendingFeedback: { body: "Original human request" },
+			}),
+		},
+		replies: (body, number) => {
+			assert.ok(
+				number <= 2,
+				"Research must not advance to the 17932-token request",
+			);
+			if (!body.format)
+				return nativeReply("", [readCall()], {
+					prompt_eval_count: 12057,
+					prompt_eval_cached_count: 8822,
+				});
+			assert.equal(body.tools, undefined);
+			return nativeReply('{"outcome":"unchanged"}', undefined, {
+				prompt_eval_count: 11000,
+			});
+		},
+		contexts: [
+			{
+				receipt: { id: "read" },
+				schema: latest,
+				data: { text, total: text.length, nextCursor: null },
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(
+		JSON.parse(fixture.models[1].body.messages.at(-2).content).text,
+		text,
+	);
+	assert.match(
+		fixture.models[1].body.messages[1].content,
+		/Original human request/,
+	);
+	assert.deepEqual(
+		fixture.models[1].body.format,
+		latest.oneOf[0].properties.result,
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "read" }]);
+	assert.equal(fixture.failed.length, 0);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("context reserve counts multibyte additions and completes a whole native read batch", async () => {
+	for (const letter of ["a", "א"]) {
+		const text = letter.repeat(1400),
+			fixture = agentFixture({
+				replies: [
+					nativeReply(
+						"",
+						[readCall(), readCall("discussion", { cursor: 1 }, "second")],
+						{ prompt_eval_count: 10000 },
+					),
+					...(letter === "a"
+						? [nativeReply("Ready", undefined, { prompt_eval_count: 11000 })]
+						: []),
+					nativeReply('{"outcome":"unchanged"}'),
+				],
+				contexts: [
+					{ receipt: { id: "first" }, schema: actionSchema(), data: { text } },
+					{
+						receipt: { id: "second" },
+						schema: actionSchema(),
+						data: { cursor: 1, items: ["new fact"] },
+					},
+				],
+			});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.equal(fixture.models.length, letter === "a" ? 3 : 2);
+		assert.equal(fixture.reads.length, 2);
+		assert.deepEqual(fixture.completed[0].receipts, [
+			{ id: "first" },
+			{ id: "second" },
+		]);
+		assert.equal(
+			fixture.models.at(-1).body.messages.filter(({ role }) => role === "tool")
+				.length,
+			2,
+		);
+	}
+});
+
+test("API five compresses only adjacent idempotent article commands and preserves human fields", async () => {
+	const add = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: {
+				pasukCoordinates: [
+					{ perekId: 15, pasuk: 14 },
+					{ perekId: 15, pasuk: 13 },
+				],
+			},
+		},
+		reordered = {
+			...add,
+			target: { pasukCoordinates: [...add.target.pasukCoordinates].reverse() },
+		},
+		moed = {
+			relationshipKey: "moadim",
+			action: "add",
+			target: { moedIds: [3, 1] },
+		},
+		dedication = {
+			relationshipKey: "dedicationAssignments",
+			action: "replace",
+			target: { dedicationId: 9, expiresAt: null },
+		},
+		primary = {
+			relationshipKey: "primaryPerek",
+			action: "replace",
+			target: { perekId: 1 },
+		};
+	const draft = {
+		description: '  נוסח מדויק "אנושי"\n  ',
+		evidenceIndexes: [0],
+		changes: [
+			{
+				kind: "article_links",
+				targetId: "594",
+				after: {
+					commands: [
+						add,
+						reordered,
+						moed,
+						moed,
+						dedication,
+						dedication,
+						primary,
+						primary,
+					],
+				},
+			},
+		],
+	};
+	const output = {
+		outcome: "revised",
+		summary: "Reviewed",
+		responses: [
+			{ body: "Exact response", commentId: issueId, status: "addressed" },
+		],
+		draft,
+	};
+	const fixture = agentFixture({
+		bundle: agentBundle({ apiVersion: 5 }),
+		job: { apiVersion: 5, task: "pr_resolution" },
+		replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	const received = JSON.parse(fixture.completed[0].content);
+	assert.deepEqual(received.draft.changes[0].after.commands, [
+		add,
+		moed,
+		dedication,
+		primary,
+	]);
+	assert.equal(received.draft.description, draft.description);
+	assert.deepEqual(received.draft.evidenceIndexes, draft.evidenceIndexes);
+	assert.deepEqual(received.responses, output.responses);
+});
+
+test("removes exact duplicates inside API five link sets without changing fields or action boundaries", async () => {
+	const first = { perekId: 15, pasuk: 14 },
+		second = { perekId: 15, pasuk: 13 };
+	for (const action of ["add", "remove", "replace", "clear"]) {
+		const commands = [
+			{
+				relationshipKey: "coveringSources",
+				action,
+				target: {
+					pasukCoordinates: [first, second, { pasuk: 14, perekId: 15 }],
+					coverageVerified: false,
+				},
+			},
+			{ relationshipKey: "moadim", action, target: { moedIds: [3, 1, 3] } },
+		];
+		for (const apiVersion of [5, 6]) {
+			const output = {
+				outcome: "revised",
+				summary: "Exact summary",
+				responses: [],
+				draft: {
+					description: '  Original human text "unchanged"\n  ',
+					evidenceIndexes: [0],
+					changes: [
+						{ kind: "article_links", targetId: "594", after: { commands } },
+					],
+				},
+			};
+			const fixture = agentFixture({
+				bundle: agentBundle({ apiVersion }),
+				job: { apiVersion, task: "pr_resolution" },
+				replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+			});
+			assert.equal((await fixture.run()).status, "completed");
+			const expected = structuredClone(output);
+			if (apiVersion === 5) {
+				expected.draft.changes[0].after.commands[0].target.pasukCoordinates = [
+					first,
+					second,
+				];
+				expected.draft.changes[0].after.commands[1].target.moedIds = [3, 1];
+			}
+			assert.deepEqual(JSON.parse(fixture.completed[0].content), expected);
+		}
+	}
+});
+
+test("nonadjacent repeated article commands retain order and remain subject to server rejection", async () => {
+	const add = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+		},
+		remove = { ...add, action: "remove" };
+	const output = {
+		outcome: "implemented",
+		summary: "Requested",
+		responses: [],
+		pullRequests: [
+			{
+				changes: [
+					{
+						kind: "article_links",
+						targetId: "594",
+						after: { commands: [add, remove, add] },
+					},
+				],
+			},
+		],
+	};
+	let rejected;
+	const fixture = agentFixture({
+		bundle: agentBundle({ apiVersion: 5 }),
+		job: { apiVersion: 5 },
+		replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+		intercept: (target, body) => {
+			if (target.endsWith("/complete")) {
+				rejected = JSON.parse(body.content);
+				return new Response("Invalid sequence", { status: 400 });
+			}
+		},
+	});
+	assert.equal((await fixture.run()).status, "failed");
+	assert.deepEqual(rejected, output);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("independent fields commute while same-field action boundaries and replacements retain intent", async () => {
+	const addA = {
+			relationshipKey: "coveringSources",
+			action: "add",
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+		},
+		addB = {
+			...addA,
+			target: { pasukCoordinates: [{ perekId: 1, pasuk: 2 }] },
+		},
+		moedA = {
+			relationshipKey: "moadim",
+			action: "remove",
+			target: { moedIds: [1] },
+		},
+		moedB = { ...moedA, target: { moedIds: [2] } };
+	for (const [commands, expected] of [
+		[
+			[addA, addB, addA],
+			[addA, addB],
+		],
+		[
+			[moedA, moedB, moedA],
+			[moedA, moedB],
+		],
+		[
+			[addA, moedA, addA],
+			[addA, moedA],
+		],
+		[
+			[
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+			],
+			[
+				addA,
+				{
+					relationshipKey: "primaryPerek",
+					action: "replace",
+					target: { perekId: 1 },
+				},
+			],
+		],
+		[
+			[
+				{ ...addA, action: "replace" },
+				{ ...addB, action: "replace" },
+				{ ...addA, action: "replace" },
+			],
+			[
+				{ ...addA, action: "replace" },
+				{ ...addB, action: "replace" },
+				{ ...addA, action: "replace" },
+			],
+		],
+		[
+			[
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+				addB,
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+			],
+			[
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+				addB,
+				{ ...addA, target: { ...addA.target, coverageVerified: false } },
+			],
+		],
+	]) {
+		const output = {
+			outcome: "implemented",
+			summary: "Requested",
+			responses: [],
+			pullRequests: [
+				{
+					changes: [
+						{ kind: "article_links", targetId: "594", after: { commands } },
+					],
+				},
+			],
+		};
+		const fixture = agentFixture({
+			bundle: agentBundle({ apiVersion: 5 }),
+			job: { apiVersion: 5 },
+			replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.deepEqual(
+			JSON.parse(fixture.completed[0].content).pullRequests[0].changes[0].after
+				.commands,
+			expected,
+		);
+	}
+});
+
+test("command compaction never repairs other versions, creations, unknown actions or malformed fields", async () => {
+	const known = {
+			relationshipKey: "moadim",
+			action: "add",
+			target: { moedIds: [1] },
+		},
+		unknown = { ...known, action: "future_action" };
+	for (const [apiVersion, changes] of [
+		[
+			6,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [known, known] },
+				},
+			],
+		],
+		[5, [{ kind: "entry", after: { commands: [known, known] } }]],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [unknown, unknown] },
+				},
+			],
+		],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: { commands: [null, null] },
+				},
+			],
+		],
+		[
+			5,
+			[
+				{
+					kind: "article_links",
+					targetId: "594",
+					after: {
+						commands: [
+							{ ...known, target: null },
+							{ ...known, target: null },
+						],
+					},
+				},
+			],
+		],
+		[
+			5,
+			[{ kind: "article_links", targetId: "594", after: { commands: null } }],
+		],
+		[5, [{ kind: "article_links", targetId: "594", after: null }]],
+	]) {
+		const output = {
+				outcome: "implemented",
+				summary: "Requested",
+				responses: [],
+				pullRequests: [{ changes }],
+			},
+			fixture = agentFixture({
+				bundle: agentBundle({ apiVersion }),
+				job: { apiVersion },
+				replies: [nativeReply(), nativeReply(JSON.stringify(output))],
+			});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.deepEqual(JSON.parse(fixture.completed[0].content), output);
+	}
+});
+
+test("typed argument errors enter real tool history without receipts or schema changes", async () => {
+	const error = readRejection("invalid_article_id"),
+		schema = actionSchema(),
+		fixture = agentFixture({
+			bundle: agentBundle({
+				tools: [
+					{
+						name: "record",
+						description: "Read",
+						inputSchema: { type: "object" },
+					},
+				],
+			}),
+			replies: [
+				nativeReply("", [
+					readCall(
+						"record",
+						{ kind: "target:article_links", id: issueId },
+						"bad",
+					),
+				]),
+				nativeReply("", [
+					readCall(
+						"record",
+						{ kind: "target:article_links", id: "27" },
+						"chosen-by-model",
+					),
+				]),
+				nativeReply(),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [
+				error,
+				{ receipt: { id: "actual-read" }, data: { articleId: "27" }, schema },
+			],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.reads.map((read) => read.arguments.id),
+		[issueId, "27"],
+	);
+	assert.deepEqual(
+		fixture.reads.map((read) => read.receipts),
+		[[], []],
+	);
+	assert.deepEqual(
+		JSON.parse(fixture.models[1].body.messages.at(-1).content),
+		error,
+	);
+	assert.equal(fixture.models[1].body.messages.at(-1).tool_call_id, "bad");
+	assert.equal(fixture.models[1].body.messages.at(-1).tool_name, "record");
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "actual-read" }]);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		schema.oneOf[0].properties.result,
+	);
+	assert.equal(fixture.models.length, 4);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("verified preloaded context can complete after a redundant rejected read without forced clarification", async () => {
+	const schema = actionSchema(),
+		fixture = agentFixture({
+			replies: [
+				nativeReply("", [readCall()]),
+				nativeReply(),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [readRejection()],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(fixture.models.length, 3);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		schema.oneOf[0].properties.result,
+	);
+});
+
+test("an identical rejected whole batch enters the one ordinary final phase", async () => {
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [readRejection(), readRejection()],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+	assert.equal(
+		fixture.models
+			.at(-1)
+			.body.messages.filter((message) => message.role === "tool").length,
+		2,
+	);
+	assert.equal(fixture.failed.length, 0);
+});
+
+test("rejected reads retain the latest trusted schema and previously earned receipts", async () => {
+	const latest = actionSchema({
+		type: "object",
+		oneOf: [
+			{
+				type: "object",
+				properties: {
+					outcome: { const: "revised" },
+					description: { const: "Exact human text" },
+				},
+			},
+		],
+	});
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format
+					? '{"outcome":"revised","description":"Exact human text"}'
+					: "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			{ receipt: { id: "earned" }, data: { value: "actual" }, schema: latest },
+			readRejection(),
+			readRejection(),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.reads.map((read) => read.receipts),
+		[[], [{ id: "earned" }], [{ id: "earned" }]],
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "earned" }]);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		latest.oneOf[0].properties.result,
+	);
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+});
+
+test("a repeated rejection mixed with a new real read completes the batch and continues planning", async () => {
+	const fixture = agentFixture({
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [
+				readCall("discussion", {}, "bad-again"),
+				readCall("discussion", { cursor: 10 }, "new-read"),
+			]),
+			nativeReply(),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			readRejection(),
+			readRejection(),
+			{
+				receipt: { id: "new" },
+				data: { items: ["new"] },
+				schema: actionSchema(),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.ok(fixture.models[2].body.tools);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "new" }]);
+});
+
+test("success/error transitions are new information without changing trusted facts on rejection", async () => {
+	const read = (id) => ({
+		receipt: { id },
+		data: { value: 1 },
+		schema: actionSchema(),
+	});
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			read("first"),
+			readRejection(),
+			read("returned"),
+			readRejection(),
+			readRejection(),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 5);
+	assert.equal(fixture.models.length, 6);
+	assert.deepEqual(fixture.completed[0].receipts, [
+		{ id: "first" },
+		{ id: "returned" },
+	]);
+	assert.ok(fixture.models[4].body.tools);
+});
+
+test("changed finite error feedback remains new but property order does not", async () => {
+	const error = readRejection("invalid_article_id");
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			readRejection(),
+			error,
+			{
+				error: {
+					message: error.error.message,
+					code: error.error.code,
+					type: error.error.type,
+				},
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+});
+
+test("malformed or unrecognized read-error envelopes remain fatal and private", async () => {
+	const marker = "pv_bad_read_envelope",
+		valid = readRejection();
+	for (const value of [
+		{ error: null },
+		{ error: [] },
+		{ error: marker },
+		{ error: {} },
+		{ error: { ...valid.error, type: "storage_error" } },
+		{ error: { ...valid.error, code: "constructor" } },
+		{ error: { ...valid.error, code: marker } },
+		{ error: { ...valid.error, message: marker } },
+		{ error: { type: valid.error.type, code: valid.error.code } },
+		{ error: { ...valid.error, cause: marker } },
+		{ ...valid, data: marker },
+		{ ...valid, receipt: {} },
+		{ ...valid, schema: actionSchema() },
+	]) {
+		const fixture = agentFixture({
+			replies: [nativeReply("", [readCall()])],
+			contexts: [value],
+		});
+		const result = await fixture.run();
+		assert.equal(result.error, "Invalid agent context response");
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.completed.length, 0);
+		assert.equal(fixture.failed.length, 1);
+		assert.equal(fixture.releases.length, 1);
+		assert.ok(
+			!inspect([result, fixture.failed, fixture.logs]).includes(marker),
+		);
+	}
+});
+
+test("HTTP errors never become recoverable even with a valid typed body", async () => {
+	for (const status of [400, 401, 403, 409, 500]) {
+		const fixture = agentFixture({
+			replies: [nativeReply("", [readCall()])],
+			intercept: (target) =>
+				target.endsWith("/context")
+					? Response.json(readRejection(), { status })
+					: undefined,
+		});
+		assert.equal(
+			(await fixture.run()).error,
+			`Worker context failed (${status})`,
+		);
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.completed.length, 0);
+	}
+});
+
+test("recoverable feedback uses the same deadline/reserve and still releases after a failed final", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		contexts: [readRejection()],
+		replies: (body, number) => {
+			if (number === 1) {
+				clock = 75000;
+				return nativeReply("", [readCall()]);
+			}
+			assert.equal(body.keep_alive, "45000ms");
+			assert.ok(body.format);
+			throw new Error("Final unavailable");
+		},
+	});
+	assert.equal((await fixture.run()).error, "Final unavailable");
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("an unchanged whole research batch enters final format with every actual read and receipt", async () => {
+	const schema = actionSchema(),
+		data = { items: [{ id: "known", body: "Private source" }], total: 1 },
+		fixture = agentFixture({
+			replies: [
+				nativeReply("", [
+					readCall("discussion", { source: "item", cursor: 0 }, "first"),
+				]),
+				nativeReply("", [
+					readCall("discussion", { cursor: 0, source: "item" }, "second"),
+				]),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [
+				{ data, schema, receipt: { id: "first", at: "earlier" } },
+				{
+					data: { total: 1, items: data.items },
+					schema: { oneOf: schema.oneOf, type: "object" },
+					receipt: { id: "second", at: "later" },
+				},
+			],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.equal(fixture.models[2].body.tools, undefined);
+	assert.deepEqual(
+		fixture.models[2].body.format,
+		schema.oneOf[0].properties.result,
+	);
+	assert.deepEqual(
+		fixture.completed[0].receipts.map((receipt) => receipt.id),
+		["first", "second"],
+	);
+	assert.deepEqual(
+		fixture.models[2].body.messages.map((message) => message.role),
+		["system", "user", "assistant", "tool", "assistant", "tool", "user"],
+	);
+	assert.equal(
+		fixture.models[2].body.messages.filter((message) => message.role === "tool")
+			.length,
+		2,
+	);
+	assert.equal(fixture.releases.length, 1);
+	assert.equal(fixture.failed.length, 0);
+	assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+});
+
+test("a mixed repeated/new batch finishes all reads and continues research", async () => {
+	const bundle = agentBundle({
+		tools: ["discussion", "history"].map((name) => ({
+			name,
+			description: "Read",
+			inputSchema: { type: "object" },
+		})),
+	});
+	const fixture = agentFixture({
+		bundle,
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [
+				readCall("discussion", {}, "again"),
+				readCall("history", {}, "new"),
+			]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.ok(fixture.models[2].body.tools);
+	assert.equal(
+		fixture.models[2].body.messages.filter((message) => message.role === "tool")
+			.length,
+		3,
+	);
+	assert.equal(fixture.completed[0].receipts.length, 3);
+});
+
+test("changed trusted data or admissible schema remains new information for the same call", async () => {
+	for (const changed of ["data", "schema"]) {
+		const first = {
+			data: { record: { value: 1 } },
+			schema: actionSchema(),
+			receipt: { id: "first" },
+		};
+		const second = {
+			data: { record: { value: changed === "data" ? 2 : 1 } },
+			schema:
+				changed === "schema"
+					? actionSchema({
+							type: "object",
+							oneOf: [
+								{
+									type: "object",
+									properties: {
+										outcome: { const: "unchanged" },
+										newField: { type: "string" },
+									},
+								},
+							],
+						})
+					: actionSchema(),
+			receipt: { id: "second" },
+		};
+		const fixture = agentFixture({
+			contexts: [first, second],
+			replies: [
+				nativeReply("", [readCall()]),
+				nativeReply("", [readCall()]),
+				nativeReply("Ready"),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+		});
+		assert.equal((await fixture.run()).status, "completed", changed);
+		assert.equal(fixture.models.length, 4, changed);
+		assert.ok(fixture.models[2].body.tools, changed);
+		assert.deepEqual(
+			fixture.models[3].body.format,
+			second.schema.oneOf[0].properties.result,
+		);
+		assert.equal(fixture.reads.length, 2);
+	}
+});
+
+test("a current value reverting to an older value remains new information", async () => {
+	const fixture = agentFixture({
+		contexts: [1, 2, 1].map((value, index) => ({
+			data: { value },
+			schema: actionSchema(),
+			receipt: { id: index },
+		})),
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall()]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 5);
+	assert.equal(fixture.reads.length, 3);
+	assert.ok(fixture.models[3].body.tools);
+	assert.equal(fixture.models[4].body.tools, undefined);
+});
+
+test("repeated unknown context can finalize as clarification without invented changes", async () => {
+	const result = {
+			outcome: "clarification",
+			summary: "Missing source",
+			responses: [],
+		},
+		schema = actionSchema({
+			type: "object",
+			oneOf: [
+				{ type: "object", properties: { outcome: { const: "clarification" } } },
+			],
+		});
+	const fixture = agentFixture({
+		job: { schema },
+		contexts: [1, 2].map((id) => ({
+			data: { record: null },
+			schema,
+			receipt: { id },
+		})),
+		replies: (body) =>
+			nativeReply(
+				body.format ? JSON.stringify(result) : "",
+				body.format ? undefined : [readCall()],
+			),
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.deepEqual(JSON.parse(fixture.completed[0].content), result);
+	assert.equal(fixture.completed[0].receipts.length, 2);
+});
+
+test("the soft final reserve redirects only the next planning call inside the original deadline", async () => {
+	for (const remaining of [45000, 45001]) {
+		let clock = 0;
+		const fixture = agentFixture({
+			now: () => clock,
+			replies: (body, number) => {
+				if (number === 1) {
+					clock = 120000 - remaining;
+					return nativeReply("", [readCall()]);
+				}
+				return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+			},
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.equal(fixture.models.length, remaining === 45000 ? 2 : 3);
+		assert.equal(Boolean(fixture.models[1].body.format), remaining === 45000);
+		assert.equal(fixture.models[1].body.keep_alive, `${remaining}ms`);
+		assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+		assert.equal(fixture.releases.length, 1);
+		assert.equal(fixture.failed.length, 0);
+	}
+});
+
+test("a failed final after repeated reads is acknowledged and unloaded without retry", async () => {
+	const fixture = agentFixture({
+		replies: (body) => {
+			if (body.format) throw new Error("Final unavailable");
+			return nativeReply("", [readCall()]);
+		},
+	});
+	assert.equal((await fixture.run()).error, "Final unavailable");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
+});
+
+test("native residency reuses one original deadline, then releases the requested model after completion", async (t) => {
+	let clock = 1000;
+	const bounds = [],
+		originalTimeout = AbortSignal.timeout;
+	t.mock.method(AbortSignal, "timeout", (duration) => {
+		bounds.push(duration);
+		return originalTimeout(duration);
+	});
+	const fixture = agentFixture({
+		now: () => clock,
+		job: { model: "configured-model" },
+		replies: (_body, number) => {
+			clock += 20000;
+			return nativeReply(
+				number === 3 ? '{"outcome":"unchanged"}' : "Ready",
+				number === 1 ? [readCall()] : undefined,
+				{ model: "provider-reported-model" },
+			);
+		},
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.models.map(({ body }) => body.keep_alive),
+		["120000ms", "100000ms", "80000ms"],
+	);
+	assert.equal(new Set(fixture.models.map(({ signal }) => signal)).size, 1);
+	assert.equal(bounds.filter((duration) => duration === 120000).length, 1);
+	assert.ok(bounds.every((duration) => [30000, 120000].includes(duration)));
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.releases.length, 1);
+	assert.deepEqual(fixture.releases[0].body, {
+		model: "configured-model",
+		messages: [],
+		stream: false,
+		keep_alive: 0,
+	});
+	assert.notEqual(fixture.releases[0].signal, fixture.models[0].signal);
+	assert.equal(fixture.releases[0].signal.aborted, false);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/complete"));
+	assert.ok(fixture.calls.at(-1).target.endsWith("/api/chat"));
+	assert.equal(fixture.completed[0].model, "provider-reported-model");
+});
+
+test("the original deadline prevents another generation even before its timer can run", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: () => {
+			clock = 120001;
+			return nativeReply("", [readCall()]);
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
+});
+
+test("a final response after the monotonic deadline never reaches completion", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: (body) => {
+			if (body.format) clock = 120001;
+			return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("a context read consuming the original deadline prevents later batch reads", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: [
+			nativeReply("", [readCall(), readCall("discussion", {}, "read-2")]),
+		],
+		intercept: (target) => {
+			if (target.endsWith("/context")) clock = 120001;
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("native abort releases after failure acknowledgement with an independent cleanup signal", async () => {
+	const controller = new AbortController();
+	const fixture = agentFixture({
+		signal: controller.signal,
+		replies: (_body, _number, request) => {
+			controller.abort(new Error("Original cancellation"));
+			request.signal.throwIfAborted();
+		},
+	});
+	assert.equal((await fixture.run()).error, "Original cancellation");
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.models[0].signal.aborted, true);
+	assert.equal(fixture.releases.length, 1);
+	assert.equal(fixture.releases[0].signal.aborted, false);
+	assert.notEqual(fixture.releases[0].signal, controller.signal);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
+});
+
+test("model release waits for completion or failure acknowledgement", async () => {
+	for (const failed of [false, true]) {
+		let acknowledge, entered;
+		const waiting = new Promise((resolve) => {
+			entered = resolve;
+		});
+		const fixture = agentFixture({
+			...(failed
+				? {
+						replies: () => {
+							throw new Error("Model unavailable");
+						},
+					}
+				: {}),
+			intercept: async (target) => {
+				if (!target.endsWith(failed ? "/fail" : "/complete")) return;
+				entered();
+				await new Promise((resolve) => {
+					acknowledge = resolve;
+				});
+				return Response.json({ prIds: [] });
+			},
+		});
+		const pending = fixture.run();
+		await waiting;
+		assert.equal(fixture.releases.length, 0);
+		acknowledge();
+		assert.equal((await pending).status, failed ? "failed" : "completed");
+		assert.equal(fixture.releases.length, 1);
+	}
+});
+
+test("cleanup failures are private warnings and preserve completed or failed job outcomes", async () => {
+	const marker = "private_release_marker";
+	for (const primaryFailure of [false, true]) {
+		for (const cleanupFailure of [
+			"transport",
+			"http",
+			"json",
+			"wrong-response",
+			"log-sink",
+		]) {
+			const fixture = agentFixture({
+				onLog: (message) => {
+					if (
+						cleanupFailure === "log-sink" &&
+						message.startsWith("Local model release")
+					)
+						throw new Error(marker);
+				},
+				replies: (body) => {
+					if (primaryFailure) throw new Error("Original model failure");
+					return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+				},
+				intercept: (target, body) => {
+					if (!target.endsWith("/api/chat") || body.keep_alive !== 0) return;
+					if (cleanupFailure === "transport") throw new Error(marker);
+					if (cleanupFailure === "http")
+						return new Response(marker, { status: 503 });
+					if (cleanupFailure === "json") return new Response(marker);
+					return Response.json({ done: true, done_reason: marker });
+				},
+			});
+			const result = await fixture.run();
+			assert.equal(result.status, primaryFailure ? "failed" : "completed");
+			assert.equal(
+				result.error,
+				primaryFailure ? "Original model failure" : undefined,
+			);
+			assert.equal(fixture.releases.length, 1);
+			assert.equal(fixture.failed.length, primaryFailure ? 1 : 0);
+			assert.equal(fixture.completed.length, primaryFailure ? 0 : 1);
+			assert.equal(
+				fixture.logs.at(-1)[0],
+				"Local model release was not confirmed; bounded residency may remain",
+			);
+			assert.ok(!inspect({ result, logs: fixture.logs }).includes(marker));
+		}
+	}
+});
+
+test("idle work and failures before model dispatch never unload a model", async () => {
+	for (const job of [null, { schema: {} }, { user: "malformed-json" }]) {
+		const fixture = agentFixture({
+			...(job
+				? { job }
+				: {
+						intercept: (target) =>
+							target.endsWith("/claim")
+								? new Response(null, { status: 204 })
+								: undefined,
+					}),
+		});
+		assert.equal((await fixture.run()).status, job ? "failed" : "idle");
+		assert.equal(fixture.models.length, 0);
+		assert.equal(fixture.releases.length, 0);
+	}
+});
+
+test("native PR resolution retains fresh comments, same-PR identity and only immutable bundle caching", async () => {
+	const feedback = {
+		pendingFeedback: {
+			items: [{ id, body: "Correct the existing proposal" }],
+			total: 21,
+			nextCursor: 20,
+		},
+	};
+	const fixture = agentFixture({
+		job: { task: "pr_resolution", user: JSON.stringify(feedback) },
+		replies: (body, index) =>
+			index === 1
+				? nativeReply("", [readCall("discussion", { cursor: 20 })])
+				: nativeReply(
+						body.format
+							? JSON.stringify({
+									outcome: "revised",
+									summary: "Addressed",
+									responses: [
+										{ commentId: id, status: "addressed", body: "Resolved" },
+									],
+									draft: { description: "Updated existing PR" },
+								})
+							: "Ready",
+					),
+		contexts: [
+			{
+				receipt: { hash: "e".repeat(64) },
+				schema: actionSchema(),
+				data: {
+					items: [{ id, body: "The correction beyond the first page" }],
+					total: 21,
+					nextCursor: null,
+				},
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(JSON.parse(fixture.models[0].body.messages[1].content), {
+		task: "pr_resolution",
+		context: feedback,
+	});
+	assert.match(
+		fixture.models[1].body.messages[3].content,
+		/beyond the first page/,
+	);
+	assert.equal(fixture.completed[0].issueId, issueId);
+	assert.equal(
+		JSON.parse(fixture.completed[0].content).pullRequests,
+		undefined,
+	);
+	assert.equal(
+		fixture.calls.filter((call) => call.target.endsWith("/bundle")).length,
+		1,
+	);
+	assert.deepEqual(
+		fixture.calls.findLast((call) => call.target.endsWith("/claim")).body
+			.bundleHashes,
+		[fixture.bundle.hash],
+	);
+	assert.notEqual(fixture.models[0].signal, fixture.models[3].signal);
+});
+
+test("malformed or ambiguous trusted completion schemas fail before inference", async () => {
+	const good = actionSchema();
+	for (const schema of [
+		null,
+		{},
+		{ ...good, oneOf: [] },
+		{ ...good, oneOf: [...good.oneOf, ...good.oneOf] },
+		actionSchema({ type: "object", oneOf: [] }),
+		{ ...good, oneOf: [{ ...good.oneOf[0], required: ["action"] }] },
+		{ ...good, oneOf: [{ ...good.oneOf[0], additionalProperties: true }] },
+		{
+			...good,
+			oneOf: [
+				{
+					...good.oneOf[0],
+					properties: { ...good.oneOf[0].properties, extra: {} },
+				},
+			],
+		},
+	]) {
+		const fixture = agentFixture({ job: { schema } });
+		if (schema === null)
+			await assert.rejects(fixture.run(), /Invalid worker claim response/);
+		else
+			assert.equal((await fixture.run()).error, "Invalid worker result schema");
+		assert.equal(fixture.models.length, 0);
+		assert.equal(fixture.completed.length, 0);
+	}
+});
+
+test("all native calls are validated before any read and invalid calls never retry", async () => {
+	for (const calls of [
+		"invalid",
+		[null],
+		[readCall("merge")],
+		[readCall("discussion", "private arguments")],
+		[readCall("discussion", [])],
+		[readCall("discussion", null)],
+		[readCall(), readCall()],
+		[readCall("discussion", {}, "")],
+		[readCall("discussion", {}, "x".repeat(256))],
+		[{ function: null }],
+	]) {
+		const fixture = agentFixture({ replies: [nativeReply("", calls)] });
+		assert.equal((await fixture.run()).status, "failed");
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.reads.length, 0);
+		assert.equal(fixture.completed.length, 0);
+	}
+});
+
+test("native context errors and malformed updated schemas never continue or complete", async () => {
+	for (const context of [
+		null,
+		{},
+		{ receipt: {}, schema: actionSchema() },
+		{ receipt: {}, data: {}, schema: {} },
+	]) {
+		const fixture = agentFixture({
+			replies: [nativeReply("", [readCall()])],
+			contexts: [context],
+		});
+		assert.equal((await fixture.run()).status, "failed");
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.completed.length, 0);
+	}
+	const fixture = agentFixture({
+		replies: [nativeReply("", [readCall()])],
+		intercept: (target) =>
+			target.endsWith("/context")
+				? new Response("private error", { status: 400 })
+				: undefined,
+	});
+	assert.equal((await fixture.run()).error, "Worker context failed (400)");
+	assert.equal(fixture.models.length, 1);
+});
+
+test("native and final context/output limits and malformed envelopes never save a result", async () => {
+	for (const final of [false, true])
+		for (const broken of [
+			nativeReply("Ready", undefined, { prompt_eval_count: 16384 }),
+			nativeReply("Ready", undefined, { prompt_eval_count: -1 }),
+			nativeReply("Ready", undefined, { prompt_eval_count: undefined }),
+			nativeReply("Ready", undefined, { done: false }),
+			nativeReply("Ready", undefined, { done_reason: "length" }),
+			nativeReply("x".repeat(100001)),
+			nativeReply("", undefined),
+			nativeReply("Ready", undefined, {
+				message: { role: "user", content: "Ready" },
+			}),
+			nativeReply("Ready", undefined, {
+				message: { role: "assistant", content: "Ready", thinking: 1 },
+			}),
+		]) {
+			const fixture = agentFixture({
+				replies: final ? [nativeReply(), broken] : [broken],
+			});
+			assert.equal((await fixture.run()).status, "failed");
+			assert.equal(fixture.completed.length, 0);
+			assert.equal(fixture.models.length, final ? 2 : 1);
+		}
+	for (const content of ["null", "[]", '"result"', "not JSON"]) {
+		const fixture = agentFixture({
+			replies: [nativeReply(), nativeReply(content)],
+		});
+		assert.equal((await fixture.run()).error, "Invalid local model response");
+		assert.equal(fixture.completed.length, 0);
+	}
+	const fixture = agentFixture({
+		replies: [nativeReply(), nativeReply("", [readCall()])],
+	});
+	assert.equal(
+		(await fixture.run()).error,
+		"Unexpected tool call during final generation",
+	);
+	assert.equal(fixture.reads.length, 0);
+});
+
+test("abort in a native batch prevents later reads and acknowledges failure independently", async () => {
+	const stop = new AbortController();
+	const fixture = agentFixture({
+		signal: stop.signal,
+		replies: [
+			nativeReply("", [
+				readCall(),
+				readCall("discussion", { cursor: 2 }, "read-2"),
+			]),
+		],
+		intercept: (target) => {
+			if (target.endsWith("/context")) {
+				stop.abort(new DOMException("Stopped", "AbortError"));
+				return Response.json({ receipt: {}, data: {}, schema: actionSchema() });
+			}
+		},
+	});
+	assert.equal((await fixture.run()).status, "failed");
+	assert.equal(
+		fixture.calls.filter((call) => call.target.endsWith("/context")).length,
+		1,
+	);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.calls.at(-1).signal.aborted, false);
+});
+
+test("an aborted final response cannot complete or trigger another generation", async () => {
+	const stop = new AbortController();
+	const fixture = agentFixture({
+		signal: stop.signal,
+		replies: (body) => {
+			if (body.format) {
+				stop.abort(new DOMException("Stopped", "AbortError"));
+				return nativeReply('{"outcome":"unchanged"}');
+			}
+			return nativeReply();
+		},
+	});
+	assert.equal((await fixture.run()).error, "Stopped");
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.calls.at(-1).signal.aborted, false);
+});
+
+test("unsupported tasks or mismatched bundle versions never run native inference", async () => {
+	for (const job of [
+		{ task: "merge" },
+		{ bundleHash: "not-a-hash" },
+		{ apiVersion: 99 },
+		{ bundleVersion: "different-version" },
+	]) {
+		const fixture = agentFixture({ job });
+		assert.equal((await fixture.run()).status, "failed");
+		assert.equal(fixture.models.length, 0);
+		assert.equal(fixture.completed.length, 0);
+	}
+});
+
+test("rejected native names and arguments never become error-log evidence", async () => {
+	const privateFragment = "pv_7F2k9";
+	for (const calls of [
+		[readCall(privateFragment)],
+		[readCall("discussion", privateFragment)],
+	]) {
+		const fixture = agentFixture({ replies: [nativeReply("", calls)] });
+		const result = await fixture.run();
+		assert.equal(result.error, "Invalid local model tool call");
+		assert.ok(
+			!inspect({ result, failed: fixture.failed, logs: fixture.logs }).includes(
+				privateFragment,
+			),
+		);
+		assert.equal(fixture.reads.length, 0);
+	}
+});
+
+test("bundle identity, duplicate declarations and tampering are checked before inference", async () => {
+	const bundle = agentBundle();
+	assert.equal(validateWorkerBundle(bundle, bundle.hash), bundle);
+	for (const broken of [
+		{ ...bundle, system: "changed" },
+		{ ...bundle, protocolVersion: 3 },
+		agentBundle({ tools: [...bundle.tools, ...bundle.tools] }),
+		agentBundle({ tools: [{ ...bundle.tools[0], inputSchema: true }] }),
+	])
+		assert.throws(() => validateWorkerBundle(broken, broken.hash), /bundle/);
+	const fixture = agentFixture({
+		intercept: (target) =>
+			target.endsWith("/bundle")
+				? Response.json({ ...bundle, system: "tampered" })
+				: undefined,
+	});
+	assert.equal((await fixture.run()).status, "failed");
+	assert.equal(fixture.models.length, 0);
+});
+
+test("malformed JSON is private at every native/final/legacy/API boundary", async () => {
+	const marker = "pv_7F2k9";
+	assert.throws(
+		() => JSON.parse(marker),
+		(error) => error.message.includes(marker),
+	);
+	for (const stage of [
+		"native-envelope",
+		"final-envelope",
+		"final-content",
+		"legacy-envelope",
+		"task-context",
+		"bundle",
+		"context",
+		"complete",
+		"fail",
+		"claim",
+	]) {
+		let modelCalls = 0,
+			failedJob,
+			rejection,
+			result;
+		const bundle = agentBundle();
+		const job = {
+			...claim,
+			user: stage === "task-context" ? marker : "{}",
+			protocolVersion: 2,
+			task: "pr_resolution",
+			bundleHash: bundle.hash,
+			bundleVersion: bundle.version,
+			schema: actionSchema(),
+		};
+		if (stage === "legacy-envelope") delete job.protocolVersion;
+		const run = createContributionWorker(options, {
+			request: async (url, request) => {
+				const target = String(url);
+				if (target.endsWith("/claim"))
+					return stage === "claim" ? new Response(marker) : Response.json(job);
+				if (target.endsWith("/bundle"))
+					return stage === "bundle"
+						? new Response(marker)
+						: Response.json(bundle);
+				if (target.endsWith("/api/chat")) {
+					modelCalls++;
+					if (
+						stage === "legacy-envelope" ||
+						stage === "native-envelope" ||
+						(stage === "final-envelope" && modelCalls === 2)
+					)
+						return new Response(marker);
+					return Response.json(
+						nativeReply(
+							stage === "final-content" || stage === "fail"
+								? marker
+								: modelCalls === 1
+									? "Ready"
+									: "{}",
+							stage === "context" ? [readCall()] : undefined,
+						),
+					);
+				}
+				if (target.endsWith("/context") || target.endsWith("/complete"))
+					return new Response(marker);
+				if (target.endsWith("/fail")) {
+					failedJob = JSON.parse(request.body);
+					return stage === "fail"
+						? new Response(marker)
+						: Response.json({ updated: true });
+				}
+				throw new Error("Unexpected privacy fixture request");
+			},
+		});
+		try {
+			result = await run();
+		} catch (error) {
+			rejection = error;
+		}
+		assert.ok(
+			!inspect({ failedJob, result, rejection }).includes(marker),
+			stage,
+		);
+		assert.equal(rejection?.cause, undefined);
+		assert.match(
+			result?.error ?? rejection?.message,
+			/^Invalid (?:local model|worker)/,
+			stage,
+		);
+		if (stage !== "claim") assert.equal(failedJob.token, claim.token);
+	}
+});
+
+test("watch logs fixed diagnostics for malformed native final, claim and authentication JSON", async () => {
+	const marker = "pv_7F2k9";
+	for (const stage of ["claim", "model", "authentication"]) {
+		const stop = new AbortController(),
+			logs = [],
+			bundle = agentBundle(),
+			savedFetch = globalThis.fetch;
+		globalThis.fetch = async () => new Response(marker);
+		try {
+			await runContributionWorker(
+				[
+					"--watch",
+					...(stage === "authentication"
+						? []
+						: ["--dev", "--origin", "http://localhost:3101"]),
+				],
+				stage === "authentication" ? credentials : {},
+				{
+					signal: stop.signal,
+					log: (...args) => {
+						logs.push(args);
+						if (args[0] === "Local contribution worker:") stop.abort();
+					},
+					pause: async () => stop.abort(),
+					request: async (url) => {
+						const target = String(url);
+						if (target.endsWith("/claim"))
+							return stage === "claim"
+								? new Response(marker)
+								: Response.json({
+										...claim,
+										user: "{}",
+										protocolVersion: 2,
+										task: "pr_resolution",
+										bundleHash: bundle.hash,
+										bundleVersion: bundle.version,
+										schema: actionSchema(),
+									});
+						if (target.endsWith("/bundle")) return Response.json(bundle);
+						if (target.endsWith("/api/chat"))
+							return Response.json(nativeReply(marker));
+						if (target.endsWith("/fail"))
+							return Response.json({ updated: true });
+						throw new Error("Unexpected watch fixture request");
+					},
+				},
+			);
+		} finally {
+			globalThis.fetch = savedFetch;
+		}
+		assert.ok(!inspect(logs).includes(marker));
+		assert.match(inspect(logs), /Invalid (?:worker|local model)/);
+	}
+});
+
+test("real CLI preserves native tool history, typed final format and private evidence", async () => {
+	const marker = "pv_native_private_1",
+		bundle = agentBundle();
+	const result = { outcome: "unchanged", summary: "Checked", responses: [] };
+	const fixture = {
+		bundle,
+		job: {
+			...claim,
+			model: "configured-cli-model",
+			user: JSON.stringify({ evidence: marker }),
+			protocolVersion: 2,
+			task: "pr_resolution",
+			bundleHash: bundle.hash,
+			bundleVersion: bundle.version,
+			schema: actionSchema(),
+		},
+		receipt: { hash: "f".repeat(64) },
+		marker,
+		result,
+	};
+	const bootstrap = `data:text/javascript,${encodeURIComponent(`
+import assert from 'node:assert/strict';
+const fixture = JSON.parse(process.env.CONTRIBUTION_NATIVE_CLI_FIXTURE);
+// Reversing object property order must preserve the complete schema semantics.
+const expectedFormat = Object.fromEntries(Object.entries(fixture.job.schema.oneOf[0].properties.result).reverse());
+let models = 0, completed = false;
+globalThis.fetch = async (url, request) => {
+  const path = new URL(url).pathname, body = JSON.parse(request.body);
+  if (path.endsWith('/claim')) return Response.json(fixture.job);
+  if (path.endsWith('/bundle')) return Response.json(fixture.bundle);
+  if (path.endsWith('/context')) return Response.json({receipt:fixture.receipt,data:{text:fixture.marker},schema:fixture.job.schema});
+  if (path.endsWith('/api/chat')) {
+    if (body.keep_alive === 0 && body.messages.length === 0) {
+      if (!completed || body.model !== 'configured-cli-model' || body.tools || body.format) throw Error('Invalid model release');
+      console.log('native_release_verified'); return Response.json({done:true,done_reason:'unload'});
+    }
+    models++;
+    if (!/^[1-9][0-9]*ms$/.test(body.keep_alive) || Number.parseInt(body.keep_alive,10)>120000) throw Error('Invalid model residency');
+    if (models===2 && (body.messages.at(-1).role!=='tool' || !body.messages.at(-1).content.includes(fixture.marker))) throw Error('Native history was lost');
+    if (models===3) {
+      if (body.tools) throw Error('Typed format was changed');
+      assert.deepEqual(body.format, expectedFormat);
+    }
+    return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,model:'untrusted-provider-model',message:{role:'assistant',content:models<=2?'':JSON.stringify(fixture.result),...(models<=2?{tool_calls:[{id:models===1?'one':'two',function:{name:'discussion',arguments:{}}}]}:{})}});
+  }
+  if (path.endsWith('/complete')) {
+    if(models!==3 || body.receipts.length!==2 || JSON.parse(body.content).outcome!=='unchanged') throw Error('Invalid native completion');
+    completed = true;console.log('native_fixture_verified');return Response.json({prIds:[]});
+  }
+  if (path.endsWith('/fail')) return Response.json({updated:true});
+  throw Error('Unexpected CLI fixture route');
+};`)}`;
+	const { stdout, stderr } = await promisify(execFile)(
+		process.execPath,
+		[
+			"--import",
+			bootstrap,
+			fileURLToPath(new URL("./contribution-worker.mjs", import.meta.url)),
+			"--once",
+			"--dev",
+			"--origin",
+			"http://localhost:3101",
+		],
+		{
+			windowsHide: true,
+			env: {
+				...process.env,
+				CONTRIBUTION_NATIVE_CLI_FIXTURE: JSON.stringify(fixture),
+			},
+		},
+	);
+	assert.match(stdout, /native_fixture_verified/);
+	assert.match(stdout, /native_release_verified/);
+	assert.match(stdout, /completed/);
+	assert.ok(!`${stdout}${stderr}`.includes(marker));
+});
+
+test("real CLI receives typed error feedback, executes the model's next read and keeps private evidence out of logs", async () => {
+	const bundle = agentBundle(),
+		marker = "pv_recoverable_cli_private";
+	const fixture = {
+		bundle,
+		marker,
+		error: readRejection(),
+		job: {
+			...claim,
+			model: "configured-cli-model",
+			user: JSON.stringify({ evidence: marker }),
+			protocolVersion: 2,
+			task: "pr_resolution",
+			bundleHash: bundle.hash,
+			bundleVersion: bundle.version,
+			schema: actionSchema(),
+		},
+	};
+	const bootstrap = `data:text/javascript,${encodeURIComponent(`
+import assert from 'node:assert/strict';
+const fixture = JSON.parse(process.env.CONTRIBUTION_RECOVERABLE_CLI_FIXTURE);
+const expectedFormat = Object.fromEntries(Object.entries(fixture.job.schema.oneOf[0].properties.result).reverse());
+let models = 0, reads = 0, completed = false;
+globalThis.fetch = async (url, request) => {
+ const path = new URL(url).pathname, body = JSON.parse(request.body);
+ if(path.endsWith('/claim')) return Response.json(fixture.job);
+ if(path.endsWith('/bundle')) return Response.json(fixture.bundle);
+ if(path.endsWith('/context')) {
+   reads++;
+   if(body.receipts.length || body.arguments.cursor !== (reads===1?-1:0) || models!==reads) throw Error('Read was automatically changed or retried');
+   return Response.json(reads===1 ? fixture.error : {receipt:{id:'earned'},data:{text:fixture.marker},schema:fixture.job.schema});
+ }
+ if(path.endsWith('/api/chat')) {
+   if(body.keep_alive===0 && body.messages.length===0) {
+     if(!completed || body.model!=='configured-cli-model') throw Error('Invalid cleanup');
+     console.log('recoverable_release_verified'); return Response.json({done:true,done_reason:'unload'});
+   }
+   models++;
+   if(models===2) {
+     const feedback=JSON.parse(body.messages.at(-1).content);
+     if(feedback.error?.type!==fixture.error.error.type || feedback.error.code!==fixture.error.error.code || feedback.error.message!==fixture.error.error.message) throw Error('Actual error feedback missing');
+   }
+   if(models===3 && !body.messages.at(-1).content.includes(fixture.marker)) throw Error('Actual successful read missing');
+   if(models===4) {
+     if(body.tools) throw Error('Final schema was changed');
+     assert.deepEqual(body.format, expectedFormat);
+   }
+   return Response.json({done:true,prompt_eval_count:100,message:{role:'assistant',content:models<=2?'':models===3?'Ready':'{"outcome":"unchanged"}',...(models<=2?{tool_calls:[{id:models===1?'invalid':'valid',function:{name:'discussion',arguments:{cursor:models===1?-1:0}}}]}:{})}});
+ }
+ if(path.endsWith('/complete')) {
+   if(models!==4 || reads!==2) throw Error('Invalid receipt/progress boundary');
+   assert.deepEqual(body.receipts, [{id:'earned'}]);
+   completed=true; console.log('recoverable_cli_verified'); return Response.json({prIds:[]});
+ }
+ if(path.endsWith('/fail')) return Response.json({updated:true});
+ throw Error('Unexpected fixture route');
+};`)}`;
+	const { stdout, stderr } = await promisify(execFile)(
+		process.execPath,
+		[
+			"--import",
+			bootstrap,
+			fileURLToPath(new URL("./contribution-worker.mjs", import.meta.url)),
+			"--once",
+			"--dev",
+			"--origin",
+			"http://localhost:3101",
+		],
+		{
+			windowsHide: true,
+			env: {
+				...process.env,
+				CONTRIBUTION_RECOVERABLE_CLI_FIXTURE: JSON.stringify(fixture),
+			},
+		},
+	);
+	assert.match(stdout, /recoverable_cli_verified/);
+	assert.match(stdout, /recoverable_release_verified/);
+	assert.match(stdout, /completed/);
+	assert.ok(!`${stdout}${stderr}`.includes(marker));
+});
+
+test("malformed OAuth JSON is safe for direct callers without hiding transport failures", async () => {
+	await assert.rejects(
+		workerTokenProvider(credentials, {
+			request: async () => new Response("pv_7F2k9"),
+		})(),
+		(error) => {
+			assert.equal(error.message, "Invalid worker authentication response");
+			assert.equal(error.cause, undefined);
+			return true;
+		},
+	);
+	for (const error of [
+		new DOMException("Worker stopped", "AbortError"),
+		new Error("Connection unavailable"),
+	])
+		await assert.rejects(
+			workerTokenProvider(credentials, {
+				request: async () => ({
+					ok: true,
+					json: async () => {
+						throw error;
+					},
+				}),
+			})(),
+			(actual) => actual === error,
+		);
+});
+
+test("the CLI never prints malformed response contents", async () => {
+	const execute = promisify(execFile),
+		privateFragment = "pv_7F2k9",
+		bootstrap = `data:text/javascript,${encodeURIComponent(
+			"globalThis.fetch = async () => new Response(process.env.CONTRIBUTION_TEST_MALFORMED_BODY);",
+		)}`;
+	await assert.rejects(
+		execute(
+			process.execPath,
+			[
+				"--import",
+				bootstrap,
+				fileURLToPath(new URL("./contribution-worker.mjs", import.meta.url)),
+				"--once",
+				"--dev",
+				"--origin",
+				"http://localhost:3101",
+			],
+			{
+				windowsHide: true,
+				env: {
+					...process.env,
+					CONTRIBUTION_TEST_MALFORMED_BODY: `${privateFragment}"'\\\n`,
+				},
+			},
+		),
+		(error) => {
+			assert.equal(error.code, 1);
+			assert.equal(error.stderr.trim(), "Invalid worker claim response");
+			assert.ok(!`${error.stdout}${error.stderr}`.includes(privateFragment));
+			return true;
+		},
+	);
+});
 
 test("watch resumes after a temporary claim outage and cancels its original polling delay", async () => {
 	const stop = new AbortController(),

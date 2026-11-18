@@ -17,6 +17,7 @@ import {
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekDateInCycle,
 	getPerekRangeLabel,
 	getPerekSource,
 	getProgrammeYearsElapsed,
@@ -28,6 +29,7 @@ import {
 } from "../../../src/data/learning-schedule";
 import {
 	HebrewDate,
+	hebcalDateToNumber,
 	parseNumericalDateToHebcalDate,
 } from "../../../src/util/hebdates-util";
 
@@ -275,6 +277,62 @@ describe("getCycleForDate", () => {
 			number: 12,
 			projected: true,
 		});
+	});
+});
+
+describe("getPerekDateInCycle (#3612)", () => {
+	it("returns the stored schedule entry in a confirmed cycle", () => {
+		const cycle4 = getCycle(4);
+		expect(hebcalDateToNumber(getPerekDateInCycle(1, cycle4))).toBe(57851207);
+		expect(hebcalDateToNumber(getPerekDateInCycle(268, cycle4))).toBe(57861226);
+		expect(hebcalDateToNumber(getPerekDateInCycle(929, cycle4))).toBe(57890705);
+	});
+
+	it.each([1, 3, 9, 10])(
+		"round-trips all 929 perakim through cycle %i as study days",
+		(cycleNumber) => {
+			const cycle = getCycle(cycleNumber);
+			for (let perekId = 1; perekId <= 929; perekId += 1) {
+				const resolved = resolveCalendarDay(
+					getPerekDateInCycle(perekId, cycle),
+				);
+				expect(resolved).toMatchObject({
+					status: "study",
+					perekId,
+					cycle: cycleNumber,
+				});
+			}
+		},
+	);
+
+	it("projects study days on the Sunday–Thursday cadence", () => {
+		const cycle11 = getCycle(11);
+		expect(getPerekDateInCycle(1, cycle11).deltaDays(cycle11.start)).toBe(0);
+		// Perek 5 lands on the first Thursday; perek 6 on the second Sunday.
+		expect(getPerekDateInCycle(5, cycle11).deltaDays(cycle11.start)).toBe(4);
+		expect(getPerekDateInCycle(6, cycle11).deltaDays(cycle11.start)).toBe(7);
+		expect(getPerekDateInCycle(929, cycle11).deltaDays(cycle11.end)).toBe(0);
+	});
+
+	it("round-trips all 929 perakim through a projected cycle as study days", () => {
+		const cycle12 = getCycle(12);
+		for (let perekId = 1; perekId <= 929; perekId += 1) {
+			const resolved = resolveCalendarDay(getPerekDateInCycle(perekId, cycle12));
+			expect(resolved).toMatchObject({
+				status: "study",
+				perekId,
+				cycle: 12,
+				projected: true,
+			});
+		}
+	});
+
+	it("throws for out-of-range perek ids", () => {
+		const cycle = getCycle(4);
+		expect(() => getPerekDateInCycle(0, cycle)).toThrow("Invalid perekId: 0");
+		expect(() => getPerekDateInCycle(930, cycle)).toThrow(
+			"Invalid perekId: 930",
+		);
 	});
 });
 

@@ -85,6 +85,7 @@ describe("extractCitations", () => {
 			expect(resolved).toHaveLength(0);
 			expect(ambiguous).toHaveLength(1);
 			expect(ambiguous[0].quote).toBe("שמואל ה ז");
+			expect(ambiguous[0].dependencyPerekIds).toEqual([510, 605]);
 		});
 	});
 
@@ -114,6 +115,7 @@ describe("extractCitations", () => {
 			expect(resolved).toHaveLength(0);
 			expect(ambiguous).toHaveLength(1);
 			expect(ambiguous[0].reason).toContain("out of range");
+			expect(ambiguous[0].dependencyPerekIds).toEqual([1]);
 		});
 
 		it("ignores sefer names followed by ordinary prose words", () => {
@@ -183,7 +185,7 @@ describe("extractCitations", () => {
 
 		it("labels a range with its end pasuk", () => {
 			const { resolved } = extractCitations("בראשית יח, ב-ה מראה.", catalogue);
-			expect(resolved[0].label).toContain("-5");
+			expect(resolved[0].label).toBe("בראשית יח ב-ה");
 		});
 
 		it("holds a citation whose perek matches several catalogue rows", () => {

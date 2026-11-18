@@ -313,6 +313,36 @@ export function publishVersionBumps(
 		execFileSync("git", args, { cwd, encoding: "utf8" });
 	if (git("status", "--porcelain").trim())
 		throw new Error("Version publisher requires a clean checkout");
+	if (
+		sourceSha &&
+		mode !== "released" &&
+		modulesToBump(needs, "retry").length
+	) {
+		if (!/^[a-f0-9]{40}$/.test(sourceSha))
+			throw new Error("Retry source must be an immutable commit SHA");
+		// An older workflow can finish after master history was replaced. A full
+		// checkout of current refs then lacks its source object. Fetch that exact
+		// object without restoring old refs; keep the ancestry checks below.
+		const source = spawnSync(
+			"git",
+			["rev-parse", "--verify", "--quiet", `${sourceSha}^{commit}`],
+			{ cwd, encoding: "utf8" },
+		);
+		if (
+			source.status === 1 &&
+			!source.signal &&
+			!source.stdout.trim() &&
+			!source.stderr.trim()
+		) {
+			git("fetch", "--no-tags", "origin", sourceSha);
+		} else if (source.status !== 0) {
+			throw new Error(`Cannot inspect retry source: ${source.stderr}`);
+		}
+		if (
+			git("rev-parse", "--verify", `${sourceSha}^{commit}`).trim() !== sourceSha
+		)
+			throw new Error("Retry source resolved to another commit");
+	}
 	for (let attempt = 1; attempt <= 5; attempt++) {
 		git(
 			"fetch",

@@ -60,6 +60,13 @@ ARG MAPBOX_PUBLIC_KEY
 # hadolint ignore=DL3064
 ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
 
+# Optional assets CDN origin (ASSETS_BASE_URL). Statically generated HTML
+# resolves asset URLs during `bun run build`, so an ECS environment edit alone
+# cannot rewrite it — the origin must be present at build time. Empty/unset
+# preserves the direct S3 fallback; see docs/aws/s3-delivery-cost-2026-11-01.md.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
+
 RUN bun run build
 
 # Production image, copy all the files and run next
@@ -71,6 +78,12 @@ LABEL io.bible-on-site.image-delivery="soci-v2"
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Carry the build-time assets origin as the runtime default so ISR/SSR
+# re-renders and route handlers resolve the same URLs baked into static HTML.
+# An ECS task-definition environment entry can still override it.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
 
 # Install curl for ECS health checks
 RUN apk add --no-cache curl~=8

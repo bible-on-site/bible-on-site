@@ -46,10 +46,9 @@ export default defineConfig({
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: webServerCommand,
-		// Merge, don't replace: the base env carries WEB_PORT for the
-		// per-worktree derived port (issue #2881) — dropping it bound the
-		// launcher to :3001 while the suite waited on the derived port.
 		env: {
+			// Keep the derived WEB_PORT the launcher needs — a bare override
+			// leaves it on :3001 while Playwright probes the derived port.
 			...(baseConfig.webServer as TestConfigWebServer).env,
 			...webPushEnv,
 		},

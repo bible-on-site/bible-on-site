@@ -190,7 +190,7 @@ test("sub-50ms interaction audits report against their own published bounds", ()
 	// published bound instead, as the Web Vitals timings already do.
 	for (const [auditId, budget] of [
 		["server-response-time", 100],
-		["max-potential-fid", 250],
+		["largest-observed-task", 250],
 	]) {
 		for (const value of [0, 4, budget - 1, budget, budget + 1]) {
 			const entry = { name: `audit: ${auditId}`, measure: "time_ms", value };
@@ -212,6 +212,17 @@ test("sub-50ms interaction audits report against their own published bounds", ()
 			Number.NaN,
 		).value,
 		4 / 100,
+	);
+	// The retired FID proxy no longer carries a static budget: it stays out of
+	// Bencher entirely (BENCHER_RETIRED_AUDITS in the audit loop), so a stray
+	// time_ms entry must pass through unconverted rather than silently gate.
+	assert.equal(
+		lighthouseBenchmarkEntry(
+			{ name: "audit: max-potential-fid", measure: "time_ms", value: 260 },
+			"max-potential-fid",
+			5000,
+		).measure,
+		"time_ms",
 	);
 	// Neighbouring audits keep the shared percentage threshold.
 	for (const auditId of ["interactive", "bootup-time", "redirects"]) {

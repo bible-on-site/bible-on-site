@@ -13,13 +13,24 @@
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
-| [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
 | [`codeql.yml`](../../../../.github/workflows/codeql.yml) | CodeQL analysis (independent check) |
 | [`dependency-review.yml`](../../../../.github/workflows/dependency-review.yml) | PR dependency review (independent check) |
 | [`dependency-submission.yml`](../../../../.github/workflows/dependency-submission.yml) | Dependency snapshot submission |
 | [`xcode-mcpbridge-poc.yml`](../../../../.github/workflows/xcode-mcpbridge-poc.yml) | Diagnostic PoC for Xcode's mcpbridge device driver (dispatch only) |
 
 ## Triggers and concurrency
+
+### Explicit pull request creation
+
+Contributors and assigned agents open pull requests explicitly and choose
+whether the work is a draft or ready for review. Publishing a branch does
+not open a pull request.
+
+The two former branch-publication workflows were disabled repository-wide
+and removed with their scripts and tests on November 17, 2026. Historical
+branches can still contain those workflows, so keep their GitHub workflow
+IDs `216311524` and `421128633` inactive. Re-enabling them would allow old
+branch activity to recreate completed or deliberately closed work.
 
 `ci.yml` runs on `push` to `master`, on `pull_request` to `master`, on
 `merge_group` (merge-queue validation), and on `workflow_dispatch`. The
@@ -485,24 +496,53 @@ A deleted queue branch can leave its old CI run queued or running after the
 queue has rebuilt a replacement. CI currently assigns each merge-group run a
 unique concurrency key, so normal PR supersession does not remove these runs.
 
-`reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` after
-merge-group CI run requests/completions and matching queue-branch delete
-events. It consumes trusted default-branch code and GitHub metadata, never a
-candidate checkout or artifact. Delivery of internal queue delete events is
-not assumed, so the CI workflow-run scans also provide cleanup opportunities.
+`reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` when a
+PR closes, validation runs are requested/started/completed, or a queue branch is
+deleted. It consumes trusted default-branch code and GitHub metadata, never a
+candidate checkout or artifact. The `pull_request_target: closed` event
+provides the privileged metadata context for fork PRs too; its checkout is
+always the trusted base commit. Run events reconcile validation that starts
+after the merge, including re-runs that do not emit a `requested` event,
+without a scheduled polling job or a separate credential.
+The merged-PR and unmerged-queue passes use independent job concurrency
+groups. Each pass coalesces its own pending events without interrupting a
+running cancellation; a PR event cannot evict the queue pass's pending work.
+Validation of the controller itself uses normal PR concurrency to cancel
+superseded test jobs.
+
+`cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
+runs whose associated PRs have merged. It covers every workflow, follows
+GitHub's native pagination once per active status and validates each immutable
+run again before cancellation. Active inventories are not atomic snapshots:
+their `total_count` can change while runs start or finish. Successful
+`gh api --paginate --slurp` completion follows all pagination links; malformed
+pages, failed requests and counts above GitHub's 1,000-result filtered-search
+limit stop the pass. Later native events reconcile status transitions.
+Master pushes, releases, dispatches, open PRs and commits still
+referenced by the live queue are preserved. A merged PR's unfinished checks
+are redundant validation; its normal master CI and deployment remain
+independent, including after an administrative merge. Unknown associations
+and incomplete queue visibility prevent cancellation. A durable intent
+journal precedes each normal cancel request; an uncertain result is read
+once and never retried or force-cancelled.
+GitHub can return HTTP 409 even for a run displayed as queued when its backend
+has not admitted the run yet. That run is recorded as deferred after the same
+identity-checked reconciliation, and the remaining candidates are processed.
+A later native event checks it again. Permission, transport and other provider
+errors remain failures; the controller does not force an unavailable transition.
 
 A candidate must belong to this exact repository and CI workflow, retain its
 original run/ref/head identity, have an absent queue ref, and appear in no
 current queue head or base. Complete bounded pages and two fresh proofs are
-required. Current master and every merged PR's remaining validation are
-preserved, including HEADGREEN cases where a PR merges before its earlier
-checks finish. Unknown identity, incomplete topology, API errors and races
-fail closed. The controller caps requests and permits at most two normal
+required. This older, separate pass only handles unmerged queue entries;
+merged validation belongs to the merged-PR pass described above. Unknown
+identity, incomplete topology, API errors and races fail closed. The
+unmerged controller caps requests and permits at most two normal
 cancellations per invocation; it never force-cancels or retries a mutation.
 
 The cleanup job requires a successful fsynced intent journal before every
 POST and retains one outcome-reconciliation read, so unknown outcomes are not
 retried. It uploads its proof artifact even after failure. For read-only
-inspection, the helper also supports `--dry-run`. Rollback changes the job to
+inspection, both helpers support `--dry-run`. Rollback changes the job to
 that mode and restores `actions: read`; exact stale builds can still be
 cleaned up manually after the same current-state checks.

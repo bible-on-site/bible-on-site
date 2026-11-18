@@ -3,6 +3,7 @@
 // inside client bundles via the ranged perush views (#2607).
 import type { ReadingMetric, ReadingProgressUnit } from "../reading-metrics/types";
 import type { RangedPerushNote } from "./service";
+import type { PerushNote } from "./types";
 
 /**
  * Reading-metrics view model for a range-bounded perush (#3108) — the
@@ -67,5 +68,36 @@ export function rangedNotesReadingMetrics(
 			estimatedSeconds: estimateReadingSeconds(total),
 		},
 		units,
+	};
+}
+
+/**
+ * Selection-scoped estimate (#2607): aggregate the stored `tanah_note_metric`
+ * counts of a perush's *rendered* notes — e.g. the subset a pasuk selection
+ * leaves on the perek — into the same `{wordCount, estimatedSeconds}`
+ * contract the whole-perek `tanah_perush_metric` row carries. `units` are
+ * the perush's `pasuk:noteIdx`-keyed note rows for the perek; `notes` the
+ * notes actually shown (already filtered to the selection).
+ *
+ * Returns `undefined` — metric unknown — when either input is still loading
+ * or when any rendered note has no stored unit row: a partial estimate must
+ * never present as the selection's count. `ReadingTime` treats the returned
+ * `0`s of an empty selection as verified-empty and renders nothing.
+ */
+export function selectionScopedNoteMetric(
+	units: readonly ReadingProgressUnit[] | undefined,
+	notes: readonly Pick<PerushNote, "pasuk" | "noteIdx">[] | undefined,
+): ReadingMetric | undefined {
+	if (!units || !notes) return undefined;
+	const counts = new Map(units.map((unit) => [unit.key, unit.wordCount]));
+	let wordCount = 0;
+	for (const note of notes) {
+		const count = counts.get(`${note.pasuk}:${note.noteIdx}`);
+		if (count == null) return undefined;
+		wordCount += count;
+	}
+	return {
+		wordCount,
+		estimatedSeconds: estimateReadingSeconds(wordCount),
 	};
 }

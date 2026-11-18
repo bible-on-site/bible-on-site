@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import packageJson from "../../package.json";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
-import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
 import {
 	buildGraph,
 	organizationNode,
@@ -12,6 +12,8 @@ import {
 	websiteNode,
 } from "@/lib/seo/jsonld";
 import { siteOpenGraph } from "@/lib/seo/opengraph";
+import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
+import { alHeperek } from "./brand-font";
 import { AhrefsAnalytics } from "./components/AhrefsAnalytics";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
@@ -45,6 +47,7 @@ export default function RootLayout({
 	return (
 		<html
 			lang="he"
+			className={alHeperek.variable}
 			dir="rtl"
 			data-scroll-behavior="smooth"
 			/* The root layout's inline bootstrap applies stored reader settings
@@ -71,7 +74,7 @@ export default function RootLayout({
 			<body>
 				<TopNav />
 
-				<NavBar />
+				<NavBar version={packageJson.version} />
 				{children}
 			</body>
 		</html>

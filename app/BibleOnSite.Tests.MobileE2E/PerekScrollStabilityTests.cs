@@ -1,4 +1,5 @@
 using BibleOnSite.Tests.MobileE2E.Platforms;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Interactions;
 using Xunit;
@@ -21,9 +22,7 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
     {
         CheckFirstPerushIfAvailable();
 
-        var list = Page.WaitFor("PasukimCollection");
-        var location = list.Location;
-        var size = list.Size;
+        var (location, size) = Page.WaitForStableFrame("PasukimCollection");
         var centerX = location.X + size.Width / 2;
         var topY = location.Y + size.Height / 5;
         var bottomY = location.Y + size.Height * 4 / 5;
@@ -41,19 +40,25 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
             Driver!.PerformActions([sequence]);
         }
 
-        // The last flick's inertia keeps the collection decelerating and
-        // recycling cells on the main thread, starving the WDA lookups that
-        // follow. A short gutter drag takes scroll tracking and stops it.
-        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
-        Driver!.PerformActions([ReaderScrollActions.Brake(
-            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
-            DriverTelemetry.WindowSize(Driver))]);
-
+        // queryAppState asks the driver for the app lifecycle state without
+        // walking the view tree — cheap even while the main thread is busy.
+        // Probe it before the settle wait so a crashed or stalled app surfaces
+        // now instead of after the stable-frame deadline.
         var appState = Driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
         Output.WriteLine($"App state after scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
         Assert.Equal(4L, Convert.ToInt64(appState));
+
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread, starving the WDA lookups that
+        // follow. A short gutter drag takes scroll tracking and stops it. The
+        // frame re-resolves — the storm may have recycled the earlier handle.
+        var (brakeLocation, brakeSize) = Page.WaitForStableFrame("PasukimCollection");
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(brakeLocation, brakeSize),
+            DriverTelemetry.WindowSize(Driver))]);
+
         Assert.NotEmpty(Page.Source);
         Assert.NotEmpty(Page.FirstPasuk);
     });
@@ -65,22 +70,40 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
     {
         Page.Tap("PerushimChevronButton");
         // The panel animates up (~250 ms); poll briefly for a rendered checkbox.
-        AppiumElement? checkbox = null;
-        for (var attempt = 0; attempt < 10 && checkbox == null; attempt++)
+        // RenderedElements reads displayed state inside the lookup's snapshot.
+        var available = false;
+        for (var attempt = 0; attempt < 10 && !available; attempt++)
         {
             Thread.Sleep(300);
-            checkbox = Driver!
-                .FindElements(Platform.AutomationId("PerushCheckBox"))
-                .FirstOrDefault(element => element.Displayed);
+            try
+            {
+                available = Page.RenderedElements("PerushCheckBox").Count > 0;
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The panel was mid-render; the next poll sees a fresh tree.
+            }
         }
-        if (checkbox == null)
+        if (!available)
         {
             Output.WriteLine("No perushim available in this build; scrolling without inline commentary.");
         }
         else
         {
-            Platform.Tap(Driver!, checkbox);
-            Output.WriteLine("Checked the first perush so scrolling churns HtmlView cells.");
+            // Tap's poll keeps the same center-in-viewport rule as the
+            // discovery scan and re-resolves a recycled handle — all inside
+            // this optional step's own five-second budget.
+            try
+            {
+                Page.Tap("PerushCheckBox", _ => true, TimeSpan.FromSeconds(5));
+                Output.WriteLine("Checked the first perush so scrolling churns HtmlView cells.");
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // The only rendered checkboxes sit outside the viewport —
+                // treat like an unavailable pack instead of failing setup.
+                Output.WriteLine("The rendered perush checkbox never became tappable; scrolling without it.");
+            }
         }
         Page.Tap("PerushimChevronButton");
     }

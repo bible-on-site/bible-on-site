@@ -19,6 +19,7 @@ chrono-tz.workspace = true
 rusqlite.workspace = true
 sha2.workspace = true
 reading-metrics.workspace = true
+mongo-config.workspace = true
 bson.workspace = true
 icu_calendar.workspace = true
 sunrise.workspace = true

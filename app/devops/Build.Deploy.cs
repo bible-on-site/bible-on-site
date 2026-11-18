@@ -361,30 +361,43 @@ partial class Build
         });
     }
 
-    // Pushes app/store-listing onto the app's own Hebrew listing inside an open
-    // edit. Play resolves Hebrew under the legacy "iw" tag, so the tag is read
-    // back from the edit rather than hardcoded.
+    // Pushes each locale directory under app/store-listing onto its Google Play
+    // listing inside an open edit. The directory name is the Play language tag,
+    // except "he": Play resolves Hebrew under the legacy "iw" tag, so the tag is
+    // read back from the edit rather than hardcoded. Screenshots stay on the
+    // default (Hebrew) listing — the other locales inherit its graphic assets.
     void SyncStoreListing(AndroidPublisherService service, string editId)
     {
         var listingDir = RootDirectory / "store-listing";
-        var description = ReadListingFile(listingDir / "he" / "description.txt", 4000);
-        var shortDescription = ReadListingFile(listingDir / "he" / "short-description.txt", 80);
         var screenshotsDir = listingDir / "screenshots" / "android";
         var screenshots = screenshotsDir.DirectoryExists()
             ? screenshotsDir.GlobFiles("*.png").OrderBy(p => p.Name).ToList()
             : [];
-        if (description is null && shortDescription is null && screenshots.Count == 0)
+        var localeDirs = listingDir.DirectoryExists()
+            ? listingDir.GlobDirectories("*").Where(d => d.Name != "screenshots").OrderBy(d => d.Name).ToList()
+            : [];
+        if (localeDirs.Count == 0 && screenshots.Count == 0)
         {
             Serilog.Log.Information("No store-listing content found under app/store-listing - skipping listing sync");
             return;
         }
 
         var listings = service.Edits.Listings.List(GooglePlayPackageName, editId).Execute().Listings ?? [];
-        var language = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
+        var hebrewLanguage = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
 
-        if (description is not null || shortDescription is not null)
+        foreach (var localeDir in localeDirs)
         {
+            var language = localeDir.Name == "he" ? hebrewLanguage : localeDir.Name;
+            var title = ReadListingFile(localeDir / "title.txt", 30);
+            var shortDescription = ReadListingFile(localeDir / "short-description.txt", 80);
+            var description = ReadListingFile(localeDir / "description.txt", 4000);
+            if (title is null && shortDescription is null && description is null)
+            {
+                continue;
+            }
+
             var listing = listings.FirstOrDefault(l => l.Language == language) ?? new Listing { Language = language };
+            listing.Title = title ?? listing.Title;
             listing.ShortDescription = shortDescription ?? listing.ShortDescription;
             listing.FullDescription = description ?? listing.FullDescription;
             service.Edits.Listings.Update(listing, GooglePlayPackageName, editId, language).Execute();
@@ -393,12 +406,12 @@ partial class Build
 
         if (screenshots.Count > 0)
         {
-            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, language,
+            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, hebrewLanguage,
                 EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum.PhoneScreenshots).Execute();
             foreach (var screenshot in screenshots)
             {
                 using var stream = File.OpenRead(screenshot);
-                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, language,
+                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, hebrewLanguage,
                     EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum.PhoneScreenshots, stream, "image/png").Upload();
                 if (uploadProgress.Status != UploadStatus.Completed)
                 {
@@ -406,7 +419,7 @@ partial class Build
                 }
             }
 
-            Serilog.Log.Information($"Replaced {language} phone screenshots ({screenshots.Count} files)");
+            Serilog.Log.Information($"Replaced {hebrewLanguage} phone screenshots ({screenshots.Count} files)");
         }
     }
 
