@@ -1,7 +1,12 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { sendNotification, setVapidDetails, WebPushError } from "web-push";
-import { query } from "@/lib/api-client";
+import {
+	lockedTransaction,
+	query,
+	txExecute,
+	txQuery,
+} from "@/lib/api-client";
 import { dailyPerekPayload } from "./payload";
 
 /**
@@ -72,23 +77,64 @@ export function parseSubscription(body: unknown): WebPushSubscription | null {
 const endpointHash = (endpoint: string) =>
 	createHash("sha256").update(endpoint).digest("hex");
 
+/**
+ * Hard bound on stored subscriptions (#3500): the endpoint is anonymous,
+ * so a per-IP limit alone cannot stop a flood spread over many addresses.
+ * Well above the real subscriber count; upserts of an existing endpoint
+ * stay allowed past the cap — only brand-new endpoints are refused.
+ */
+const MAX_STORED_SUBSCRIPTIONS = 25_000;
+
+/** The subscription table hit its bound; only existing keys may update. */
+export class SubscriptionStoreFullError extends Error {}
+
 export async function saveSubscription(
 	subscription: WebPushSubscription,
 ): Promise<void> {
 	const { endpoint, keys } = subscription;
-	await query(
-		`INSERT INTO tanah_web_push_subscription (endpoint_hash, endpoint, p256dh, auth)
+	const hash = endpointHash(endpoint);
+	const params = [
+		hash,
+		endpoint,
+		keys.p256dh,
+		keys.auth,
+		keys.p256dh,
+		keys.auth,
+	];
+	const upsert = `INSERT INTO tanah_web_push_subscription (endpoint_hash, endpoint, p256dh, auth)
 		 VALUES (?, ?, ?, ?)
-		 ON DUPLICATE KEY UPDATE p256dh = ?, auth = ?`,
-		[
-			endpointHash(endpoint),
-			endpoint,
-			keys.p256dh,
-			keys.auth,
-			keys.p256dh,
-			keys.auth,
-		],
+		 ON DUPLICATE KEY UPDATE p256dh = ?, auth = ?`;
+	// Fast path: an existing endpoint's upsert needs no capacity check.
+	const existing = await query(
+		"SELECT endpoint_hash FROM tanah_web_push_subscription WHERE endpoint_hash = ?",
+		[hash],
 	);
+	if (existing.length > 0) {
+		await query(upsert, params);
+		return;
+	}
+	// New endpoint: the capacity check and the insert hold a table-wide
+	// named lock together, so concurrent registrations cannot read the
+	// same remaining capacity and overshoot the bound.
+	await lockedTransaction("tanah_web_push_subscription:save", async (conn) => {
+		// Another transaction may have claimed this endpoint while waiting
+		// for the lock — then it is an upsert and the cap does not apply.
+		const claimed = await txQuery(
+			conn,
+			"SELECT endpoint_hash FROM tanah_web_push_subscription WHERE endpoint_hash = ?",
+			[hash],
+		);
+		if (claimed.length === 0) {
+			const rows = await txQuery<{ total: number }>(
+				conn,
+				"SELECT COUNT(*) AS total FROM tanah_web_push_subscription",
+			);
+			if (Number(rows[0]?.total ?? 0) >= MAX_STORED_SUBSCRIPTIONS) {
+				throw new SubscriptionStoreFullError();
+			}
+		}
+		await txExecute(conn, upsert, params);
+	});
 }
 
 export async function deleteSubscription(endpoint: string): Promise<void> {

@@ -18,13 +18,16 @@ export function TopNav() {
 		<nav className="top-nav" aria-label="ניווט עליון">
 			<Link href="/">
 				<Image
-					src="/images/logos/logo-white-letters-69.webp"
+					src="/images/logos/header-logo-reversed.svg"
 					alt='תנ"ך על הפרק'
 					loading="eager"
 					unoptimized
-					width={69}
-					height={50}
-					style={{ width: 72, height: "auto" }}
+					width={1131}
+					height={340}
+					style={{
+						width: "clamp(80px, calc(100vw - 250px), 180px)",
+						height: "auto",
+					}}
 				/>
 			</Link>
 			<TopNavSearch />

@@ -5,26 +5,27 @@ on:
       - .github/workflows/reap-obsolete-merge-groups.yml
       - devops/github/ci/reap-obsolete-merge-groups.mjs
       - devops/github/ci/reap-obsolete-merge-groups.test.mjs
+      - devops/github/ci/cancel-merged-pr-runs.mjs
+      - devops/github/ci/cancel-merged-pr-runs.test.mjs
       - .nvmrc
+  pull_request_target:
+    branches: [master]
+    types: [closed]
   workflow_run:
-    workflows: [Continuous Integration]
-    types: [requested, completed]
+    workflows: [Continuous Integration, CodeQL, Dependency review, Dependency submission, Data Deployment Tests, Perek Image Tools]
+    # Re-runs do not emit requested; catch them when they start too.
+    types: [requested, in_progress, completed]
   delete:
 permissions:
   contents: read
-concurrency:
-  # Unrelated PR/master CI events must not replace a queued controller run.
-  group: >-
-    obsolete-merge-group-${{ github.event_name == 'pull_request' && github.event.pull_request.number ||
-      ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group') ||
-       (github.event_name == 'delete' && github.event.ref_type == 'branch' &&
-        startsWith(github.event.ref, 'gh-readonly-queue/master/pr-'))) && 'control' || github.run_id }}
-  cancel-in-progress: false
 jobs:
   test:
     timeout-minutes: 60
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    concurrency:
+      group: obsolete-merge-group-tests-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,16 +34,24 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: node --test devops/github/ci/reap-obsolete-merge-groups.test.mjs
+      - run: node --test devops/github/ci/cancel-merged-pr-runs.test.mjs
   inspect:
     if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' &&
+       github.event.workflow_run.workflow_id == 105623149) ||
       (github.event_name == 'delete' && github.event.ref_type == 'branch' &&
        startsWith(github.event.ref, 'gh-readonly-queue/master/pr-'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Each pass reconciles a different candidate set. A PR event must not
+    # replace the queued job that can inspect unmerged queue entries.
+    concurrency:
+      group: obsolete-unmerged-queue-control
+      cancel-in-progress: false
     permissions:
       contents: read
       actions: write
+      pull-requests: read
     steps:
       # These events run trusted default-branch code, never candidate code/artifacts.
       - uses: actions/checkout@v7
@@ -60,5 +69,38 @@ jobs:
         if: always()
         with:
           name: obsolete-merge-group-proof-${{ github.run_id }}
+          path: .artifacts/obsolete-merge-groups/
+          if-no-files-found: error
+  merged:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'workflow_run' && contains(fromJSON('["merge_group", "pull_request", "dynamic"]'), github.event.workflow_run.event)) ||
+      (github.event_name == 'delete' && github.event.ref_type == 'branch' &&
+       startsWith(github.event.ref, 'gh-readonly-queue/master/pr-'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: merged-pr-validation-control
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Cancel validation belonging to merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/ci/cancel-merged-pr-runs.mjs --apply
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: merged-pr-validation-proof-${{ github.run_id }}
           path: .artifacts/obsolete-merge-groups/
           if-no-files-found: error

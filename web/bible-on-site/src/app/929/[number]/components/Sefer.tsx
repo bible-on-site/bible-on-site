@@ -44,6 +44,8 @@ import { ReadingTime } from "@/app/components/ReadingTime";
 import { FlipBook } from "@/app/components/reading/FlipBook";
 import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { Perek, SefarimItem } from "@/data/db/tanah-view-types";
+import { getActiveLearningCycle } from "@/data/learning-calendar-policy";
+import { getPerekDateInCycle } from "@/data/learning-schedule";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
@@ -64,6 +66,7 @@ import {
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
@@ -464,10 +467,20 @@ const Sefer = (props: {
 		[seferColor],
 	);
 
-	const hebrewDateStr = useMemo(
-		() => constructTsetAwareHDate(new Date()).toTraditionalHebrewString(),
-		[],
-	);
+	// Each spread's header date is its own perek's scheduled study day in the
+	// active learning cycle (#3612) — the cycle holding today, or the upcoming
+	// one during an inter-cycle gap — never a shared "today".
+	const panelDateLabels = useMemo(() => {
+		const today = constructTsetAwareHDate(getCurrentDate());
+		const todayLabel = today.toTraditionalHebrewString();
+		const cycle = getActiveLearningCycle(today);
+		return perakim.map((_perek, perekIdx) => {
+			const id = perekIds?.[perekIdx];
+			return !id
+				? todayLabel
+				: getPerekDateInCycle(id, cycle).toTraditionalHebrewString();
+		});
+	}, [perakim, perekIds]);
 
 	// Index of the current perek within the sefer, used to map SSG-provided data
 	const currentPerekIdx = useMemo(
@@ -680,7 +693,7 @@ const Sefer = (props: {
 							}
 							perekId={perekIds?.[perekIdx] ?? 0}
 							seferName={perekObj.sefer}
-							hebrewDateStr={hebrewDateStr}
+							hebrewDateStr={panelDateLabels[perekIdx]}
 							initialSlug={
 								contentNavigation.content &&
 								pagePerekId === contentNavigation.content.perekId
@@ -710,7 +723,7 @@ const Sefer = (props: {
 			perushim,
 			batchSummaries,
 			dailyOverride,
-			hebrewDateStr,
+			panelDateLabels,
 			seferPerekTitles,
 			contentNavigation.content,
 			navigateFromPage,

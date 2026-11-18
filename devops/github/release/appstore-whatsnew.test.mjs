@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
 	EDITABLE_STATES,
 	editableVersion,
+	inspectLiveVersions,
 	liveVersion,
+	main,
+	publicStoreVersion,
 	publishWhatsNew,
 } from "./appstore-whatsnew.mjs";
 
@@ -251,8 +260,7 @@ test("editableVersion uses the current iOS state when legacy state disagrees", a
  * The sanitized shape of the real 5.1.23 failure (run 44034434746): the
  * legacy-state query returned more than one record. A superseded version can
  * retain a stale legacy live flag, and the same live version can appear on
- * more than one record — only the verified iOS live state may decide the
- * baseline.
+ * more than one record — so no single record can prove the public baseline.
  */
 const realWorldRecords = [
 	{
@@ -300,20 +308,19 @@ const realWorldRecords = [
 	},
 ];
 
-test("liveVersion resolves the baseline from verified state in the real multi-record response", async () => {
-	// The failed run's response held several records; only one verified-live
-	// version exists, reported by two different records.
-	assert.equal(await liveVersion("app1", async () => ({ data: realWorldRecords })), "5.1.23");
-});
-
-test("liveVersion treats duplicate records of one live version as one baseline", async () => {
-	const read = async () => ({
-		data: [
-			versionData("5.1.23", "a", "READY_FOR_SALE"),
-			versionData("5.1.23", "b", "READY_FOR_SALE"),
-		],
-	});
-	assert.equal(await liveVersion("app1", read), "5.1.23");
+test("liveVersion fails closed on the real multi-record response until one record proves the baseline", async () => {
+	// Two live records report the same version, so neither a plain read nor
+	// the public storefront match can select a unique record — the baseline
+	// stays blocked rather than guessed.
+	const read = async () => ({ data: realWorldRecords });
+	await assert.rejects(
+		liveVersion("app1", read),
+		/more than one live iOS App Store version/i,
+	);
+	await assert.rejects(
+		liveVersion("app1", read, async () => "5.1.23"),
+		/uniquely match/i,
+	);
 });
 
 test("liveVersion ambiguity names the conflicting candidates and the corrective action", async () => {
@@ -330,37 +337,6 @@ test("liveVersion ambiguity names the conflicting candidates and the corrective 
 	assert.match(error.message, /5\.1\.22/);
 	assert.match(error.message, /5\.1\.23/);
 	assert.match(error.message, /App Store Connect/);
-});
-
-test("liveVersion blocks rather than silently trusting records it cannot classify", async () => {
-	// A row missing platform, state, or versionString can never prove it is
-	// not the live record — ignoring it could fabricate a null baseline.
-	for (const row of [
-		{ id: "x", attributes: { versionString: "5.1.9", appVersionState: "READY_FOR_DISTRIBUTION" } },
-		{ id: "x", attributes: { versionString: "5.1.9", platform: "IOS" } },
-		{ id: "x", attributes: { platform: "IOS", appVersionState: "READY_FOR_DISTRIBUTION" } },
-		{ id: "x", attributes: { platform: "IOS" } },
-	]) {
-		await assert.rejects(
-			liveVersion("app1", async () => ({
-				data: [versionData("5.1.7"), row],
-			})),
-			/cannot be classified/i,
-			JSON.stringify(row),
-		);
-	}
-	// But a proven non-live or non-iOS row with missing unrelated attributes
-	// is still excludable — only live candidates need full identity.
-	assert.equal(
-		await liveVersion("app1", async () => ({
-			data: [
-				versionData("5.1.7"),
-				{ id: "x", attributes: { platform: "IOS", appVersionState: "REJECTED" } },
-				{ id: "y", attributes: { platform: "MAC_OS" } },
-			],
-		})),
-		"5.1.7",
-	);
 });
 
 test("liveVersion refuses truncated or paginated responses instead of guessing", async () => {
@@ -431,4 +407,513 @@ test("publishWhatsNew refuses a truncated localization list instead of writing b
 		/incomplete/i,
 	);
 	assert.equal(writes.length, 0, "no write may happen on unverifiable state");
+});
+
+test("public version inspection preserves the exact queried identities without choosing an ambiguous baseline", async () => {
+	let calls = 0;
+	const records = [
+		modernVersion("5.1.8", "READY_FOR_DISTRIBUTION", {
+			appStoreState: "READY_FOR_SALE",
+			copyright: "not retained",
+		}),
+		modernVersion("5.1.9", "READY_FOR_DISTRIBUTION"),
+		modernVersion("8.0.0", "READY_FOR_DISTRIBUTION", { platform: "MAC_OS" }),
+	];
+	const snapshot = await inspectLiveVersions(
+		"app/1",
+		async (endpoint, parameters) => {
+			calls++;
+			assert.equal(endpoint, "apps/app%2F1/appStoreVersions");
+			assert.deepEqual(parameters, {
+				"filter[appVersionState]": "READY_FOR_DISTRIBUTION",
+				"filter[platform]": "IOS",
+				limit: "200",
+			});
+			return { data: records, included: [{ private: "not retained" }] };
+		},
+	);
+	assert.equal(calls, 1);
+	assert.equal(snapshot.appId, "app/1");
+	assert.equal(snapshot.publicBaseline, null);
+	assert.match(snapshot.error, /more than one live/i);
+	assert.deepEqual(snapshot.records[0], {
+		id: "5.1.8",
+		version: "5.1.8",
+		platform: "IOS",
+		appVersionState: "READY_FOR_DISTRIBUTION",
+		appStoreState: "READY_FOR_SALE",
+	});
+	assert.equal(snapshot.records.length, 3);
+	assert.doesNotMatch(JSON.stringify(snapshot), /not retained/);
+});
+
+test("public inspection retains legacy, absent, replaced and malformed-version states while preserving publication selection", async () => {
+	for (const [records, baseline, expectedError] of [
+		[[versionData("5.1.8")], "5.1.8", null],
+		[[modernVersion("5.1.8", "READY_FOR_DISTRIBUTION")], "5.1.8", null],
+		[[{ id: "absent" }], null, null],
+		[
+			[
+				modernVersion("5.1.7", "REPLACED_WITH_NEW_VERSION", {
+					appStoreState: "READY_FOR_SALE",
+				}),
+			],
+			null,
+			null,
+		],
+		[[modernVersion("invalid", "READY_FOR_DISTRIBUTION")], null, /not semver/],
+		[[], null, null],
+	]) {
+		const snapshot = await inspectLiveVersions("app1", async () => ({
+			data: records,
+		}));
+		assert.equal(snapshot.publicBaseline, baseline);
+		if (expectedError) assert.match(snapshot.error, expectedError);
+		else assert.equal(snapshot.error, null);
+		assert.equal(snapshot.records.length, records.length);
+		if (records[0]?.id === "absent")
+			assert.deepEqual(snapshot.records[0], {
+				id: "absent",
+				version: null,
+				platform: null,
+				appVersionState: null,
+				appStoreState: null,
+			});
+	}
+	await assert.rejects(
+		inspectLiveVersions("app1", async () => {
+			throw new Error("read failed");
+		}),
+		/read failed/,
+	);
+});
+
+test("inspection CLI uses only authenticated Apple GETs and persists the same unambiguous diagnostic record", (t) => {
+	const directory = mkdtempSync(
+		path.join(tmpdir(), "apple-public-inspection-"),
+	);
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const preload = path.join(directory, "fetch-fixture.mjs");
+	writeFileSync(
+		preload,
+		`
+import assert from "node:assert/strict";
+import { writeFileSync } from "node:fs";
+const calls = [];
+process.on("exit", () => writeFileSync(process.env.INSPECTION_CALLS, JSON.stringify(calls)));
+globalThis.fetch = async (input, options) => {
+  const url = new URL(input);
+  assert.equal(url.origin, "https://api.appstoreconnect.apple.com");
+  assert.equal(options.method ?? "GET", "GET");
+  assert.match(options.headers.Authorization, /^Bearer /);
+  calls.push({path: url.pathname, query: Object.fromEntries(url.searchParams)});
+  if (url.pathname === "/v1/apps") return {ok:true, json:async () => ({data:[{id:"app1",attributes:{bundleId:"com.tanah.daily929"}}]})};
+  assert.equal(url.pathname, "/v1/apps/app1/appStoreVersions");
+  return {ok:true, json:async () => ({data:[{id:"v1",attributes:{versionString:"5.1.8",platform:"IOS",appVersionState:"READY_FOR_DISTRIBUTION"}}]})};
+};
+`,
+	);
+	const { privateKey } = generateKeyPairSync("ec", {
+		namedCurve: "prime256v1",
+	});
+	const output = path.join(directory, "literal output $value");
+	const callsPath = path.join(directory, "calls.json");
+	const result = spawnSync(
+		process.execPath,
+		[
+			"--import",
+			pathToFileURL(preload).href,
+			fileURLToPath(new URL("./appstore-whatsnew.mjs", import.meta.url)),
+			"inspect",
+			"--out-dir",
+			output,
+		],
+		{
+			encoding: "utf8",
+			env: {
+				...process.env,
+				GITHUB_REPOSITORY: "",
+				API_KEY_PATH: "",
+				API_KEY_ID: "synthetic",
+				API_ISSUER_ID: "synthetic",
+				API_KEY_BASE64: Buffer.from(
+					privateKey.export({ type: "pkcs8", format: "pem" }),
+				).toString("base64"),
+				INSPECTION_CALLS: callsPath,
+			},
+		},
+	);
+	assert.equal(result.status, 0, result.stderr);
+	const saved = JSON.parse(
+		readFileSync(
+			path.join(output, "app-store-public-version-inspection.json"),
+			"utf8",
+		),
+	);
+	assert.deepEqual(saved, JSON.parse(result.stdout));
+	assert.equal(saved.publicBaseline, "5.1.8");
+	assert.equal(saved.error, null);
+	assert.equal(saved.kind, "app-store-public-version-inspection/1");
+	const calls = JSON.parse(readFileSync(callsPath, "utf8"));
+	assert.equal(calls.length, 2);
+	assert.equal(calls[0].query["filter[bundleId]"], "com.tanah.daily929");
+	assert.equal(
+		calls[1].query["filter[appVersionState]"],
+		"READY_FOR_DISTRIBUTION",
+	);
+	assert.doesNotMatch(JSON.stringify(saved), /Bearer|PRIVATE KEY|synthetic/);
+});
+
+test("inspection CLI validates its command and output before reading Apple credentials", () => {
+	const script = fileURLToPath(
+		new URL("./appstore-whatsnew.mjs", import.meta.url),
+	);
+	for (const [args, message] of [
+		[[], /Usage:/],
+		[["unsupported"], /Usage:/],
+		[["inspect"], /--out-dir is required/],
+		[["publish"], /--version is required/],
+	]) {
+		const result = spawnSync(process.execPath, [script, ...args], {
+			encoding: "utf8",
+			env: { ...process.env, API_KEY_PATH: "must-not-be-read" },
+		});
+		assert.notEqual(result.status, 0);
+		assert.match(result.stderr, message);
+		assert.doesNotMatch(result.stderr, /ENOENT|credentials are incomplete/);
+	}
+});
+
+test("inspection entrypoint reads the guarded app once and returns before any publication path", async (t) => {
+	const directory = mkdtempSync(
+		path.join(tmpdir(), "apple-public-entrypoint-"),
+	);
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const originalArguments = process.argv;
+	const originalKeyPath = process.env.API_KEY_PATH;
+	const originalRepository = process.env.GITHUB_REPOSITORY;
+	const originalGithubOutput = process.env.GITHUB_OUTPUT;
+	t.after(() => {
+		process.argv = originalArguments;
+		if (originalKeyPath === undefined) delete process.env.API_KEY_PATH;
+		else process.env.API_KEY_PATH = originalKeyPath;
+		if (originalRepository === undefined) delete process.env.GITHUB_REPOSITORY;
+		else process.env.GITHUB_REPOSITORY = originalRepository;
+		if (originalGithubOutput === undefined) delete process.env.GITHUB_OUTPUT;
+		else process.env.GITHUB_OUTPUT = originalGithubOutput;
+	});
+	const keyPath = path.join(directory, "synthetic-key.json");
+	const { privateKey } = generateKeyPairSync("ec", {
+		namedCurve: "prime256v1",
+	});
+	writeFileSync(
+		keyPath,
+		JSON.stringify({
+			key_id: "synthetic",
+			issuer_id: "synthetic",
+			key: privateKey.export({ type: "pkcs8", format: "pem" }),
+		}),
+	);
+	process.env.API_KEY_PATH = keyPath;
+	process.env.GITHUB_OUTPUT = "";
+	const requests = [];
+	t.mock.method(globalThis, "fetch", async (input, options) => {
+		const url = new URL(input);
+		requests.push(url.href);
+		assert.equal(options.method ?? "GET", "GET");
+		if (url.origin === "https://itunes.apple.com") {
+			assert.equal(url.pathname, "/lookup");
+			assert.equal(url.searchParams.get("id"), "1045128150");
+			assert.equal(url.searchParams.get("country"), "il");
+			assert.equal(options.headers, undefined);
+			return { ok: true, json: async () => publicAppleResult("5.1.15") };
+		}
+		assert.equal(url.origin, "https://api.appstoreconnect.apple.com");
+		assert.match(options.headers.Authorization, /^Bearer /);
+		const data =
+			url.pathname === "/v1/apps"
+				? [{ id: "1045128150", attributes: { bundleId: "com.tanah.daily929" } }]
+				: ["5.1.15", "5.0.217", "5.0.34", "5.0.33", "4.0.2"].map((version) =>
+						modernVersion(version, "READY_FOR_DISTRIBUTION"),
+					);
+		return { ok: true, json: async () => ({ data }) };
+	});
+	const output = [];
+	t.mock.method(console, "log", (value) => output.push(value));
+	const errors = [];
+	t.mock.method(console, "error", (value) => errors.push(value));
+	process.argv = [
+		process.execPath,
+		"appstore-whatsnew.mjs",
+		"inspect",
+		"--out-dir",
+		directory,
+	];
+	await main();
+	assert.deepEqual(
+		requests.map((value) => new URL(value).pathname),
+		["/v1/apps", "/v1/apps/1045128150/appStoreVersions", "/lookup"],
+	);
+	assert.equal(JSON.parse(output[0]).publicBaseline, "5.1.15");
+	assert.equal(JSON.parse(output[0]).publicLookupVersion, "5.1.15");
+	assert.deepEqual(
+		JSON.parse(
+			readFileSync(
+				path.join(directory, "app-store-public-version-inspection.json"),
+				"utf8",
+			),
+		),
+		JSON.parse(output[0]),
+	);
+	for (const [args, message] of [
+		[[], /Usage:/],
+		[["unsupported"], /Usage:/],
+		[["inspect"], /--out-dir is required/],
+		[["publish"], /--version is required/],
+	]) {
+		process.argv = [process.execPath, "appstore-whatsnew.mjs", ...args];
+		await assert.rejects(main(), message);
+	}
+	process.env.GITHUB_REPOSITORY = "";
+	process.argv = [
+		process.execPath,
+		"appstore-whatsnew.mjs",
+		"publish",
+		"--version",
+		"5.1.9",
+		"--tag",
+		"app-v5.1.9",
+		"--out-dir",
+		directory,
+	];
+	await assert.rejects(main(), /GITHUB_REPOSITORY is required/);
+	assert.equal(requests.length, 3);
+	process.env.GITHUB_REPOSITORY = "bible-on-site/bible-on-site";
+	process.argv = [
+		process.execPath,
+		"appstore-whatsnew.mjs",
+		"publish",
+		"--version",
+		"not-version",
+		"--tag",
+		"app-vnot-version",
+		"--out-dir",
+		directory,
+	];
+	await main();
+	const publication = JSON.parse(
+		readFileSync(path.join(directory, "release-notes-manifest.json"), "utf8"),
+	);
+	assert.equal(publication.publicBaseline, "5.1.15");
+	assert.equal(publication.publication.attempted, false);
+	assert.match(publication.publication.error, /Invalid release version/);
+	assert.equal(requests.length, 6);
+	assert.equal(errors.length, 1);
+});
+
+function publicAppleResult(version, overrides = {}) {
+	return {
+		resultCount: 1,
+		results: [
+			{
+				trackId: 1045128150,
+				bundleId: "com.tanah.daily929",
+				kind: "software",
+				wrapperType: "software",
+				version,
+				...overrides,
+			},
+		],
+	};
+}
+
+test("ambiguous ready versions use the exact published Apple match rather than the greatest version", async () => {
+	const versions = [
+		modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
+		modernVersion("5.0.217", "READY_FOR_DISTRIBUTION"),
+	];
+	let lookups = 0;
+	const published = async (appId) => {
+		assert.equal(appId, "1045128150");
+		lookups++;
+		return "5.0.217";
+	};
+	assert.equal(
+		await liveVersion(
+			"1045128150",
+			async () => ({ data: versions }),
+			published,
+		),
+		"5.0.217",
+	);
+	const inspected = await inspectLiveVersions(
+		"1045128150",
+		async () => ({ data: versions }),
+		published,
+	);
+	assert.equal(inspected.publicBaseline, "5.0.217");
+	assert.equal(inspected.publicLookupVersion, "5.0.217");
+	assert.equal(inspected.records.length, 2);
+	assert.equal(inspected.error, null);
+	assert.equal(lookups, 2);
+});
+
+test("public baseline resolution fails closed for missing, duplicate, malformed and unavailable matches", async () => {
+	for (const [versions, published] of [
+		[["5.1.15", "5.0.217"], "5.1.25"],
+		[["5.1.15", "5.1.15"], "5.1.15"],
+		[["5.1.15", "invalid"], "invalid"],
+	]) {
+		await assert.rejects(
+			liveVersion(
+				"1045128150",
+				async () => ({
+					data: versions.map((version) =>
+						modernVersion(version, "READY_FOR_DISTRIBUTION"),
+					),
+				}),
+				async () => published,
+			),
+			/uniquely match|not semver/,
+		);
+	}
+	const read = async () => ({
+		data: [
+			modernVersion("5.1.15", "READY_FOR_DISTRIBUTION"),
+			modernVersion("5.0.217", "READY_FOR_DISTRIBUTION"),
+		],
+	});
+	await assert.rejects(
+		liveVersion("1045128150", read, async () => {
+			throw new Error("lookup unavailable");
+		}),
+		/lookup unavailable/,
+	);
+	const inspection = await inspectLiveVersions("1045128150", read, async () => {
+		throw new Error("lookup unavailable");
+	});
+	assert.equal(inspection.publicBaseline, null);
+	assert.equal(inspection.publicLookupVersion, null);
+	assert.equal(inspection.error, "lookup unavailable");
+});
+
+test("empty and single ready-version results preserve the existing path without another lookup", async () => {
+	for (const records of [
+		[],
+		[modernVersion("5.1.15", "READY_FOR_DISTRIBUTION")],
+	]) {
+		assert.equal(
+			await liveVersion(
+				"1045128150",
+				async () => ({ data: records }),
+				() => {
+					throw new Error("must not perform an unnecessary lookup");
+				},
+			),
+			records[0]?.attributes.versionString ?? null,
+		);
+	}
+});
+
+test("public Apple lookup binds the exact software identity without credentials or redirects", async () => {
+	let calls = 0;
+	const version = await publicStoreVersion(
+		"1045128150",
+		async (input, options) => {
+			calls++;
+			const url = new URL(input);
+			assert.equal(url.origin, "https://itunes.apple.com");
+			assert.equal(url.pathname, "/lookup");
+			assert.deepEqual(Object.fromEntries(url.searchParams), {
+				id: "1045128150",
+				country: "il",
+				entity: "software",
+			});
+			assert.equal(options.method, "GET");
+			assert.equal(options.redirect, "error");
+			assert.equal(options.headers, undefined);
+			assert(options.signal instanceof AbortSignal);
+			return { ok: true, json: async () => publicAppleResult("5.1.15") };
+		},
+	);
+	assert.equal(version, "5.1.15");
+	assert.equal(calls, 1);
+});
+
+test("public Apple lookup refuses invalid app IDs before transport", async () => {
+	for (const id of [
+		undefined,
+		1045128150,
+		"0",
+		"-1",
+		"app/1",
+		"1045128150?country=us",
+		"999999999999999999999",
+	]) {
+		await assert.rejects(
+			publicStoreVersion(id, () => {
+				throw new Error("unexpected transport");
+			}),
+			/Invalid public Apple app identity/,
+		);
+	}
+});
+
+test("public Apple lookup rejects unbound, non-software or ambiguous result payloads", async () => {
+	for (const result of [
+		null,
+		{},
+		{ resultCount: 0, results: [] },
+		{ resultCount: 1, results: [] },
+		{ resultCount: 1, results: null },
+		{ resultCount: 1, results: [null] },
+		{ resultCount: 2, results: publicAppleResult("5.1.15").results },
+		{
+			resultCount: 1,
+			results: [
+				...publicAppleResult("5.1.15").results,
+				...publicAppleResult("5.1.15").results,
+			],
+		},
+		publicAppleResult("5.1.15", { trackId: "1045128150" }),
+		publicAppleResult("5.1.15", { trackId: 2 }),
+		publicAppleResult("5.1.15", { bundleId: "other.app" }),
+		publicAppleResult("5.1.15", { kind: "song" }),
+		publicAppleResult("5.1.15", { wrapperType: "track" }),
+		publicAppleResult(5),
+		publicAppleResult("5.1"),
+	]) {
+		await assert.rejects(
+			publicStoreVersion("1045128150", async () => ({
+				ok: true,
+				json: async () => result,
+			})),
+			/identity is missing or ambiguous/,
+		);
+	}
+});
+
+test("public Apple read failures remain failures without retries or a guessed baseline", async () => {
+	for (const response of [
+		async () => ({ ok: false, status: 503 }),
+		async () => {
+			throw new Error("network unavailable");
+		},
+		async () => ({
+			ok: true,
+			json: async () => {
+				throw new Error("invalid JSON");
+			},
+		}),
+	]) {
+		let calls = 0;
+		await assert.rejects(
+			publicStoreVersion("1045128150", (...args) => {
+				calls++;
+				return response(...args);
+			}),
+			/HTTP 503|network unavailable|invalid JSON/,
+		);
+		assert.equal(calls, 1);
+	}
 });

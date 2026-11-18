@@ -2,6 +2,7 @@
 const mockSave = jest.fn();
 const mockDelete = jest.fn();
 const mockConfigured = jest.fn();
+const mockAllowed = jest.fn();
 jest.mock("@/lib/app-push", () => {
 	const actual = jest.requireActual("@/lib/app-push/service");
 	return {
@@ -11,9 +12,17 @@ jest.mock("@/lib/app-push", () => {
 		deleteDevice: (...args: unknown[]) => mockDelete(...args),
 	};
 });
+jest.mock("@/lib/rate-limit", () => {
+	const actual = jest.requireActual("@/lib/rate-limit");
+	return {
+		...actual,
+		pushRegistrationAllowed: (...args: unknown[]) => mockAllowed(...args),
+	};
+});
 jest.mock("server-only", () => ({}));
 
 import { DELETE, POST } from "@/app/api/push/device/route";
+import { DeviceStoreFullError } from "@/lib/app-push";
 
 const device = {
 	userId: "d7f3a1b2c4d5e6f7a8b9c0",
@@ -40,6 +49,7 @@ describe("/api/push/device", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockConfigured.mockReturnValue(true);
+		mockAllowed.mockReturnValue(true);
 		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
 	afterEach(() => {
@@ -101,6 +111,35 @@ describe("/api/push/device", () => {
 			expect(response.status).toBe(201);
 			expect(await response.json()).toEqual({ registered: true });
 			expect(mockSave).toHaveBeenCalledWith(device);
+		});
+
+		it("bounds anonymous writes per client address (#3500)", async () => {
+			mockAllowed.mockReturnValue(false);
+			const response = await POST(
+				new Request("http://localhost/api/push/device", {
+					method: "POST",
+					headers: { "x-real-ip": "203.0.113.9" },
+					body: JSON.stringify(device),
+				}),
+			);
+			expect(response.status).toBe(429);
+			expect(mockAllowed).toHaveBeenCalledWith("203.0.113.9");
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("keeps the configured gate ahead of the rate limit", async () => {
+			mockConfigured.mockReturnValue(false);
+			mockAllowed.mockReturnValue(false);
+			expect((await POST(request("POST", device))).status).toBe(404);
+			expect(mockAllowed).not.toHaveBeenCalled();
+		});
+
+		it("returns 503 when the device store is at its bound", async () => {
+			mockSave.mockRejectedValue(new DeviceStoreFullError());
+			expect((await POST(request("POST", device))).status).toBe(503);
+			expect(console.error).toHaveBeenCalledWith(
+				"Push device store is full",
+			);
 		});
 
 		it.each([

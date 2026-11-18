@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { canonicalJson } from "~/lib/canonical-json";
 import type { ChangeInput, Contribution } from "~/lib/tanahpedia/contributions";
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +15,21 @@ const mocks = vi.hoisted(() => ({
 	clientSettings: vi.fn(),
 	scopeContext: vi.fn(),
 	grounding: vi.fn(),
+	article: vi.fn(),
+	perek: vi.fn(),
 }));
+vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
+	readArticleLinkContext: mocks.article,
+}));
+vi.mock(
+	"~/server/tanahpedia/contribution-perek-reads.server",
+	async (original) => ({
+		...(await original<
+			typeof import("~/server/tanahpedia/contribution-perek-reads.server")
+		>()),
+		readAgentPerek: mocks.perek,
+	}),
+);
 vi.mock(
 	"~/server/tanahpedia/contribution-agent-context.server",
 	async (original) => ({
@@ -887,6 +903,97 @@ describe("issue-to-PR LLM generation", () => {
 			options: { temperature: 0 },
 		});
 		expect(request.headers.Authorization).toBeUndefined();
+	});
+	it("persists exact read citations alongside inherited evidence when creating an article-link PR", async () => {
+		const quote = "בראשית א כו";
+		const coordinates = {
+			seferName: "בראשית",
+			additionalLetter: null,
+			perekInContext: 1,
+			pasukCount: 31,
+		};
+		const state = {
+			sourceHash: "b".repeat(64),
+			contentHash: "a".repeat(32),
+			coveringSources: [],
+		};
+		mocks.article.mockResolvedValue({ plainText: quote, state });
+		mocks.perek.mockResolvedValue({ id: 1, coordinates });
+		const changes: ChangeInput[] = [
+			{
+				kind: "article_links",
+				targetId: "27",
+				after: {
+					commands: [
+						{
+							relationshipKey: "coveringSources",
+							action: "add",
+							target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] },
+						},
+					],
+				},
+			},
+		];
+		await createGeneratedContributionPrs(
+			{
+				issue,
+				provider: "local_llm",
+				modelCatalogue: {
+					people: [],
+					places: [],
+					entities: [],
+					targets: [{ kind: "article_links", id: "27", current: state }],
+					references: { perek: [{ id: 1, name: "בראשית א" }] },
+					articleGroundings: [
+						{
+							articleId: "27",
+							sourceHash: state.sourceHash,
+							coordinates: [{ perekId: 1, pasuk: 26 }],
+							chapters: [
+								{
+									id: 1,
+									fingerprint: createHash("sha256")
+										.update(canonicalJson(coordinates))
+										.digest("hex"),
+								},
+							],
+							citations: [
+								{
+									perekId: 1,
+									pasuk: 26,
+									pasukTo: 26,
+									label: quote,
+									quote,
+									spanStart: 0,
+									spanEnd: quote.length,
+								},
+							],
+						},
+					],
+				},
+			},
+			{
+				content: JSON.stringify({ pullRequests: [{ ...draft, changes }] }),
+				model: "local-actual",
+			},
+		);
+		const proposed = mocks.create.mock.calls[0][0];
+		expect(proposed.evidence).toHaveLength(2);
+		expect(proposed.evidence[0]).toEqual(issue.evidence[0]);
+		expect(proposed.evidence[1]).toMatchObject({
+			citation: quote,
+			quote,
+			articleSource: {
+				articleId: "27",
+				contentHash: state.contentHash,
+				sourceHash: state.sourceHash,
+				spanStart: 0,
+				spanEnd: quote.length,
+			},
+		});
+		expect(issue.evidence).toHaveLength(1);
+		expect(proposed.assignee).toMatchObject({ kind: "human", id: "doradsoft" });
+		expect(mocks.create.mock.calls[0][1].isDoradsoft).toBe(false);
 	});
 	it("separates multiple PR types without automatically resolving the source issue", async () => {
 		localOutput({ pullRequests: [draft, { ...draft, title: "הצעה אחרת" }] });

@@ -51,10 +51,10 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         var verseBeforeStorm = Page.FirstPasuk;
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
 
-        var list = Page.WaitFor("PasukimCollection");
-        var centerX = list.Location.X + list.Size.Width / 2;
-        var topY = list.Location.Y + list.Size.Height / 5;
-        var bottomY = list.Location.Y + list.Size.Height * 4 / 5;
+        var (location, size) = Page.WaitForStableFrame("PasukimCollection");
+        var centerX = location.X + size.Width / 2;
+        var topY = location.Y + size.Height / 5;
+        var bottomY = location.Y + size.Height * 4 / 5;
 
         // 40 flicks still force heavy cell prefetch/recycle churn while every
         // pasuk cell renders HtmlView commentary blocks, and the whole test has
@@ -62,13 +62,23 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Storm(bottomY, topY);
         Storm(topY, bottomY);
 
+        // queryAppState is a cheap lifecycle probe — run it before the settle
+        // wait so a crashed or stalled app surfaces now instead of after the
+        // stable-frame deadline.
+        var appState = Driver!.ExecuteScript("mobile: queryAppState",
+            new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
+        Output.WriteLine($"App state after perushim scroll storm: {appState}");
+        // 4 = running in foreground. A crashed app reports 1 (not running).
+        Assert.Equal(4L, Convert.ToInt64(appState));
+
         // The last flick's inertia keeps the collection decelerating and
         // recycling cells on the main thread — that is the starvation that
         // stretched every later WDA command past the 45s return budget. A
-        // short gutter drag takes scroll tracking and stops the momentum.
-        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        // short gutter drag takes scroll tracking and stops the momentum. The
+        // frame re-resolves — the storm may have recycled the earlier handle.
+        var (brakeLocation, brakeSize) = Page.WaitForStableFrame("PasukimCollection");
         Driver!.PerformActions([ReaderScrollActions.Brake(
-            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            new System.Drawing.Rectangle(brakeLocation, brakeSize),
             DriverTelemetry.WindowSize(Driver))]);
 
         // WDA resolves every pointerMove against the app element's AX snapshot
@@ -97,11 +107,6 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
             }
         }
 
-        var appState = Driver!.ExecuteScript("mobile: queryAppState",
-            new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
-        Output.WriteLine($"App state after perushim scroll storm: {appState}");
-        // 4 = running in foreground. A crashed app reports 1 (not running).
-        Assert.Equal(4L, Convert.ToInt64(appState));
         Assert.Equal(sourceBeforeStorm, Page.Source);
         // Opposite flicks need not cancel their inertia. The reader can remain
         // inside the huge note, with every verse outside the visible viewport.
@@ -116,18 +121,33 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Page.Tap("PerushimChevronButton");
 
         Page.WaitFor("PerushCheckBox", element => element.Displayed);
-        var checkboxes = Driver!
-            .FindElements(Platform.AutomationId("PerushCheckBox"))
-            .Where(element => element.Displayed)
-            .ToList();
 
-        foreach (var checkbox in checkboxes.Take(5))
+        // Each tap resolves a fresh live target: the panel can recycle its
+        // rows between the lookup and the gesture, so a held handle can
+        // stale (#3421). Frames identify distinct rows so a re-render after
+        // a tap never re-taps a row that was already checked.
+        var tapped = new List<(System.Drawing.Point Location, System.Drawing.Size Size)>();
+        for (var attempt = 0; tapped.Count < 5 && attempt < 15; attempt++)
         {
-            Platform.Tap(Driver!, checkbox);
+            var next = Page.RenderedElements("PerushCheckBox")
+                .FirstOrDefault(checkbox => !tapped.Contains(checkbox.Frame));
+            if (next.Element == null)
+            {
+                break;
+            }
+            try
+            {
+                Platform.Tap(Driver!, next.Element);
+                tapped.Add(next.Frame);
+            }
+            catch (OpenQA.Selenium.StaleElementReferenceException)
+            {
+                // The row was recycled between lookup and tap — re-render and retry.
+            }
         }
-        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 5)} synthetic perushim.");
+        Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
         Page.Tap("PerushimChevronButton");
-        return Math.Min(checkboxes.Count, 5);
+        return tapped.Count;
     }
 }

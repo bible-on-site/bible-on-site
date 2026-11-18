@@ -620,21 +620,29 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         var before = driver.PageSource;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            // The shared capsule back is the app's visible back control on the
-            // custom top-bar pages (preferences, readers) — all outside UIKit's
-            // navigation bar (#2467).
-            var button = driver.FindElements(AutomationId("TopBarBackButton"))
-                .FirstOrDefault(element => element.Displayed && CanTap(element))
-                ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
-                    .FirstOrDefault(element => element.Displayed && CanTap(element));
-            if (button != null)
+            try
             {
-                Tap(driver, button);
+                // The shared capsule back is the app's visible back control on the
+                // custom top-bar pages (preferences, readers) — all outside UIKit's
+                // navigation bar (#2467).
+                var button = driver.FindElements(AutomationId("TopBarBackButton"))
+                    .FirstOrDefault(element => element.Displayed && CanTap(element))
+                    ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
+                        .FirstOrDefault(element => element.Displayed && CanTap(element));
+                if (button != null)
+                {
+                    Tap(driver, button);
+                }
+                else
+                {
+                    // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
+                    driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
+                }
             }
-            else
+            catch (StaleElementReferenceException)
             {
-                // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
-                driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
+                // The tree churned mid-resolve or mid-tap; the next attempt
+                // re-evaluates on a fresh snapshot.
             }
             if (PageChanged(driver, before))
             {

@@ -12,6 +12,8 @@ export interface ArticleLiteralGrounding {
 	sourceHash: string;
 	coordinates: PasukCoordinate[];
 	chapters: { id: number; fingerprint: string }[];
+	/** Exact resolved spans actually returned by trusted source reads. */
+	citations?: ResolvedCitation[];
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {

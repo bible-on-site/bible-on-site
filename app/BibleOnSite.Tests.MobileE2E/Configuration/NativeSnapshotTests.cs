@@ -10,7 +10,8 @@ namespace BibleOnSite.Tests.MobileE2E.Configuration;
 [Trait("Category", "Unit")]
 public sealed class NativeSnapshotTests
 {
-    private static Dictionary<string, object> Entry(string id, bool displayed = true, double x = 0, double y = 0) => new()
+    private static Dictionary<string, object> Entry(string id, bool displayed = true, double x = 0, double y = 0,
+        double width = 20, double height = 20) => new()
     {
         ["element-6066-11e4-a52e-4f735466cecf"] = id,
         ["displayed"] = displayed,
@@ -20,8 +21,8 @@ public sealed class NativeSnapshotTests
         {
             ["x"] = x,
             ["y"] = y,
-            ["width"] = 20,
-            ["height"] = 20d
+            ["width"] = width,
+            ["height"] = height
         }
     };
 
@@ -222,7 +223,8 @@ public sealed class NativeSnapshotTests
     [Fact]
     public void ScrollReturnRetriesAHeadingLookupStraggler()
     {
-        var executor = new SnapshotExecutor([Entry("collection"), Entry("collection"), Entry("heading", y: 40)])
+        var executor = new SnapshotExecutor(
+            [Entry("collection", width: 100), Entry("collection", width: 100), Entry("heading", y: 40)])
         {
             TimeoutOnLookup = 2,
             FrameWidth = 100
@@ -346,6 +348,73 @@ public sealed class NativeSnapshotTests
         Assert.True(snapshot.IsVisibleIn(new(100, 100)));
     }
 
+    [Fact]
+    public void StableFramesComeFromThePollSnapshotWithoutARectRequest()
+    {
+        var executor = new SnapshotExecutor([Entry("collection", x: 10, y: 20, width: 80, height: 40)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        var (location, size) = page.WaitForStableFrame("PasukimCollection");
+        Assert.Equal(new Point(10, 20), location);
+        Assert.Equal(new Size(80, 40), size);
+        // Two consecutive identical snapshots prove the frame settled.
+        Assert.Equal(2, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+    }
+
+    [Fact]
+    public void PollConditionsReadSnapshotGeometryWithoutARectRequest()
+    {
+        var executor = new SnapshotExecutor([Entry("collection", width: 80)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        Assert.NotNull(page.WaitFor("PasukimCollection", element => element.Size.Width >= 50));
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+    }
+
+    [Fact]
+    public void ObservationCapturesTheAttributeInsideThePoll()
+    {
+        var executor = new SnapshotExecutor([Entry("switch")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        Assert.True(page.WaitForObservation("DivineNameMaskingSwitch",
+            element => new IosPlatformAdapter().IsChecked(element)));
+        Assert.Single(executor.Commands, command => command == DriverCommand.GetElementAttribute);
+        Assert.Equal(1, executor.Lookups);
+    }
+
+    [Fact]
+    public void TapReresolvesATargetRecycledBeforeTheGesture()
+    {
+        var executor = new SnapshotExecutor([Entry("button")]) { StaleOnRect = 1 };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).Tap("CircularMenuButton");
+        Assert.Equal(2, executor.Lookups);
+        Assert.Equal(2, executor.Commands.Count(command => command == DriverCommand.GetElementRect));
+        Assert.Single(executor.Commands, command => command == "actions");
+    }
+
+    [Fact]
+    public void BottomNavigationAssertionsReadEveryFrameFromThePollSnapshots()
+    {
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "CircularMenuButton" => new object[] { Entry("menu", x: 25, y: 10, width: 50, height: 50) },
+                "TextButton" => new object[] { Entry("text", x: 0, y: 10, width: 50, height: 50) },
+                "FullScreenButton" => new object[] { Entry("full", x: 0, y: 10, width: 50, height: 50) },
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).AssertBottomNavigationLayout();
+        Assert.Equal(6, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.IsElementEnabled, executor.Commands);
+    }
+
     [Theory]
     [InlineData("PORTRAIT", 0)]
     [InlineData("LANDSCAPE", 1)]
@@ -365,8 +434,10 @@ public sealed class NativeSnapshotTests
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
         public bool StaleOnText { get; init; }
+        public int StaleOnRect { get; set; }
         public int TimeoutOnLookup { get; init; }
         public string TimeoutMessage { get; init; } = "The element observation timed out.";
+        public Func<object?, object?>? Respond { get; init; }
         public string Orientation { get; set; } = "PORTRAIT";
         public int FrameX { get; set; } = 10;
         public int FrameWidth { get; set; } = 30;
@@ -401,14 +472,30 @@ public sealed class NativeSnapshotTests
                 }
                 else
                 {
-                    value = results.Length == 0
-                        ? Array.Empty<object>()
-                        : new object[] { results[(Lookups - 1) % results.Length] };
+                    value = Respond?.Invoke(command.Parameters["value"])
+                        ?? (results.Length == 0
+                            ? Array.Empty<object>()
+                            : new object[] { results[(Lookups - 1) % results.Length] });
                 }
             }
             else if (command.Name == DriverCommand.GetElementRect)
             {
-                value = new Dictionary<string, object> { ["x"] = FrameX, ["y"] = 20, ["width"] = FrameWidth, ["height"] = 40 };
+                if (StaleOnRect-- > 0)
+                {
+                    status = WebDriverResult.ObsoleteElement;
+                    value = new Dictionary<string, object>
+                    {
+                        ["message"] = "The element was recycled before the gesture."
+                    };
+                }
+                else
+                {
+                    value = new Dictionary<string, object> { ["x"] = FrameX, ["y"] = 20, ["width"] = FrameWidth, ["height"] = 40 };
+                }
+            }
+            else if (command.Name == DriverCommand.GetElementAttribute)
+            {
+                value = command.Parameters["name"] as string == "value" ? "1" : "true";
             }
             else if (command.Name == DriverCommand.GetWindowRect)
             {

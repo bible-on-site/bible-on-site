@@ -226,7 +226,10 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   error), `POST` stores a
   `PushSubscription.toJSON()` body, `DELETE {endpoint}` removes it. Only
   endpoints on known browser push services (FCM, Mozilla, WNS, Apple) are
-  accepted, so the sender never POSTs to arbitrary URLs.
+  accepted, so the sender never POSTs to arbitrary URLs. Anonymous `POST`s
+  are bounded (#3500): a per-client-address rate limit (429) shared with
+  `/api/push/device`, and `tanah_web_push_subscription` caps new endpoints
+  at 25,000 rows while existing endpoints always upsert.
 - **Trigger**: `.github/workflows/web-push-daily.yml` calls
   `POST /api/push/daily` at 05:00 UTC Sunday-Friday with
   `Authorization: Bearer $PUSH_SEND_SECRET`. The route resolves the day with
@@ -236,6 +239,10 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   check. Payloads link to `/929/<perekId>`, use topic `daily-perek` (an
   undelivered reminder is replaced, not stacked) and a 12-hour TTL.
   Subscriptions the push service reports as gone (404/410) are deleted.
+  Failure fails closed (#3499): every-send-failed answers 502 and a
+  targeted check that matched no live subscription answers 404, so the
+  scheduled `curl --fail-with-body` run goes red instead of passing on
+  `{ "sent": 0 }`.
 - **Service worker**: `public/sw.js` only renders pushes (RTL Hebrew) and
   focuses or opens the linked page on click, same-origin only. It has no
   fetch handler, so it never affects loading or caching.
@@ -311,9 +318,14 @@ correlate directly with nginx upstream logs. Each line carries `version`
 min/mean/max/p50/p90/p95/p99 in ms, sampled once per event-loop iteration so
 queueing delay ahead of a request handler is recorded), `eventLoopUtilization`
 (idle/active ms and the delta ratio), `cpu` (user/system ms deltas) and `gc`
-(count, total/max ms, per-kind counts). Accumulators reset every interval; the
-timer is unref'd so drain behavior is unchanged. Enabling in production is a
-separate deployment decision — the instrumentation PR does not turn it on.
+(count, total/max ms, per-kind counts). A runtime that cannot provide a
+primitive emits `{"unsupported": true}` for that field instead of zeros that
+would read as a perfectly healthy loop — under Bun, `eventLoopUtilization`
+returns a zero stub and `gc` is absent from
+`PerformanceObserver.supportedEntryTypes`, while `eventLoopDelay` and `cpu`
+report real values there. Accumulators reset every interval; the timer is
+unref'd so drain behavior is unchanged. Enabling in production is a separate
+deployment decision — the instrumentation PR does not turn it on.
 
 Local verification against the real compiled server:
 

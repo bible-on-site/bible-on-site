@@ -33,7 +33,9 @@ import {
 	readContributionAgentTool,
 } from "./contribution-agent-context.server";
 import {
+	assertContributionAgentPreservationResult,
 	assertContributionAgentVerbatimResult,
+	contributionAgentPreservationConstraints,
 	contributionAgentResultSchema,
 	contributionAgentVerbatimConstraints,
 	parseContributionAgentResult,
@@ -49,6 +51,7 @@ import {
 	readContributionAgentBundle,
 	touchContributionAgent,
 } from "./contribution-agent-registry.server";
+import { appendAgentArticleEvidence } from "./contribution-article-evidence.server";
 import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import {
 	awsGenerate,
@@ -554,6 +557,8 @@ export async function completeContributionAgentWork(
 			if (replay(item)) return { prIds: item.generation?.prIds ?? [] };
 			await prepareAgentLease(conn, raw, true);
 			assertContributionAgentVerbatimResult(item, result);
+			assertContributionAgentPreservationResult(item, result);
+			const preserved = contributionAgentPreservationConstraints(item);
 			if (result.draft?.changes)
 				await assertCurrentAgentArticleGrounding(
 					conn,
@@ -561,6 +566,19 @@ export async function completeContributionAgentWork(
 					context.catalogue,
 					item.changes,
 				);
+			if (
+				result.draft &&
+				!preserved.some(({ field }) => field === "evidence")
+			) {
+				const selected = result.draft.evidence ?? item.evidence;
+				const supplemented = await appendAgentArticleEvidence(
+					conn,
+					result.draft.changes ?? item.changes,
+					context.catalogue,
+					selected,
+				);
+				if (supplemented !== selected) result.draft.evidence = supplemented;
+			}
 			const changed = result.draft
 				? await applyContributionAgentRevision(
 						conn,
@@ -568,9 +586,14 @@ export async function completeContributionAgentWork(
 						result.draft,
 						actor,
 						{
-							verbatimFields: contributionAgentVerbatimConstraints(item).map(
-								(constraint) => constraint.field,
-							),
+							verbatimFields: [
+								...contributionAgentVerbatimConstraints(item).map(
+									({ field }) => field,
+								),
+								...preserved.flatMap(({ field }) =>
+									field === "title" || field === "description" ? [field] : [],
+								),
+							],
 						},
 					)
 				: false;

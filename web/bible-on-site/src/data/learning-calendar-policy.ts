@@ -36,6 +36,16 @@ export function getCalendarCycleWindow(today: HebrewDate) {
 
 export type CalendarCycleWindow = ReturnType<typeof getCalendarCycleWindow>;
 
+/**
+ * The cycle a reader dates chapters against (#3612): the one containing
+ * today, or the window's next cycle when today sits in an inter-cycle gap —
+ * the same upcoming cycle the לוח לימוד יומי presents as its forward bound.
+ */
+export function getActiveLearningCycle(today: HebrewDate): StudyCycle {
+	const { current, next } = getCalendarCycleWindow(today);
+	return current ?? next;
+}
+
 /** Same Hebrew month/day in the previous year, constraining missing Adar I. */
 export function calendarCycleExportOpens(cycle: StudyCycle): HebrewDate {
 	const year = cycle.start.year - 1;
