@@ -237,7 +237,7 @@ test("permission, provider and transport failures still stop after one reconcili
   }
 });
 
-test("CLI adapter paginates and refuses truncated run inventories", async () => {
+test("CLI adapter uses native pagination and rejects malformed run inventories", async () => {
   const calls = [];
   const api = new GitHubCliApi((command, args, options) => {
     calls.push({ command, args, options });
@@ -247,10 +247,36 @@ test("CLI adapter paginates and refuses truncated run inventories", async () => 
   assert.ok(calls[0].args.includes("--paginate")); assert.ok(calls[0].args.includes("--slurp"));
   assert.equal(calls[0].options.timeout, POLICY.requestTimeoutMs);
   await assert.rejects(api.listRuns("unknown"), /Invalid run filter/);
-  for (const pages of [null, [], [{}], [{ total_count: 101, workflow_runs: [run()] }]]) {
+  for (const pages of [null, [], [{}], [{ total_count: -1, workflow_runs: [] }],
+    [{ total_count: 1.5, workflow_runs: [] }], [{ total_count: 1, workflow_runs: null }]]) {
     const broken = new GitHubCliApi(() => JSON.stringify(pages));
     await assert.rejects(broken.listRuns("queued"), /run pages/);
   }
+});
+
+test("active runs can leave an inventory while native pagination completes", async () => {
+  const first = Array.from({ length: 100 }, (_, i) => run(i + 1));
+  const remaining = [run(104), run(105), run(106)];
+  const pages = [{ total_count: 109, workflow_runs: first },
+    { total_count: 106, workflow_runs: remaining }];
+  const api = new GitHubCliApi(() => JSON.stringify(pages));
+  assert.deepEqual(await api.listRuns("queued"), [...first, ...remaining]);
+  // Even one response's count and rows need not describe an atomic snapshot.
+  const single = new GitHubCliApi(() => JSON.stringify([{ total_count: 2, workflow_runs: [run()] }]));
+  assert.deepEqual(await single.listRuns("in_progress"), [run()]);
+});
+
+test("native pagination retains new runs and rejects the provider's search cap", async () => {
+  const growing = new GitHubCliApi(() => JSON.stringify([
+    { total_count: 1, workflow_runs: [run()] }, { total_count: 2, workflow_runs: [run(2)] },
+  ]));
+  assert.deepEqual(await growing.listRuns("queued"), [run(), run(2)]);
+  const capped = new GitHubCliApi(() => JSON.stringify([{ total_count: 1001, workflow_runs: [run()] }]));
+  await assert.rejects(capped.listRuns("queued"), /search limit/);
+  const failedPage = new GitHubCliApi(() => {
+    throw Object.assign(new Error("page 2 failed"), { stdout: JSON.stringify({ total_count: 101, workflow_runs: [run()] }) });
+  });
+  await assert.rejects(failedPage.listRuns("queued"), /GitHub API request failed/);
 });
 
 test("one inventory per status covers every workflow and all reads settle before mutations", async () => {

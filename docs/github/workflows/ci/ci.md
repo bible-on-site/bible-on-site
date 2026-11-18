@@ -511,9 +511,14 @@ Validation of the controller itself uses normal PR concurrency to cancel
 superseded test jobs.
 
 `cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
-runs whose associated PRs have merged. It covers every workflow, paginates
-the complete active inventory once per status and validates each immutable run again before
-cancellation. Master pushes, releases, dispatches, open PRs and commits still
+runs whose associated PRs have merged. It covers every workflow, follows
+GitHub's native pagination once per active status and validates each immutable
+run again before cancellation. Active inventories are not atomic snapshots:
+their `total_count` can change while runs start or finish. Successful
+`gh api --paginate --slurp` completion follows all pagination links; malformed
+pages, failed requests and counts above GitHub's 1,000-result filtered-search
+limit stop the pass. Later native events reconcile status transitions.
+Master pushes, releases, dispatches, open PRs and commits still
 referenced by the live queue are preserved. A merged PR's unfinished checks
 are redundant validation; its normal master CI and deployment remain
 independent, including after an administrative merge. Unknown associations
