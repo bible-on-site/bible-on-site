@@ -141,9 +141,13 @@ export class GitHubCliApi {
     requireValue(Array.isArray(pages) && pages.length > 0
       && pages.every(page => Array.isArray(page.workflow_runs) && Number.isSafeInteger(page.total_count)
         && page.total_count >= 0), "Invalid run pages");
-    const runs = pages.flatMap(page => page.workflow_runs);
-    requireValue(pages.every(page => page.total_count <= runs.length), "Incomplete run pages");
-    return runs;
+    // gh follows every native pagination link and fails if any request fails.
+    // Active status filters are mutable, so total_count is not a snapshot of
+    // the rows collected across pages (or even within a single response).
+    // Keep the documented filtered-search cap explicit instead of mistaking
+    // an ordinary status transition for incomplete pagination.
+    requireValue(pages.every(page => page.total_count <= 1000), "Run inventory exceeds GitHub search limit");
+    return pages.flatMap(page => page.workflow_runs);
   }
   async getRun(id) { return this.request(`repos/${POLICY.repository}/actions/runs/${id}`); }
   async getPullRequest(number) { return this.request(`repos/${POLICY.repository}/pulls/${number}`); }
