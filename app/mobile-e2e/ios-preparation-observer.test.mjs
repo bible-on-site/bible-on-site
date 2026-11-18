@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { setImmediate as tick } from "node:timers/promises";
 import { test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -13,6 +14,23 @@ const udid = "4AD2086B-7B8F-4608-A742-AA422A0B8D74";
 const hash = "a".repeat(64);
 const nonce = "b".repeat(32);
 const nextNonce = "c".repeat(32);
+
+// The listener owns an ephemeral port; its HTTP host is always loopback.
+function observerRequest(environment, path, options = {}) {
+  return new Promise((accept, reject) => {
+    const request = http.request({
+      hostname: "127.0.0.1", port: environment.MOBILE_IOS_PREPARATION_PORT, path,
+      method: options.method ?? "GET", headers: options.headers, signal: options.signal,
+    }, response => {
+      const chunks = [];
+      response.on("data", chunk => chunks.push(chunk));
+      response.on("error", reject);
+      response.on("end", () => accept(new Response(Buffer.concat(chunks), { status: response.statusCode })));
+    });
+    request.on("error", reject);
+    request.end(options.body);
+  });
+}
 
 function deferred() {
   let resolve, reject;
@@ -245,9 +263,8 @@ test("wrong device, bundle, state, token and route cannot reserve a transition",
   }
   await assert.rejects(f.call("reserve", f.identity(), { environment: { ...f.observer.environment,
     MOBILE_IOS_PREPARATION_TOKEN: "0".repeat(64) } }), /rejected \(401\)/);
-  const port = f.observer.environment.MOBILE_IOS_PREPARATION_PORT;
-  assert.equal((await fetch(`http://127.0.0.1:${port}/other`)).status, 404);
-  assert.equal((await fetch(`http://127.0.0.1:${port}/prepare`)).status, 404);
+  assert.equal((await observerRequest(f.observer.environment, "/other")).status, 404);
+  assert.equal((await observerRequest(f.observer.environment, "/prepare")).status, 404);
   assert.equal(f.readers.length, 0);
   assert.equal((await f.call("reserve", f.identity())).transitionAllowed, true);
 });
@@ -310,7 +327,7 @@ test("client disconnection aborts the source verification and cannot obtain a bo
   const pending = f.call("reserve", f.identity(), { request: (url, options) => {
     const port = f.observer.environment.MOBILE_IOS_PREPARATION_PORT;
     assert.equal(url, `http://127.0.0.1:${port}/prepare`);
-    return fetch(`http://127.0.0.1:${port}/prepare`,
+    return observerRequest(f.observer.environment, "/prepare",
       { ...options, signal: AbortSignal.any([options.signal, client.signal]) });
   } });
   const rejected = assert.rejects(pending);
