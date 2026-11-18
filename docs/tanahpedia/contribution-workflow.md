@@ -449,12 +449,29 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
-The current bundle v12 and worker runtime v7 retain API v5, protocol v2, literal
+The current bundle v13 and worker runtime v8 retain API v5, protocol v2, literal
 article-link grounding and exact-copy enforcement. They supply fixed, typed feedback
 for invalid arguments in the current read call, after the normal identity, lease
 and context checks. A rejected read supplies no receipt, records or result schema.
 Local and AWS agents can correct those arguments within the original execution
 deadline; authentication, stale-context, replay and storage failures remain fatal.
+
+Status questions use an unchanged response rather than a replacement draft.
+Current `item.reviewStatus` distinguishes required doradsoft approval, requested
+changes, approval and the owner's review exemption; satisfying review alone does
+not prove every merge gate. The local transport retains real tool calls, source
+results and human feedback, but excludes unverified intermediate model prose and
+thinking from subsequent research and final generation. `READS_COMPLETE` ends
+research and grants no merge authority.
+
+Clear, unconditional preservation commands in pending human feedback constrain
+the named title, description, evidence or operation sequence in both the decoder
+and final locked transaction. Text remains byte-exact, and locked evidence does
+not receive automatic source additions. The finite Hebrew/English parser leaves
+quoted examples, competing edits and unclear conditions for clarification rather
+than guessing intent. Omitted draft fields retain current values; identical drafts
+create no revision or review invalidation. Canonical before-value and structured
+source refreshes still follow the normal content-rebase rules.
 
 For generated article-link PRs and agent revisions, resolved citations from the
 job's actual source reads also become structured PR evidence. The server checks

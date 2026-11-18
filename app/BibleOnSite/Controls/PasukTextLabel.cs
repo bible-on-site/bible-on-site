@@ -19,7 +19,7 @@ public class PasukTextLabel : Label
     /// The shared scripture-font contract (#2623): every pasuk label renders in
     /// Taamey D — the perek, parasha and masora readers, the focused-pasuk
     /// overlay and שניים מקרא rows. Set as a local value so the implicit Label
-    /// style's OpenSansRegular can never win; spans without their own
+    /// style's AlHeperekRegular can never win; spans without their own
     /// FontFamily inherit it on every platform (qri/ktiv, reciting/selected
     /// words, {פ}/{ס} markers). The pasuk-number marker is the deliberate
     /// exception — reader chrome that keeps the app's main face, set

@@ -155,7 +155,7 @@ function footerRow(config: SesConfig, replyTo: string): ReactElement {
 					background: "#f5f9fa",
 					borderTop: "1px solid #dce5e7",
 					textAlign: "right",
-					fontFamily: "Arial,sans-serif",
+					fontFamily: "'Al Heperek Font UI',Arial,sans-serif",
 					fontSize: 13,
 					lineHeight: 1.8,
 					color: "#637780",
