@@ -82,7 +82,8 @@ jobs:
             printf 'Unsupported .NET SDK version: %s\n' "$sdk_version" >&2
             exit 1
           fi
-          feature_band="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} / 100 * 100))"
+          patch_hundreds="${BASH_REMATCH[3]:0:1}"
+          feature_band="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((patch_hundreds * 100))"
           for manifests in "${DOTNET_ROOT:?}/sdk-manifests"/*; do
             [ -d "$manifests" ] || continue
             if [ "${manifests##*/}" != "$feature_band" ]; then
@@ -92,12 +93,14 @@ jobs:
           dotnet workload update
           dotnet workload install maui-android
       - name: 'Restore NuGet projects'
+        env:
+          SNAPSHOT_SOURCE: ${{ matrix.source }}
         run: |
           # Read the Android TFM from whichever tree is checked out — the
           # merge-base targets an older .NET, head the current one — so the
           # restore always matches the snapshot instead of pinning a version.
           TFM=$(grep -o 'net[0-9.]*-android' app/BibleOnSite/BibleOnSite.csproj | head -1)
-          echo "Restoring $TFM for ${{ matrix.source }}"
+          echo "Restoring $TFM for $SNAPSHOT_SOURCE"
           dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64 -p:PublishReadyToRun=true
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true

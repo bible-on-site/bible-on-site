@@ -4,8 +4,8 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -14,7 +14,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 
 const workflow = readFileSync(
-	new URL("../../../.github/workflows/dependency-submission.yml", import.meta.url),
+	new URL(
+		"../../../.github/workflows/dependency-submission.yml",
+		import.meta.url,
+	),
 	"utf8",
 ).replace(/\r\n/g, "\n");
 const step = workflow
@@ -32,7 +35,9 @@ const script = step
 const shell =
 	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
 const shellPath = (path) =>
-	path.replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
+	path
+		.replace(/\\/g, "/")
+		.replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
 
 function fixture({ sdk = "10.0.403", fail = "" } = {}, run) {
 	const directory = mkdtempSync(join(tmpdir(), "dependency-workloads-"));
@@ -45,7 +50,10 @@ function fixture({ sdk = "10.0.403", fail = "" } = {}, run) {
 	for (const band of ["8.0.100", "10.0.400", "11.0.100", "11.0.200"])
 		mkdirSync(join(manifests, band), { recursive: true });
 	writeFileSync(join(manifests, "README"), "keep non-directory entries");
-	writeFileSync(join(directory, "global.json"), JSON.stringify({ sdk: { version: sdk } }));
+	writeFileSync(
+		join(directory, "global.json"),
+		JSON.stringify({ sdk: { version: sdk } }),
+	);
 	writeFileSync(
 		join(bin, "dotnet"),
 		`#!/usr/bin/env bash
@@ -87,21 +95,33 @@ esac
 			commands,
 			selected,
 			execute: (extra = {}) =>
-				spawnSync(shell, ["-e", "-o", "pipefail", "-c", `export PATH="$WORKLOAD_TEST_BIN:$PATH"\n${script}`], {
-					cwd: directory,
-					encoding: "utf8",
-					env: {
-						...process.env,
-						DOTNET_ROOT: shellPath(installation),
-						WORKLOAD_TEST_BIN: shellPath(bin),
-						WORKLOAD_TEST_NODE: shellPath(process.execPath),
-						WORKLOAD_TEST_COMMANDS: shellPath(commands),
-						WORKLOAD_TEST_SELECTED: shellPath(selected),
-						WORKLOAD_TEST_SET: sdk.startsWith("10.") ? "10.0.404" : "11.0.100.1",
-						WORKLOAD_TEST_FAIL: fail,
-						...extra,
+				spawnSync(
+					shell,
+					[
+						"-e",
+						"-o",
+						"pipefail",
+						"-c",
+						`export PATH="$WORKLOAD_TEST_BIN:$PATH"\n${script}`,
+					],
+					{
+						cwd: directory,
+						encoding: "utf8",
+						env: {
+							...process.env,
+							DOTNET_ROOT: shellPath(installation),
+							WORKLOAD_TEST_BIN: shellPath(bin),
+							WORKLOAD_TEST_NODE: shellPath(process.execPath),
+							WORKLOAD_TEST_COMMANDS: shellPath(commands),
+							WORKLOAD_TEST_SELECTED: shellPath(selected),
+							WORKLOAD_TEST_SET: sdk.startsWith("10.")
+								? "10.0.404"
+								: "11.0.100.1",
+							WORKLOAD_TEST_FAIL: fail,
+							...extra,
+						},
 					},
-				}),
+				),
 		});
 	} finally {
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()));
@@ -109,6 +129,36 @@ esac
 		rmSync(directory, { recursive: true, force: true });
 	}
 }
+
+test("preserves decimal feature bands for every three-digit SDK patch including leading zeroes", () => {
+	const selection = script.slice(
+		script.indexOf("\n") + 1,
+		script.indexOf("\nfor manifests in "),
+	);
+	const result = spawnSync(
+		shell,
+		[
+			"-e",
+			"-o",
+			"pipefail",
+			"-c",
+			`
+set -u
+for ((patch=0; patch<1000; patch++)); do
+  printf -v digits '%03d' "$patch"
+  sdk_version="11.0.$digits"
+  ${selection}
+  expected="11.0.$((patch / 100 * 100))"
+  [ "$feature_band" = "$expected" ] || exit 52
+done
+printf '1000 feature bands verified\\n'
+`,
+		],
+		{ encoding: "utf8" },
+	);
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(result.stdout.trim(), "1000 feature bands verified");
+});
 
 for (const source of ["base", "head"])
 	for (const [sdk, band, set] of [
@@ -151,11 +201,18 @@ test("missing installation root fails without deleting manifests", () =>
 for (const [stage, status, commands] of [
 	["version", 44, ["--version"]],
 	["update", 45, ["--version", "workload update"]],
-	["install", 47, ["--version", "workload update", "workload install maui-android"]],
+	[
+		"install",
+		47,
+		["--version", "workload update", "workload install maui-android"],
+	],
 ])
 	test(`${stage} failure propagates without retrying or running later commands`, () =>
 		fixture({ fail: stage }, (f) => {
 			const result = f.execute();
 			assert.equal(result.status, status, result.stderr);
-			assert.deepEqual(readFileSync(f.commands, "utf8").trim().split("\n"), commands);
+			assert.deepEqual(
+				readFileSync(f.commands, "utf8").trim().split("\n"),
+				commands,
+			);
 		}));
