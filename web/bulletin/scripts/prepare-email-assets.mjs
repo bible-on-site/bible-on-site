@@ -89,7 +89,10 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 		sha256: hash,
 		file,
 		s3Key,
-		url: `${cdnOrigin}/${s3Key}`,
+		url:
+			id === "logo-header"
+				? "https://xn--febl3a.co.il/images/logos/header-logo.jpg"
+				: `${cdnOrigin}/${s3Key}`,
 		contentType: extension === "jpg" ? "image/jpeg" : "image/png",
 		width: metadata.width,
 		height: metadata.height,
@@ -103,18 +106,8 @@ await addAsset(
 	"logo-header",
 	"app/BibleOnSite/Resources/Images/logo_header.jpg",
 	"jpg",
-	async (source) => {
-		if (
-			sha256(source) !==
-			"bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7"
-		) {
-			throw new Error(
-				"The selected original logo changed. Review the source before updating this asset.",
-			);
-		}
-		return source;
-	},
-	"Existing Bible On Site native-app and PDF-header brand artwork; copied without alteration.",
+	async (source) => source,
+	"Al Heperek Yehuda 0.9.3 outlined wordmark, shared with the native application and PDF header.",
 );
 
 const sources = {

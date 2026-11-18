@@ -915,8 +915,31 @@ jobs:
   build_sefaria_mongo_docker:
     timeout-minutes: 60
     name: Build Sefaria MongoDB Docker Image
-    needs: [setup_env, determine_changes, determine_docker_image_availability]
-    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
+    needs:
+      [
+        setup_env,
+        determine_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+      ]
+    # The image consumers are data_ci and perushim_data: mirror their triggers
+    # exactly, including baseline-recovery runs on docs-only changes, so a
+    # triggered consumer never pulls an image nobody built (#3621).
+    if: >-
+      ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (
+        needs.determine_changes.outputs.data_module_changed == 'true' ||
+        needs.determine_changes.outputs.data_ci_changed == 'true' ||
+        needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false' ||
+        (
+          (needs.determine_changes.outputs.docs_only != 'true' || needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true') &&
+          (
+            needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
+            (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
+            needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
+            needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
+          )
+        )
+      ) }}
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -3517,10 +3540,10 @@ jobs:
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
-        # Docs-only runs skip every checked job, so the result stays success.
-        # A missing baseline still re-enables this gate: the recovery run it
-        # triggered must pass before the merge may proceed (#3621).
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' || needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true' }}
+        # Always runs: the detection tier runs on docs-only changes too, so its
+        # results must always be evaluated — a failed detector may never ride a
+        # skipped gate to green. Suites that intentionally skip on docs-only
+        # runs are gated inside the script by their exact triggers (#3621).
         run: |
           # These suites stay skipped on docs-only runs; baseline recovery
           # re-enables this gate without re-enabling them.
@@ -4126,10 +4149,16 @@ jobs:
 
       - name: Publish Cross Module Coverage To Codacy
         if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
-        uses: codacy/codacy-coverage-reporter-action@master
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: |
+          REPORTER_DIRECTORY=$(mktemp -d "$RUNNER_TEMP/codacy-coverage.XXXXXX")
+          curl --fail --silent --show-error --location \
+            https://coverage.codacy.com/get.sh --output "$REPORTER_DIRECTORY/get.sh"
+          CODACY_REPORTER_TMP_FOLDER="$REPORTER_DIRECTORY/cli" \
+            CODACY_REPORTER_SKIP_CHECKSUM=false \
+            bash "$REPORTER_DIRECTORY/get.sh" download
+          node devops/github/ci/codacy-coverage.mjs "$REPORTER_DIRECTORY/cli" "$CROSS_MODULE_COVERAGE_REPORT"
 
       - name: Verify Coverage 3rd Party Reporting
         run: |

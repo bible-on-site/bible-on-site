@@ -113,10 +113,15 @@ test("the required aggregator always evaluates and gates recovered work", () => 
 		(step) => step.id === "check_prerequisites",
 	);
 	assert.ok(check, "cross_module_ci lost its prerequisite gate step");
-	// A docs-only run skips the gate entirely unless a baseline gap triggered
-	// module recovery — that recovery must then pass the gate like real work.
-	assert.ok(String(check.if).includes("docs_only != 'true'"));
-	assert.ok(String(check.if).includes("baseline_recovery_required == 'true'"));
+	// The gate must always run: detection jobs run on docs-only changes, so a
+	// failed detector may never hide behind a skipped result check (#3621).
+	// Only the suites that intentionally skip on docs-only runs stay gated —
+	// inside the script, by their exact triggers.
+	assert.equal(
+		check.if,
+		undefined,
+		"check_prerequisites must always run so a failed detector blocks the merge",
+	);
 	assert.ok(
 		String(check.run).includes("docs_only"),
 		"docs-only runs must not demand results from docs-gated suites",
@@ -129,6 +134,69 @@ test("the required aggregator always evaluates and gates recovered work", () => 
 	assert.ok(publish.length >= 6, "every module flag must republish coverage");
 	for (const step of publish)
 		assert.equal(step.if, undefined, `${step.name} must not skip docs-only`);
+});
+
+test("detector result checks run unconditionally inside the gate script", () => {
+	const check = jobs.cross_module_ci.steps.find(
+		(step) => step.id === "check_prerequisites",
+	);
+	assert.ok(check, "cross_module_ci lost its prerequisite gate step");
+	const run = String(check.run);
+	// The docs-only suite gate covers only the suites that skip on docs-only
+	// runs; the detection-tier result checks sit outside it, so a failed
+	// detector — with recovery unset or false — still blocks the merge.
+	const gatedStart = run.indexOf('docs_only }}" != "true"');
+	assert.ok(gatedStart >= 0, "docs-gated suite block is missing");
+	const gatedSuites = run.slice(
+		gatedStart,
+		run.indexOf("\nfi", gatedStart),
+	);
+	for (const detector of [
+		"determine_changes",
+		"determine_baseline_availability",
+		"determine_docker_image_availability",
+	]) {
+		const needle = `needs.${detector}.result`;
+		assert.ok(
+			run.includes(`${needle} }}" != "success"`),
+			`${detector} result is never checked`,
+		);
+		assert.ok(
+			!gatedSuites.includes(needle),
+			`${detector} result check must not sit inside the docs-only suite gate`,
+		);
+	}
+	for (const suite of [
+		"workflow_timeouts",
+		"root_evidence_guard",
+		"database_backups",
+		"transcription_ci",
+	]) {
+		assert.ok(
+			gatedSuites.includes(`needs.${suite}.result`),
+			`${suite} is not a docs-gated suite and must not hide inside the gate`,
+		);
+	}
+});
+
+test("docs-only baseline recovery can build a missing MongoDB image", () => {
+	const build = jobs.build_sefaria_mongo_docker;
+	assert.ok(build, "missing build_sefaria_mongo_docker job");
+	assert.ok(
+		String(build.needs).includes("determine_baseline_availability"),
+		"image producer must see baseline recovery outputs",
+	);
+	const gate = String(build.if);
+	assert.ok(gate.includes("is_sefaria_mongo_available != 'true'"));
+	// The producer's trigger must mirror every consumer trigger: data_ci's
+	// baseline recovery and perushim_data's docs-only recovery path.
+	assert.ok(gate.includes("is_data_master_coverage_available == 'false'"));
+	assert.ok(gate.includes("docs_only != 'true'"));
+	assert.ok(gate.includes("baseline_recovery_required == 'true'"));
+	assert.ok(gate.includes("perushim_pipeline_module_changed == 'true'"));
+	assert.ok(gate.includes("perushim_pipeline_ci_changed == 'true'"));
+	assert.ok(gate.includes("is_perushim_data_sql_available != 'true'"));
+	assert.ok(gate.includes("is_perushim_notes_sqlite_available != 'true'"));
 });
 
 test("releases and version bumps stay tied to module changes on master", () => {

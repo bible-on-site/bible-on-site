@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+	DeviceStoreFullError,
 	deleteDevice,
 	isDeviceRegistryConfigured,
 	parseDeviceRegistration,
@@ -7,6 +8,10 @@ import {
 	saveDevice,
 } from "@/lib/app-push";
 import { MAX_JSON_BODY_BYTES, readBoundedJson } from "@/lib/bounded-json";
+import {
+	pushRegistrationAllowed,
+	requestClientKey,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +32,14 @@ const notConfigured = () =>
  */
 export async function POST(request: Request) {
 	if (!isDeviceRegistryConfigured()) return notConfigured();
+	// Anonymous endpoint: bound writes per client address (#3500). The
+	// store cap in saveDevice is the backstop for a distributed flood.
+	if (!pushRegistrationAllowed(requestClientKey(request))) {
+		return NextResponse.json(
+			{ error: "Too many requests" },
+			{ status: 429 },
+		);
+	}
 	const body = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
 	if (body.status === "unreadable") {
 		console.warn("Push device body read failed");
@@ -42,8 +55,12 @@ export async function POST(request: Request) {
 	}
 	try {
 		await saveDevice(device);
-	} catch {
-		console.error("Failed to save push device");
+	} catch (error) {
+		console.error(
+			error instanceof DeviceStoreFullError
+				? "Push device store is full"
+				: "Failed to save push device",
+		);
 		return NextResponse.json({ error: "Unavailable" }, { status: 503 });
 	}
 	return NextResponse.json({ registered: true }, { status: 201 });

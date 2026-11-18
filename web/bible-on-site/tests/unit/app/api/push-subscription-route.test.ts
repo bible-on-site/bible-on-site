@@ -2,6 +2,7 @@
 const mockSave = jest.fn();
 const mockDelete = jest.fn();
 const mockConfigured = jest.fn();
+const mockAllowed = jest.fn();
 jest.mock("@/lib/web-push", () => {
 	const actual = jest.requireActual("@/lib/web-push/service");
 	return {
@@ -9,6 +10,13 @@ jest.mock("@/lib/web-push", () => {
 		isWebPushConfigured: () => mockConfigured(),
 		saveSubscription: (...args: unknown[]) => mockSave(...args),
 		deleteSubscription: (...args: unknown[]) => mockDelete(...args),
+	};
+});
+jest.mock("@/lib/rate-limit", () => {
+	const actual = jest.requireActual("@/lib/rate-limit");
+	return {
+		...actual,
+		pushRegistrationAllowed: (...args: unknown[]) => mockAllowed(...args),
 	};
 });
 jest.mock("server-only", () => ({}));
@@ -22,6 +30,7 @@ jest.mock("web-push", () => ({
 }));
 
 import { DELETE, GET, POST } from "@/app/api/push/subscription/route";
+import { SubscriptionStoreFullError } from "@/lib/web-push";
 
 const FCM = "https://fcm.googleapis.com/fcm/send/abc";
 const privateFailure = () =>
@@ -42,6 +51,7 @@ describe("/api/push/subscription", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockConfigured.mockReturnValue(true);
+		mockAllowed.mockReturnValue(true);
 		process.env.VAPID_PUBLIC_KEY = "public-key";
 		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
@@ -107,6 +117,35 @@ describe("/api/push/subscription", () => {
 			const response = await POST(request("POST", subscription));
 			expect(response.status).toBe(201);
 			expect(mockSave).toHaveBeenCalledWith(subscription);
+		});
+
+		it("bounds anonymous writes per client address (#3500)", async () => {
+			mockAllowed.mockReturnValue(false);
+			const response = await POST(
+				new Request("http://localhost/api/push/subscription", {
+					method: "POST",
+					headers: { "x-real-ip": "203.0.113.9" },
+					body: JSON.stringify(subscription),
+				}),
+			);
+			expect(response.status).toBe(429);
+			expect(mockAllowed).toHaveBeenCalledWith("203.0.113.9");
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("keeps the configured gate ahead of the rate limit", async () => {
+			mockConfigured.mockReturnValue(false);
+			mockAllowed.mockReturnValue(false);
+			expect((await POST(request("POST", subscription))).status).toBe(404);
+			expect(mockAllowed).not.toHaveBeenCalled();
+		});
+
+		it("returns 503 when the subscription store is at its bound", async () => {
+			mockSave.mockRejectedValue(new SubscriptionStoreFullError());
+			expect((await POST(request("POST", subscription))).status).toBe(503);
+			expect(console.error).toHaveBeenCalledWith(
+				"Push subscription store is full",
+			);
 		});
 
 		it.each([

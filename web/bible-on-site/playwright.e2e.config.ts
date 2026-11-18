@@ -46,7 +46,12 @@ export default defineConfig({
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: webServerCommand,
-		env: webPushEnv,
+		env: {
+			// Keep the derived WEB_PORT the launcher needs — a bare override
+			// leaves it on :3001 while Playwright probes the derived port.
+			...(baseConfig.webServer as TestConfigWebServer).env,
+			...webPushEnv,
+		},
 	},
 	fullyParallel: true,
 	// Browser-timing nondeterminism under parallel CI load (e.g. the lazy

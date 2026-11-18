@@ -1,9 +1,13 @@
+import { canonicalJson } from "~/lib/canonical-json";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
 import type { ContributionAgentResponse } from "~/lib/tanahpedia/contribution-agents";
+import { derivePreservationConstraints } from "~/lib/tanahpedia/contribution-preservation-constraints";
 import { deriveVerbatimFieldConstraints } from "~/lib/tanahpedia/contribution-verbatim-constraints";
 import {
 	assertIssueScopeChanges,
+	type ChangeInput,
 	type Contribution,
+	type ReviewedChange,
 	record,
 	textField,
 	uuidField,
@@ -39,6 +43,51 @@ export function contributionAgentVerbatimConstraints(item: Contribution) {
 		),
 		item,
 	);
+}
+
+export function contributionAgentPreservationConstraints(item: Contribution) {
+	if (item.kind !== "pr") return [];
+	const pending = new Set(pendingContributionAgentComments(item));
+	return derivePreservationConstraints(
+		item.events.filter(
+			(event) => event.actor.kind === "human" && pending.has(event.id),
+		),
+	);
+}
+
+function proposedOperations(
+	changes: readonly (ChangeInput | ReviewedChange)[],
+) {
+	return changes.map(({ kind, targetId, after }) => ({
+		kind,
+		targetId,
+		after,
+	}));
+}
+
+export function assertContributionAgentPreservationResult(
+	item: Contribution,
+	result: {
+		draft?: {
+			title?: string;
+			description?: string;
+			evidence?: Contribution["evidence"];
+			changes?: (ChangeInput | ReviewedChange)[];
+		};
+	},
+) {
+	const draft = result.draft;
+	const changes = draft?.changes;
+	const projectedChanges =
+		changes === undefined ? undefined : proposedOperations(changes);
+	for (const { field } of contributionAgentPreservationConstraints(item)) {
+		const actual = field === "changes" ? projectedChanges : draft?.[field];
+		if (actual === undefined) continue;
+		const expected =
+			field === "changes" ? proposedOperations(item.changes) : item[field];
+		if (canonicalJson(actual) !== canonicalJson(expected))
+			throw new Error(`The human requested preserving the current ${field}`);
+	}
 }
 
 export function assertContributionAgentVerbatimResult(
@@ -103,6 +152,23 @@ export function contributionAgentResultSchema(
 		},
 	};
 	const verbatim = contributionAgentVerbatimConstraints(item);
+	const preserved = contributionAgentPreservationConstraints(item);
+	for (const { field } of preserved) {
+		const property = field === "evidence" ? "evidenceIndexes" : field;
+		const expected =
+			field === "evidence"
+				? item.evidence.map((_source, index) => index)
+				: field === "changes"
+					? proposedOperations(item.changes)
+					: item[field];
+		Object.assign(draft.properties, {
+			[property]: {
+				...draft.properties[property],
+				...(field === "evidence" ? { minItems: item.evidence.length } : {}),
+				const: expected,
+			},
+		});
+	}
 	for (const constraint of verbatim)
 		Object.assign(draft.properties, {
 			[constraint.field]: {
@@ -249,13 +315,18 @@ export function parseContributionAgentResult(
 		throw new Error("Unsupported agent result field");
 	const summary = textField(output.summary, "agent summary", 10000);
 	const verbatim = contributionAgentVerbatimConstraints(item);
+	const preserved = contributionAgentPreservationConstraints(item);
 	const fieldText = (
 		value: unknown,
 		field: "title" | "description",
 		max: number,
 	) => {
 		const validated = textField(value, field, max);
-		if (!verbatim.some((constraint) => constraint.field === field))
+		if (
+			![...verbatim, ...preserved].some(
+				(constraint) => constraint.field === field,
+			)
+		)
 			return validated;
 		if (typeof value !== "string" || value.length > max)
 			throw new Error(`${field}: exceeds maximum length`);
@@ -348,7 +419,7 @@ export function parseContributionAgentResult(
 		if (raw.evidenceIndexes !== undefined) {
 			if (
 				!Array.isArray(raw.evidenceIndexes) ||
-				!raw.evidenceIndexes.length ||
+				(!raw.evidenceIndexes.length && item.evidence.length !== 0) ||
 				raw.evidenceIndexes.some(
 					(index) =>
 						!Number.isInteger(index) ||
@@ -388,6 +459,7 @@ export function parseContributionAgentResult(
 		}
 	}
 	assertContributionAgentVerbatimResult(item, { draft, responses });
+	assertContributionAgentPreservationResult(item, { draft });
 	return {
 		outcome: outcome as
 			| "implemented"

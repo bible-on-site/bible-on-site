@@ -16,11 +16,11 @@ public class PasukMarkerTextConverter : IMultiValueConverter
     private const int MaxCachedMergesPerSource = 4;
 
     // The pasuk-number marker is reader chrome, not scripture: it keeps the
-    // app's main face (the implicit Label style's OpenSansRegular alias) while
+    // app's main face (the implicit Label style's AlHeperekRegular alias) while
     // the pasuk text it precedes renders in Taamey D (#2623). Left unset it
     // would inherit the label's scripture face — which is exactly the
     // wrong-glyph result the review called out.
-    internal const string MarkerFontFamily = "OpenSansRegular";
+    internal const string MarkerFontFamily = "AlHeperekRegular";
 
     // Keyed on the source FormattedString instance: Pasuk.FormattedText keeps
     // returning the same instance while its weak-ref cache lives and hands out

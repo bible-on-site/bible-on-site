@@ -1,13 +1,5 @@
 import { verifyContributionWorkerAccessToken } from "../auth";
 import { skipAuthEnabled } from "../environment.server";
-import {
-	ContributionWorkerConflict,
-	claimContributionGeneration,
-	completeContributionGeneration,
-	failContributionGeneration,
-	getContributionWorkerBundle,
-	readContributionWorkerContext,
-} from "./contribution-worker.server";
 
 class WorkerRequestError extends Error {}
 async function workerBody(request: Request): Promise<unknown> {
@@ -81,6 +73,15 @@ export async function handleContributionWorkerRequest(
 	const action = url.pathname.slice("/api/contributions/worker/".length);
 	if (!["claim", "complete", "fail", "bundle", "context"].includes(action))
 		return new Response("Not found", { status: 404, headers });
+	// Rejected requests must not initialize the database/provider graph.
+	const {
+		ContributionWorkerConflict,
+		claimContributionGeneration,
+		completeContributionGeneration,
+		failContributionGeneration,
+		getContributionWorkerBundle,
+		readContributionWorkerContext,
+	} = await import("./contribution-worker.server");
 	try {
 		const input = await workerBody(request);
 		if (action === "bundle")

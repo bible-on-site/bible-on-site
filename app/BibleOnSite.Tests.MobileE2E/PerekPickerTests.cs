@@ -27,14 +27,13 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
 
         // כתובים's first sefer is תהלים — a long chapter list that must overflow.
         TapItem("PickerGroupItem", "כתובים");
-        var perekList = Page.WaitFor("PerekPickerPerekList");
         // PerekPickerPopup is the full-screen overlay (scrim included); the card
-        // is the bordered panel whose columns the lists must fill.
-        var card = Page.WaitFor("PerekPickerCard");
+        // is the bordered panel whose columns the lists must fill. Both frames
+        // come from the accepting polls' snapshots — no live read after a wait.
+        var listFrame = Page.WaitForStableFrame("PerekPickerPerekList");
+        var cardFrame = Page.WaitForStableFrame("PerekPickerCard");
 
         // #2475: the list uses the available column height, not a fixed band.
-        var listFrame = MobilePlatformAdapter.ReadFrame(perekList);
-        var cardFrame = MobilePlatformAdapter.ReadFrame(card);
         Assert.True(listFrame.Size.Height > cardFrame.Size.Height * 0.5,
             $"list height {listFrame.Size.Height} should fill most of the card height {cardFrame.Size.Height}");
 
@@ -91,11 +90,8 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         Assert.NotEmpty(Page.FirstPasuk);
     }
 
-    private void TapItem(string automationId, string text)
-    {
-        var item = Page.WaitFor(automationId, element => element.Text == text);
-        Platform.Tap(Driver!, item);
-    }
+    private void TapItem(string automationId, string text) =>
+        Page.Tap(automationId, element => element.Text == text);
 
     private void FlickList(string automationId, double fromFraction, double toFraction)
     {

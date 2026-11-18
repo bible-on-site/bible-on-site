@@ -62,5 +62,14 @@ Retries retain the last worker's measurements. Web Vitals now exercises desktop
 and mobile controls, waits for asynchronous metric delivery and fails missing
 metrics instead of silently skipping NaN INP.
 
+Under `throttlingMethod: "simulate"`, Lighthouse audit timings such as
+`long-tasks`, `total-blocking-time` and `max-potential-fid` are Lantern-model
+outputs: observed durations scaled by the calibrated CPU slowdown multiplier.
+The task-blocking gate is the observed largest top-level task (`metric:
+largest-observed-task`, real on-runner milliseconds against a 250ms tripwire),
+and real INP from the Web Vitals run is the responsiveness gate. The deprecated
+`max-potential-fid` proxy stays in the raw reports and summary diagnostics but
+is retired from Bencher reporting (#3605).
+
 Run `bun run test:perf-reporting` for regression checks. `bun run test:perf`
 continues to require the production build and exercises the real application.
