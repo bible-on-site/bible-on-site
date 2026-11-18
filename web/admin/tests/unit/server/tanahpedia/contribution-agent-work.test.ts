@@ -1149,7 +1149,7 @@ describe("assignment-driven leased contribution work", () => {
 	it("uses API five article read receipts to resolve the same PR with known nested identities", async () => {
 		const input = await claim();
 		expect(input.apiVersion).toBe(5);
-		expect(agent().installedVersion).toBe("tanahpedia-agents-v12");
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v13");
 		mocks.tool.mockResolvedValue({
 			data: {
 				kind: "target:article_links",
