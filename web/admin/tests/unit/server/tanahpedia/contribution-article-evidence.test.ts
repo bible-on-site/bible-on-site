@@ -127,6 +127,13 @@ it("attaches actual read spans to selected article links and retains all existin
 	expect(read).toHaveBeenCalledWith({}, "123", { current: true });
 });
 it("attaches replacement coverage evidence while excluding removed coverage", async () => {
+	const plainText = "חדש ציטוט ועוד ראיה";
+	const removedQuote = " ראיה";
+	const removedStart = plainText.indexOf(removedQuote);
+	read.mockResolvedValue({
+		plainText,
+		state: { contentHash: "c".repeat(32), sourceHash: "d".repeat(64) },
+	});
 	const catalogue = literalCatalogue();
 	const grounding = catalogue.articleGroundings?.[0];
 	if (!grounding?.citations) throw new Error("Missing fixture citations");
@@ -135,33 +142,44 @@ it("attaches replacement coverage evidence while excluding removed coverage", as
 		pasuk: 30,
 		pasukTo: 30,
 		label: "בראשית א ל",
+		quote: removedQuote,
+		spanStart: removedStart,
+		spanEnd: removedStart + removedQuote.length,
 	});
+	const proposals = (action: "add" | "remove"): ChangeInput[] => [
+		{
+			...literalChange,
+			after: {
+				commands: [
+					{
+						relationshipKey: "coveringSources",
+						action: "replace",
+						target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] },
+					},
+					{
+						relationshipKey: "coveringSources",
+						action,
+						target: { pasukCoordinates: [{ perekId: 1, pasuk: 30 }] },
+					},
+				],
+			},
+		},
+	];
 	const result = await appendAgentArticleEvidence(
 		{} as never,
-		[
-			{
-				...literalChange,
-				after: {
-					commands: [
-						{
-							relationshipKey: "coveringSources",
-							action: "replace",
-							target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] },
-						},
-						{
-							relationshipKey: "coveringSources",
-							action: "remove",
-							target: { pasukCoordinates: [{ perekId: 1, pasuk: 30 }] },
-						},
-					],
-				},
-			},
-		],
+		proposals("remove"),
 		catalogue,
 		[],
 	);
 	expect(result).toHaveLength(1);
 	expect(result[0].citation).toBe("בראשית א כו-כז");
+	const added = await appendAgentArticleEvidence(
+		{} as never,
+		proposals("add"),
+		catalogue,
+		[],
+	);
+	expect(added.map((source) => source.quote)).toEqual([" ציטוט", removedQuote]);
 });
 it("keeps repeated pages and repeated revisions idempotent while preserving an editor's evidence notes", async () => {
 	const catalogue = literalCatalogue();
