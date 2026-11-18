@@ -14,7 +14,7 @@ The canonical light/reversed wordmarks, compact lockups, launcher artwork and fi
 
 Run `node scripts/generate-brand-assets.mjs` from `web/bible-on-site/` to regenerate all 22 shared assets: public SVG copies, native launcher layers and splash, fitted favicon PNGs and both website/admin ICOs, legacy web images, the touch icon and shared PDF/header JPEG. Add `--check` to verify that every output matches its canonical source without writing. Native icons combine a full-bleed background with transparent artwork. Android scales the artwork into the adaptive icon's safe zone before applying the launcher's mask. The loading view uses the complete composite. Historical web-image URLs keep serving the current artwork.
 
-Run `node web/bulletin/scripts/prepare-email-assets.mjs --sharp-module web/bible-on-site/node_modules/sharp` from the repository root to regenerate the email/PDF manifest. The email wordmark is served from the website at `/images/logos/header-logo.jpg`. Existing content-addressed S3 images remain available. These commands write repository files and require no asset upload.
+Run `node web/bulletin/scripts/prepare-email-assets.mjs --sharp-module web/bible-on-site/node_modules/sharp` from the repository root to regenerate the email/PDF manifest and the embedded PDF header. The email wordmark is served from the website at `/images/logos/header-logo.jpg`. Existing content-addressed S3 images remain available. These commands write repository files and require no asset upload.
 
 Email clients that support web fonts load the three WOFF2 faces from the official website. Other email clients use the declared system fallback. The logo remains an image in either case.
 

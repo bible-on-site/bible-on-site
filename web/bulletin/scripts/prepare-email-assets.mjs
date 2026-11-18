@@ -101,6 +101,7 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 		attribution,
 	});
 	outputs.push({ file, bytes });
+	if (id === "logo-header") outputs.push({ file: "logo-header.jpg", bytes });
 }
 
 const { fontVersion } = JSON.parse(
