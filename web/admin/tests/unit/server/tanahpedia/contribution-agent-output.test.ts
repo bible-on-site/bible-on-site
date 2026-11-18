@@ -96,6 +96,30 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it.each([
+		"Keep description. If necessary, update the description.",
+		"Keep description. Actually, replace the description.",
+	])(
+		"a qualifying edit cannot become an unconditional native/server lock: %s",
+		(body) => {
+			const current = item();
+			current.events[0].body = body;
+			expect(outcomeSchema(current, "revised")).not.toHaveProperty(
+				"properties.draft.properties.description.const",
+			);
+			expect(
+				parse(
+					{
+						outcome: "revised",
+						summary: "נבדק",
+						responses: [response],
+						draft: { description: "updated after review" },
+					},
+					current,
+				).draft?.description,
+			).toBe("updated after review");
+		},
+	);
 	it("a status question naming the description cannot cancel an explicit later lock", () => {
 		const current = item();
 		current.events[0].body = "Is the description unchanged? Keep description.";

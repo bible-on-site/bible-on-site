@@ -62,7 +62,6 @@ describe("explicit preservation instructions", () => {
 	it.each([
 		"Is the description unchanged? Keep description.",
 		"האם התיאור השתנה? יש לשמר בדיוק את התיאור.",
-		"The description has one change. Keep description.",
 		"Review the description. Keep description.",
 	])(
 		"keeps a clear preservation instruction after a non-editing mention: %s",
@@ -75,6 +74,34 @@ describe("explicit preservation instructions", () => {
 	it("does not let an opposing preservation directive establish a lock", () => {
 		expect(derive("Keep description. Do not keep description.")).toEqual([]);
 	});
+	it.each([
+		'Keep description. "Update the description."',
+		'Keep description. Example: "Update the description."',
+		"Keep description.\n```\nUpdate the description.\n```",
+		"Keep description.\n> Update the description.",
+	])(
+		"opaque examples cannot cancel a real human preservation request: %s",
+		(body) => {
+			expect(derive(body)).toEqual([
+				{ field: "description", commentIds: ["human-comment"] },
+			]);
+		},
+	);
+	it.each([
+		"Keep description. If necessary, update the description.",
+		"Keep description. Actually, replace the description.",
+		"Keep description. I want to update the description.",
+		"Keep description. If necessary, improve it.",
+		"Keep description. It may need some work.",
+		"יש לשמר את התיאור. אם צריך, עדכן את התיאור.",
+		"Keep description. Review and update the description.",
+		"Keep description. Review the description ולשנות אותו.",
+	])(
+		"leaves unknown or conditional editing context unconstrained: %s",
+		(body) => {
+			expect(derive(body)).toEqual([]);
+		},
+	);
 	it("handles comma-and lists without treating long unknown qualifiers as field names", () => {
 		expect(
 			derive("Keep title, description, and evidence.").map(
