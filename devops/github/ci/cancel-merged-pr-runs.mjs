@@ -106,9 +106,13 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
     requireValue(sameRun(after, current), "Reconciliation identity changed");
     action.status = after.status;
     action.conclusion = after.conclusion;
-    action.outcome = after.status === "completed" ? "completed" : "cancellation-requested";
+    const deferred = requestError?.httpStatus === 409 && after.status !== "completed";
+    action.outcome = after.status === "completed" ? "completed"
+      : deferred ? "deferred" : requestError ? "request-failed" : "cancellation-requested";
+    if (deferred) action.reason = "github-run-not-cancellable";
+    if (requestError) action.httpStatus = requestError.httpStatus ?? null;
     await journal({ kind: "cancel-observed", ...action, requestAccepted: !requestError });
-    if (requestError && after.status !== "completed") throw requestError;
+    if (requestError && after.status !== "completed" && !deferred) throw requestError;
   }
   return report;
 }
@@ -120,8 +124,15 @@ export class GitHubCliApi {
     if (paginate) args.push("--paginate", "--slurp");
     if (method) args.push("--method", method);
     if (data) args.push("--input", "-");
-    const text = this.execute("gh", args, { encoding: "utf8", timeout: POLICY.requestTimeoutMs,
-      maxBuffer: 16 * 1024 * 1024, input: data ? JSON.stringify(data) : undefined });
+    let text;
+    try {
+      text = this.execute("gh", args, { encoding: "utf8", timeout: POLICY.requestTimeoutMs,
+        stdio: "pipe", maxBuffer: 16 * 1024 * 1024, input: data ? JSON.stringify(data) : undefined });
+    } catch (error) {
+      const failure = new Error("GitHub API request failed", { cause: error });
+      failure.httpStatus = httpStatus(error);
+      throw failure;
+    }
     return text.trim() ? JSON.parse(text) : null;
   }
   async listRuns(status) {
@@ -145,6 +156,20 @@ export class GitHubCliApi {
   async cancelRun(id) { this.request(`repos/${POLICY.repository}/actions/runs/${id}/cancel`, { method: "POST" }); }
   async getQueue() {
     return this.request("graphql", { data: { query: 'query { repository(owner:"bible-on-site",name:"bible-on-site") { databaseId nameWithOwner defaultBranchRef { target { oid } } mergeQueue(branch:"master") { entries(first:100) { totalCount pageInfo { hasNextPage } nodes { position state headCommit { oid } baseCommit { oid } pullRequest { number headRefOid } } } } } }' } });
+  }
+}
+
+function httpStatus(error) {
+  if (typeof error?.stdout !== "string") return null;
+  try {
+    const raw = JSON.parse(error.stdout)?.status;
+    if (typeof raw !== "number" && typeof raw !== "string") return null;
+    const status = Number(raw);
+    return Number.isInteger(status) && status >= 400 && status < 600
+      && String(status) === String(raw) ? status : null;
+  } catch {
+    // A process/transport failure has no authenticated HTTP response to classify.
+    return null;
   }
 }
 
