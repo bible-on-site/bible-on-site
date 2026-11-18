@@ -2,7 +2,16 @@
 id: max-potential-fid
 strategy: all
 explanation: |
-  Deprecated metric, replaced by INP (Interaction to Next Paint).
-  This metric is volatile in local testing and has been superseded
-  by INP as a Core Web Vital.
+  Deprecated metric — Google retired FID in favour of INP (Interaction to
+  Next Paint), which this suite measures with real interactions on every
+  audited page (16ms vs the 200ms "good" bound on the mobile homepage,
+  run 43992116896). Under throttlingMethod "simulate" this audit's value
+  is a Lantern model: an observed ~29ms react-dom/scheduler evaluate +
+  hydration task projects to 160-260ms at the calibrated m500 CPU
+  multiplier, so the reading straddles the 250ms bound on calibration
+  noise alone (#3605). Policy: the audit keeps running and stays in the
+  raw LHR, summary and opportunities diagnostics, but is retired from
+  Bencher reporting; the observed largest top-level task
+  (lighthouse: <page> (<device>) | metric: largest-observed-task) carries
+  the task-blocking gate instead.
 typical_value: "500-2500ms depending on page and CPU load"
