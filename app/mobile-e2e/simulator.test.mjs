@@ -363,7 +363,7 @@ test("heal waits out a mid-flight shutdown, then re-boots the device", async (t)
 test("heal deducts the power-off wait from the recovery boot deadline", async (t) => {
   // Shutdown polling and boot readiness share one absolute 300-second budget:
   // the recovery boot may only use the time the power-off did not consume.
-  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  const { options, calls, env, simQueue } = fixture(t);
   simQueue.push("Shutting Down", "Shutdown");
   let tick = 0;
   let waitBudget;
