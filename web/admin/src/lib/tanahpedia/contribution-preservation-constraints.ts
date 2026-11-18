@@ -5,7 +5,7 @@ export type PreservedContributionField =
 	| "changes";
 
 const FIELD =
-	/(?<![\p{L}\p{N}_])(?:(?:(?:the|current|existing)\s+)*(?:title|description|evidence|(?:change|operation)\s+sequence|changes)|ו?(?:ה?כותרת|ה?תיאור|ה?ראיות|ה?שינויים|רצף\s+ה?שינויים))(?![\p{L}\p{N}_])/giu;
+	/(?<![\p{L}\p{N}_])(?:(?:(?:the|current|existing)\s+){0,2}(?:title|description|evidence|(?:change|operation)\s+sequence|changes)|ו?(?:ה?כותרת|ה?תיאור|ה?ראיות|ה?שינויים|רצף\s+ה?שינויים))(?![\p{L}\p{N}_])/giu;
 const ACTION =
 	/^(?:(?:please|נא|אנא|יש|אבקש)\s+)?(?:preserve|keep|retain|לשמר|שמר|שמרו|לשמור)(?=\s|$)\s*/iu;
 
@@ -46,7 +46,9 @@ function requestedFields(clause: string): PreservedContributionField[] {
 	});
 	// Only an entire finite field list is actionable. Qualifications, questions,
 	// negatives and "preserve evidence AND add quotes" are not guessed.
-	return /^#(?:\s*(?:,|and|ו)?\s*#)*$/iu.test(remainder) ? fields : [];
+	return /^#(?:(?:,?(?:and|ו)|,)?#)*$/iu.test(remainder.replace(/\s+/gu, ""))
+		? fields
+		: [];
 }
 
 /** Narrow, data-only locks from pending human comments, never source evidence. */

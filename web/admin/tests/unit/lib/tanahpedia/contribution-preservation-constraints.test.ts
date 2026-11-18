@@ -56,6 +56,14 @@ describe("explicit preservation instructions", () => {
 			]),
 		).toEqual([{ field: "evidence", commentIds: ["one", "two"] }]);
 	});
+	it("handles comma-and lists without treating long unknown qualifiers as field names", () => {
+		expect(
+			derive("Keep title, description, and evidence.").map(
+				({ field }) => field,
+			),
+		).toEqual(["title", "description", "evidence"]);
+		expect(derive(`Keep ${"the ".repeat(1800)}description.`)).toEqual([]);
+	});
 	it("a competing edit affects only its named field", () => {
 		expect(derive("Keep evidence and title. Change the title.")).toEqual([
 			{ field: "evidence", commentIds: ["human-comment"] },
