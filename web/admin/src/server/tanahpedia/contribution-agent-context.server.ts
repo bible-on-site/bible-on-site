@@ -498,6 +498,7 @@ class ContextReader {
 			sourceHash,
 			coordinates: expandLiteralCitationCoordinates(citations),
 			chapters,
+			citations: citations.map((citation) => ({ ...citation })),
 		});
 	}
 
