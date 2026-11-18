@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "bible-on-site-bulletin"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "ammonia",
  "anyhow",
