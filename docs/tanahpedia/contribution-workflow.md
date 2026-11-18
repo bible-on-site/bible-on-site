@@ -417,8 +417,8 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
-The current bundle v12 retains API v5, protocol v2, literal
-article-link grounding and exact-copy enforcement. They add fixed, typed feedback
+The current bundle v12 and worker runtime v7 retain API v5, protocol v2, literal
+article-link grounding and exact-copy enforcement. They supply fixed, typed feedback
 for invalid arguments in the current read call, after the normal identity, lease
 and context checks. A rejected read supplies no receipt, records or result schema.
 Local and AWS agents can correct those arguments within the original execution
