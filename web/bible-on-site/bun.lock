@@ -5,7 +5,7 @@
     "": {
       "name": "bible-on-site",
       "dependencies": {
-        "@aws-sdk/client-lambda": "3.1169.0",
+        "@aws-sdk/client-lambda": "3.1170.0",
         "@pdf-lib/fontkit": "1.1.1",
         "bidi-js": "1.1.0",
         "gematry": "1.0.2",
@@ -92,7 +92,7 @@
 
     "@aws-sdk/checksums": ["@aws-sdk/checksums@3.1002.5", "", { "dependencies": { "@aws-sdk/core": "^3.981.0", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-OHlfkNzDFjYnwNPABhwAkDTUi0HPjfsKUHJDR0bSMORpCXNzRpInPCNCIT08xKDhjaPlcLJ+2Av+Sk7hHnuC8A=="],
 
-    "@aws-sdk/client-lambda": ["@aws-sdk/client-lambda@3.1169.0", "", { "dependencies": { "@aws-sdk/core": "^3.981.0", "@aws-sdk/credential-provider-node": "^3.972.97", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/fetch-http-handler": "^5.8.1", "@smithy/node-http-handler": "^4.14.2", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-DpKyuJBK6UD4Zo0IxlfZDcWHQoZydPD0ckn8dnJR2fjfnQhpCoGAqhU8o+e9MnvF0hDiU91llXQqIHYFhD0xVw=="],
+    "@aws-sdk/client-lambda": ["@aws-sdk/client-lambda@3.1170.0", "", { "dependencies": { "@aws-sdk/core": "^3.981.0", "@aws-sdk/credential-provider-node": "^3.972.97", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/fetch-http-handler": "^5.8.1", "@smithy/node-http-handler": "^4.14.2", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-nV7URAvrHsDHxbqzSt/whZHwt7uEIuw/DbbBow8hwcBCh3mU91qkhGq5QuSmMaom8Ix49ziKyWMRnhnPKUtvhQ=="],
 
     "@aws-sdk/client-s3": ["@aws-sdk/client-s3@3.1170.0", "", { "dependencies": { "@aws-sdk/checksums": "^3.1002.5", "@aws-sdk/core": "^3.981.0", "@aws-sdk/credential-provider-node": "^3.972.97", "@aws-sdk/middleware-sdk-s3": "^3.972.89", "@aws-sdk/signature-v4-multi-region": "^3.996.52", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/fetch-http-handler": "^5.8.1", "@smithy/node-http-handler": "^4.14.2", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-Cl/cbJdfduZKSHKn7zegpIIhWKHWJKirhVX5HtcLesM6oGfTLLDszaFPW1gWprNoUSXnYvIO7kcSyVNBgFLphA=="],
 
