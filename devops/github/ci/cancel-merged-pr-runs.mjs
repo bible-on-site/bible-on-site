@@ -18,7 +18,7 @@ function identity(run) {
   return JSON.stringify([run.id, run.workflow_id, run.event, run.head_sha, run.head_branch, run.head_repository.id]);
 }
 
-function pullNumbers(run) {
+async function pullNumbers(run, api) {
   if (run.event === "merge_group") {
     return queueRef(run.head_branch) ? [Number(run.head_branch.split("/")[2].split("-")[1])] : [];
   }
@@ -26,9 +26,14 @@ function pullNumbers(run) {
     const match = /^refs\/pull\/([1-9][0-9]*)\/(head|merge)$/.exec(run.head_branch);
     return match && positive(Number(match[1])) ? [Number(match[1])] : [];
   }
-  if (run.event !== "pull_request" || !Array.isArray(run.pull_requests)) return [];
-  return [...new Set(run.pull_requests.filter(pr => positive(pr.number)
-    && pr.base?.repo?.id === POLICY.repositoryId).map(pr => pr.number))];
+  if (run.event !== "pull_request") return [];
+  const linked = Array.isArray(run.pull_requests) ? run.pull_requests : [];
+  // GitHub clears a workflow run's pull_requests array when its PR merges.
+  // Its commit-to-PR API retains that association, including older PR heads.
+  const associations = linked.length ? linked : (await api.getCommitPullRequests(run.head_sha)).filter(pr =>
+    pr.head?.ref === run.head_branch && pr.head.repo?.id === run.head_repository.id);
+  return [...new Set(associations.filter(pr => positive(pr.number)
+    && pr.base?.repo?.id === POLICY.repositoryId).map(pr => pr.number))].sort((a, b) => a - b);
 }
 
 function protectedHeads(response) {
@@ -67,14 +72,14 @@ export async function cancelMergedRuns({ api, journal, dryRun = true }) {
   }
   for (const listed of runs.values()) {
     if (!events.includes(listed.event) || !statuses.includes(listed.status)) continue;
-    const numbers = pullNumbers(listed);
+    const numbers = await pullNumbers(listed, api);
     if (!numbers.length) continue;
     let eligible = true;
     for (const number of numbers) if (!(await isMerged(number))) eligible = false;
     if (!eligible) continue;
     const current = await api.getRun(listed.id);
     requireValue(identity(current) === identity(listed)
-      && JSON.stringify(pullNumbers(current)) === JSON.stringify(numbers), "Run identity changed");
+      && JSON.stringify(await pullNumbers(current, api)) === JSON.stringify(numbers), "Run identity changed");
     if (!statuses.includes(current.status)) continue;
     // A queue commit can still be a base of another live group after its PR merges.
     if (protectedHeads(await api.getQueue()).has(current.head_sha)) continue;
@@ -121,6 +126,12 @@ export class GitHubCliApi {
   }
   async getRun(id) { return this.request(`repos/${POLICY.repository}/actions/runs/${id}`); }
   async getPullRequest(number) { return this.request(`repos/${POLICY.repository}/pulls/${number}`); }
+  async getCommitPullRequests(head) {
+    requireValue(sha(head), "Invalid commit identity");
+    const pages = this.request(`repos/${POLICY.repository}/commits/${head}/pulls?per_page=100`, { paginate: true });
+    requireValue(Array.isArray(pages) && pages.length > 0 && pages.every(Array.isArray), "Invalid commit PR pages");
+    return pages.flat();
+  }
   async cancelRun(id) { this.request(`repos/${POLICY.repository}/actions/runs/${id}/cancel`, { method: "POST" }); }
   async getQueue() {
     return this.request("graphql", { data: { query: 'query { repository(owner:"bible-on-site",name:"bible-on-site") { databaseId nameWithOwner defaultBranchRef { target { oid } } mergeQueue(branch:"master") { entries(first:100) { totalCount pageInfo { hasNextPage } nodes { position state headCommit { oid } baseCommit { oid } pullRequest { number headRefOid } } } } } }' } });

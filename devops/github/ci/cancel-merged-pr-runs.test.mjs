@@ -21,6 +21,7 @@ function fixture(runs = [run()]) {
     async getPullRequest(number) { return { number, base: { repo: repo() },
       state: state.open.has(number) ? "open" : "closed", merged: !state.open.has(number),
       merged_at: state.open.has(number) ? null : "2026-11-18T09:50:00Z" }; },
+    async getCommitPullRequests() { return []; },
     async getQueue() { return { data: { repository: { databaseId: POLICY.repositoryId,
       nameWithOwner: POLICY.repository, defaultBranchRef: { target: { oid: sha("f") } },
       mergeQueue: { entries: { totalCount: state.queue.length, pageInfo: { hasNextPage: false }, nodes: structuredClone(state.queue) } } } } }; },
@@ -81,6 +82,24 @@ test("unknown or foreign PR associations never imply a merged PR", async () => {
   for (const branch of ["refs/pull/0/head", "refs/pull/9007199254740992/head", "refs/pull/10/other"]) {
     const f = fixture([{ ...run(1, "dynamic"), head_branch: branch }]);
     assert.deepEqual((await execute(f, { dryRun: false })).actions, []);
+  }
+});
+
+test("recovers merged PR associations cleared from workflow metadata by GitHub", async () => {
+  const f = fixture([{ ...run(1, "pull_request"), pull_requests: [] }]);
+  f.api.getCommitPullRequests = async head => {
+    assert.equal(head, sha("a"));
+    return [{ ...association(10), head: { ref: "feature", sha: sha("d"), repo: repo() } }];
+  };
+  await execute(f, { dryRun: false });
+  assert.deepEqual(f.state.cancels, [1]);
+  for (const change of [pr => { pr.head.ref = "reused-branch"; }, pr => { pr.head.repo.id++; },
+    pr => { pr.head = null; }, pr => { pr.base.repo.id++; }]) {
+    const g = fixture([{ ...run(1, "pull_request"), pull_requests: [] }]);
+    g.api.getCommitPullRequests = async () => {
+      const pr = { ...association(10), head: { ref: "feature", repo: repo() } }; change(pr); return [pr];
+    };
+    assert.deepEqual((await execute(g, { dryRun: false })).actions, []);
   }
 });
 
@@ -201,6 +220,19 @@ test("CLI adapter uses fixed repository endpoints and one normal cancel POST", a
   assert.deepEqual(calls[3].args.slice(-2), ["--method", "POST"]);
 });
 
+test("commit-to-PR lookup is paginated without guessing branch ownership", async () => {
+  const api = new GitHubCliApi((command, args) => {
+    assert.ok(args[1].includes(`/commits/${sha("a")}/pulls?per_page=100`));
+    assert.ok(args.includes("--paginate"));
+    return JSON.stringify([[association(10)], [association(20)]]);
+  });
+  assert.deepEqual((await api.getCommitPullRequests(sha("a"))).map(pr => pr.number), [10, 20]);
+  await assert.rejects(api.getCommitPullRequests("invalid"), /commit identity/);
+  for (const pages of [null, [], [{}]]) {
+    await assert.rejects(new GitHubCliApi(() => JSON.stringify(pages)).getCommitPullRequests(sha("a")), /commit PR pages/);
+  }
+});
+
 test("trusted event entrypoint saves proof and rejects candidate execution contexts", async () => {
   const dir = await mkdtemp(join(tmpdir(), "merged-run-cleanup-"));
   try {
@@ -233,4 +265,6 @@ test("workflow only checks out trusted default-branch code and has no scheduler 
   assert.match(workflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
   assert.doesNotMatch(workflow, /schedule:|force-cancel|BOT_PAT|pull_request\.head\.sha/);
   assert.match(workflow, /cancel-in-progress: false/);
+  const legacy = workflow.split("- name: Cancel only obsolete merge-group runs after two fresh proofs")[1];
+  assert.match(legacy, /workflow_run\.event == 'merge_group' &&\s+github.event.workflow_run.workflow_id == 105623149/);
 });

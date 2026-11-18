@@ -67,7 +67,8 @@ jobs:
         run: node devops/github/ci/cancel-merged-pr-runs.mjs --apply
       - name: Cancel only obsolete merge-group runs after two fresh proofs
         if: >-
-          (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group') ||
+          (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' &&
+           github.event.workflow_run.workflow_id == 105623149) ||
           github.event_name == 'delete'
         env:
           GITHUB_TOKEN: ${{ github.token }}
