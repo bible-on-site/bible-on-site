@@ -504,6 +504,11 @@ provides the privileged metadata context for fork PRs too; its checkout is
 always the trusted base commit. Run events reconcile validation that starts
 after the merge, including re-runs that do not emit a `requested` event,
 without a scheduled polling job or a separate credential.
+The merged-PR and unmerged-queue passes use independent job concurrency
+groups. Each pass coalesces its own pending events without interrupting a
+running cancellation; a PR event cannot evict the queue pass's pending work.
+Validation of the controller itself uses normal PR concurrency to cancel
+superseded test jobs.
 
 `cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
 runs whose associated PRs have merged. It covers every workflow, paginates

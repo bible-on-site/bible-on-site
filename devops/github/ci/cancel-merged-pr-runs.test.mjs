@@ -272,6 +272,20 @@ test("workflow only checks out trusted default-branch code and has no scheduler 
   assert.doesNotMatch(workflow, /schedule:|force-cancel|BOT_PAT|pull_request\.head\.sha/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /types: \[requested, in_progress, completed\]/);
-  const legacy = workflow.split("- name: Cancel only obsolete merge-group runs after two fresh proofs")[1];
+  const legacy = workflow.split("  inspect:")[1].split("  merged:")[0];
   assert.match(legacy, /workflow_run\.event == 'merge_group' &&\s+github.event.workflow_run.workflow_id == 105623149/);
+});
+
+test("independent reconciliation jobs cannot evict each other's queued work", async () => {
+  const workflow = await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml", import.meta.url), "utf8");
+  assert.doesNotMatch(workflow, /^concurrency:/m);
+  const legacy = workflow.split("  inspect:")[1].split("  merged:")[0];
+  const merged = workflow.split("  merged:")[1];
+  assert.match(legacy, /group: obsolete-unmerged-queue-control\s+cancel-in-progress: false/);
+  assert.match(merged, /group: merged-pr-validation-control\s+cancel-in-progress: false/);
+  assert.match(legacy, /reap-obsolete-merge-groups.mjs --apply/);
+  assert.doesNotMatch(legacy, /cancel-merged-pr-runs.mjs --apply|pull_request_target/);
+  assert.match(merged, /cancel-merged-pr-runs.mjs --apply/);
+  assert.match(merged, /github.event_name == 'pull_request_target'/);
+  assert.match(workflow, /group: obsolete-merge-group-tests-\$\{\{ github.event.pull_request.number \}\}\s+cancel-in-progress: true/);
 });
