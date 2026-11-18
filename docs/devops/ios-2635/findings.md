@@ -143,30 +143,17 @@ becomes available.
 
 ## Post-`f5f9dadb3` re-verification attempt (2026-11-17) — aborted
 
-Ten iterations of `app-mobile-e2e-ab.yml` were dispatched on frozen SHA
-`1c6da48393c5028e914757be23a8e63d59227bc2` (branch `exp/ios-runner-ab-1c6da48`;
-master at dispatch time, post-`f5f9dadb3`; the `#3421` snapshot-read sweep was
-still in PR review, so it is not part of the frozen code).
+A re-verification dispatch on frozen SHA `1c6da483` (post-`f5f9dadb3` master;
+pre-#3421 merge) aborted on the runbook's probe-queue criterion: the
+`namespace-profile-mac-os` profile did not schedule a runner for the
+`probe_namespace` job for over two hours while the same run's `xcode-27` jobs
+scheduled normally — the profile is not currently available to this repo.
 
-**Zero shard pairs collected.** Iteration 1's `probe_namespace` job stayed
-`queued` continuously for over two hours (17:54Z until abort at ~19:56Z) while
-the same run's `xcode-27` `build_ios` job scheduled in ~1 minute and
-completed, and GitHub-hosted jobs on unrelated runs scheduled normally during
-the same window. The ~1-minute probe (historically scheduled in ~20 seconds)
-never received a `namespace-profile-mac-os` runner.
-
-Per the runbook abort criterion — `probe_namespace` queuing indefinitely means
-the `namespace-profile-mac-os` profile is no longer available to this repo —
-the experiment was stopped without substituting another runner label and all
-ten pending dispatches were cancelled (runs `44142032239`, `44142854448`,
-`44142909379`, `44142990293`, `44143063773`, `44143257919`, `44143697749`,
-`44144274156`, `44144424184`, `44144543350`).
-
-**Decision impact**: #2312 stays closed. The performance re-verification is
-blocked by runner availability, not by data. If the Namespace profile is
-restored for this repo, re-dispatch on then-current master (post-`f5f9dadb3`
-*and* post-#3421 — the #3421 sweep removes the remaining post-wait live reads
-the faster runner raced on) per the same runbook.
+**Decision impact**: #2312 stays closed. The performance migration is blocked
+by runner availability, not by data; re-run ≥10 iterations on then-current
+master (post-`f5f9dadb3` and post-#3421) if the profile is restored. Full
+execution detail is on
+[#3422](https://github.com/bible-on-site/bible-on-site/issues/3422).
 
 ## Interpretation per the issue's decision rule
 
@@ -200,9 +187,8 @@ bounded re-verification rather than dropping the idea:
   reframe #2312 as a *performance* migration and flip
   `ios_runner` in `app-mobile-e2e.yml` (a one-line `runs-on` input change —
   runner selection is not AWS-impacting).
-  *(Attempted 2026-11-17 and aborted — `probe_namespace` queued >2h; see the
-  re-verification section above. Re-dispatch once the profile schedules
-  again.)*
+  *(Attempted 2026-11-17; aborted on the probe-queue criterion — see the
+  re-verification section above.)*
 - In parallel, file the app/harness follow-ups the data points at:
   - convert remaining live-element reads (`ReadFrame`/`Enabled`/`.Location`
     after `WaitFor`) to the snapshot/condition-element pattern that
