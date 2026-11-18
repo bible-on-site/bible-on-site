@@ -2379,6 +2379,19 @@ describe("fresh article source context", () => {
 		expect(result.catalogue.references.perek).toEqual([
 			{ id: 1, name: "בראשית א" },
 		]);
+		expect(result.catalogue.articleGroundings).toMatchObject([
+			{
+				articleId: "27",
+				sourceHash: article.state.sourceHash,
+				citations: [
+					{
+						quote: "בראשית א כו",
+						spanStart: start,
+						spanEnd: start + "בראשית א כו".length,
+					},
+				],
+			},
+		]);
 	});
 	it("pages every candidate explicitly and keeps the text page unchanged while continuing citations", async () => {
 		article.plainText = "בראשית א כו. בראשית א ב. בראשית א ג.";

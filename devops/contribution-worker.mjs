@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 const API_TIMEOUT = 30000;
 const MODEL_TIMEOUT = 120000;
 const FINAL_RESERVE = 45000;
+const MODEL_CONTEXT = 16384;
+const MODEL_OUTPUT = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const loopback = (host) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
 const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
@@ -15,7 +17,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v6";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v7";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -101,7 +103,7 @@ function agentResultSchema(schema) {
 }
 
 function nativeModelMessage(body, bundle) {
-	if (body?.prompt_eval_count >= 16384)
+	if (body?.prompt_eval_count >= MODEL_CONTEXT)
 		throw new Error(
 			"Agent context reached the model window; no result was applied",
 		);
@@ -145,16 +147,171 @@ function nativeModelMessage(body, bundle) {
 	return message;
 }
 
-function nativeAgentSystem(bundle) {
+/** Select operation instructions only from the server's constrained result
+ * schema, never from a model/human hint. Unknown or open contracts retain the
+ * whole guide so future schemas cannot silently lose their instructions. */
+function operationGuideForSchema(bundle, schema) {
+	const kinds = new Set(),
+		pending = [agentResultSchema(schema)];
+	while (pending.length) {
+		const node = pending.pop();
+		if (!object(node)) continue;
+		if (Object.hasOwn(node, "$ref")) return bundle.operationGuide;
+		if (object(node.properties) && Object.hasOwn(node.properties, "kind")) {
+			const kind = node.properties.kind;
+			if (typeof kind?.const === "string") kinds.add(kind.const);
+			else if (
+				Array.isArray(kind?.enum) &&
+				kind.enum.length &&
+				kind.enum.every((value) => typeof value === "string")
+			)
+				for (const value of kind.enum) kinds.add(value);
+			else return bundle.operationGuide;
+		}
+		for (const value of Object.values(node)) {
+			if (Array.isArray(value)) pending.push(...value);
+			else if (object(value)) pending.push(value);
+		}
+	}
+	const matches = (guide, kind) =>
+		guide.startsWith(`${kind}:`) || guide.startsWith(`${kind} (`);
+	if (
+		!kinds.size ||
+		[...kinds].some(
+			(kind) => !bundle.operationGuide.some((guide) => matches(guide, kind)),
+		)
+	)
+		return bundle.operationGuide;
+	const vocabulary = bundle.tools.find((tool) => tool.name === "record")
+		?.inputSchema?.properties?.kind?.enum;
+	if (!Array.isArray(vocabulary)) return bundle.operationGuide;
+	const otherKinds = vocabulary
+		.filter((kind) => typeof kind === "string" && kind.startsWith("target:"))
+		.map((kind) => kind.slice(7))
+		.filter((kind) => !kinds.has(kind));
+	// Only omit a guide for a declared, disallowed operation. General guidance
+	// and future/unknown instruction formats always remain in the prompt.
+	return bundle.operationGuide.filter(
+		(guide) => !otherKinds.some((kind) => matches(guide, kind)),
+	);
+}
+
+function nativeAgentSystem(bundle, schema) {
 	return [
 		bundle.system.replace(
 			"Return JSON matching the supplied action schema.",
 			"Use the supplied native read functions to obtain missing context; the final proposal uses a separately constrained result schema.",
 		),
 		"Operation guide:",
-		...bundle.operationGuide,
+		...operationGuideForSchema(bundle, schema),
 		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
+		"Tool records arrays omit only records identical to their latest value already supplied in currentRecords or earlier tool messages. Reuse those earlier values; omission is never deletion. Changed records are supplied again. Text, citations, discussions and page cursors are retained in full.",
+		"Plan source reads from their totals. For a short article that fits a single declared article_text page, request its complete plainTextLength when practical instead of defaulting to a partial 4000-character page. Never claim unread source text was checked.",
 	].join("\n");
+}
+
+/** Omit only repeated record values, never source pages or human feedback.
+ * Compare with the latest value so A -> B -> A remains an explicit update. */
+function recordDeltas(records, latest) {
+	return records.filter((record) => {
+		if (
+			!object(record) ||
+			typeof record.kind !== "string" ||
+			!(typeof record.id === "string" || typeof record.id === "number") ||
+			canonical(Object.keys(record).sort()) !== '["current","id","kind"]'
+		) {
+			// Unknown record formats may describe a changed identity/value.
+			// Retain them and stop suppressing older values on their behalf.
+			latest.clear();
+			return true;
+		}
+		const key = canonical([record.kind, record.id]);
+		const value = canonical(record.current);
+		const unchanged = latest.has(key) && latest.get(key) === value;
+		latest.set(key, value);
+		return !unchanged;
+	});
+}
+
+/** API v5 relationship keys write disjoint article fields. Track repeats per
+ * key, retaining action boundaries and replace A -> B -> A on that same field.
+ * Unknown commands are barriers; other APIs/change kinds are never compacted. */
+function compactArticleCommands(output, apiVersion) {
+	if (apiVersion !== 5) return;
+	const proposals = [
+		...(Array.isArray(output.pullRequests) ? output.pullRequests : []),
+		...(object(output.draft) ? [output.draft] : []),
+	];
+	const actions = {
+		primaryPerek: ["replace"],
+		coveringSources: ["add", "remove", "replace", "clear"],
+		moadim: ["add", "remove", "replace", "clear"],
+		dedicationAssignments: ["add", "remove", "replace"],
+	};
+	for (const proposal of proposals) {
+		if (!Array.isArray(proposal?.changes)) continue;
+		for (const change of proposal.changes) {
+			if (
+				change?.kind !== "article_links" ||
+				!Array.isArray(change.after?.commands)
+			)
+				continue;
+			const fields = new Map();
+			change.after.commands = change.after.commands.filter((command) => {
+				if (
+					!object(command) ||
+					!object(command.target) ||
+					!Object.hasOwn(actions, command.relationshipKey) ||
+					!actions[command.relationshipKey].includes(command.action)
+				) {
+					fields.clear();
+					return true;
+				}
+				const field =
+					command.relationshipKey === "coveringSources"
+						? "pasukCoordinates"
+						: command.relationshipKey === "moadim"
+							? "moedIds"
+							: null;
+				// These API-v5 arrays are sets even for replacement. Preserve the
+				// first exact value and its position; never reinterpret unknown fields.
+				if (field && Array.isArray(command.target[field])) {
+					const values = new Set();
+					command.target[field] = command.target[field].filter((value) => {
+						const fingerprint = canonical(value);
+						if (values.has(fingerprint)) return false;
+						values.add(fingerprint);
+						return true;
+					});
+				}
+				const target = { ...command.target };
+				// Sort only the comparison fingerprint, never the proposed order.
+				if (field && Array.isArray(target[field]))
+					target[field] = [...target[field]].sort((a, b) =>
+						canonical(a).localeCompare(canonical(b)),
+					);
+				const key = canonical({ ...command, target });
+				const commuting =
+					field !== null &&
+					["add", "remove"].includes(command.action) &&
+					Object.keys(target).length === 1 &&
+					Array.isArray(target[field]);
+				const previous = fields.get(command.relationshipKey);
+				const seen =
+					commuting && previous?.action === command.action
+						? previous.seen
+						: new Set();
+				const duplicate = key === previous?.key || (commuting && seen.has(key));
+				if (commuting) seen.add(key);
+				fields.set(command.relationshipKey, {
+					key,
+					action: command.action,
+					seen,
+				});
+				return !duplicate;
+			});
+		}
+	}
 }
 
 export function validateWorkerBundle(value, expectedHash) {
@@ -525,13 +682,23 @@ export function createContributionWorker(
 						);
 					return Math.min(MODEL_TIMEOUT, remaining);
 				};
+				const context = parseJson(job.user, "Invalid worker task context");
+				const latestRecords = new Map();
+				if (Array.isArray(context?.currentRecords))
+					recordDeltas(context.currentRecords, latestRecords);
+				let schema = job.schema,
+					promptTokens = 0;
+				const systemMessage = {
+					role: "system",
+					content: nativeAgentSystem(bundle, schema),
+				};
 				const messages = [
-					{ role: "system", content: nativeAgentSystem(bundle) },
+					systemMessage,
 					{
 						role: "user",
 						content: canonical({
 							task: job.task,
-							context: parseJson(job.user, "Invalid worker task context"),
+							context,
 						}),
 					},
 				];
@@ -546,7 +713,8 @@ export function createContributionWorker(
 							parameters: tool.inputSchema,
 						},
 					}));
-				let schema = job.schema;
+				let evaluatedMessages = messages.length,
+					evaluatedSystem = systemMessage.content;
 				agentResultSchema(schema);
 				const infer = async (history, declaration) => {
 					const remaining = remainingBudget();
@@ -566,7 +734,11 @@ export function createContributionWorker(
 							think: false,
 							truncate: false,
 							shift: false,
-							options: { temperature: 0, num_predict: 4096, num_ctx: 16384 },
+							options: {
+								temperature: 0,
+								num_predict: MODEL_OUTPUT,
+								num_ctx: MODEL_CONTEXT,
+							},
 							messages: history,
 							...declaration,
 						}),
@@ -575,7 +747,13 @@ export function createContributionWorker(
 						throw new Error(`Local model returned HTTP ${response.status}`);
 					const body = await readJson(response, "Invalid local model response");
 					remainingBudget();
-					return { body, message: nativeModelMessage(body, bundle) };
+					const message = nativeModelMessage(body, bundle);
+					// Ollama reports the full prompt, including cached tokens. Do
+					// not subtract cache hits when budgeting the next native turn.
+					promptTokens = body.prompt_eval_count;
+					evaluatedMessages = history.length;
+					evaluatedSystem = systemMessage.content;
+					return { body, message };
 				};
 				const finalize = async () => {
 					// Native parameter decoding can drop JSON-schema constraints.
@@ -586,7 +764,7 @@ export function createContributionWorker(
 							{
 								role: "user",
 								content:
-									"Now return only the final result object matching the supplied JSON response schema. Preserve the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft.",
+									"Now return only the final result object matching the supplied JSON response schema, as minified JSON without indentation or optional whitespace. Keep generated titles, descriptions and summaries concise; do not repeat the same explanation in several fields. Emit each command once. Group article coordinates with the same relationship/action into one command when their order has no effect. When revising a PR, omit optional unchanged draft fields instead of reproducing them. Preserve every required change, evidence and comment response, the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft, preserving all whitespace inside that text.",
 							},
 						],
 						{ format: agentResultSchema(schema) },
@@ -598,6 +776,9 @@ export function createContributionWorker(
 						"Invalid local model response",
 					);
 					if (!object(output)) throw new Error("Invalid local model response");
+					// The decoder cannot enforce uniqueItems. Only compact known
+					// idempotent/commuting repeats; server validation remains mandatory.
+					compactArticleCommands(output, job.apiVersion);
 					remainingBudget();
 					const result = await api(
 						"complete",
@@ -622,6 +803,24 @@ export function createContributionWorker(
 					// This reserves time inside the original deadline; it does not
 					// cancel, retry or extend an in-flight model request.
 					if (remainingBudget() <= FINAL_RESERVE) return await finalize();
+					// Reserve output space before extending research. UTF-8 bytes
+					// conservatively estimate new text, with room for chat framing;
+					// this is not a tokenizer. Finalization retains the full history
+					// and drops native tool declarations. Ollama still rejects any
+					// overlong prompt/output with truncation and shifting disabled.
+					const additions = messages.slice(evaluatedMessages);
+					if (
+						promptTokens &&
+						promptTokens +
+							(systemMessage.content === evaluatedSystem
+								? 0
+								: Buffer.byteLength(systemMessage.content, "utf8")) +
+							Buffer.byteLength(canonical(additions), "utf8") +
+							128 * additions.length +
+							MODEL_OUTPUT >=
+							MODEL_CONTEXT
+					)
+						return await finalize();
 					const { message } = await infer(messages, { tools });
 					messages.push(message);
 					if (!message.tool_calls?.length) return await finalize();
@@ -670,7 +869,16 @@ export function createContributionWorker(
 							research.set(query, facts);
 							receipts.push(read.receipt);
 							schema = read.schema;
-							data = read.data;
+							data =
+								object(read.data) && Array.isArray(read.data.records)
+									? {
+											...read.data,
+											records: recordDeltas(read.data.records, latestRecords),
+										}
+									: read.data;
+							// A trusted read can widen the result contract. Refresh its
+							// operation guide before the next research/final request.
+							systemMessage.content = nativeAgentSystem(bundle, schema);
 						}
 						messages.push({
 							role: "tool",

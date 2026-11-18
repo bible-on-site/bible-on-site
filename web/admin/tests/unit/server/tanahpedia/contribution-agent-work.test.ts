@@ -1,11 +1,14 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { canonicalJson } from "~/lib/canonical-json";
+import * as toolArguments from "~/lib/tanahpedia/contribution-agent-tool-arguments";
 import {
 	CONTRIBUTION_AGENT_TOOL_ERRORS,
 	ContributionAgentToolInputError,
 } from "~/lib/tanahpedia/contribution-agent-tool-errors";
-import * as toolArguments from "~/lib/tanahpedia/contribution-agent-tool-arguments";
 import type { RegisteredContributionAgent } from "~/lib/tanahpedia/contribution-agents";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
+import type { ArticleLiteralGrounding } from "~/lib/tanahpedia/contribution-article-grounding";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
 import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
 
@@ -23,6 +26,14 @@ const mocks = vi.hoisted(() => ({
 	assigned: vi.fn(),
 	lockContext: vi.fn(),
 	touch: vi.fn(),
+	article: vi.fn(),
+	perek: vi.fn(),
+}));
+vi.mock("~/server/tanahpedia/contribution-perek-reads.server", () => ({
+	readAgentPerek: mocks.perek,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
+	readArticleLinkContext: mocks.article,
 }));
 vi.mock("~/server/db", () => ({ txQuery: mocks.query }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
@@ -49,9 +60,17 @@ vi.mock("~/server/tanahpedia/contribution-agent-context.server", () => ({
 			entities: unknown[];
 			targets: unknown[];
 			references: Record<string, unknown[]>;
+			articleGroundings?: ArticleLiteralGrounding[];
 		}[]
 	) => ({
 		...catalogues[0],
+		...(catalogues.some((catalogue) => catalogue.articleGroundings?.length)
+			? {
+					articleGroundings: catalogues.flatMap(
+						(catalogue) => catalogue.articleGroundings ?? [],
+					),
+				}
+			: {}),
 		entities: catalogues.flatMap((catalogue) => catalogue.entities),
 		targets: catalogues.flatMap((catalogue) => catalogue.targets),
 		references: Object.fromEntries(
@@ -281,6 +300,111 @@ async function claim() {
 }
 
 describe("assignment-driven leased contribution work", () => {
+	it("adds receipt-backed article evidence while revising the same PR and retaining its other fields", async () => {
+		const input = await claim();
+		const quote = "בראשית א כו";
+		const chapter = {
+			seferName: "בראשית",
+			additionalLetter: null,
+			perekInContext: 1,
+			pasukCount: 31,
+		};
+		mocks.perek.mockResolvedValue({ id: 1, coordinates: chapter });
+		const change = {
+			kind: "article_links" as const,
+			targetId: "27",
+			before: null,
+			after: {
+				commands: [
+					{
+						relationshipKey: "coveringSources" as const,
+						action: "add" as const,
+						target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] },
+					},
+				],
+			},
+			labels: {},
+		};
+		current().changes = [change];
+		const original = structuredClone(current());
+		mocks.article.mockResolvedValue({
+			plainText: quote,
+			state: { contentHash: "a".repeat(32), sourceHash: "b".repeat(64) },
+		});
+		mocks.tool.mockResolvedValue({
+			data: {
+				id: "27",
+				cursor: 0,
+				total: quote.length,
+				text: quote,
+				nextCursor: null,
+			},
+			catalogue: {
+				...empty,
+				articleGroundings: [
+					{
+						articleId: "27",
+						sourceHash: "b".repeat(64),
+						coordinates: [{ perekId: 1, pasuk: 26 }],
+						chapters: [
+							{
+								id: 1,
+								fingerprint: createHash("sha256")
+									.update(canonicalJson(chapter))
+									.digest("hex"),
+							},
+						],
+						citations: [
+							{
+								perekId: 1,
+								pasuk: 26,
+								pasukTo: 26,
+								label: quote,
+								quote,
+								spanStart: 0,
+								spanEnd: quote.length,
+							},
+						],
+					},
+				],
+			},
+		});
+		const read = await readContributionWorkerContext({
+			...input,
+			name: "article_text",
+			arguments: { id: "27" },
+		});
+		if ("error" in read) throw new Error("Expected a source receipt");
+		mocks.revise.mockImplementationOnce(async (_conn, item, draft) => {
+			item.evidence = draft.evidence;
+			item.revision++;
+			return true;
+		});
+		await completeContributionAgentWork({
+			...input,
+			receipts: [read.receipt],
+			content: output("revised", { draft: { evidenceIndexes: [0] } }),
+		});
+		expect(current()).toMatchObject({
+			id: original.id,
+			title: original.title,
+			description: original.description,
+			changes: original.changes,
+			revision: original.revision + 1,
+		});
+		expect(current().evidence).toHaveLength(2);
+		expect(current().evidence[0]).toEqual(original.evidence[0]);
+		expect(current().evidence[1]).toMatchObject({
+			citation: quote,
+			quote,
+			articleSource: { articleId: "27", spanStart: 0, spanEnd: quote.length },
+		});
+		expect(mocks.create).not.toHaveBeenCalled();
+		expect(job().result).toMatchObject({
+			changed: true,
+			pendingCommentIds: [],
+		});
+	});
 	it("keeps unexpected argument-validator faults fatal without returning model feedback", async () => {
 		const input = await claim();
 		const failure = new TypeError("Internal validation failure");
@@ -1025,7 +1149,7 @@ describe("assignment-driven leased contribution work", () => {
 	it("uses API five article read receipts to resolve the same PR with known nested identities", async () => {
 		const input = await claim();
 		expect(input.apiVersion).toBe(5);
-		expect(agent().installedVersion).toBe("tanahpedia-agents-v11");
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v12");
 		mocks.tool.mockResolvedValue({
 			data: {
 				kind: "target:article_links",

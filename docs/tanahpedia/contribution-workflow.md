@@ -200,7 +200,7 @@ discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
 Runtime v5 introduced Ollama's native read functions and assistant/tool messages;
-the current runtime v6 retains that transport. Once research ends, one separate request receives the
+the current runtime v7 retains that transport. Once research ends, one separate request receives the
 complete constrained result schema. This avoids losing schema constraints in
 Ollama's native function-parameter representation. Both phases share the existing
 120-second execution deadline, 16K context and 4,096-token output limit; reads
@@ -220,6 +220,38 @@ and schema moves directly to the single final generation. Before another researc
 request, 45 seconds or less remaining also selects that final phase. This is a
 soft reserve within the original deadline; it neither cancels nor extends an
 in-flight request. Changed data or schema remains new information.
+Runtime v7 also budgets the next research turn using Ollama's full
+`prompt_eval_count`, including cached tokens, plus a conservative UTF-8 byte
+estimate of newly appended messages and chat framing. It reserves the existing
+4,096-token output allowance and selects the final phase before another research
+request would consume that reserve. This estimate is not a tokenizer; Ollama's
+strict context/output checks still apply. Final generation keeps all source
+pages, human feedback and read results, and omits the native tool declarations.
+Cumulative `records` arrays omit exact repeats of their latest previously
+supplied value, including initial `currentRecords`; changed values are supplied
+again. The original server receipts, schema validation and freshness checks
+remain unchanged. Missing evidence still requires clarification.
+The native system prompt includes only operation guides permitted by the
+server's finite result-kind constraints. Other declared operation guides are
+omitted; general instructions and the complete read-tool declarations remain.
+Human text and model hints cannot select this scope. A trusted read that changes
+the result contract refreshes the guide before the next inference, and changed
+system text also consumes the context reserve. Open, referenced or unknown
+contracts retain the full guide. Final JSON requests omit optional indentation
+and keep generated prose concise while preserving exact human quotations.
+Source totals guide read planning: a short article can use one complete page
+within the declared tool limits; unread text cannot be claimed as reviewed.
+The local grammar cannot enforce JSON Schema `uniqueItems`; the server still
+validates the complete result. For API v5 article-link proposals only, the worker
+compacts exact repetitions of idempotent commands on independent relationship
+fields and same-action set additions/removals. API v5 primary-perek, coverage,
+moed and dedication commands write separate fields. Exact repeated coordinates
+or moed IDs inside a command are removed, keeping the first value and its
+position. These sets compare independently of item order. A different action/value on the same
+field retains its order, including add/remove/add and replace A/B/A. Unknown
+commands reset this optimization. Other operation kinds and
+other API versions retain their sequence. It never compacts human
+text or evidence; invalid output remains subject to the server's normal checks.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
@@ -417,12 +449,23 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
-The current bundle v11 and worker runtime v6 retain API v5, protocol v2, literal
-article-link grounding and exact-copy enforcement. They add fixed, typed feedback
+The current bundle v12 and worker runtime v7 retain API v5, protocol v2, literal
+article-link grounding and exact-copy enforcement. They supply fixed, typed feedback
 for invalid arguments in the current read call, after the normal identity, lease
 and context checks. A rejected read supplies no receipt, records or result schema.
 Local and AWS agents can correct those arguments within the original execution
 deadline; authentication, stale-context, replay and storage failures remain fatal.
+
+For generated article-link PRs and agent revisions, resolved citations from the
+job's actual source reads also become structured PR evidence. The server checks
+the current source hash, exact UTF-16 span and chapter identity/bounds, includes only citations supporting
+proposed verse links, and preserves existing evidence and editor notes. Existing
+spans refresh before deduplication and source-limit checks, so repeated pages or
+revisions do not duplicate a citation. No model-written quotation is
+accepted through this path. Supplementing evidence requires a revised draft;
+an unchanged response cannot claim that a requested edit was applied. Older
+receipts without citation spans remain readable. The normal 30-source limit
+fails explicitly rather than silently removing existing sources.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
