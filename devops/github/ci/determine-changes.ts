@@ -65,6 +65,11 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
+const UBUNTU_MIRROR_CI_PATHS = [
+	"devops/github/ci/ubuntu-apt-mirrors.mjs",
+	"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
+];
+
 // The evaluation guide and MongoDB test image are not delivered data inputs.
 // Keep exact boundaries so actual annotations, SQL and pipelines still deliver.
 const DATA_CI_ONLY_PATTERN =
@@ -79,6 +84,7 @@ export const MODULES = {
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
 		ciPaths: [
+			...UBUNTU_MIRROR_CI_PATHS,
 			...NATIVE_IMAGE_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
 			...RELEASE_CI_PATHS,
@@ -141,6 +147,7 @@ export const MODULES = {
 		// Release startup smoke (#2373) — so a runner-only edit must trigger
 		// the same app checks as a parent-workflow edit.
 		ciPaths: [
+			...UBUNTU_MIRROR_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
@@ -161,11 +168,14 @@ export const MODULES = {
 		// Approved timings are packaged inputs through extraModulePaths.
 		// Test projects exercise the app but never change its package, so a
 		// test-only change must not ship a store release or bump the version.
-		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,
+		// BibleOnSite.DeviceTests is the in-process XHarness test app (#3349) —
+		// same test-only status as the BibleOnSite.Tests.* suites.
+		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
 	},
 	admin: {
 		directory: "web/admin",
 		ciPaths: [
+			...UBUNTU_MIRROR_CI_PATHS,
 			"devops/github/release/recovery-request.mjs",
 			"devops/github/release/recovery-request.test.mjs",
 			...NATIVE_IMAGE_CI_PATHS,

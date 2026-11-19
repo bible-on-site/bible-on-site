@@ -14,7 +14,7 @@ concurrency:
 jobs:
   upgrade:
     if: github.repository == 'bible-on-site/bible-on-site' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,10 +25,20 @@ jobs:
         with:
           node-version-file: devops/package.json
 
+      - name: Get a read token for the private font repository
+        id: font-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.FONT_RELEASE_READER_CLIENT_ID }}
+          private-key: ${{ secrets.FONT_RELEASE_READER_PRIVATE_KEY }}
+          owner: bible-on-site
+          repositories: al-heperek-font
+          permission-contents: read
+
       - name: Download the latest stable font release if newer
         id: release
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          GH_TOKEN: ${{ steps.font-token.outputs.token }}
         run: node devops/github/release/upgrade-al-heperek-font.mjs download "$RUNNER_TEMP"
 
       - name: Set up Bun

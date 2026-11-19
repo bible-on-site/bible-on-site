@@ -178,7 +178,7 @@ test("rejects a stalled kernel mirror and selects complete Ubuntu metadata", asy
 		return new Response(signedMetadata);
 	});
 	assert.equal(result, primary);
-	assert.equal(calls.length, 8);
+	assert.equal(calls.length, 16);
 	assert.equal(new Set(calls.map((call) => call.signal)).size, 1);
 	assert.deepEqual(
 		calls.slice(0, 4).map((call) => new URL(call.url).pathname),
@@ -200,6 +200,31 @@ test("uses the independent fallback when Ubuntu DNS fails", async () => {
 		}),
 		"https://mirrors.kernel.org/ubuntu/",
 	);
+});
+
+test("uses a verified fallback when archive metadata and the kernel mirror fail", async () => {
+	const azure = "https://azure.archive.ubuntu.com/ubuntu/";
+	const michigan = "https://mirror.its.umich.edu/ubuntu/";
+	for (const expected of [azure, michigan]) {
+		const mirror = await selectUbuntuArchive("resolute", async (url) => {
+			const host = new URL(url).hostname;
+			if (host === "archive.ubuntu.com" && url.includes("-backports/")) {
+				throw Object.assign(new Error("Header timeout"), {
+					code: "UND_ERR_HEADERS_TIMEOUT",
+				});
+			}
+			if (
+				host === "mirrors.kernel.org" ||
+				(host === "azure.archive.ubuntu.com" && expected === michigan)
+			) {
+				throw Object.assign(new Error("Network unreachable"), {
+					code: "ENETUNREACH",
+				});
+			}
+			return new Response(signedMetadata);
+		});
+		assert.equal(mirror, expected);
+	}
 });
 
 test("joins cancelled fallback probes as soon as the preferred mirror is complete", async () => {
@@ -233,7 +258,7 @@ test("joins cancelled fallback probes as soon as the preferred mirror is complet
 	assert.equal(await selection, primary);
 	assert.equal(completedBeforeAnotherEventLoopTurn, true);
 	assert.equal(active, 0);
-	assert.equal(cancelled, 4);
+	assert.equal(cancelled, 12);
 });
 
 test("a faster healthy fallback does not change the preferred mirror", async () => {
@@ -286,7 +311,7 @@ test("failed selection exposes bounded request stages and network causes without
 		(error) => {
 			assert.match(error.message, /within five seconds/);
 			assert(error.cause instanceof AggregateError);
-			assert.equal(error.cause.errors.length, 8);
+			assert.equal(error.cause.errors.length, 16);
 			const details = error.cause.errors
 				.map((probe) => probe.message)
 				.join("\n");
@@ -407,12 +432,12 @@ test("stalled headers and bodies share one five-second cap and leave the source 
 		details.filter((message) =>
 			message.includes("phase=headers http=none reason=deadline"),
 		).length,
-		4,
+		8,
 	);
 	assert.equal(
 		details.filter((message) =>
 			message.includes("phase=body http=200 reason=deadline"),
 		).length,
-		4,
+		8,
 	);
 });

@@ -193,7 +193,7 @@ public partial class ParashaPage
         _unitRecitationSelection = true;
         _lastLongPressTime = DateTime.Now;
         UpdateSelectionBar();
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
     }
 
     private async void OnHeaderPointerPressed(object? sender, PointerEventArgs e)

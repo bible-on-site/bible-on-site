@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.684",
+	"version": "0.2.686",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -53,15 +53,15 @@
 		"node": ">=26.10.0 <27"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1170.0",
+		"@aws-sdk/client-lambda": "3.1171.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.122",
-		"isomorphic-dompurify": "4.7.0",
+		"isomorphic-dompurify": "4.8.0",
 		"jsdom": "31.0.1",
 		"leaflet": "1.9.4",
-		"mapbox-gl": "3.35.0",
+		"mapbox-gl": "3.35.1",
 		"moment-timezone": "0.6.6",
 		"monocart-coverage-reports": "3.2.1",
 		"mpg123-decoder": "1.0.3",
@@ -78,7 +78,7 @@
 		"web-push": "4.0.0"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-s3": "3.1170.0",
+		"@aws-sdk/client-s3": "3.1171.0",
 		"@biomejs/biome": "2.6.8",
 		"@playwright/test": "1.65.1",
 		"@swc/core": "1.16.22",

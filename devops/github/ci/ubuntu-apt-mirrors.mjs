@@ -8,6 +8,8 @@ const managedArchive =
 const candidates = [
 	"https://archive.ubuntu.com/ubuntu/",
 	"https://mirrors.kernel.org/ubuntu/",
+	"https://azure.archive.ubuntu.com/ubuntu/",
+	"https://mirror.its.umich.edu/ubuntu/",
 ];
 const networkCodes = new Set([
 	"ENOTFOUND",
@@ -116,11 +118,15 @@ export async function selectUbuntuArchive(codename, fetchMetadata = fetch) {
 	// Preserve preference order, but do not spend the rest of the deadline on
 	// an unused fallback after the preferred mirror has fully passed. Join the
 	// cancelled probes so no request remains active when configuration changes.
-	let mirror = await probes[0];
-	if (mirror) {
-		unused.abort();
-		await Promise.all(probes);
-	} else mirror = await probes[1];
+	let mirror;
+	for (const probe of probes) {
+		mirror = await probe;
+		if (mirror) {
+			unused.abort();
+			await Promise.all(probes);
+			break;
+		}
+	}
 	if (!mirror) {
 		throw new Error(
 			"No Ubuntu primary mirror served all signed release metadata within five seconds",
