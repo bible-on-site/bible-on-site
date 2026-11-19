@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    In-process device-test app (#3349): the XHarness layer between the portable
+    unit suite and Appium. NOT a dotnet-test project — IsTestProject=false keeps
+    MTP away from it; the tests run inside this app through the instrumentation
+    in Platforms/Android. See README.md for the local run.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net11.0-android</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BibleOnSite.DeviceTests</RootNamespace>
+    <ApplicationId>com.bibleonsite.devicetests</ApplicationId>
+    <ApplicationTitle>BibleOnSite DeviceTests</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <!-- Results export goes through MediaStore.Downloads, which exists only on
+         API 29+ — keep the minimum there so instrumentation can always hand the
+         XML back to XHarness. -->
+    <SupportedOSPlatformVersion>29.0</SupportedOSPlatformVersion>
+    <!-- xUnit v2 + the XHarness headless runner are not an MTP test project;
+         MTP must ignore this app or `dotnet test` fails to classify it. -->
+    <IsTestProject>false</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
+    <PackageReference Include="Microsoft.DotNet.XHarness.TestRunners.Xunit" Version="11.0.0-prerelease.26556.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="11.0.0" />
+    <!-- The headless runner is xUnit v2 — deliberately not the xunit.v3 + MTP
+         stack the portable suites use (see docs/tests/app/device-tests-research.md §6). -->
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.abstractions" Version="2.0.3" />
+    <PackageReference Include="xunit.runner.utility" Version="2.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Parity checks: the exact production sources the portable suite links,
+         compiled here for android so the same assertions run on-device
+         (linked, not copied — the PoC pattern proven in #3336). -->
+    <Compile Include="..\BibleOnSite\Converters\PasukMarkerTextConverter.cs" Link="Linked\PasukMarkerTextConverter.cs" />
+    <Compile Include="..\BibleOnSite\Helpers\GimatryHelper.cs" Link="Linked\GimatryHelper.cs" />
+  </ItemGroup>
+
+</Project>
