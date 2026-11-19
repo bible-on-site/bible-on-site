@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution, Contributor } from "~/lib/tanahpedia/contributions";
@@ -13,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 	detail: vi.fn(),
 	catalogue: vi.fn(),
 	articlePreview: vi.fn(),
+	articleSearch: vi.fn(),
 	articleGenerate: vi.fn(),
 	status: vi.fn(),
 	agents: vi.fn(),
@@ -63,6 +71,7 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 	getContribution: mocks.detail,
 	getContributionCatalogue: mocks.catalogue,
 	getContributionArticleLinkPreview: mocks.articlePreview,
+	searchContributionArticles: mocks.articleSearch,
 	getContributionLlmStatus: mocks.status,
 	getContributionAgents: mocks.agents,
 	createContributionItem: mocks.create,
@@ -222,6 +231,7 @@ describe("issues and PR administration", () => {
 			mocks.detail,
 			mocks.catalogue,
 			mocks.articlePreview,
+			mocks.articleSearch,
 			mocks.articleGenerate,
 			mocks.status,
 			mocks.agents,
@@ -416,19 +426,62 @@ describe("issues and PR administration", () => {
 		).toBeInTheDocument();
 		expect(mocks.articlePreview).toHaveBeenCalledWith({ data: "17" });
 	});
-	it("opens a discovered article-link PR from the ordinary PR queue", async () => {
+	it("keeps link discovery inside the shared composer instead of a queue panel", async () => {
+		show("pr");
+		await screen.findByText("שינוי שם");
+		expect(screen.queryByText("איתור קישורים למאמר")).not.toBeInTheDocument();
+		expect(screen.queryByLabelText("מספר מאמר לאיתור")).not.toBeInTheDocument();
+	});
+	it("finds an article by title inside the shared composer", async () => {
+		mocks.search = { id: "new" };
+		mocks.articleSearch.mockResolvedValue([
+			{
+				id: "17",
+				title: "מאמר לדוגמה",
+				perekLabel: "בראשית א",
+				authorName: "הרב דוגמה",
+			},
+		]);
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "לדוגמה" },
+		});
+		const list = await screen.findByRole("list", {
+			name: "תוצאות חיפוש המאמרים",
+		});
+		expect(mocks.articleSearch).toHaveBeenCalledWith({
+			data: { q: "לדוגמה" },
+		});
+		await act(async () =>
+			fireEvent.click(
+				within(list).getByRole("button", { name: /מאמר לדוגמה/ }),
+			),
+		);
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
+		expect(mocks.articlePreview).toHaveBeenCalledWith({ data: "17" });
+	});
+	it("discovers article links inside the shared composer and opens the ordinary PR", async () => {
+		mocks.search = { id: "new" };
 		mocks.articleGenerate.mockResolvedValue({
 			runId: "discovery",
 			outcomes: [],
 			prIds: [PRID],
 		});
 		show("pr");
-		await screen.findByText("שינוי שם");
-		fireEvent.click(screen.getByText("איתור קישורים למאמר"));
-		fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+		fireEvent.change(await screen.findByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
 			target: { value: "17" },
 		});
-		fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
 		await waitFor(() =>
 			expect(mocks.navigate).toHaveBeenCalledWith({
 				to: "/",
@@ -456,24 +509,29 @@ describe("issues and PR administration", () => {
 			message: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
 		},
 	])(
-		"reports discovery failure before opening any existing PR: $error",
+		"reports discovery failure inside the composer before opening any PR: $error",
 		async ({ prIds, error, message }) => {
+			mocks.search = { id: "new" };
 			mocks.articleGenerate.mockResolvedValue({
 				runId: "failed-discovery",
 				outcomes: [{ articleId: 17, outcome: "error", proposals: [], error }],
 				prIds,
 			});
 			show("pr");
-			await screen.findByText("שינוי שם");
-			fireEvent.click(screen.getByText("איתור קישורים למאמר"));
-			fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+			fireEvent.change(await screen.findByLabelText("סוג שינוי"), {
+				target: { value: "article_links" },
+			});
+			fireEvent.change(screen.getByLabelText("מספר מאמר"), {
 				target: { value: "17" },
 			});
-			fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+			await act(async () =>
+				fireEvent.click(
+					screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+				),
+			);
 			expect(await screen.findByRole("alert")).toHaveTextContent(message);
-			expect(screen.queryByRole("status")).not.toBeInTheDocument();
 			expect(mocks.navigate).not.toHaveBeenCalled();
-			expect(screen.getByLabelText("מספר מאמר לאיתור")).toHaveValue("17");
+			expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
 		},
 	);
 	it("clears search and assignee filters without retaining empty URL values", async () => {

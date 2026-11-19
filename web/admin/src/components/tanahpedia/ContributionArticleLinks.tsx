@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { canonicalJson } from "~/lib/canonical-json";
 import type {
 	ArticleLinkCommand,
@@ -28,6 +28,22 @@ export interface ContributionArticlePreview {
 export type PreviewContributionArticle = (
 	id: string,
 ) => Promise<ContributionArticlePreview>;
+
+/** One title-search hit — enough context to tell same-name articles apart. */
+export interface ContributionArticleTarget {
+	id: string;
+	title: string;
+	perekLabel: string;
+	authorName: string | null;
+}
+export type SearchContributionArticles = (
+	query: string,
+) => Promise<ContributionArticleTarget[]>;
+/** Runs deterministic discovery for the chosen article; resolves ordinary PR ids. */
+export type DiscoverContributionArticleLinks = (
+	articleId: string,
+) => Promise<string[]>;
+const ARTICLE_SEARCH_DEBOUNCE_MS = 250;
 
 const RELATIONSHIPS = {
 	primaryPerek: "פרק ראשי",
@@ -146,6 +162,9 @@ export function ContributionArticleLinkFields({
 	onCommandsChange,
 	references,
 	previewArticle,
+	searchArticles,
+	discoverLinks,
+	openPr,
 }: {
 	targetId: string;
 	commands: string;
@@ -153,6 +172,9 @@ export function ContributionArticleLinkFields({
 	onCommandsChange: (commands: string) => void;
 	references?: Record<string, Reference[]>;
 	previewArticle?: PreviewContributionArticle;
+	searchArticles?: SearchContributionArticles;
+	discoverLinks?: DiscoverContributionArticleLinks;
+	openPr?: (id: string) => unknown;
 }) {
 	const id = useId();
 	// Draft values can be incomplete; strict shared validation runs on submit.
@@ -165,8 +187,94 @@ export function ContributionArticleLinkFields({
 		null,
 	);
 	const [loading, setLoading] = useState(false);
+	const [discovering, setDiscovering] = useState(false);
 	const [error, setError] = useState("");
+	const [message, setMessage] = useState("");
 	const current = preview?.id === targetId ? preview : null;
+	const loadPreview = async (articleId: string) => {
+		if (!previewArticle) return;
+		const generation = ++request.current;
+		setError("");
+		setMessage("");
+		setLoading(true);
+		try {
+			const result = await previewArticle(contributionArticleId(articleId));
+			if (generation === request.current) setPreview(result);
+		} catch (failure) {
+			if (generation === request.current)
+				setError(
+					failure instanceof Error ? failure.message : "טעינת המאמר נכשלה",
+				);
+		} finally {
+			if (generation === request.current) setLoading(false);
+		}
+	};
+	const discover = async () => {
+		if (!discoverLinks || !openPr || discovering) return;
+		request.current++;
+		setLoading(false);
+		setError("");
+		setMessage("");
+		setDiscovering(true);
+		try {
+			const ids = await discoverLinks(contributionArticleId(targetId));
+			if (ids.length) await openPr(ids[0]);
+			else
+				setMessage(
+					"לא נמצאו קישורים חדשים שניתן להציע למאמר זה. אפשר לפתוח פנייה ולשייך אותה לסוכן מקומי להמשך חקירה.",
+				);
+		} catch (failure) {
+			setError(
+				failure instanceof Error ? failure.message : "איתור הקישורים נכשל",
+			);
+		} finally {
+			setDiscovering(false);
+		}
+	};
+	const [query, setQuery] = useState("");
+	const [results, setResults] = useState<ContributionArticleTarget[] | null>(
+		null,
+	);
+	const [searching, setSearching] = useState(false);
+	const searchRequest = useRef(0);
+	useEffect(() => {
+		if (!searchArticles) return;
+		const generation = ++searchRequest.current;
+		const text = query.trim();
+		if (!text) {
+			setResults(null);
+			setSearching(false);
+			return;
+		}
+		setSearching(true);
+		const timer = setTimeout(() => {
+			setError("");
+			searchArticles(text)
+				.then((found) => {
+					if (searchRequest.current === generation) setResults(found);
+				})
+				.catch((failure: unknown) => {
+					if (searchRequest.current === generation) {
+						setResults(null);
+						setError(
+							failure instanceof Error ? failure.message : "חיפוש המאמרים נכשל",
+						);
+					}
+				})
+				.finally(() => {
+					if (searchRequest.current === generation) setSearching(false);
+				});
+		}, ARTICLE_SEARCH_DEBOUNCE_MS);
+		return () => clearTimeout(timer);
+	}, [query, searchArticles]);
+	const select = (result: ContributionArticleTarget) => {
+		setResults(null);
+		setQuery("");
+		setMessage("");
+		setError("");
+		onTargetChange(result.id);
+		void loadPreview(result.id);
+	};
 	// Draft numeric inputs may be incomplete. Submission uses the strict shared
 	// validator; the JSON string is an internal form value, never a user editor.
 	const update = (index: number, command: ArticleLinkCommand) => {
@@ -208,6 +316,57 @@ export function ContributionArticleLinkFields({
 	};
 	return (
 		<div className="contribution-source-fields">
+			{searchArticles && (
+				<div className="contribution-source-fields">
+					<label>
+						חיפוש מאמר לפי שם
+						<input
+							className="contribution-input"
+							type="search"
+							aria-label="חיפוש מאמר לפי שם"
+							maxLength={120}
+							value={query}
+							onChange={(event) => {
+								setQuery(event.target.value);
+								setMessage("");
+							}}
+						/>
+					</label>
+					{searching && (
+						<p className="contribution-muted" role="status">
+							מחפש מאמרים...
+						</p>
+					)}
+					{!searching && results && results.length === 0 && (
+						<p className="contribution-muted">
+							לא נמצאו מאמרים בשם הזה. אפשר לנסות ניסוח אחר או להזין מספר מאמר
+							ידנית.
+						</p>
+					)}
+					{!searching && results && results.length > 0 && (
+						<ul
+							className="contribution-article-results"
+							aria-label="תוצאות חיפוש המאמרים"
+						>
+							{results.map((result) => (
+								<li key={result.id}>
+									<button
+										type="button"
+										className="contribution-button"
+										onClick={() => select(result)}
+									>
+										{result.title}{" "}
+										<span className="contribution-muted">
+											{result.perekLabel} · מאמר {result.id}
+											{result.authorName ? ` · ${result.authorName}` : ""}
+										</span>
+									</button>
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
+			)}
 			<label>
 				מספר מאמר
 				<input
@@ -220,40 +379,35 @@ export function ContributionArticleLinkFields({
 						request.current++;
 						setLoading(false);
 						setError("");
+						setMessage("");
 						onTargetChange(event.target.value);
 					}}
 				/>
 			</label>
-			{previewArticle && (
-				<button
-					type="button"
-					className="contribution-button"
-					disabled={loading || !targetId}
-					onClick={async () => {
-						const generation = ++request.current;
-						setError("");
-						setLoading(true);
-						try {
-							const result = await previewArticle(
-								contributionArticleId(targetId),
-							);
-							if (generation === request.current) setPreview(result);
-						} catch (failure) {
-							if (generation === request.current)
-								setError(
-									failure instanceof Error
-										? failure.message
-										: "טעינת המאמר נכשלה",
-								);
-						} finally {
-							if (generation === request.current) setLoading(false);
-						}
-					}}
-				>
-					{loading ? "טוען מאמר..." : "טעינת המאמר"}
-				</button>
-			)}
+			<div className="contribution-form-actions">
+				{previewArticle && (
+					<button
+						type="button"
+						className="contribution-button"
+						disabled={loading || discovering || !targetId}
+						onClick={() => void loadPreview(targetId)}
+					>
+						{loading ? "טוען מאמר..." : "טעינת המאמר"}
+					</button>
+				)}
+				{discoverLinks && openPr && (
+					<button
+						type="button"
+						className="contribution-button"
+						disabled={discovering || !targetId}
+						onClick={() => void discover()}
+					>
+						{discovering ? "מאתר קישורים..." : "איתור קישורים ופתיחת PR"}
+					</button>
+				)}
+			</div>
 			{error && <p role="alert">{error}</p>}
+			{message && <p role="status">{message}</p>}
 			{current && (
 				<section aria-label="המאמר שנבחר" className="contribution-diff-note">
 					<a href={`/articles/${current.id}`} target="_blank" rel="noreferrer">
@@ -270,6 +424,8 @@ export function ContributionArticleLinkFields({
 			)}
 			<p className="contribution-muted">
 				אפשר לשנות כמה קישורים לאותו מאמר. לכל מאמר פותחים PR נפרד.
+				{discoverLinks &&
+					" איתור אוטומטי מציע קישורים מציטוטים במאמר ופותח או מוצא PR רגיל עם מקורות והשוואה לסקירה."}
 			</p>
 			{Object.entries(lists).map(([kind, choices]) => (
 				<datalist key={kind} id={`${id}-${kind}`}>

@@ -321,6 +321,34 @@ afterAll(async () => {
 });
 
 describe("Article link contribution transactions", () => {
+	it("finds articles by title with perek and author context and escapes wildcards", async () => {
+		const { searchArticleLinkTargets } = await import(
+			"~/server/tanahpedia/contribution-article-links.server"
+		);
+		const hits = await store.withContributions((connection) =>
+			searchArticleLinkTargets(connection, "מאמר"),
+		);
+		expect(hits).toEqual([
+			{
+				id: "1",
+				title: "מאמר בדיקה",
+				perekLabel: "בראשית א",
+				authorName: "מחבר בדיקה",
+			},
+			{
+				id: "2",
+				title: "מאמר אחר",
+				perekLabel: "בראשית א",
+				authorName: "מחבר בדיקה",
+			},
+		]);
+		// A % wildcard must match literally, not list every article.
+		expect(
+			await store.withContributions((connection) =>
+				searchArticleLinkTargets(connection, "%"),
+			),
+		).toEqual([]);
+	});
 	it("rejects an array article-link action before persisting or projecting an ordinary proposal", async () => {
 		await conn.query(
 			"INSERT INTO tanah_article_covering_source VALUES(1,1,1),(1,1,2)",

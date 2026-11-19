@@ -15,7 +15,10 @@ import {
 	notifyContributionAgentWork,
 	reconcileContributionAgentAssignments,
 } from "./contribution-agent-runtime.server";
-import { readArticleLinkPreview } from "./contribution-article-links.server";
+import {
+	readArticleLinkPreview,
+	searchArticleLinkTargets,
+} from "./contribution-article-links.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import { contributionIdentity } from "./contribution-identity.server";
 import {
@@ -91,6 +94,22 @@ export const getContributionArticleLinkPreview = createServerFn({
 	.handler(async ({ data }) => {
 		await contributionIdentity();
 		return withContributions((conn) => readArticleLinkPreview(conn, data));
+	});
+/** Bounded title search behind the shared composer's article picker. */
+export const searchContributionArticles = createServerFn({ method: "GET" })
+	.validator((raw: unknown) => {
+		const data =
+			typeof raw === "string"
+				? raw
+				: raw && typeof raw === "object" && !Array.isArray(raw)
+					? (raw as Record<string, unknown>).q
+					: undefined;
+		return typeof data === "string" ? data.trim().slice(0, 120) : "";
+	})
+	.handler(async ({ data }) => {
+		await contributionIdentity();
+		if (!data) return [];
+		return withContributions((conn) => searchArticleLinkTargets(conn, data));
 	});
 export const createContributionItem = createServerFn({ method: "POST" })
 	.validator((data: unknown) => data)

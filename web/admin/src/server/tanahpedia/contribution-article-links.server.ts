@@ -271,6 +271,68 @@ export async function prepareArticleLinkChange(
 	};
 }
 
+export interface ArticleLinkTarget {
+	id: string;
+	title: string;
+	perekLabel: string;
+	authorName: string | null;
+}
+
+const ARTICLE_SEARCH_LIMIT = 25;
+
+/** Title search for the shared composer picker. A bounded LIKE scan — never
+ * prose, hashes or a whole catalogue — with enough context to tell results
+ * apart (canonical perek label and author). */
+export async function searchArticleLinkTargets(
+	conn: PoolConnection,
+	search: string,
+): Promise<ArticleLinkTarget[]> {
+	const like = `%${search.replace(/[\\%_]/g, (mark) => `\\${mark}`)}%`;
+	const rows = await txQuery<{
+		id: number;
+		name: string;
+		perekId: number;
+		authorName: string | null;
+	}>(
+		conn,
+		`SELECT a.id, a.name, a.perek_id AS perekId, au.name AS authorName
+		 FROM tanah_article a LEFT JOIN tanah_author au ON au.id = a.author_id
+		 WHERE a.name LIKE ? ESCAPE '\\\\' ORDER BY a.name, a.id LIMIT ${ARTICLE_SEARCH_LIMIT}`,
+		[like],
+	);
+	const perekIds = [...new Set(rows.map((row) => Number(row.perekId)))];
+	const perakim = perekIds.length
+		? await txQuery<{
+				id: number;
+				seferName: string;
+				additionalLetter: string | null;
+				perekInContext: number;
+				pasukCount: number | null;
+			}>(
+				conn,
+				`SELECT id,sefer_name AS seferName,additional_letter AS additionalLetter,perek_in_context AS perekInContext,pasuk_count AS pasukCount FROM tanah_perek_view WHERE id ${ID_SET}`,
+				[JSON.stringify(perekIds)],
+			)
+		: [];
+	const labels = new Map(
+		perakim.map((perek) => [
+			Number(perek.id),
+			cataloguePerekLabel({
+				...perek,
+				id: Number(perek.id),
+				perekInContext: Number(perek.perekInContext),
+				pasukCount: perek.pasukCount === null ? null : Number(perek.pasukCount),
+			}),
+		]),
+	);
+	return rows.map((row) => ({
+		id: String(row.id),
+		title: row.name,
+		perekLabel: labels.get(Number(row.perekId)) ?? `פרק ${row.perekId}`,
+		authorName: row.authorName,
+	}));
+}
+
 /** Browser preview is one bounded article lookup, never a whole prose catalogue. */
 export async function readArticleLinkPreview(
 	conn: PoolConnection,
