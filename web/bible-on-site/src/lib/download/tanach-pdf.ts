@@ -35,6 +35,7 @@ import {
 	visualTextRuns,
 } from "./bidi-text";
 import {
+	embedUiFont,
 	getBoldFontBytes,
 	getRegularFontBytes,
 	getScriptureFontBytes,
@@ -276,10 +277,10 @@ export async function buildTanachPdfForPerekRange(
 	const regularBytes = getRegularFontBytes();
 	const boldBytes = getBoldFontBytes();
 	const font = memoizeGlyphEncoding(
-		await doc.embedFont(regularBytes, { subset: true }),
+		await embedUiFont(doc, regularBytes, { subset: true }),
 	);
 	const boldFont = memoizeGlyphEncoding(
-		await doc.embedFont(boldBytes, { subset: true }),
+		await embedUiFont(doc, boldBytes, { subset: true }),
 	);
 	const scriptureFont = memoizeGlyphEncoding(
 		await doc.embedFont(getScriptureFontBytes(), { subset: true }),
