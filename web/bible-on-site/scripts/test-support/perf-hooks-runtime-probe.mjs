@@ -33,6 +33,10 @@ const busyFor = (ms) => {
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 
+// stderr only — stdout stays a parseable JSON report.
+const warnCaught = (where, error) =>
+	console.warn(`perf-hooks probe ${where}:`, error);
+
 const eluRead = (a, b) => {
 	try {
 		const u =
@@ -47,6 +51,7 @@ const eluRead = (a, b) => {
 			utilization: round3(u.utilization),
 		};
 	} catch (error) {
+		warnCaught("eventLoopUtilization", error);
 		return { threw: String(error) };
 	}
 };
@@ -59,6 +64,7 @@ const cpuRead = (prev) => {
 			systemMs: round3(c.system / 1000),
 		};
 	} catch (error) {
+		warnCaught("cpuUsage", error);
 		return { threw: String(error) };
 	}
 };
@@ -78,6 +84,7 @@ const delaySummary = (histogram) => {
 			p99Ms: toMs(histogram.percentile(99)),
 		};
 	} catch (error) {
+		warnCaught("delay histogram read", error);
 		return { threw: String(error) };
 	}
 };
@@ -85,8 +92,9 @@ const delaySummary = (histogram) => {
 const delayReset = (histogram) => {
 	try {
 		histogram?.reset();
-	} catch {
+	} catch (error) {
 		// A sampler without reset() still yields cumulative evidence.
+		warnCaught("delay histogram reset", error);
 	}
 };
 
@@ -122,15 +130,20 @@ if (!isMainThread) {
 	try {
 		observer.observe({ entryTypes: ["gc"] });
 	} catch (error) {
+		warnCaught("gc observe", error);
 		gcObserveThrew = String(error);
 	}
 
 	let delay = null;
 	let delayCreateThrew = null;
 	try {
-		delay = monitorEventLoopDelay({ resolution: 10 });
+		// samplePerIteration so a synchronous busy block lands in the
+		// histogram on the next loop turn; the default timer sampler resyncs
+		// after an overrun and never sees it.
+		delay = monitorEventLoopDelay({ resolution: 10, samplePerIteration: true });
 		delay.enable();
 	} catch (error) {
+		warnCaught("monitorEventLoopDelay", error);
 		delayCreateThrew = String(error);
 	}
 
@@ -150,6 +163,9 @@ if (!isMainThread) {
 	const cpuAnchorBusy = cpuAnchor();
 	delayReset(delay);
 	busyFor(300);
+	// The delay histogram samples on loop turns; without one turn the
+	// busy-phase summary below always reads empty.
+	await sleep(0);
 	const eluAnchorBusyEnd = eluRead();
 	const afterBusy = {
 		eluDelta: eluRead(eluAnchorBusy),
@@ -198,6 +214,7 @@ if (!isMainThread) {
 							})()
 						: "missing";
 			} catch (error) {
+				warnCaught("worker.performance read", error);
 				message.parentSideWorkerPerformance = { threw: String(error) };
 			}
 			worker.terminate();
