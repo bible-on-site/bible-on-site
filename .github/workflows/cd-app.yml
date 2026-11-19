@@ -486,9 +486,10 @@ jobs:
           mkdir -p $HOME/private_keys
           # Decode the .p8 key file
           echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
-          # Create JSON file that Fastlane expects. jq owns the JSON escaping:
-          # the old sed newline dance relied on BSD-sed replacement semantics
-          # and produced a corrupt single-line key under GNU sed (#3679).
+          # Create the shared api_key.json Apple credential file; jq owns
+          # the JSON escaping — the old sed newline escape relied on BSD-sed
+          # replacement semantics and produced a corrupt single-line key
+          # under GNU sed (#3679).
           jq -n \
             --arg key_id "$API_KEY_ID" \
             --arg issuer_id "$API_ISSUER_ID" \
@@ -661,10 +662,12 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           mkdir -p $HOME/private_keys
+          # Decode the .p8 key file
           echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
-          # Create the JSON credential file. jq owns the JSON escaping: the
-          # old sed newline dance relied on BSD-sed replacement semantics and
-          # produced a corrupt single-line key under GNU sed (#3679).
+          # Create the shared api_key.json Apple credential file; jq owns
+          # the JSON escaping — the old sed newline escape relied on BSD-sed
+          # replacement semantics and produced a corrupt single-line key
+          # under GNU sed (#3679).
           jq -n \
             --arg key_id "$API_KEY_ID" \
             --arg issuer_id "$API_ISSUER_ID" \
