@@ -12,6 +12,17 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { PDFDocument } from "pdf-lib";
+
+export function embedUiFont(
+	doc: PDFDocument,
+	bytes: Uint8Array,
+	options: { subset?: boolean } = {},
+) {
+	// The Hebrew locl substitution uses one unmapped glyph for both ordinary
+	// and nonbreaking spaces. Use their encoded glyphs for PDF extraction.
+	return doc.embedFont(bytes, { ...options, features: { locl: false } });
+}
 
 let regularFontCache: Uint8Array | null = null;
 let boldFontCache: Uint8Array | null = null;
