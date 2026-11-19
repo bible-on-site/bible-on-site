@@ -112,7 +112,7 @@ public sealed class E2eCoverageRestoreTests
             var recorder = Directory.CreateDirectory(Path.Join(_root.FullName, "Recorder"));
             File.WriteAllText(Path.Join(recorder.FullName, "Recorder.csproj"), """
                 <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup><TargetFramework>net10.0</TargetFramework><AssemblyName>AltCover.Recorder.g</AssemblyName></PropertyGroup>
+                  <PropertyGroup><TargetFramework>net11.0</TargetFramework><AssemblyName>AltCover.Recorder.g</AssemblyName></PropertyGroup>
                 </Project>
                 """);
             File.WriteAllText(Path.Join(recorder.FullName, "Recorder.cs"), """
@@ -122,12 +122,12 @@ public sealed class E2eCoverageRestoreTests
             var app = Directory.CreateDirectory(Path.Join(_root.FullName, "App"));
             _project = Path.Join(app.FullName, "App.csproj");
             _program = Path.Join(app.FullName, "Program.cs");
-            _intermediate = Path.Join(app.FullName, "obj", "Debug", "net10.0");
-            OutputAssembly = Path.Join(app.FullName, "bin", "Debug", "net10.0", "FixtureApp.dll");
+            _intermediate = Path.Join(app.FullName, "obj", "Debug", "net11.0");
+            OutputAssembly = Path.Join(app.FullName, "bin", "Debug", "net11.0", "FixtureApp.dll");
             var project = XDocument.Parse("""
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
-                    <TargetFramework>net10.0</TargetFramework>
+                    <TargetFramework>net11.0</TargetFramework>
                     <AssemblyName>FixtureApp</AssemblyName>
                     <OutputType>Exe</OutputType>
                   </PropertyGroup>
@@ -160,11 +160,13 @@ public sealed class E2eCoverageRestoreTests
             #endif
             """);
 
+        // Persistent build servers keep fixture assemblies mapped after the
+        // build, which makes the temp-dir delete in Dispose flaky on reruns.
         internal string Build(bool coverage) => Execute("build", _project, "--nologo", "--verbosity", "minimal",
-            "-p:E2ECoverage=" + (coverage ? "true" : "false"));
+            "--disable-build-servers", "-p:E2ECoverage=" + (coverage ? "true" : "false"));
 
         internal void InvokeRestore(string skipProperty) => Execute("msbuild", _project, "--nologo",
-            "-target:_E2ECoverageRestore", "-p:E2ECoverage=false", "-p:" + skipProperty + "=true");
+            "--disable-build-servers", "-target:_E2ECoverageRestore", "-p:E2ECoverage=false", "-p:" + skipProperty + "=true");
 
         internal string Run() => Execute(OutputAssembly).Trim();
 

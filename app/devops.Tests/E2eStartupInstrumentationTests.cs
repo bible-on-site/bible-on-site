@@ -73,12 +73,12 @@ public sealed class E2eStartupInstrumentationTests
             }
             var app = Directory.CreateDirectory(Path.Join(_root.FullName, "App"));
             _project = Path.Join(app.FullName, "App.csproj");
-            _output = Path.Join(app.FullName, "bin", "Debug", "net10.0");
+            _output = Path.Join(app.FullName, "bin", "Debug", "net11.0");
             _instrumented = Path.Join(_root.FullName, "instrumented");
             _version = XDocument.Load(Path.Join(appRoot, "BibleOnSite", "BibleOnSite.csproj"))
                 .Descendants("AltCoverVersion").Single().Value;
             new XDocument(new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-                new XElement("PropertyGroup", new XElement("TargetFramework", "net10.0"),
+                new XElement("PropertyGroup", new XElement("TargetFramework", "net11.0"),
                     new XElement("OutputType", "Exe"), new XElement("AssemblyName", "StartupFixture")),
                 new XElement("ItemGroup", new XElement("ProjectReference",
                     new XAttribute("Include", "../Recorder/BibleOnSite.E2eCoverage.csproj")),
@@ -108,7 +108,9 @@ public sealed class E2eStartupInstrumentationTests
                 """);
         }
 
-        internal void Build() => Execute("build", _project, "--nologo", "--verbosity", "minimal");
+        // Persistent build servers keep fixture assemblies mapped after the
+        // build, which makes the temp-dir delete in Dispose flaky on reruns.
+        internal void Build() => Execute("build", _project, "--nologo", "--verbosity", "minimal", "--disable-build-servers");
 
         internal string Instrument()
         {
