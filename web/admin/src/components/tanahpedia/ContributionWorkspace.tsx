@@ -1122,9 +1122,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 											);
 										return result.prIds;
 									}}
-									openPr={(id) =>
-										navigate({ to: "/", search: { tab: "prs", id } })
-									}
+									openPr={(id) => {
+										setEditingItem(null);
+										return navigate({ to: "/", search: { tab: "prs", id } });
+									}}
 									busy={save.isPending}
 									onSubmit={async (value) => {
 										await save.mutateAsync(value);

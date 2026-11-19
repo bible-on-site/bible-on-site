@@ -497,6 +497,38 @@ describe("issues and PR administration", () => {
 			},
 		});
 	});
+	it("leaves edit mode to show the PR detail when discovery reuses the PR being edited", async () => {
+		mocks.search = { id: PRID };
+		pr.changes = [articleChange()];
+		mocks.articleGenerate.mockResolvedValue({
+			runId: "discovery",
+			outcomes: [],
+			prIds: [PRID],
+		});
+		show("pr");
+		fireEvent.click(await screen.findByRole("button", { name: "עריכה" }));
+		expect(
+			await screen.findByRole("heading", { name: "עריכת הדיון" }),
+		).toBeInTheDocument();
+		expect(await screen.findByLabelText("מספר מאמר")).toHaveValue("17");
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		await waitFor(() =>
+			expect(mocks.navigate).toHaveBeenCalledWith({
+				to: "/",
+				search: { tab: "prs", id: PRID },
+			}),
+		);
+		expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
+			pr.title,
+		);
+		expect(
+			screen.queryByRole("heading", { name: "עריכת הדיון" }),
+		).not.toBeInTheDocument();
+	});
 	it.each([
 		{
 			prIds: [],
