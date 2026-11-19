@@ -161,7 +161,9 @@ export const MODULES = {
 		// Approved timings are packaged inputs through extraModulePaths.
 		// Test projects exercise the app but never change its package, so a
 		// test-only change must not ship a store release or bump the version.
-		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,
+		// BibleOnSite.DeviceTests is the in-process XHarness test app (#3349) —
+		// same test-only status as the BibleOnSite.Tests.* suites.
+		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
 	},
 	admin: {
 		directory: "web/admin",

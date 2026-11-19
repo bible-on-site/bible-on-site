@@ -512,6 +512,8 @@ describe("detectChanges", () => {
 		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
 		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",
 		"app/BibleOnSite.Tests.MobileE2E/PerekPilotTests.cs",
+		// The in-process XHarness test app is test-only too (#3349).
+		"app/BibleOnSite.DeviceTests/Tests/DeviceTests.cs",
 		"app/mobile-e2e/run.mjs",
 	]) {
 		test(`${path} runs app checks without a store release`, () => {
