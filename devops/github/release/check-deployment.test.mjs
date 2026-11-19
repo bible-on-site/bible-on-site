@@ -553,6 +553,192 @@ test("an unfinished newer data attempt does not block recovery", () => {
 	assert.equal(result.deploy, true);
 });
 
+// Deployment 7846191320's SHA predates the 2026-11-16 history rewrite: real
+// object, disjoint lineage, so the compare API answers 404 "No common
+// ancestor" instead of an ancestry status (#3640).
+const rewrittenHistorySha = "b7c7fafc876e4d13920582c08d387bb6c92ed941";
+const noCommonAncestor = (head) =>
+	new Error(`gh: No common ancestor between ${sha} and ${head}. (HTTP 404)`);
+
+test("only a proven-ahead historical deployment supersedes a data dispatch", () => {
+	for (const [status, deploy] of [
+		["ahead", false],
+		["behind", true],
+		["identical", true],
+		["diverged", true],
+	]) {
+		const mock = request();
+		const result = checkDeployment(
+			{ ...input, moduleName: "data" },
+			(endpoint) => {
+				if (endpoint.includes("/deployments?"))
+					return [
+						{
+							id: 22,
+							sha: rewrittenHistorySha,
+							payload: { ci_run_id: "20" },
+						},
+					];
+				if (endpoint.includes("/deployments/22/statuses"))
+					return [{ state: "success" }];
+				if (endpoint.includes("/compare/")) return { status };
+				if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+				return mock(endpoint);
+			},
+		);
+		assert.equal(result.deploy, deploy, status);
+	}
+});
+
+test("a successful deployment on unrelated history cannot supersede", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return [
+					{ id: 22, sha: rewrittenHistorySha, payload: { ci_run_id: "5" } },
+				];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/deployments/22/statuses"))
+				throw new Error("an unrelated record cannot prove supersession");
+			if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("unproven deployment ancestry fails the guard instead of approving", () => {
+	for (const failure of [
+		"gh: Not Found (HTTP 404)",
+		"gh: Forbidden (HTTP 403)",
+		"gh: HTTP 502 Bad Gateway",
+		"socket hang up",
+	]) {
+		const mock = request();
+		assert.throws(
+			() =>
+				checkDeployment({ ...input, moduleName: "data" }, (endpoint) => {
+					if (endpoint.includes("/deployments?"))
+						return [
+							{
+								id: 22,
+								sha: rewrittenHistorySha,
+								payload: { ci_run_id: "5" },
+							},
+						];
+					if (endpoint.includes("/compare/")) throw new Error(failure);
+					return mock(endpoint);
+				}),
+			(error) =>
+				error.message.includes(
+					`Cannot verify deployment freshness: compare ${sha}...${rewrittenHistorySha} failed`,
+				) && error.message.includes(failure),
+			failure,
+		);
+	}
+});
+
+test("unrelated history later in paginated deployments cannot supersede", () => {
+	const mock = request();
+	const older = {
+		id: 21,
+		sha,
+		payload: { ci_run_id: "5" },
+	};
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return endpoint.endsWith("page=1")
+					? Array(100).fill(older)
+					: [
+							{
+								id: 22,
+								sha: rewrittenHistorySha,
+								payload: { ci_run_id: "5" },
+							},
+						];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("delivered SQL stays a no-op next to unrelated history", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data", artifactId: "90" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return [
+					{ id: 23, sha: rewrittenHistorySha, payload: { ci_run_id: "5" } },
+					{
+						id: 22,
+						sha,
+						payload: { ci_run_id: "10", sql_artifact_id: "90" },
+					},
+				];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/deployments/22/statuses"))
+				return [{ state: "success" }];
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, false);
+	assert.match(result.reason, /already deployed/);
+});
+
+test("a newer Release Data dispatch on unrelated history does not supersede", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/actions/runs?"))
+				return {
+					workflow_runs: [
+						{ ...source, id: 11, head_sha: rewrittenHistorySha },
+						source,
+					],
+				};
+			if (endpoint.includes("/runs/11/jobs?"))
+				return { jobs: [{ name: "Release Data", conclusion: "success" }] };
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("unproven Release Data ancestry fails the guard instead of approving", () => {
+	const mock = request();
+	assert.throws(
+		() =>
+			checkDeployment({ ...input, moduleName: "data" }, (endpoint) => {
+				if (endpoint.includes("/actions/runs?"))
+					return {
+						workflow_runs: [
+							{ ...source, id: 11, head_sha: rewrittenHistorySha },
+							source,
+						],
+					};
+				if (endpoint.includes("/runs/11/jobs?"))
+					return { jobs: [{ name: "Release Data", conclusion: "success" }] };
+				if (endpoint.includes("/compare/"))
+					throw new Error("gh: Not Found (HTTP 404)");
+				return mock(endpoint);
+			}),
+		/Cannot verify deployment freshness/,
+	);
+});
+
 const metadata = (attempt = 1, extra = {}) => ({
 	...published,
 	body: `<!-- release-delivery:${JSON.stringify({ ref: sha, ci_run_id: "10", ci_run_attempt: attempt, module_name: "website", module_version: "1.0.10", ...extra })} -->`,
