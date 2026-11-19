@@ -1174,7 +1174,7 @@ jobs:
 
       - name: Store Website Performance Diagnostics
         id: perf-diagnostics
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (steps.bun-perf-test.outcome == 'success' || steps.bun-perf-test.outcome == 'failure') }}
         uses: actions/upload-artifact@v7
         with:
           name: website-perf-diagnostics-${{ github.run_id }}
@@ -1183,7 +1183,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish performance diagnostics summary
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.perf-diagnostics.outcome == 'success' }}
         shell: bash
         env:
           DIAGNOSTICS_URL: ${{ steps.perf-diagnostics.outputs.artifact-url }}
