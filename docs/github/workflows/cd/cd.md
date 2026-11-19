@@ -73,7 +73,10 @@ Each platform deploy is independent: a failure on one store does not roll
 back the others, and re-dispatching `deploy-app` (or a manual run of
 `cd-app.yml`/`testflight-distribution.yml`/`testflight-status.yml` with the
 artifact name and CI run id) resumes only the missing piece — partial-store
-failure recovery is by design, not a manual rebuild.
+failure recovery is by design, not a manual rebuild. The public Hebrew
+What's New metadata phase (`publish_app_store_notes`, on `ubuntu-latest`)
+has its own `app_store_notes_only` dispatch that republishes notes for an
+exact artifact version without re-running the binary or distribution phases.
 
 ## Data Deployment (`cd-data.yml`)
 
