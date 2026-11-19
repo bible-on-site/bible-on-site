@@ -3,7 +3,8 @@
  *
  * Produces a well-formatted PDF with:
  * - Each perek starts on a fresh page
- * - Al Heperek UI prose and complete Taamey D scripture clusters
+ * - Al Heperek prose and scripture — its niqqud/taamim release (#3685)
+ *   shapes marked clusters on one face, so no scripture-face split remains
  * - Perek title + descriptive header
  * - Available perushim listed per perek
  * - Related article titles per perek
@@ -38,7 +39,6 @@ import {
 	embedUiFont,
 	getBoldFontBytes,
 	getRegularFontBytes,
-	getScriptureFontBytes,
 } from "./pdf-fonts";
 import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { SemanticPageInfo } from "./types";
@@ -66,16 +66,6 @@ export function segmentsToText(segments: Segment[]): string {
 		.replace(/־\s+/g, "־")
 		.replace(/\s+/g, " ")
 		.trim();
-}
-
-/**
- * Strip cantillation marks (taamim, U+0591–U+05AF) from Hebrew text.
- * Keeps nikud (vowels, U+05B0–U+05BD), shin/sin dots, letters, maqaf.
- * Taamim have zero advance-width in many fonts and confuse pdf-lib's
- * width measurement, causing garbled layout.
- */
-export function stripTaamim(text: string): string {
-	return text.replace(/[\u0591-\u05AF]/g, "");
 }
 
 /** Strip HTML tags from a string, decode common entities. */
@@ -151,7 +141,6 @@ interface DrawContext {
 	doc: Awaited<ReturnType<typeof PDFDocument.create>>;
 	font: PDFFont;
 	boldFont: PDFFont;
-	scriptureFont: PDFFont;
 	y: number;
 	pageNum: number;
 }
@@ -173,29 +162,10 @@ interface FontRun extends VisualTextRun {
 	font: PDFFont;
 }
 
-const SCRIPTURE_MARK = /[\u0591-\u05af\u05bd\u05c0\u05c3-\u05c6]/u;
-
-function textRuns(
-	ctx: DrawContext,
-	text: string,
-	preferred: PDFFont,
-): FontRun[] {
-	return visualTextRuns(text).flatMap((run) => {
-		if (preferred === ctx.scriptureFont || !SCRIPTURE_MARK.test(run.text)) {
-			return [{ ...run, font: preferred }];
-		}
-		// Keep complete Hebrew clusters on the scripture face. Bullets, dashes,
-		// ellipses and other surrounding prose retain their UI glyphs.
-		const chunks = Array.from(
-			run.text.matchAll(/[\u0590-\u05ff\s]+|[^\u0590-\u05ff\s]+/gu),
-			([text]) => ({
-				text,
-				rtl: run.rtl,
-				font: SCRIPTURE_MARK.test(text) ? ctx.scriptureFont : preferred,
-			}),
-		);
-		return run.rtl ? chunks.reverse() : chunks;
-	});
+// Al Heperek covers niqqud and taamim since v0.9.5 (#3685), so every run —
+// marked or not — draws on the caller's preferred face.
+function textRuns(text: string, preferred: PDFFont): FontRun[] {
+	return visualTextRuns(text).map((run) => ({ ...run, font: preferred }));
 }
 
 function runsWidth(runs: FontRun[], size: number): number {
@@ -215,7 +185,7 @@ function drawRtlLine(
 ): void {
 	const page = currentPage(ctx);
 	// One UAX #9 pass per line — reused for both width and draw.
-	const runs = textRuns(ctx, text, font);
+	const runs = textRuns(text, font);
 	const textWidth = runsWidth(runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
 	let cursor = Math.max(MARGIN, x);
@@ -236,7 +206,7 @@ function drawRtlWrapped(
 	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
 	const measuringFont = {
 		widthOfTextAtSize: (t: string, s: number) =>
-			runsWidth(textRuns(ctx, t, font), s),
+			runsWidth(textRuns(t, font), s),
 	};
 	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
@@ -282,15 +252,10 @@ export async function buildTanachPdfForPerekRange(
 	const boldFont = memoizeGlyphEncoding(
 		await embedUiFont(doc, boldBytes, { subset: true }),
 	);
-	const scriptureFont = memoizeGlyphEncoding(
-		await doc.embedFont(getScriptureFontBytes(), { subset: true }),
-	);
-
 	const ctx: DrawContext = {
 		doc,
 		font,
 		boldFont,
-		scriptureFont,
 		y: 0,
 		pageNum: 0,
 	};
@@ -313,11 +278,12 @@ export async function buildTanachPdfForPerekRange(
 
 		ctx.y -= BODY_LINE_HEIGHT * 0.5; // spacing
 
-		// ── Pesukim ──
+		// ── Pesukim — canonical text keeps its taamim; Al Heperek shapes the
+		//    full marked clusters (#3685). ──
 		for (const pasuk of perek.pesukim) {
-			const text = stripTaamim(segmentsToText(pasuk.segments));
+			const text = segmentsToText(pasuk.segments);
 			if (!text) continue;
-			drawRtlWrapped(ctx, text, scriptureFont, BODY_SIZE, BODY_LINE_HEIGHT);
+			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
 			ctx.y -= 2; // tiny inter-pasuk gap
 		}
 

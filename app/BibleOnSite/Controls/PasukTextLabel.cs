@@ -16,14 +16,14 @@ namespace BibleOnSite.Controls;
 public class PasukTextLabel : Label
 {
     /// <summary>
-    /// The shared scripture-font contract (#2623): every pasuk label renders in
-    /// Taamey D — the perek, parasha and masora readers, the focused-pasuk
-    /// overlay and שניים מקרא rows. Set as a local value so the implicit Label
-    /// style's AlHeperekRegular can never win; spans without their own
-    /// FontFamily inherit it on every platform (qri/ktiv, reciting/selected
-    /// words, {פ}/{ס} markers). The pasuk-number marker is the deliberate
-    /// exception — reader chrome that keeps the app's main face, set
-    /// explicitly by <see cref="Converters.PasukMarkerTextConverter"/>.
+    /// The shared scripture-font contract (#2623/#3685): every pasuk label
+    /// renders in Al Heperek — the perek, parasha and masora readers, the
+    /// focused-pasuk overlay and שניים מקרא rows. Set as a local value so no
+    /// implicit Label style can win; spans without their own FontFamily
+    /// inherit it on every platform (qri/ktiv, reciting/selected words,
+    /// {פ}/{ס} markers). The pasuk-number marker is the deliberate exception
+    /// — reader chrome that pins the app's main face, set explicitly by
+    /// <see cref="Converters.PasukMarkerTextConverter"/>.
     /// </summary>
     public PasukTextLabel()
     {

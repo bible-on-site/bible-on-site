@@ -82,9 +82,9 @@ public class PasukTextLabelTests
         label.FlowDirection.Should().Be(Microsoft.Maui.FlowDirection.LeftToRight);
     }
 
-    // #2623: the shared scripture contract — every pasuk label renders Taamey
-    // D. The ctor sets it as a local value so the implicit Label style's
-    // AlHeperekRegular can never win; spans without their own family inherit it.
+    // #2623/#3685: the shared scripture contract — every pasuk label renders
+    // Al Heperek. The ctor sets it as a local value so no implicit Label
+    // style can win; spans without their own family inherit it.
     [Fact]
     public void defaults_to_the_scripture_font_family()
     {

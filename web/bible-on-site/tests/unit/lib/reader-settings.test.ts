@@ -204,23 +204,31 @@ describe("reader-settings", () => {
 		);
 	});
 
-	it("applyReaderSettings sets data-tanakh-font for the Noto opt-out and removes it for the default", () => {
+	it("applyReaderSettings sets data-tanakh-font for opt-out choices and removes it for the default", () => {
 		applyReaderSettings({ fontId: 1 });
 		expect(document.documentElement.dataset.tanakhFont).toBe("noto");
+		applyReaderSettings({ fontId: 2 });
+		expect(document.documentElement.dataset.tanakhFont).toBe("taamey");
 		applyReaderSettings({ fontId: 0 });
 		expect(document.documentElement.dataset.tanakhFont).toBeUndefined();
 	});
 
-	it("bootstrap applies stored font choice before paint", () => {
-		localStorage.setItem(
-			READER_SETTINGS_STORAGE_KEY,
-			JSON.stringify({ v: READER_SETTINGS_VERSION, fontId: 1 }),
-		);
-		runBootstrap();
-		expect(document.documentElement.dataset.tanakhFont).toBe("noto");
-	});
+	it.each([
+		[1, "noto"],
+		[2, "taamey"],
+	])(
+		"bootstrap applies stored font choice %i before paint",
+		(fontId, expected) => {
+			localStorage.setItem(
+				READER_SETTINGS_STORAGE_KEY,
+				JSON.stringify({ v: READER_SETTINGS_VERSION, fontId }),
+			);
+			runBootstrap();
+			expect(document.documentElement.dataset.tanakhFont).toBe(expected);
+		},
+	);
 
-	it("v1 stored font choices migrate to the Taamey default", () => {
+	it("v1 stored font choices migrate to the current default face", () => {
 		for (const fontId of [0, 1]) {
 			localStorage.setItem(
 				READER_SETTINGS_STORAGE_KEY,
@@ -234,6 +242,15 @@ describe("reader-settings", () => {
 		);
 		runBootstrap();
 		expect(document.documentElement.dataset.tanakhFont).toBeUndefined();
+	});
+
+	it("a saved v2 Noto opt-out keeps Noto while the default became Al Heperek (#3685)", () => {
+		localStorage.setItem(
+			READER_SETTINGS_STORAGE_KEY,
+			JSON.stringify({ v: 2, fontId: 1 }),
+		);
+		expect(getStoredReaderSettings().fontId).toBe(1);
+		expect(PEREK_TANAKH_FONTS[1]).toBe("noto");
 	});
 
 	it("bootstrap script applies stored settings synchronously before paint", () => {

@@ -87,14 +87,6 @@ pub fn plain_pesukim(pesukim: &[String]) -> Vec<Vec<PdfSegment>> {
 /// Virtual files (images) referenced by the generated markup.
 type TypstFiles = Vec<(String, Vec<u8>)>;
 
-/// Strip Hebrew cantillation marks (taamim, U+0591–U+05AF) while keeping
-/// nikud (U+05B0–U+05BD, U+05BF, U+05C1–U+05C2, U+05C4–U+05C5, U+05C7).
-pub fn strip_taamim(text: &str) -> String {
-    text.chars()
-        .filter(|&c| !(('\u{0591}'..='\u{05AF}').contains(&c)))
-        .collect()
-}
-
 /// Remove spaces immediately after a Hebrew maqaf (U+05BE ־) so that
 /// hyphenated pairs stay visually connected.
 fn collapse_maqaf_spaces(text: &str) -> String {
@@ -282,66 +274,9 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
     decode_html_entity(&entity)
 }
 
-/// Bundled Frank-Rühl face that covers the whole Hebrew block, including all
-/// taamim — used for scripture runs inside articles (#2961). Its four faces
-/// keep real bold/italic emphasis intact.
-const CANTILLATION_FONT: &str = "Taamey Frank CLM";
-
-/// Scripture marks and punctuation outside the Al Heperek UI character set.
-fn needs_cantillation_face(c: char) -> bool {
-    matches!(c, '\u{0591}'..='\u{05AF}' | '\u{05BD}' | '\u{05C0}' | '\u{05C3}'..='\u{05C6}')
-}
-
-/// Characters that belong to a Hebrew text run: the whole Hebrew block
-/// (letters, marks, maqaf, sof pasuq, geresh/gershayim) plus whitespace, so a
-/// quoted phrase of several words is detected as one run.
-fn is_hebrew_run_char(c: char) -> bool {
-    matches!(c, '\u{0590}'..='\u{05FF}') || c.is_whitespace()
-}
-
-/// Emit article text as Typst markup. When `cantillation_font` is set, maximal
-/// Hebrew runs containing marks the article font lacks are wrapped in
-/// `#text(font: …)[…]` so every base-plus-combining-mark cluster shapes in that
-/// single bundled font — Typst's per-glyph fallback would instead re-shape the
-/// cluster in a second font while also keeping the original base glyph (#2961).
-/// Runs without such marks, and every non-Hebrew char, keep the article font.
-fn push_article_text(out: &mut String, text: &str, cantillation_font: Option<&str>) {
-    let Some(font) = cantillation_font else {
-        out.push_str(&typst_escape(text));
-        return;
-    };
-    let mut rest = text;
-    while !rest.is_empty() {
-        let hebrew = rest.chars().next().is_some_and(is_hebrew_run_char);
-        let end = rest
-            .find(|c: char| is_hebrew_run_char(c) != hebrew)
-            .unwrap_or(rest.len());
-        let (chunk, tail) = rest.split_at(end);
-        rest = tail;
-        let core = chunk.trim();
-        if hebrew && core.chars().any(needs_cantillation_face) {
-            let lead = chunk.len() - chunk.trim_start().len();
-            let end = chunk.trim_end().len();
-            out.push_str(&chunk[..lead]);
-            out.push_str("#text(font: ");
-            out.push_str(&typst_string(font));
-            out.push_str(")[");
-            out.push_str(&typst_escape(&chunk[lead..end]));
-            out.push_str("];");
-            out.push_str(&chunk[end..]);
-        } else {
-            out.push_str(&typst_escape(chunk));
-        }
-    }
-}
-
-/// Chapter headings can retain meteg after stripping taamim. Shape their full
-/// Hebrew runs on the scripture face rather than invoking per-glyph fallback.
-fn scripture_aware_text(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    push_article_text(&mut out, text, Some("Taamey D"));
-    out
-}
+/// Al Heperek covers the whole Hebrew block — letters, niqqud, meteg and the
+/// full taamim range — since v0.9.5 (#3685), so every run shapes on the active
+/// face and no cantillation re-routing remains.
 
 /// Convert article HTML to Typst markup, preserving semantic structure.
 ///
@@ -356,18 +291,17 @@ fn scripture_aware_text(text: &str) -> String {
 ///   li       → bullet item
 ///   Other tags are silently consumed (content preserved).
 fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
-    html_to_typst_with_headings(html, files, false, Some(CANTILLATION_FONT))
+    html_to_typst_with_headings(html, files, false)
 }
 
 fn daily_html_to_typst(html: &str, files: &mut TypstFiles) -> String {
-    html_to_typst_with_headings(html, files, true, Some(CANTILLATION_FONT))
+    html_to_typst_with_headings(html, files, true)
 }
 
 fn html_to_typst_with_headings(
     html: &str,
     files: &mut TypstFiles,
     daily_headings: bool,
-    cantillation_font: Option<&str>,
 ) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
@@ -375,13 +309,13 @@ fn html_to_typst_with_headings(
     let mut italic_open = false;
     let mut underline_open = false;
     let mut span_closures = Vec::new();
-    // Raw decoded text between tags; runs needing the cantillation face are
-    // wrapped when the buffer is flushed at the next tag or at the end.
+    // Raw decoded text between tags; escaped when the buffer is flushed at
+    // the next tag or at the end.
     let mut text_buf = String::new();
 
     while let Some(c) = chars.next() {
         if c == '<' {
-            push_article_text(&mut out, &text_buf, cantillation_font);
+            out.push_str(&typst_escape(&text_buf));
             text_buf.clear();
             let mut tag_content = String::new();
             for tc in chars.by_ref() {
@@ -565,7 +499,7 @@ fn html_to_typst_with_headings(
         }
         text_buf.push(c);
     }
-    push_article_text(&mut out, &text_buf, cantillation_font);
+    out.push_str(&typst_escape(&text_buf));
 
     for count in span_closures.into_iter().rev() {
         for _ in 0..count {
@@ -697,7 +631,7 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
     let subtitle_line = |text: &str| {
         format!(
             "#text(size: 23pt, fill: white.transparentize(15%), tracking: 0.08em, {})\n\n",
-            typst_str(&strip_taamim(text))
+            typst_str(text)
         )
     };
 
@@ -719,7 +653,7 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
     }
     markup.push_str(&format!(
         "#text(size: 52pt, weight: \"bold\", tracking: 0.05em, {})\n\n#v(8pt)\n#box(width: 40%, height: 1pt, fill: gradient.linear(white.transparentize(100%), white.transparentize(50%), white.transparentize(100%)))\n\n#v(8pt)\n",
-        typst_str(&strip_taamim(title))
+        typst_str(title)
     ));
     if !cover.subtitle.is_empty() {
         markup.push_str(&subtitle_line(&cover.subtitle));
@@ -727,7 +661,7 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
     if !cover.edition.is_empty() {
         markup.push_str(&format!(
             "#text(size: 18pt, fill: white.transparentize(45%), tracking: 0.04em, {})\n\n",
-            typst_str(&strip_taamim(&cover.edition))
+            typst_str(&cover.edition)
         ));
     }
     markup.push_str("]\n]\n");
@@ -745,7 +679,7 @@ fn append_toc_page(markup: &mut String, req: &PdfRequest) {
         let label = perek_label(idx);
         markup.push_str(&format!(
             "#block(inset: (right: 0.2em))[#link({label})[{} #box(width: 1fr, repeat[.]) #context counter(page).at({label}).first()]]\n#v(0.28em)\n",
-            scripture_aware_text(&strip_taamim(&line))
+            typst_escape(&line)
         ));
     }
 }
@@ -785,11 +719,11 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
     let mut markup = String::with_capacity(16 * 1024);
     let mut files: TypstFiles = Vec::new();
 
-    // Page and text settings. Al Heperek Font UI supplies glyphs Taamey D lacks
-    // (en/em dash, minus) so they don't vanish from article text.
+    // Page and text settings. Al Heperek covers the whole Hebrew block plus
+    // the en/em dash and minus glyphs, so a single family shapes everything.
     markup.push_str(
         r#"#set page(paper: "a4", margin: (top: 20mm, bottom: 20mm, left: 15mm, right: 15mm))
-#set text(font: ("Al Heperek Font UI", "Taamey D"), size: 11pt, dir: rtl, lang: "he")
+#set text(font: "Al Heperek Font UI", size: 11pt, dir: rtl, lang: "he")
 #set par(justify: true)
 "#,
     );
@@ -823,7 +757,7 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
         };
         markup.push_str(&format!(
             "#align(center, text(size: 16pt, weight: \"bold\")[{}])\n",
-            scripture_aware_text(&strip_taamim(&title_text))
+            typst_escape(&title_text)
         ));
         markup.push_str("#v(0.5em)\n");
 
@@ -854,11 +788,7 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
                 continue;
             }
             let prefix = to_hebrew_letter(i + 1);
-            markup.push_str(&format!(
-                "*{}* #text(font: \"Taamey D\")[{}]\n\n",
-                typst_escape(&prefix),
-                text
-            ));
+            markup.push_str(&format!("*{}* {}\n\n", typst_escape(&prefix), text));
         }
 
         // Articles
@@ -877,13 +807,11 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
                     "" => header,
                     author => format!("{} / {}", header, author),
                 };
-                // The header may quote cantillated scripture; marked runs need
-                // the article's bundled cantillation face like the body (#2961)
-                // — Typst per-glyph fallback would duplicate base letters.
-                let mut header_markup = String::new();
-                push_article_text(&mut header_markup, &header_text, Some(CANTILLATION_FONT));
+                // The header may quote cantillated scripture — Al Heperek
+                // shapes the complete marked runs like the body (#3685).
                 markup.push_str(&format!(
-                    "#text(size: 12pt, weight: \"bold\")[{header_markup}]\n\n"
+                    "#text(size: 12pt, weight: \"bold\")[{}]\n\n",
+                    typst_escape(&header_text)
                 ));
 
                 let typst_content = html_to_typst(&body_html, &mut files);
@@ -922,9 +850,11 @@ fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::R
         std::fs::read(&font_path)
             .map_err(|e| anyhow::anyhow!("Failed to read font {}: {}", font_path.display(), e))
     };
+    // Al Heperek shapes every Hebrew run (#3685). Taamey Frank CLM remains
+    // only for real italic/bold-italic outlines, which Al Heperek lacks.
     let fonts = [
-        read_font("TaameyD-Regular.ttf")?,
         read_font("AlHeperekUI-Regular.ttf")?,
+        read_font("AlHeperekUI-SemiBold.ttf")?,
         read_font("AlHeperekUI-Bold.ttf")?,
         read_font("TaameyFrankCLM-Regular.ttf")?,
         read_font("TaameyFrankCLM-Bold.ttf")?,
@@ -961,14 +891,6 @@ mod tests {
 
     fn to_typst(html: &str) -> String {
         html_to_typst(html, &mut Vec::new())
-    }
-
-    #[test]
-    fn test_strip_taamim() {
-        let input = "בְּ\u{0591}רֵאשִׁית";
-        let stripped = strip_taamim(input);
-        assert!(!stripped.contains('\u{0591}'));
-        assert!(stripped.contains('ְ'));
     }
 
     #[test]
@@ -1083,29 +1005,26 @@ mod tests {
     }
 
     #[test]
-    fn daily_article_taamim_runs_use_bundled_cantillation_face() {
-        // #2961: Al Heperek Font UI (the daily article face) has no glyphs for
-        // U+0591–U+05AF — cantillated quotes must be wrapped in a bundled
-        // cantillation-capable face so marks stay attached to their bases.
+    fn daily_article_taamim_runs_stay_on_al_heperek() {
+        // #3685: Al Heperek covers U+0591–U+05AF — cantillated quotes shape on
+        // the article face unwrapped, marks attached to their bases.
         let daily = daily_html_to_typst(
             "<p>אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו (מלכים א כ לה) ועוד</p>",
             &mut Vec::new(),
         );
-        // The maximal Hebrew phrase containing taamim is wrapped as one run —
-        // marks are never isolated from their bases.
         assert!(
-            daily.contains("#text(font: \"Taamey Frank CLM\")[אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו]"),
+            daily.contains("אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו"),
             "{daily}"
         );
+        assert!(!daily.contains("Taamey Frank CLM"));
+        assert!(!daily.contains("Taamey D"));
         // The source reference and following prose keep the article font.
         assert!(daily.contains("(מלכים א כ לה) ועוד"));
 
-        // Nikud-only Hebrew renders fine in Al Heperek Font UI — no wrap.
-        let daily = daily_html_to_typst("<p>אָמַר שָׁלוֹם תָּמִיד</p>", &mut Vec::new());
-        assert!(!daily.contains("Taamey Frank CLM"));
-
-        // Cantillated article runs also select a complete shaping face in sefer exports.
-        assert!(to_typst("<p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>").contains("Taamey Frank CLM"));
+        // Cantillated article runs also stay unwrapped in sefer exports.
+        let sefer = to_typst("<p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>");
+        assert!(sefer.contains("וַיֹּאמֶ֞ר אֵלָ֑יו"));
+        assert!(!sefer.contains("font:"));
     }
 
     #[test]
@@ -1114,27 +1033,23 @@ mod tests {
             "<p>\"וַיֹּאמֶר <strong>דָּבָ֖ר</strong>\" <span style='font-weight:bold'>אֵלָ֑יו</span> <i>כֹּ֥ה</i> וַיֹּאמֶ֣ר׃</p>",
             &mut Vec::new(),
         );
-        // Each fragment keeps its marks with their bases; emphasis still
-        // applies (the CLM family has real bold/italic faces). וַיֹּאמֶר is
-        // nikud-only — it correctly stays on the article font.
-        assert!(!daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶר]"));
-        assert!(daily.contains("#strong[#text(font: \"Taamey Frank CLM\")[דָּבָ֖ר];]"));
-        assert!(daily.contains("#text(weight: 700)[#text(font: \"Taamey Frank CLM\")[אֵלָ֑יו];]"));
-        assert!(daily.contains("#emph[#text(font: \"Taamey Frank CLM\")[כֹּ֥ה];]"));
-        assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֣ר׃]"));
-        // Meteg belongs to the scripture face. The whole Hebrew run switches
-        // together so the mark remains attached to its authored base glyph.
-        assert!(daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new()).contains("Taamey Frank CLM"));
-
-        // Rare marks missing from Al Heperek Font UI (U+05C4–U+05C6) also wrap.
+        // Marked runs keep emphasis markup but never a cantillation font wrap —
+        // Al Heperek shapes base and marks on the article face. Italic text is
+        // the one exception: it uses CLM's real italic outlines (Al Heperek
+        // has no italic face).
+        assert!(daily.contains("#strong[דָּבָ֖ר]"));
+        assert!(daily.contains("#text(weight: 700)[אֵלָ֑יו];"));
+        assert!(daily.contains("#emph[כֹּ֥ה]"));
+        assert!(daily.contains("וַיֹּאמֶ֣ר׃"));
+        // Meteg and the rare marks U+05C4–U+05C6 are in Al Heperek too.
+        let daily = daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new());
+        assert!(daily.contains("הָאָֽרֶץ") && !daily.contains("font:"));
         let daily = daily_html_to_typst("<p>א\u{05C4}ב\u{05C5}ג\u{05C6} דבר</p>", &mut Vec::new());
-        assert!(
-            daily.contains("#text(font: \"Taamey Frank CLM\")[א\u{05C4}ב\u{05C5}ג\u{05C6} דבר]")
-        );
+        assert!(daily.contains("א\u{05C4}ב\u{05C5}ג\u{05C6} דבר") && !daily.contains("#text(font:"));
 
-        // A run that is only marks still wraps rather than emitting tofu.
+        // A run that is only marks stays plain article text.
         let daily = daily_html_to_typst("<p>֑֒֓</p>", &mut Vec::new());
-        assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[֑֒֓]"));
+        assert!(daily.contains("֑֒֓") && !daily.contains("#text(font:"));
     }
 
     #[test]
@@ -1144,9 +1059,10 @@ mod tests {
             "<p>גוף</p><h3>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h3><p>המשך</p>",
             &mut Vec::new(),
         );
-        // The whole heading phrase (maqaf included) is one cantillation run.
+        // The whole heading phrase (maqaf included) is one marked run on the
+        // article face.
         assert!(daily.contains(
-            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];]"
+            "#heading(level: 3, numbering: none)[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];"
         ));
     }
 
@@ -1203,7 +1119,8 @@ mod tests {
             cover_text: PdfCoverText::default(),
         };
         let (markup, _) = generate_typst_markup(&req);
-        assert!(markup.contains("Taamey D"));
+        assert!(markup.contains("Al Heperek Font UI"));
+        assert!(!markup.contains("Taamey D"));
         assert!(markup.contains("rtl"));
         assert!(markup.contains("בראשית א - בריאת העולם"));
         assert!(markup.contains("בְּרֵאשִׁ֖ית")); // taamim preserved in pesukim
@@ -1273,7 +1190,7 @@ mod tests {
         assert!(!markup.contains("tracking: 0.08em"));
         assert!(markup.contains("Genesis 1"));
         assert!(markup.contains(&format!(
-            "*{}* #text(font: \"Taamey D\")[First \\/ escaped]",
+            "*{}* First \\/ escaped",
             to_hebrew_letter(1)
         )));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));

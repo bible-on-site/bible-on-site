@@ -4,9 +4,8 @@ use std::path::Path;
 use anyhow::{Result, ensure};
 
 use super::{
-    CANTILLATION_FONT, PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup,
-    push_article_text, scripture_aware_text, split_article_header, strip_taamim, to_hebrew_letter,
-    typst_escape, typst_string,
+    PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup, split_article_header,
+    to_hebrew_letter, typst_escape, typst_string,
 };
 
 const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header.jpg");
@@ -61,7 +60,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
     let mut out = String::from(
         r##"#set document(title: "תנ\"ך על הפרק", author: "תנ\"ך על הפרק")
 #set page(paper: "a4", fill: rgb("F5F9FA"), margin: (top: 14mm, bottom: 18mm, left: 13mm, right: 13mm))
-#set text(font: ("Al Heperek Font UI", "Taamey D"), size: 13pt, fill: rgb("233D48"), dir: rtl, lang: "he")
+#set text(font: "Al Heperek Font UI", size: 13pt, fill: rgb("233D48"), dir: rtl, lang: "he")
 #set par(justify: true, leading: 0.4em, spacing: 0.35em)
 #set page(footer: context align(center, text(font: "Al Heperek Font UI", size: 9.5pt, fill: rgb("637780"))[תנ\"ך על הפרק #h(6pt) · #h(6pt) #counter(page).display()]))
 #block(width: 100%, fill: white, inset: 12pt, radius: 6pt, breakable: true)[
@@ -76,7 +75,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
     if !perek.header.trim().is_empty() {
         out.push_str(&format!(
             "#v(3pt)\n#align(center, text(size: 12pt, fill: rgb(\"28758A\"))[{}])\n",
-            scripture_aware_text(&strip_taamim(&perek.header)),
+            typst_escape(&perek.header),
         ));
     }
     out.push_str(
@@ -96,7 +95,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         let verse = pasuk_markup(segments);
         if !verse.is_empty() {
             out.push_str(&format!(
-                "#text(size: 11.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~#text(font: \"Taamey D\")[{}] ",
+                "#text(size: 11.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~{} ",
                 typst_escape(&to_hebrew_letter(index + 1)),
                 verse,
             ));
@@ -108,13 +107,11 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         for (title, author, html) in &perek.articles {
             let (heading, body) = split_article_header(html);
             let heading = heading.unwrap_or_else(|| title.trim().to_string());
-            // A heading may quote scripture too — cantillated runs need the
-            // bundled cantillation face, like the body (#2961).
-            let mut heading_markup = String::new();
-            push_article_text(&mut heading_markup, &heading, Some(CANTILLATION_FONT));
+            // A heading may quote scripture — Al Heperek shapes the complete
+            // marked runs like the body (#3685).
             out.push_str(&format!(
                 "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Al Heperek Font UI\", size: 15.5pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
-                heading_markup,
+                typst_escape(&heading),
             ));
             if !author.trim().is_empty() {
                 out.push_str(&format!(
@@ -214,7 +211,10 @@ mod tests {
         );
         assert!(source.contains("בְּרֵאשִׁ֖ית") && source.contains("וְעַל־פְּנֵ֥י"));
         assert!(!source.contains("sup("));
-        assert!(source.contains("]~#text(font: \"Taamey D\")[בְּרֵאשִׁ֖ית"));
+        // Pesukim shape on the page's Al Heperek face — no per-verse font
+        // switch remains (#3685).
+        assert!(source.contains("]~בְּרֵאשִׁ֖ית"));
+        assert!(!source.contains("font: \"Taamey"));
     }
 
     #[test]
@@ -233,17 +233,19 @@ mod tests {
     }
 
     #[test]
-    fn article_heading_and_body_wrap_cantillated_runs() {
-        // #2961: article titles (leading h1s) print in Al Heperek Font UI too —
-        // a cantillated quote in the heading needs the same wrapped face.
+    fn article_heading_and_body_keep_cantillated_runs_on_al_heperek() {
+        // #3685: article titles and bodies print in Al Heperek — cantillated
+        // quotes shape on the same face, no font wrapping.
         let mut req = request();
         // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
         req.perakim[0].articles[0].2 = "<h1>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
         let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
         assert!(source.contains(
-            "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];]"
+            "fill: rgb(\"173E52\"))[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]"
         ));
-        assert!(source.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֞ר אֵלָ֑יו]"));
+        assert!(source.contains("וַיֹּאמֶ֞ר אֵלָ֑יו"));
+        assert!(!source.contains("Taamey Frank CLM"));
+        assert!(!source.contains("Taamey D"));
     }
 
     #[test]

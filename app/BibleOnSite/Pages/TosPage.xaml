@@ -109,7 +109,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                            TextDecorations="Underline"/>
                 </controls:TappableView>
-                <Label Text="גופן Taamey D המשמש לטקסט עם טעמים וגופני צד שלישי אחרים ממשיכים להיות כפופים לרישיונותיהם. סעיף זה אינו מגביל זכויות המוקנות לפי רישיונות אלה, לרבות רישיון GPL של Taamey D."
+                <Label Text="גופן Taamey D הכלול באפליקציה כחלופה וגופני צד שלישי אחרים ממשיכים להיות כפופים לרישיונותיהם. סעיף זה אינו מגביל זכויות המוקנות לפי רישיונות אלה, לרבות רישיון GPL של Taamey D."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>

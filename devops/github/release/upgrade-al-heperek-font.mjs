@@ -103,7 +103,7 @@ function importRelease(directory, tag, hash, revision) {
 		manifest.sourceRepository !== repository ||
 		manifest.family !== installedFont.family ||
 		manifest.defaultHebrewCut !== installedFont.defaultHebrewCut ||
-		manifest.cantillation !== false ||
+		typeof manifest.cantillation !== "boolean" ||
 		!manifest.choices ||
 		typeof manifest.finalTsadiFrom !== "string"
 	) {
@@ -178,6 +178,7 @@ function importRelease(directory, tag, hash, revision) {
 		...installedFont,
 		version,
 		tag,
+		cantillation: manifest.cantillation,
 		choices: manifest.choices,
 		finalTsadiFrom: manifest.finalTsadiFrom,
 		sourceRepository,
