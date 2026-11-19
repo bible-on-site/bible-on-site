@@ -272,8 +272,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ARTIFACT_NAME="${{ inputs.perushim_data_artifact }}"
-          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
-            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          # Only master-branch runs of this repository may produce the trusted
+          # baseline; a same-named fork artifact is not eligible (see #3682).
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
+            --jq '[.artifacts[] | select(.expired == false
+              and .workflow_run.repository_id == ${{ github.repository_id }}
+              and .workflow_run.head_repository_id == ${{ github.repository_id }}
+              and .workflow_run.head_branch == "master")] | first | .id')
           test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d data/mysql
@@ -326,6 +331,10 @@ jobs:
       # publish each native architecture's BuildKit cache as the
       # `website-deps-cache.master.<arch>` baseline artifact; packaging restores
       # the matching one. A missing, expired or unreadable payload builds cold.
+      # Only artifacts produced by a run on this repository's master branch are
+      # eligible: artifact names are attacker-controlled and a fork pull request
+      # could upload a same-named payload, so provenance is checked through
+      # workflow_run rather than trusting the name.
       - name: Restore website dependency cache
         if: ${{ env.IS_NPM == 'true' }}
         id: deps_cache
@@ -334,8 +343,11 @@ jobs:
         run: |
           ARTIFACT_NAME="website-deps-cache.master.${IMAGE_ARCH}"
           SRC=""
-          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
-            --jq "[.artifacts[] | select(.expired == false)] | first | .id" || echo "")
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
+            --jq '[.artifacts[] | select(.expired == false
+              and .workflow_run.repository_id == ${{ github.repository_id }}
+              and .workflow_run.head_repository_id == ${{ github.repository_id }}
+              and .workflow_run.head_branch == "master")] | first | .id' || echo "")
           if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ] && \
              gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip" && \
              mkdir -p "$RUNNER_TEMP/website-deps-cache" && \

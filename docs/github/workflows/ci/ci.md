@@ -221,7 +221,10 @@ when website content changes; Website Performance validates the app pre-merge.
 Its `deps` stage layers cache through the `website-deps-cache.master.<arch>`
 baseline artifacts — trusted master pushes export the stage's BuildKit cache
 (`type=local`) and each packaging run restores the matching architecture's
-latest unexpired artifact; a missing or stale cache just builds cold. The
+latest unexpired artifact; a missing or stale cache just builds cold.
+Artifact names are attacker-controlled, so only artifacts produced by a run on
+this repository's `master` branch are eligible — the restore filters the
+producing `workflow_run`'s repository and branch, never the name alone. The
 database-backed `builder` stage always runs fresh (`--no-cache-filter`).
 
 The shared package job normally removes its temporary database ingress in an

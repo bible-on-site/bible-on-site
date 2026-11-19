@@ -20,10 +20,9 @@ const step = workflow.jobs.package.steps.find(
 	(entry) => entry.name === "Restore website dependency cache",
 );
 assert.ok(step, "the restore step must exist in the shared package job");
-const script = step.run.replace(
-	/\$\{\{ github\.repository \}\}/g,
-	"test/repo",
-);
+const script = step.run
+	.replace(/\$\{\{ github\.repository \}\}/g, "test/repo")
+	.replace(/\$\{\{ github\.repository_id \}\}/g, "123456");
 assert.ok(!script.includes("${{"), "replay needs every expression bound");
 const shell =
 	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
@@ -106,4 +105,13 @@ test("a valid baseline artifact resolves its BuildKit cache directory", () => {
 	const { src, stdout } = restore({ listId: "42" });
 	assert.ok(src.endsWith("website-deps-cache"), src);
 	assert.match(stdout, /Restored dependency cache/);
+});
+
+// Artifact names are attacker-controlled (a fork run may upload a same-named
+// payload), so selection must verify the producing run's provenance: a run on
+// this repository's master branch — never by name alone.
+test("only artifacts from this repository's master runs are eligible", () => {
+	assert.match(script, /head_branch == "master"/);
+	assert.match(script, /workflow_run\.repository_id == 123456/);
+	assert.match(script, /workflow_run\.head_repository_id == 123456/);
 });
