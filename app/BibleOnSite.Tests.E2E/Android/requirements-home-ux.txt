@@ -1,1 +1,2 @@
 defusedxml==0.7.1
+Pillow==12.3.0
