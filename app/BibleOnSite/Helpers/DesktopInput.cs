@@ -44,6 +44,23 @@ public interface IWindowsFullscreenSurface
     void ToggleDesktopFullscreen();
 }
 
+/// <summary>
+/// Optional extension for reader pages that can step one reading unit
+/// (perek / parasha unit / masora unit) from the keyboard (#2766). PgUp and
+/// PgDn ride this surface; a scrollable list that owns focus still handles
+/// them itself, so the accelerator only reaches here when the keys are free.
+/// </summary>
+public interface IWindowsUnitNavSurface
+{
+    /// <summary>
+    /// Steps one unit in <paramref name="direction"/> (-1 previous, +1 next).
+    /// Returns false — leaving the key unhandled — while a transient surface
+    /// (picker, fan, search, selection, fullscreen chrome) owns input or the
+    /// edge of the corpus is reached.
+    /// </summary>
+    bool TryNavigateUnit(int direction);
+}
+
 /// <summary>What the Back key/accelerator/mouse-back should do.</summary>
 public enum DesktopBackRoute
 {
@@ -88,4 +105,39 @@ public static class DesktopInputPlan
     /// surface dismissed); false to leave the key unhandled.</returns>
     public static bool EvaluateEscape(bool flyoutOpen, bool surfaceDismissed)
         => flyoutOpen || surfaceDismissed;
+}
+
+/// <summary>
+/// Pure gating for PgUp/PgDn unit stepping shared by the readers (#2766):
+/// a transient surface that owns Back also owns unit stepping, and a
+/// command that cannot run (corpus edge) leaves the key unhandled.
+/// </summary>
+public static class DesktopUnitNavigation
+{
+    /// <summary>
+    /// Executes <paramref name="next"/> for a positive direction or
+    /// <paramref name="previous"/> otherwise. Returns false when
+    /// <paramref name="backOwner"/> is any surface other than
+    /// <see cref="ReaderBackSurface.None"/> — stepping never rips a
+    /// reading unit out from under a picker, menu, search or selection —
+    /// or when the chosen command cannot run, so the key press stays
+    /// unhandled.
+    /// </summary>
+    public static bool TryStep(ReaderBackSurface backOwner,
+        System.Windows.Input.ICommand? next, System.Windows.Input.ICommand? previous, int direction)
+    {
+        if (backOwner != ReaderBackSurface.None)
+        {
+            return false;
+        }
+
+        var command = direction > 0 ? next : previous;
+        if (command?.CanExecute(null) != true)
+        {
+            return false;
+        }
+
+        command.Execute(null);
+        return true;
+    }
 }

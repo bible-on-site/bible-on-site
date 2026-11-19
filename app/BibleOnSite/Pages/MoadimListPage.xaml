@@ -6,6 +6,7 @@
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.MoadimListPage"
              x:DataType="viewmodels:MoadimListViewModel"
              Title="מועדים על הפרק"
@@ -37,10 +38,22 @@
     <Grid Grid.Row="1" RowDefinitions="*">
         <!-- The published catalogue ordered by annual order and grouped by
              its Hebrew-month anchor — the מעגל השנה reading order. -->
+        <!-- Windows: edge-to-edge list rows at monitor width are
+             unscanable — cap and center the column (#2766). -->
         <CollectionView ItemsSource="{Binding Groups}"
                         IsGrouped="True"
                         SelectionMode="None"
                         Margin="8">
+            <CollectionView.MaximumWidthRequest>
+                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                </OnPlatform>
+            </CollectionView.MaximumWidthRequest>
+            <CollectionView.HorizontalOptions>
+                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                    <On Platform="Windows" Value="Center"/>
+                </OnPlatform>
+            </CollectionView.HorizontalOptions>
             <CollectionView.GroupHeaderTemplate>
                 <DataTemplate x:DataType="viewmodels:MoedMonthGroup">
                     <Label Text="{Binding MonthName}"
@@ -52,15 +65,18 @@
             </CollectionView.GroupHeaderTemplate>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:MoedUnit">
+                    <!-- A TappableView, not a gesture-only Border: on Windows
+                         the shared wrapper is a real button — Tab stop,
+                         Enter/Space activation, UIA Invoke — while touch keeps
+                         the tap gesture (#2766). -->
+                    <controls:TappableView Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MoadimListViewModel}}, Path=OpenMoedCommand}"
+                                           CommandParameter="{Binding .}"
+                                           SemanticProperties.Description="{Binding Name}">
                     <Border Padding="12,10"
                             Margin="0,3"
                             StrokeShape="RoundRectangle 8"
                             Stroke="Transparent"
                             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MoadimListViewModel}}, Path=OpenMoedCommand}"
-                                                  CommandParameter="{Binding .}"/>
-                        </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="*,Auto" InputTransparent="True">
                             <VerticalStackLayout Grid.Column="0" Spacing="1">
                                 <Label Text="{Binding Name}"
@@ -80,6 +96,7 @@
                                    VerticalOptions="Center"/>
                         </Grid>
                     </Border>
+                    </controls:TappableView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
             <CollectionView.EmptyView>
