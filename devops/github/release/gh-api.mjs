@@ -11,11 +11,23 @@ import { execFileSync } from "node:child_process";
 const transientPattern =
 	/i\/o timeout|context deadline exceeded|connection reset|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|socket hang up|TLS handshake|HTTP 5\d\d|Bad Gateway|Service Unavailable|Gateway Timeout/i;
 
-export function isTransientApiError(error) {
-	const text = [error?.message, error?.stderr, error?.stdout]
+const errorText = (error) =>
+	[error?.message, error?.stderr, error?.stdout]
 		.filter((part) => typeof part === "string")
 		.join("\n");
-	return transientPattern.test(text);
+
+export function isTransientApiError(error) {
+	return transientPattern.test(errorText(error));
+}
+
+/**
+ * The compare endpoint answers 404 for missing objects and for confirmed
+ * disjoint histories alike. Only its explicit "No common ancestor" message
+ * proves two commits share no commit (e.g. across a history rewrite); every
+ * other 404 leaves ancestry unproven.
+ */
+export function isNoCommonAncestorError(error) {
+	return /no common ancestor/i.test(errorText(error));
 }
 
 /** Synchronous backoff; every caller here is execFileSync-based. */
