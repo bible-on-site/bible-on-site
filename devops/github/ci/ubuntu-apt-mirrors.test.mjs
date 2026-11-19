@@ -98,17 +98,19 @@ test("preserves comments, ports archives and line endings", () => {
 	);
 });
 
-test("upgrades verified entries to HTTPS and fills slots without a trailing newline", () => {
+test("upgrades verified entries to HTTPS and gives every filled slot an explicit priority", () => {
 	assert.equal(
 		preferUbuntuArchives("http://azure.archive.ubuntu.com/ubuntu", [kernel]),
-		`${kernel}`,
+		`${kernel}\tpriority:1`,
 	);
+	// A missing priority ranks last for APT, so appended fallbacks would
+	// otherwise outrank the preferred mirror on a bare slot.
 	assert.equal(
 		preferUbuntuArchives("http://azure.archive.ubuntu.com/ubuntu", [
 			kernel,
 			azure,
 		]),
-		`${kernel}\n${azure}\tpriority:1\n`,
+		`${kernel}\tpriority:1\n${azure}\tpriority:2\n`,
 	);
 	assert.equal(
 		preferUbuntuArchives("http://ports.ubuntu.com/ubuntu-ports/", []),
@@ -276,13 +278,18 @@ test("rejects a mirror whose package index is unavailable or lists no pool packa
 });
 
 test("accepts a mirror that lists and serves only an uncompressed index", async () => {
+	// Unrelated checksum entries precede the package index and must not be
+	// mistaken for it.
+	const uncompressedOnly =
+		"-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nSHA256:\n " +
+		"9".repeat(64) +
+		" 500 main/Contents-amd64.gz\n " +
+		"0".repeat(64) +
+		" 1234 main/binary-amd64/Packages\n";
 	const verified = await selectUbuntuArchives("noble", async (url) => {
 		if (new URL(url).hostname !== "archive.ubuntu.com")
 			return healthyArchive(url);
-		if (url.endsWith("/InRelease"))
-			return new Response(
-				signedMetadata.replace(/ +[0-9a-f]{64} +\d+ +\S+\.gz\n/g, ""),
-			);
+		if (url.endsWith("/InRelease")) return new Response(uncompressedOnly);
 		if (url.endsWith("/binary-amd64/Packages"))
 			return new Response(packageIndex);
 		return healthyArchive(url);

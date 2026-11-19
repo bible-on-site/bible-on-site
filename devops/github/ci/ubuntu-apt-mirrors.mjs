@@ -72,11 +72,6 @@ export function preferUbuntuArchives(contents, mirrors) {
 		.map((line) => address(line))
 		.filter((uri) => !candidateAddresses.has(normalizeAddress(uri)));
 	const fills = [...mirrors, ...preserved];
-	const priorities = lines
-		.filter(ubuntuArchiveEntry)
-		.map((line) => Number(line.match(/priority:(\d+)/)?.[1]))
-		.filter(Number.isFinite);
-	let priority = priorities.length ? Math.max(...priorities) : 0;
 	const out = [];
 	let cursor = 0;
 	for (const line of lines) {
@@ -85,13 +80,21 @@ export function preferUbuntuArchives(contents, mirrors) {
 			continue;
 		}
 		if (cursor >= fills.length) continue;
-		const fill = fills[cursor++];
-		out.push(line.replace(address(line), () => fill));
+		// APT ranks a missing priority last, so every filled slot carries an
+		// explicit priority matching the verified order; unrelated trailing
+		// fields are preserved.
+		const fill = fills[cursor];
+		const eol = line.endsWith("\n") ? "\n" : "";
+		const body = line.slice(0, line.length - eol.length);
+		const tail = body
+			.slice(body.indexOf(address(line)) + address(line).length)
+			.replace(/\s*priority:\d+/, "");
+		out.push(`${fill}\tpriority:${++cursor}${tail}${eol}`);
 	}
 	while (cursor < fills.length) {
 		if (out.length && !out[out.length - 1].endsWith("\n"))
 			out[out.length - 1] += "\n";
-		out.push(`${fills[cursor++]}\tpriority:${++priority}\n`);
+		out.push(`${fills[cursor]}\tpriority:${++cursor}\n`);
 	}
 	return out.join("");
 }
@@ -151,9 +154,11 @@ function packageIndexPath(metadata) {
 		if (path === "main/binary-amd64/Packages.gz")
 			return { path, compressed: true };
 		if (path.includes("debian-installer/")) continue;
-		const index = /\/binary-[a-z0-9]+\/Packages(\.gz)?$/.exec(path)?.[1];
-		if (index === ".gz" && !gzip) gzip = { path, compressed: true };
-		else if (index === undefined && !plain) plain = { path, compressed: false };
+		const index = /\/binary-[a-z0-9]+\/Packages(\.gz)?$/.exec(path);
+		if (!index) continue;
+		if (index[1] === ".gz" && !gzip) gzip = { path, compressed: true };
+		else if (index[1] === undefined && !plain)
+			plain = { path, compressed: false };
 	}
 	// Ubuntu archives list an uncompressed index in the release checksums but
 	// only publish compressed payloads, so prefer gzip for the live fetch.
