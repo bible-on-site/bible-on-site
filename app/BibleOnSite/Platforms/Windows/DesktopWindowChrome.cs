@@ -351,6 +351,8 @@ internal sealed class DesktopWindowChrome
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.Escape, VirtualKeyModifiers.None, OnEscapeAcceleratorInvoked));
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.F, VirtualKeyModifiers.Control, OnSearchAcceleratorInvoked));
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.F11, VirtualKeyModifiers.None, OnFullscreenAcceleratorInvoked));
+		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.PageUp, VirtualKeyModifiers.None, OnPrevUnitAcceleratorInvoked));
+		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.PageDown, VirtualKeyModifiers.None, OnNextUnitAcceleratorInvoked));
 	}
 
 	private static KeyboardAccelerator Accelerator(
@@ -408,6 +410,24 @@ internal sealed class DesktopWindowChrome
 			reader.ToggleDesktopFullscreen();
 		}
 	}
+
+	private void OnNextUnitAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
+		args.Handled = TryNavigateUnit(1);
+
+	private void OnPrevUnitAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
+		args.Handled = TryNavigateUnit(-1);
+
+	/// <summary>
+	/// PgUp/PgDn step one reading unit (#2766). The accelerator only fires
+	/// when no focused control claimed the key — a scrollable list keeps its
+	/// own page scrolling — so the remaining guard is the page's: it must be
+	/// a unit-nav surface with no transient overlay up, mirrored by the
+	/// flyout check that already gates F11. An unhandled press bubbles on.
+	/// </summary>
+	private bool TryNavigateUnit(int direction) =>
+		!_shell.IsFlyoutOverlayOpen
+		&& _shell.CurrentPage is IWindowsUnitNavSurface reader
+		&& reader.TryNavigateUnit(direction);
 
 	/// <summary>
 	/// Back ordering shared by Alt+Left and the mouse Back button. The
@@ -487,12 +507,12 @@ internal sealed class DesktopWindowChrome
 
 	private void FocusCurrentPage()
 	{
-		if (_shell.CurrentPage is not { } page || page is not IWindowsDesktopSurface surface)
+		if (_shell.CurrentPage is not { } page)
 		{
 			return;
 		}
 
-		page.Dispatcher.Dispatch(() => surface.FocusInitialElement());
+		page.Dispatcher.Dispatch(() => FocusPageInitialElement(page));
 		if (_focusHookedPages.Add(page))
 		{
 			page.HandlerChanged += OnPageHandlerChanged;
@@ -500,11 +520,29 @@ internal sealed class DesktopWindowChrome
 		}
 	}
 
+	/// <summary>
+	/// Initial focus after navigation: pages implementing
+	/// <see cref="IWindowsDesktopSurface"/> pick their own entry point; every
+	/// other page lands on its shared top-bar hamburger — the same first stop
+	/// the readers take — so a keyboard-only session always lands somewhere
+	/// real instead of nowhere (#2766).
+	/// </summary>
+	private static void FocusPageInitialElement(Page page)
+	{
+		if (page is IWindowsDesktopSurface surface)
+		{
+			surface.FocusInitialElement();
+			return;
+		}
+
+		Controls.SharedTopBar.FocusNavigationButton(page);
+	}
+
 	private void OnPageHandlerChanged(object? sender, EventArgs e)
 	{
 		if (sender is Page page)
 		{
-			page.Dispatcher.Dispatch(() => (page as IWindowsDesktopSurface)?.FocusInitialElement());
+			page.Dispatcher.Dispatch(() => FocusPageInitialElement(page));
 		}
 	}
 

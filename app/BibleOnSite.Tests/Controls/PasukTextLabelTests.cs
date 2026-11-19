@@ -132,4 +132,34 @@ public class PasukTextLabelTests
         notified.Should().BeTrue();
         label.Justify.Should().BeFalse();
     }
+
+    // #2766: opt-in native text selection, honored on Windows where the
+    // handler maps it to TextBlock.IsTextSelectionEnabled. Off by default —
+    // the reader's pasuk cell carries a five-handler input chain that a
+    // selectable TextBlock would compete with; only gesture-free surfaces
+    // like the focused-pasuk overlay opt in.
+    [Fact]
+    public void selectable_defaults_to_false()
+    {
+        new PasukTextLabel().Selectable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void a_selectable_change_notifies_so_handlers_apply_text_selection()
+    {
+        var label = new PasukTextLabel();
+        var notified = false;
+        label.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PasukTextLabel.Selectable))
+            {
+                notified = true;
+            }
+        };
+
+        label.Selectable = true;
+
+        notified.Should().BeTrue();
+        label.Selectable.Should().BeTrue();
+    }
 }

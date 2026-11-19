@@ -1,10 +1,13 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
 
-public partial class AuthorsPage : ContentPage
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
+public partial class AuthorsPage : ContentPage, IWindowsDesktopSurface, IWindowsSearchSurface
+#pragma warning restore S2333
 {
     private readonly AuthorsViewModel _viewModel = new();
 
@@ -37,6 +40,36 @@ public partial class AuthorsPage : ContentPage
         // The binding handles the search phrase update
         // FilteredAuthors is automatically updated via NotifyPropertyChangedFor
         OnPropertyChanged(nameof(_viewModel.FilteredAuthors));
+    }
+
+    /// <summary>Ctrl+F lands in the author filter (#2766).</summary>
+    void IWindowsSearchSurface.OpenDesktopSearch() => AuthorsSearchInput.Focus();
+
+    /// <summary>Esc in the focused filter clears the query first, then leaves
+    /// the field — the desktop two-step, never navigation (#2766).</summary>
+    bool IWindowsDesktopSurface.DismissTopmostSurface()
+    {
+        if (!AuthorsSearchInput.IsFocused)
+        {
+            return false;
+        }
+        if (AuthorsSearchInput.Text is { Length: > 0 })
+        {
+            AuthorsSearchInput.Text = string.Empty;
+        }
+        else
+        {
+            AuthorsSearchInput.Unfocus();
+        }
+        return true;
+    }
+
+    void IWindowsDesktopSurface.FocusInitialElement()
+    {
+        if (!AuthorsSearchInput.IsFocused)
+        {
+            Controls.SharedTopBar.FocusNavigationButton(this);
+        }
     }
 
     private async void OnAuthorTapped(object? sender, TappedEventArgs e)

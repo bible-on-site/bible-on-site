@@ -134,6 +134,20 @@ public class ReaderFanMenuTests
     }
 
     [Fact]
+    public void Satellites_StayHiddenFromFocusAndUIAWhileClosed()
+    {
+        // Opacity=0 alone left the satellites as keyboard tab stops and
+        // UIA-invokable buttons while invisible (#2766).
+        var menu = new ReaderFanMenu();
+        var satellite = new ReaderFanMenuSatellite();
+        menu.Satellites.Add(satellite);
+        satellite.IsVisible.Should().BeFalse(
+            "a closed fan's satellites must leave the focus tree, not just fade out");
+        satellite.InputTransparent.Should().BeTrue();
+        satellite.Opacity.Should().Be(0);
+    }
+
+    [Fact]
     public void SetBottomInset_ShiftsContainerInsideTheGestureArea()
     {
         var menu = new ReaderFanMenu();
@@ -178,6 +192,7 @@ public class ReaderFanMenuTests
         opened.Should().BeTrue("the page refreshes satellite CanExecute before the fade picks target opacity");
         menu.IsOpen.Should().BeTrue();
         enabledSatellite.InputTransparent.Should().BeFalse();
+        enabledSatellite.IsVisible.Should().BeTrue("opening returns the satellites to the focus tree");
         enabledSatellite.Opacity.Should().Be(0, "satellites fade in from zero");
         ScrimOf(menu).IsVisible.Should().BeTrue();
 
@@ -216,6 +231,7 @@ public class ReaderFanMenuTests
         menu.ToggleButton.Rotation.Should().Be(0);
         ScrimOf(menu).IsVisible.Should().BeFalse();
         satellite.InputTransparent.Should().BeTrue();
+        satellite.IsVisible.Should().BeFalse("a closed fan's satellites leave the focus tree");
         satellite.Opacity.Should().Be(0);
     }
 
@@ -349,6 +365,7 @@ public class ReaderFanMenuTests
         menu.IsOpen.Should().BeFalse();
         satellite.Opacity.Should().Be(0);
         satellite.InputTransparent.Should().BeTrue();
+        satellite.IsVisible.Should().BeFalse();
         menu.ToggleButton.Text.Should().Be(Fonts.FluentUI.navigation_24_regular);
         menu.ToggleButton.BackgroundColor.Should().Be(Colors.Blue);
         menu.ToggleButton.Rotation.Should().Be(0);
