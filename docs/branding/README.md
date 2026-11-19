@@ -22,7 +22,7 @@ The changes update repository assets for subsequent builds. App-store listing ar
 
 ## Release upgrades
 
-[Upgrade Al Heperek Font](../../.github/workflows/upgrade-al-heperek-font.yml) runs daily and supports a manual run on the default branch. It uses `BOT_PAT` to read the private font release and open or update the same pull request branch. The workflow imports only a newer stable release, verifies the GitHub archive digest and each copied asset against the release manifest, and rebuilds the website, native and bulletin brand outputs. The PR stays open for typography, logo and license review before merge.
+[Upgrade Al Heperek Font](../../.github/workflows/upgrade-al-heperek-font.yml) runs daily and supports a manual run on the default branch. The workflow reads the private release with a GitHub App installation token scoped to Contents read on the font repository. The consumer repository holds the app client ID in `FONT_RELEASE_READER_CLIENT_ID` and its key in the `FONT_RELEASE_READER_PRIVATE_KEY` Actions secret. The workflow uses `BOT_PAT` to open or update the same pull request branch. The workflow imports only a newer stable release, verifies the GitHub archive digest and each copied asset against the release manifest, and rebuilds the website, native and bulletin brand outputs. The PR stays open for typography, logo and license review before merge.
 
 ## Validation and rollback
 
