@@ -77,8 +77,13 @@ describe("/robots.txt (issue #3257)", () => {
 	it("points crawlers at the canonical sitemap and the ARD manifest", async () => {
 		const body = await GET().text();
 		expect(body).toContain("Sitemap: https://canonical.example/sitemap.xml");
+		// The ARD manifest pointer ships as a comment, not a live `Agentmap:`
+		// directive: strict validators (Lighthouse's robots-txt audit) reject
+		// any directive outside RFC 9309 plus common extensions, which would
+		// cap the SEO audit below the required 100%.
 		expect(body).toContain(
-			"Agentmap: https://canonical.example/.well-known/ard.json",
+			"# Agentmap: https://canonical.example/.well-known/ard.json",
 		);
+		expect(body).not.toMatch(/^Agentmap:/m);
 	});
 });

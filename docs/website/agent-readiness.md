@@ -13,11 +13,11 @@ stay protected; source-specific licences and attribution still apply.
 
 | Surface | File | Content |
 | ------- | ---- | ------- |
-| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exceptions for `/api/search` and `/api/health`, disallow for `/api/` and `/dev`, Content Signals `search=yes, ai-input=yes, ai-train=yes` in the wildcard group, and an `Agentmap:` directive pointing at the ARD manifest |
+| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exceptions for `/api/search` and `/api/health`, disallow for `/api/` and `/dev`, Content Signals `search=yes, ai-input=yes, ai-train=yes` in the wildcard group, and the `Agentmap:` ARD-manifest hint parked in a comment — a live directive would fail strict robots.txt validation (Lighthouse's `robots-txt` audit caps the SEO score below the required 100%) |
 | `llms.txt` | `src/app/llms.txt/route.ts` | Project purpose, open-corpus policy, crawler buckets, canonical URL families, source references, attribution and licence guidance |
 | `/.well-known/api-catalog` | `src/app/.well-known/api-catalog/route.ts` | RFC 9727 linkset catalog of the public read APIs |
 | `/openapi.json` | `src/app/openapi.json/route.ts` | OpenAPI description of `/api/search` and the discovery endpoints |
-| `/.well-known/ard.json` + `/.well-known/ai-catalog.json` | `src/lib/ai-catalog.ts`, `src/app/.well-known/ard.json/route.ts`, `src/app/.well-known/ai-catalog.json/route.ts` | ARD v0.91 / AI Catalog capability manifest (`application/ard+json` / `application/ai-catalog+json`) listing only the agent-facing artifacts this origin really serves; advertised via `Agentmap:`, `<link rel="ard"/"ai-catalog">` in page head and a `Link` header |
+| `/.well-known/ard.json` + `/.well-known/ai-catalog.json` | `src/lib/ai-catalog.ts`, `src/app/.well-known/ard.json/route.ts`, `src/app/.well-known/ai-catalog.json/route.ts` | ARD v0.91 / AI Catalog capability manifest (`application/ard+json` / `application/ai-catalog+json`) listing only the agent-facing artifacts this origin really serves; advertised via `<link rel="ard"/"ai-catalog">` in page head, a `Link` header and an `Agentmap:` comment in robots.txt |
 | `/.well-known/agent-skills/index.json` + `/{name}/SKILL.md` | `src/lib/agent-skills.ts`, `src/app/.well-known/agent-skills/` | Agent Skills discovery index v0.2.0 with sha256 digests, and three `skill-md` artifacts (`tanah-corpus-map`, `tanah-corpus-search`, `tanah-corpus-citation`) that teach correct traversal, search and citation of the corpus |
 | `/auth.md` | `src/app/auth.md/route.ts` | Honest anonymous-access note: no registration, keys or OAuth exist for public reads |
 
@@ -124,7 +124,7 @@ site.
 | ----- | ----------- |
 | `markdownNegotiation` | **Deliberate gap.** A whole-corpus Markdown mirror was removed per the owner's PR #3299 review — duplicating gigabytes of textual content as a second representation is not acceptable while the SSG surface is already heavy. Agents read the same fully-rendered HTML readers get. |
 | `dnsAid` | Requires `_index._agents`/related DNS records — an infrastructure (DNS) change outside the website diff; per the issue it needs Dorad's explicit approval like any AWS/edge change. Not implemented here. |
-| `ard` | **Fixed in this increment** — `/.well-known/ard.json` + `/.well-known/ai-catalog.json` manifest, `Agentmap:` directive and `<link rel="ard"/"ai-catalog">` head links. |
+| `ard` | **Fixed in this increment** — `/.well-known/ard.json` + `/.well-known/ai-catalog.json` manifest, an `Agentmap:` robots.txt comment and `<link rel="ard"/"ai-catalog">` head links. |
 | `agentSkills` | **Fixed in this increment** — `/.well-known/agent-skills/index.json` + three real SKILL.md artifacts. |
 | `authMd` | **Fixed in this increment** — `/auth.md` states honestly that no authentication exists for public reads. |
 | `oauthDiscovery`, `oauthProtectedResource` | Not applicable — public reads are anonymous; publishing OAuth metadata for a nonexistent auth server would be a fake capability. |

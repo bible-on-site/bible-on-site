@@ -41,7 +41,7 @@ const BLOCKED_SCRAPERS = [
 ];
 
 test.describe("discovery documents over real HTTP", () => {
-	test("robots.txt serves the open policy, narrow API exceptions and the Agentmap directive", async ({
+	test("robots.txt serves the open policy, narrow API exceptions and the parked Agentmap hint", async ({
 		request,
 	}) => {
 		const response = await request.get("/robots.txt");
@@ -56,7 +56,10 @@ test.describe("discovery documents over real HTTP", () => {
 		expect(body).toContain("Disallow: /api/");
 		expect(body).toContain("Disallow: /dev");
 		expect(body).toContain("Sitemap: ");
-		expect(body).toMatch(/^Agentmap: https?:\/\/.+\/\.well-known\/ard\.json$/m);
+		// Parked in a comment: a live Agentmap directive would trip strict
+		// robots.txt validators (Lighthouse robots-txt audit caps SEO < 100%).
+		expect(body).toMatch(/^# Agentmap: https?:\/\/.+\/\.well-known\/ard\.json$/m);
+		expect(body).not.toMatch(/^Agentmap:/m);
 	});
 
 	test("llms.txt serves the agent guide as markdown", async ({ request }) => {
