@@ -18,7 +18,7 @@
 // and `--check` verifies the committed JSON matches what the import
 // would produce (pre-commit drift detection).
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +32,14 @@ const DIVISION = join(
 	ROOT,
 	"web/bible-on-site/src/data/parasha/parasha-division.json",
 );
+const CORPUS_DIR = join(ROOT, "web/bible-on-site/src/data/db");
+const CORPUS_FILE = /^sefaria-dump-.+\.tanah_view\.json$/;
+
+function corpusDumpFiles() {
+	return existsSync(CORPUS_DIR)
+		? readdirSync(CORPUS_DIR).filter((name) => CORPUS_FILE.test(name))
+		: [];
+}
 
 const HEBCAL_COMMIT = "ec5c7642e3";
 const HEBCAL_URL = `https://raw.githubusercontent.com/hebcal/hebcal-leyning/${HEBCAL_COMMIT}/src/aliyot.json`;
@@ -152,17 +160,14 @@ function refStr(ref) {
 let perekLengths = null;
 function loadPerekLengths() {
 	if (perekLengths) return perekLengths;
-	const corpusDir = join(ROOT, "web/bible-on-site/src/data/db");
-	const corpusFiles = readdirSync(corpusDir).filter((name) =>
-		/^sefaria-dump-.+\.tanah_view\.json$/.test(name),
-	);
+	const corpusFiles = corpusDumpFiles();
 	if (corpusFiles.length !== 1) {
 		throw new Error(
 			`expected exactly one sefaria-dump-*.tanah_view.json, found ${corpusFiles.length}`,
 		);
 	}
 	const corpus = JSON.parse(
-		readFileSync(join(corpusDir, corpusFiles[0]), "utf8"),
+		readFileSync(join(CORPUS_DIR, corpusFiles[0]), "utf8"),
 	);
 	perekLengths = new Map();
 	for (const book of corpus) {
@@ -399,6 +404,17 @@ const BOOK_PARASHA_COUNT = {
 };
 
 async function main() {
+	// --check needs perek lengths from the site's canonical corpus — a
+	// generated artifact that trees predating its commit (or partial
+	// checkouts) don't carry. Self-skip when it is absent, like the other
+	// local gates (docs/devops/pre-commit.md): drift still gates wherever
+	// the corpus is committed.
+	if (process.argv.includes("--check") && corpusDumpFiles().length === 0) {
+		console.log(
+			"Skipping parasha-aliyot drift check — no sefaria-dump-*.tanah_view.json in this tree.",
+		);
+		return;
+	}
 	const division = JSON.parse(readFileSync(DIVISION, "utf8"));
 	if (process.argv.includes("--refresh")) {
 		const upstream = await (await fetch(HEBCAL_URL)).text();
