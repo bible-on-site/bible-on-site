@@ -42,45 +42,44 @@ public partial class MasoraUnitPickerPopup //NOSONAR
 
         var seferGroup = SefarimData.GetSeferGroup(unit.SeferId);
 
-        // Select the group
+        // Every column's SelectionChanged loads the next column's items
+        // synchronously, so the whole cascade completes before the popup is
+        // first arranged. Viewport positioning waits for that arrange through
+        // PickerScrollColumns — the selected unit must be scrolled into the
+        // column's viewport, not just marked selected (same gap as #3400).
         var groups = (List<SeferGroupItem>)SeferGroupList.ItemsSource;
         var groupItem = groups.FirstOrDefault(g => g.Id == (int)seferGroup);
-        if (groupItem != null)
+        if (groupItem == null)
         {
-            SeferGroupList.SelectedItem = groupItem;
-            _selectedGroup = groupItem;
-
-            // After group is selected, load sefarim and select the right sefer
-            MainThread.BeginInvokeOnMainThread(async () =>
-            {
-                await Task.Delay(50); // Allow UI to update
-
-                var sefarim = (List<SeferItem>?)SeferList.ItemsSource;
-                if (sefarim != null)
-                {
-                    var seferItem = sefarim.FirstOrDefault(s => s.SeferId == unit.SeferId);
-                    if (seferItem != null)
-                    {
-                        SeferList.SelectedItem = seferItem;
-                        _selectedSefer = seferItem;
-
-                        await Task.Delay(50); // Allow UI to update
-
-                        var units = (List<MasoraUnit>?)UnitList.ItemsSource;
-                        if (units != null)
-                        {
-                            var unitItem = units.FirstOrDefault(u => u.UnitId == unitId);
-                            if (unitItem != null)
-                            {
-                                UnitList.SelectedItem = unitItem;
-                                _selectedUnit = unitItem;
-                                UpdateConfirmButtonState();
-                            }
-                        }
-                    }
-                }
-            });
+            return;
         }
+
+        SeferGroupList.SelectedItem = groupItem;
+        _selectedGroup = groupItem;
+        _scrollColumns.ScrollSelectedIntoView(SeferGroupList);
+
+        var seferItem = (SeferList.ItemsSource as List<SeferItem>)?
+            .FirstOrDefault(s => s.SeferId == unit.SeferId);
+        if (seferItem == null)
+        {
+            return;
+        }
+
+        SeferList.SelectedItem = seferItem;
+        _selectedSefer = seferItem;
+        _scrollColumns.ScrollSelectedIntoView(SeferList);
+
+        var unitItem = (UnitList.ItemsSource as List<MasoraUnit>)?
+            .FirstOrDefault(u => u.UnitId == unitId);
+        if (unitItem == null)
+        {
+            return;
+        }
+
+        UnitList.SelectedItem = unitItem;
+        _selectedUnit = unitItem;
+        _scrollColumns.ScrollSelectedIntoView(UnitList);
+        UpdateConfirmButtonState();
     }
 
     private void OnSeferGroupSelected(object? sender, SelectionChangedEventArgs e)

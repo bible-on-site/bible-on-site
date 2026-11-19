@@ -1,6 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { compareVersions, loadIosNativeSimulator, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
@@ -41,9 +42,11 @@ export async function bootIos({
   execute = promisify(execFile),
   loadDriver = loadIosSimulatorDriver,
   loadNativeDriver = loadIosNativeSimulator,
+  sleep = delay,
+  now = Date.now,
   log = console.log,
 } = {}) {
-  if (!["start", "wait", "boot", "resolve"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
+  if (!["start", "wait", "boot", "resolve", "heal"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
   const sdk = run("--sdk", "iphonesimulator", "--show-sdk-version").trim();
   const listDevices = () => JSON.parse(run("simctl", "list", "devices", "available", "--json")).devices;
   const select = () => selectSimulator(listDevices(), sdk);
@@ -51,7 +54,7 @@ export async function bootIos({
   // every simulator while it boots adds a blocking CoreSimulator round trip.
   // Standalone wait still selects normally; a partial handoff must never pick
   // another device or download a runtime instead.
-  const handoff = mode === "wait" && (env.MOBILE_UDID !== undefined || env.MOBILE_OS_VERSION !== undefined);
+  const handoff = (mode === "wait" || mode === "heal") && (env.MOBILE_UDID !== undefined || env.MOBILE_OS_VERSION !== undefined);
   let primary = handoff ? handedOffSimulator(env, sdk) : select();
   // Resolve only reports the deterministic pick before optional state restore.
   if (mode === "resolve") {
@@ -68,6 +71,51 @@ export async function bootIos({
     primary = select();
   }
   if (!primary) throw new Error(`No available iPhone simulator runtime compatible with iOS SDK ${sdk}.`);
+  if (mode === "heal") {
+    // The xcode-27-arm64 20261112.0361.1 runner image lets simdiskimaged
+    // unmount the iOS runtime while a device boots; a straddling boot still
+    // passes bootstatus, then powers off about a minute later when the
+    // cleanup lands (actions/runner-images#15334). The Appium session then
+    // spends its fixed 300-second deadline re-booting the dead device before
+    // installing anything. Verify the handed-off device is still usable at
+    // session entry and boot it again through the driver's own native bridge
+    // — the same path Appium recovers with — so the session never inherits a
+    // destroyed device.
+    const { getSimulator } = await loadDriver();
+    const simulator = await getSimulator(primary.udid);
+    const stat = async () => (await simulator.stat()).state;
+    let state = await stat();
+    if (state === "Booted") return;
+    // The session's readiness budget stays one absolute 300-second deadline
+    // across both the power-off wait and the re-boot: giving each its own
+    // window would double the recovery time a straddling shutdown can take.
+    const deadline = now() + 300000;
+    if (state === "Shutting Down") {
+      // The runner's cleanup is mid-flight: the native waitForBoot rejects
+      // 'Shutting Down', so wait for the power-off inside the shared deadline,
+      // then boot the device once it is actually down.
+      log(`Simulator ${primary.udid} is shutting down after the reported boot; waiting for the power-off.`);
+      while (state === "Shutting Down") {
+        if (now() > deadline) {
+          throw new Error(`Simulator ${primary.udid} stayed 'Shutting Down' past the boot deadline.`);
+        }
+        await sleep(5000);
+        state = await stat();
+      }
+    }
+    if (state === "Shutdown") {
+      log(`Simulator ${primary.udid} was powered off after the reported boot; booting it again.`);
+      await simulator.boot();
+    } else {
+      log(`Simulator ${primary.udid} is still ${state ?? "unlisted"} after the reported boot; waiting for it.`);
+    }
+    const remaining = deadline - now();
+    if (remaining <= 0) {
+      throw new Error(`Simulator ${primary.udid} spent its boot deadline shutting down before it could boot.`);
+    }
+    await simulator.waitForBoot(remaining);
+    return;
+  }
   // Every shard has its own runner and boots exactly one simulator.
   const kick = (device) => {
     if (device.state !== "Shutdown") return;
