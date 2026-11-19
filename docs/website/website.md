@@ -327,6 +327,25 @@ report real values there. Accumulators reset every interval; the timer is
 unref'd so drain behavior is unchanged. Enabling in production is a separate
 deployment decision — the instrumentation PR does not turn it on.
 
+The Bun gaps behind the `unsupported` markers are tracked upstream
+(#3641). `web/bible-on-site/scripts/test-support/perf-hooks-runtime-probe.mjs`
+re-verifies them against any runtime (`node`/`bun <path>`), printing a
+per-primitive `real`/`zero-stub`/`entry-type-absent` verdict across idle,
+busy and worker phases — current results (Windows x64):
+
+| Bun behaviour (verified on Bun 1.4.4 stable and 1.4.5 canary) | Upstream tracking |
+| --- | --- |
+| `performance.eventLoopUtilization()` returns `{idle:0, active:0, utilization:0}` on every phase, every argument form and inside workers | [oven-sh/bun#34068](https://github.com/oven-sh/bun/issues/34068) (open); implementations pending in [oven-sh/bun#44627](https://github.com/oven-sh/bun/pull/44627) (main thread, macOS/Linux only) and [oven-sh/bun#34424](https://github.com/oven-sh/bun/pull/34424) (all platforms + workers); closed prior art [oven-sh/bun#32618](https://github.com/oven-sh/bun/pull/32618) |
+| `worker.performance.eventLoopUtilization()` warns `ERR_NOT_IMPLEMENTED` once, then returns zeros | [oven-sh/bun#32609](https://github.com/oven-sh/bun/issues/32609) (open); implemented by oven-sh/bun#34424 |
+| `gc` absent from `PerformanceObserver.supportedEntryTypes`; `observe({entryTypes:["gc"]})` accepts silently and never delivers entries | draft [oven-sh/bun#47961](https://github.com/oven-sh/bun/pull/47961), blocked on [oven-sh/WebKit#1013](https://github.com/oven-sh/WebKit/pull/1013) and Bun's WebKit pin |
+| `process.cpuUsage()`, `monitorEventLoopDelay()` | real measurements — no gap |
+
+Bun's own
+[Node-compatibility docs](https://bun.com/docs/runtime/nodejs-compat) already
+state the same limits. Keep emitting `{"unsupported": true}` until a shipped
+Bun reports verified counters for each field; adoption of a fixed runtime is a
+separate follow-up.
+
 Local verification against the real compiled server:
 
 ```bash
