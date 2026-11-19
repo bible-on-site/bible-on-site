@@ -119,7 +119,7 @@ public partial class ParashaPage
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -182,7 +182,7 @@ public partial class ParashaPage
                     // Vibrate when entering selection mode
                     if (wasEmpty && _viewModel.SelectedPasukCount > 0)
                     {
-                        TriggerHapticFeedback();
+                        SelectionHaptics.Trigger();
                     }
                 });
             }
@@ -210,7 +210,7 @@ public partial class ParashaPage
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -327,7 +327,7 @@ public partial class ParashaPage
         }
 
         await Clipboard.SetTextAsync(text);
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
         // Inline feedback: the bar flashes the clipboard-checkmark glyph.
         await SelectionBar.FlashCopiedAsync();
     }
@@ -354,23 +354,4 @@ public partial class ParashaPage
     }
 
     #endregion
-
-    /// <summary>Triggers haptic feedback (vibration) for selection mode entry.</summary>
-    private static void TriggerHapticFeedback()
-    {
-        try
-        {
-#if ANDROID
-            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
-#elif IOS
-            HapticFeedback.Perform(HapticFeedbackType.LongPress);
-#endif
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
-        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
-        }
-    }
 }
