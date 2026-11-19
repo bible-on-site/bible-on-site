@@ -12,6 +12,8 @@ For changes limited to README files, local test suites and CI are not required f
 
 For a task the user assigns, you may grant the local tool, Docker file-sharing, and workspace access permissions needed to complete and validate that task. Keep each grant scoped to the task and follow platform security prompts and repository policy. Do not ask the user to repeat this authorization.
 
+You may use computer access to click buttons, enter values, and operate controls outside the active document or webpage, including browser controls, dialogs, and operating-system prompts, when needed for an authorized task. Follow the platform's requirements for any step that needs the user's direct participation.
+
 # Worktree Isolation
 
 Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing repository files or running builds. Do not switch branches or modify files in another task's checkout. After delivery, archive the task's managed worktree or remove its unmanaged worktree.
