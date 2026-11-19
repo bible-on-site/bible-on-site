@@ -340,7 +340,7 @@ jobs:
              gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip" && \
              mkdir -p "$RUNNER_TEMP/website-deps-cache" && \
              unzip -o -q "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "$RUNNER_TEMP/website-deps-cache"; then
-            INDEX=$(find "$RUNNER_TEMP/website-deps-cache" -name index.json -print -quit)
+            INDEX=$(find "$RUNNER_TEMP/website-deps-cache" -name index.json -print -quit || true)
             if [ -n "$INDEX" ]; then
               SRC=$(dirname "$INDEX")
               echo "Restored dependency cache from $ARTIFACT_NAME"
