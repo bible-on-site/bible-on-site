@@ -439,7 +439,7 @@
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
-		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.101" />
+		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.200" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
@@ -447,7 +447,7 @@
 
 	<!-- Desktop reliability fixes for navigation layout, focus and keyboard input. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
+		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
 	</ItemGroup>
 
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows).
