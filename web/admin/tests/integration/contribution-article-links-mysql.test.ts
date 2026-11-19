@@ -328,16 +328,17 @@ describe("Article link contribution transactions", () => {
 		const hits = await store.withContributions((connection) =>
 			searchArticleLinkTargets(connection, "מאמר"),
 		);
+		// ORDER BY a.name, a.id: מאמר אחר sorts before מאמר בדיקה (א < ב).
 		expect(hits).toEqual([
 			{
-				id: "1",
-				title: "מאמר בדיקה",
+				id: "2",
+				title: "מאמר אחר",
 				perekLabel: "בראשית א",
 				authorName: "מחבר בדיקה",
 			},
 			{
-				id: "2",
-				title: "מאמר אחר",
+				id: "1",
+				title: "מאמר בדיקה",
 				perekLabel: "בראשית א",
 				authorName: "מחבר בדיקה",
 			},
