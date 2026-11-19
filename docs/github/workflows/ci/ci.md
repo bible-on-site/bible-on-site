@@ -218,6 +218,11 @@ PRs and merge-queue events, without publishing release artifacts. Its SSG build
 uses the production DB through SSM and temporary RDS access. Fork PRs cannot
 run this privileged packaging path. Master pushes package website releases
 when website content changes; Website Performance validates the app pre-merge.
+Its `deps` stage layers cache through the `website-deps-cache.master.<arch>`
+baseline artifacts — trusted master pushes export the stage's BuildKit cache
+(`type=local`) and each packaging run restores the matching architecture's
+latest unexpired artifact; a missing or stale cache just builds cold. The
+database-backed `builder` stage always runs fresh (`--no-cache-filter`).
 
 The shared package job normally removes its temporary database ingress in an
 `always()` step. If its hosted runner disappears, that step cannot run.

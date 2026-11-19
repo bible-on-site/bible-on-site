@@ -33,6 +33,7 @@ on:
         value: ${{ jobs.package.outputs.docker_artifact_name }}
 permissions:
   contents: write
+  actions: read # Restores the website deps BuildKit cache (.master baseline artifact)
   id-token: write # Required for AWS OIDC authentication
 env:
   MODULE_DIRECTORY: ${{ inputs.module_directory }}
@@ -184,16 +185,11 @@ jobs:
           echo "Module directory structure:"
           tree -L 5
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver: docker
-
-      # The docker driver cannot export type=gha layer cache; the non-npm (api)
-      # build below needs a docker-container builder. npm builds keep --builder default.
-      - name: Set up Docker Buildx (GHA cache exporter)
-        if: ${{ env.IS_NPM != 'true' }}
-        id: buildx_gha
+      # The docker driver cannot export BuildKit caches. Both builds use one
+      # docker-container builder: the api exports type=gha scopes, the website
+      # publishes its deps stage cache to a .master artifact (#3682).
+      - name: Set up Docker Buildx (cache exporter)
+        id: buildx_container
         uses: docker/setup-buildx-action@v4
         with:
           driver-opts: |
@@ -326,22 +322,61 @@ jobs:
           python data/recitation/publish.py
           python data/recitation/audit.py
 
-      - name: Prepare website dependency cache
+      # #3682: the dep-stage layer cache moved off ECR. Trusted master pushes
+      # publish each native architecture's BuildKit cache as the
+      # `website-deps-cache.master.<arch>` baseline artifact; packaging restores
+      # the matching one. A missing, expired or unreadable payload builds cold.
+      - name: Restore website dependency cache
         if: ${{ env.IS_NPM == 'true' }}
         id: deps_cache
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          REPOSITORY=$(aws ecr describe-repositories --repository-names bible-on-site --query 'repositories[0].repositoryUri' --output text)
-          aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
-          CACHE_TAG_NAME=deps-cache
-          if [ "$IMAGE_ARCH" = arm64 ]; then CACHE_TAG_NAME=deps-cache-arm64; fi
-          CACHE_REF="$REPOSITORY:$CACHE_TAG_NAME"
-          echo "ref=$CACHE_REF" >> "$GITHUB_OUTPUT"
+          ARTIFACT_NAME="website-deps-cache.master.${IMAGE_ARCH}"
+          SRC=""
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id" || echo "")
+          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ] && \
+             gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip" && \
+             mkdir -p "$RUNNER_TEMP/website-deps-cache" && \
+             unzip -o -q "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "$RUNNER_TEMP/website-deps-cache"; then
+            INDEX=$(find "$RUNNER_TEMP/website-deps-cache" -name index.json -print -quit)
+            if [ -n "$INDEX" ]; then
+              SRC=$(dirname "$INDEX")
+              echo "Restored dependency cache from $ARTIFACT_NAME"
+            else
+              echo "::warning::$ARTIFACT_NAME held no BuildKit cache index; building cold"
+            fi
+          else
+            echo "No usable $ARTIFACT_NAME artifact; building cold"
+          fi
+          echo "src=$SRC" >> "$GITHUB_OUTPUT"
+
+      # Refresh the baseline before the database-backed build, so a later SSG
+      # failure cannot starve the published cache. The export targets only the
+      # deps stage chain, keeping the large builder output out of the artifact.
+      - name: Export website dependency cache
+        if: ${{ env.IS_NPM == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        env:
+          DEPS_CACHE_SRC: ${{ steps.deps_cache.outputs.src }}
+        run: |
           CACHE_ARGS=()
-          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query "imageDetails[?contains(imageTags, '$CACHE_TAG_NAME')].imageDigest | [0]" --output text)
-          if [ "$CACHE_TAG" != None ]; then CACHE_ARGS+=(--cache-from "type=registry,ref=$CACHE_REF"); fi
-          docker buildx build --builder default --network=host --progress=plain \
-            --target deps --platform "linux/$IMAGE_ARCH" --build-arg BUILDKIT_INLINE_CACHE=1 --load \
-            "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
+          if [ -n "$DEPS_CACHE_SRC" ]; then CACHE_ARGS+=(--cache-from "type=local,src=$DEPS_CACHE_SRC"); fi
+          docker buildx build --builder "${{ steps.buildx_container.outputs.name }}" --network=host --progress=plain \
+            --target deps --platform "linux/$IMAGE_ARCH" --output type=cacheonly \
+            "${CACHE_ARGS[@]}" --cache-to "type=local,dest=$RUNNER_TEMP/website-deps-cache-export,mode=max" \
+            -f web/bible-on-site/Dockerfile web
+
+      - name: Publish website dependency cache artifact
+        if: ${{ env.IS_NPM == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-deps-cache.master.${{ inputs.image_arch }}
+          path: ${{ runner.temp }}/website-deps-cache-export
+          retention-days: 90
+          overwrite: true
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         shell: bash
@@ -360,7 +395,9 @@ jobs:
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
-            BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
+            DEPS_CACHE_SRC="${{ steps.deps_cache.outputs.src }}"
+            if [ -n "$DEPS_CACHE_SRC" ]; then CACHE_ARGS+=(--cache-from "type=local,src=$DEPS_CACHE_SRC"); fi
+            BUILD_COMMAND=(docker buildx build --builder "${{ steps.buildx_container.outputs.name }}" --load --progress=plain)
             # The website Dockerfile bakes this into static HTML and the
             # runner default; only the website consumes it.
             ASSETS_ARGS+=(--build-arg ASSETS_BASE_URL="${BROWSER_ASSETS_BASE_URL}")
@@ -368,7 +405,7 @@ jobs:
             # type=gha cache needs the docker-container builder (docker driver cannot export it).
             CACHE_SCOPE="${MODULE_NAME}${{ inputs.image_arch == 'arm64' && '-arm64' || '' }}"
             CACHE_ARGS+=(--cache-from "type=gha,scope=${CACHE_SCOPE}" --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}")
-            BUILD_COMMAND=(docker buildx build --builder "${{ steps.buildx_gha.outputs.name }}" --load --progress=plain)
+            BUILD_COMMAND=(docker buildx build --builder "${{ steps.buildx_container.outputs.name }}" --load --progress=plain)
           fi
           "${BUILD_COMMAND[@]}" \
             --platform "linux/$IMAGE_ARCH" \
@@ -434,12 +471,6 @@ jobs:
               || { echo 'Recitation payload lacks the configured assets CDN host'; exit 1; }
           fi
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
-
-      - name: Publish website dependency cache (not a release image)
-        if: ${{ env.IS_NPM == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-        env:
-          CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
-        run: docker push "$CACHE_REF"
 
       - name: Export Docker Image to tarball
         run: |

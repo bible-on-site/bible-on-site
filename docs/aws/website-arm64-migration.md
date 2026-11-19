@@ -38,9 +38,10 @@ traffic. Verify the aligned command first on the pinned x86 fallback, then ARM.
 ## Native build and release contract
 
 Both native runners build the same website Dockerfile and source version.
-Architecture-specific Bun and ECR dependency caches prevent cross-architecture
-cache reuse; the existing x86 `deps-cache` name remains valid and ARM uses
-`deps-cache-arm64`. The final standalone runner executes an actual sharp/libvips
+Architecture-specific Bun caches and per-architecture dependency-cache
+artifacts (`website-deps-cache.master.amd64` and
+`website-deps-cache.master.arm64`) prevent cross-architecture cache reuse.
+The final standalone runner executes an actual sharp/libvips
 JPEG encode, resize and decode before the image can be published. Its Node
 architecture must match the build target. This supplements the existing native
 SWC/libvips dependency check.
