@@ -420,8 +420,8 @@ partial class Build
         if (missing.Length > 0)
         {
             Serilog.Log.Warning(
-                $"No matching native debug symbols supplied locally or by the public Microsoft symbol server " +
-                $"for {missing.Length} bundled arm64 libraries: {string.Join(", ", missing)}");
+                $"No matching native debug symbols supplied locally, by the public Microsoft symbol server, " +
+                $"or by the supplier store for {missing.Length} bundled arm64 libraries: {string.Join(", ", missing)}");
         }
         var data = uncovered.Where(AndroidNativeSymbols.IsDataContainer).ToArray();
         if (data.Length > 0)
