@@ -81,6 +81,27 @@ public class SharedTopBarTests : IDisposable
     }
 
     [Fact]
+    public void SharedTopBar_Capsule_HasNoInnerInset_SoSegmentFillsReachTheEdge()
+    {
+        // #3683: a 2-unit horizontal border inset left a pill-colored sliver
+        // between the active segment fill (pressed/hover/disabled) and the
+        // capsule's rounded edge. The buttons' bounds must hug the border's
+        // inner edge; the border's own shape clip keeps the fill inside the
+        // outer curve.
+        var bar = new SharedTopBar { ShowBack = true };
+
+        bar.NavCapsule.Parent.Should().BeOfType<Border>().Which.Padding
+            .Should().Be(Thickness.Zero);
+
+        // The segments keep the capsule's exact footprint: the folded inset
+        // makes each hit target EdgeWidth+2 wide with no spacing, so the
+        // divider and outer edges sit exactly where they did before #3683.
+        bar.NavCapsule.Spacing.Should().Be(0);
+        bar.NavigationButton.WidthRequest.Should().Be(SharedTopBar.CapsuleSegmentWidth);
+        bar.BackButton.WidthRequest.Should().Be(SharedTopBar.CapsuleSegmentWidth);
+    }
+
+    [Fact]
     public void SharedTopBar_BackButton_IsARecognizableLocalizedIcon()
     {
         var bar = new SharedTopBar { ShowBack = true };
