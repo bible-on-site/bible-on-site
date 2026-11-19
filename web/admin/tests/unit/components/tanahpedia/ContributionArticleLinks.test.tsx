@@ -451,6 +451,64 @@ describe("article title search and link discovery", () => {
 		).toBeInTheDocument();
 		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 	});
+	it("ignores superseded responses and paints only the latest query", async () => {
+		const resolvers: Array<(hits: ContributionArticleTarget[]) => void> = [];
+		const rejecters: Array<(failure: unknown) => void> = [];
+		const search = vi.fn().mockImplementation(
+			() =>
+				new Promise<ContributionArticleTarget[]>((resolve, reject) => {
+					resolvers.push(resolve);
+					rejecters.push(reject);
+				}),
+		);
+		setup([], undefined, { search });
+		const input = screen.getByLabelText("חיפוש מאמר לפי שם");
+		fireEvent.change(input, { target: { value: "ראשון" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("ראשון"));
+		fireEvent.change(input, { target: { value: "שני" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("שני"));
+		// The first query's late resolution must not paint stale results.
+		await act(async () => resolvers[0](found));
+		expect(
+			screen.queryByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).not.toBeInTheDocument();
+		fireEvent.change(input, { target: { value: "שלישי" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("שלישי"));
+		// Nor may the second query's late rejection surface a stale error.
+		await act(async () => rejecters[1](new Error("Stale failure")));
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		await act(async () => resolvers[2](found));
+		expect(
+			await screen.findByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).toBeInTheDocument();
+	});
+	it("falls back to a generic message for a non-error search failure", async () => {
+		setup([], undefined, { search: vi.fn().mockRejectedValue("offline") });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "מאמר" },
+		});
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"חיפוש המאמרים נכשל",
+		);
+	});
+	it("selects a search hit without a preview when no loader is provided", async () => {
+		setup([], undefined, { search: vi.fn().mockResolvedValue(found) });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "מאמר" },
+		});
+		const list = await screen.findByRole("list", {
+			name: "תוצאות חיפוש המאמרים",
+		});
+		await act(async () =>
+			fireEvent.click(
+				within(list).getAllByRole("button", { name: /מאמר לדוגמה/ })[1],
+			),
+		);
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("42");
+		expect(
+			screen.queryByRole("region", { name: "המאמר שנבחר" }),
+		).not.toBeInTheDocument();
+	});
 	it("discovers links for the chosen article and opens the ordinary PR", async () => {
 		const discover = vi.fn().mockResolvedValue(["existing-pr"]);
 		const open = vi.fn();
@@ -476,6 +534,20 @@ describe("article title search and link discovery", () => {
 			await screen.findByText(/לא נמצאו קישורים חדשים/),
 		).toBeInTheDocument();
 		expect(open).not.toHaveBeenCalled();
+	});
+	it("falls back to a generic message for a non-error discovery failure", async () => {
+		setup([], undefined, {
+			discover: vi.fn().mockRejectedValue("offline"),
+			open: vi.fn(),
+		});
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"איתור הקישורים נכשל",
+		);
 	});
 	it("keeps the article ID after a failed discovery and permits a retry", async () => {
 		const discover = vi

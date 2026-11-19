@@ -210,6 +210,8 @@ export function ContributionArticleLinkFields({
 		}
 	};
 	const discover = async () => {
+		/* istanbul ignore next -- the only caller is the button below, which
+		   renders solely when both callbacks exist and is disabled while discovering */
 		if (!discoverLinks || !openPr || discovering) return;
 		request.current++;
 		setLoading(false);
