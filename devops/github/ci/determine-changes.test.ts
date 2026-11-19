@@ -298,6 +298,28 @@ describe("detectChanges", () => {
 		});
 	}
 
+	for (const path of [
+		"devops/github/ci/ubuntu-apt-mirrors.mjs",
+		"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
+	]) {
+		test(
+			`${path} selects the package mirror consumers without a release`,
+			() => {
+				const consumers = new Set(["website", "app", "admin"]);
+				for (const [module, flags] of Object.entries(detectChanges([path]))) {
+					assert.deepEqual(
+						flags,
+						{
+							module_changed: false,
+							ci_changed: consumers.has(module),
+						},
+						module,
+					);
+				}
+			},
+		);
+	}
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
