@@ -52,7 +52,8 @@ function download(directory) {
 	if (!digest?.startsWith("sha256:") || !sha256Pattern.test(hash)) {
 		throw new Error(`Missing GitHub SHA-256 digest for ${name}`);
 	}
-	const revision = ghApi(`repos/${repository}/commits/tags/${tag}`).sha;
+	const ref = encodeURIComponent(`refs/tags/${tag}`);
+	const revision = ghApi(`repos/${repository}/commits/${ref}`).sha;
 	if (!commitSha.test(revision))
 		throw new Error(`Missing source commit for ${tag}`);
 	withApiRetries(() =>
