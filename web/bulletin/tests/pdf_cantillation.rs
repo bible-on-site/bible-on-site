@@ -62,6 +62,7 @@ fn melachim_article() -> String {
          <p>וכן נאמר {quote_yud_gimel} (מלכים א כ יג) inline.</p>\
          <p>דגש: <strong>הַכֵּ֣ינִי נָ֑א</strong> וגם \
          <span style='font-style:italic'>כֹּ֥ה אָמַ֣ר</span> ועוד \
+         <em>מֶ֥רְחָ֣א</em> ועוד \
          <span style='font-weight:bold'>וַיֹּאמֶ֞ר אֵלָ֑יו</span> תמיד.</p>\
          <p>סימנים: {specimen} — perek 307 (2026) הָאָֽרֶץ׃.</p>"
     )
@@ -400,8 +401,8 @@ fn daily_article_scripture_quotes_render_all_marks_in_al_heperek() {
     );
 
     // Italic runs keep the real italic outlines — Taamey Frank CLM Italic is
-    // the only non-Al Heperek face allowed (Al Heperek has no italic). The
-    // mahapakh of כֹּ֥ decodes on it.
+    // the only non-Al Heperek face allowed (Al Heperek has no italic). Both
+    // the styled span (כֹּ֥ה) and the semantic <em> (מֶ֥רְחָ֣א) decode on it.
     let italic_text: String = shown
         .iter()
         .filter(|s| {
@@ -413,6 +414,13 @@ fn daily_article_scripture_quotes_render_all_marks_in_al_heperek() {
     assert!(
         italic_text.contains('֥') && unmarked(&italic_text).contains('כ'),
         "italic cantillated cluster missing: {italic_text:?}"
+    );
+    // Sheva appears only inside the semantic <em>מֶ֥רְחָ֣א</em> (the styled
+    // span's clusters carry none) — glyph runs split clusters, so look for
+    // the mark anywhere on the italic face.
+    assert!(
+        italic_text.contains('\u{5b0}'),
+        "semantic <em> must also ride the italic face: {italic_text:?}"
     );
     for s in &shown {
         assert!(

@@ -447,7 +447,10 @@ fn html_to_typst_with_headings(
                 }
                 "i" | "em" => {
                     if !is_closing && !italic_open {
-                        out.push_str("#emph[");
+                        // Al Heperek has no italic face — route semantic
+                        // italics through the bundled Hebrew italic family,
+                        // matching the explicit font-style: italic branch.
+                        out.push_str("#text(font: \"Taamey Frank CLM\", style: \"italic\")[");
                         italic_open = true;
                     } else if is_closing && italic_open {
                         out.push_str("];");
@@ -938,7 +941,11 @@ mod tests {
         let html = "<b>bold</b> and <i>italic</i> text";
         let typst = to_typst(html);
         assert!(typst.contains("#strong[bold]"));
-        assert!(typst.contains("#emph[italic]"));
+        // Semantic italics ride the bundled Hebrew italic family — Al
+        // Heperek has no italic outlines (#3685).
+        assert!(typst.contains(
+            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[italic]"
+        ));
     }
 
     #[test]
@@ -968,7 +975,9 @@ mod tests {
     fn test_html_to_typst_closes_unbalanced_inline_marks() {
         let typst = to_typst("<p><strong>bold <em>italic <u>under");
 
-        assert!(typst.contains("#strong[bold #emph[italic #underline[under];];];"));
+        assert!(typst.contains(
+            "#strong[bold #text(font: \"Taamey Frank CLM\", style: \"italic\")[italic #underline[under];];];"
+        ));
     }
 
     #[test]
@@ -1039,7 +1048,9 @@ mod tests {
         // has no italic face).
         assert!(daily.contains("#strong[דָּבָ֖ר]"));
         assert!(daily.contains("#text(weight: 700)[אֵלָ֑יו];"));
-        assert!(daily.contains("#emph[כֹּ֥ה]"));
+        assert!(daily.contains(
+            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[כֹּ֥ה]"
+        ));
         assert!(daily.contains("וַיֹּאמֶ֣ר׃"));
         // Meteg and the rare marks U+05C4–U+05C6 are in Al Heperek too.
         let daily = daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new());
@@ -1083,8 +1094,8 @@ mod tests {
         let html = "ו<i>טקסט נטוי</i> בתוכה";
         let typst = to_typst(html);
         assert!(
-            typst.contains("ו#emph[טקסט נטוי]"),
-            "emph works adjacent to Hebrew: {}",
+            typst.contains("ו#text(font: \"Taamey Frank CLM\", style: \"italic\")[טקסט נטוי]"),
+            "italic tag works adjacent to Hebrew: {}",
             typst
         );
     }
@@ -1216,7 +1227,9 @@ mod tests {
         // `#strong[...](...)`, which Typst parses as call arguments.
         let typst = to_typst("<b>אֹתָֽם׃<br></b>(בראשית א כז) <i>x</i>.y <u>z</u>[w]");
         assert!(typst.contains("];(בראשית א כז)"));
-        assert!(typst.contains("#emph[x];.y"));
+        assert!(typst.contains(
+            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[x];.y"
+        ));
         assert!(typst.contains("#underline[z];\\[w\\]"));
     }
 
