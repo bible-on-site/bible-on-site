@@ -25,7 +25,7 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         Assert.NotEmpty(Page.FirstPasuk);
         OpenPicker();
 
-        // כתובים's first sefer is תהלים — a long chapter list that must overflow.
+        // כתובים's first sefer is תהילים — a long chapter list that must overflow.
         TapItem("PickerGroupItem", "כתובים");
         // PerekPickerPopup is the full-screen overlay (scrim included); the card
         // is the bordered panel whose columns the lists must fill. Both frames
@@ -76,6 +76,220 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         Page.WaitForHidden("CircularMenuScrim");
         AssertRegularReader();
     });
+
+    // #3400: opening the picker positions the chapter column at the current
+    // perek — selected and fully inside the column viewport without any
+    // manual scrolling. תהילים קיט sits ~120 items into a 150-item column, so
+    // it cannot possibly fit the initial top-of-list viewport.
+    [Fact]
+    public void OpenCentersTheCurrentPerekInsideItsColumn() => Scenario(() =>
+    {
+        NavigateToPerek("תהילים", 119, "קיט");
+        OpenPicker();
+
+        // Centered, not just inside: the item's center sits within one item
+        // height of the column's center — an edge-pinned landing cannot pass.
+        AssertItemCenteredInPerekColumn("קיט");
+        // The preselection is real — the confirm button only enables once a
+        // perek is selected.
+        Page.WaitFor("PerekPickerConfirm", element => element.Enabled);
+        // Mid-list both directions keep content: the arrows track the new
+        // viewport, not the stale top of the list.
+        Page.WaitForSpoken("PerekPickerPerekUp", spoken => spoken == MoreAbove);
+        Page.WaitForSpoken("PerekPickerPerekDown", spoken => spoken == MoreBelow);
+
+        Page.Tap("PerekPickerConfirm");
+        Page.WaitForHidden("PerekPickerPopup");
+        Assert.Equal("תהילים קיט", Page.Source);
+    });
+
+    [Fact]
+    public void ReopenAfterScrollingAwayRepositionsAtTheCurrentPerek() => Scenario(() =>
+    {
+        NavigateToPerek("תהילים", 119, "קיט");
+        OpenPicker();
+        AssertItemFullyInsidePerekColumn("קיט");
+
+        // Drag the column several screens back toward א and dismiss — the
+        // abandoned scroll position must not leak into the next opening.
+        var scrolledAway = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < scrolledAway
+            && Page.RenderedElements("PickerPerekItem").Any(element => element.Text == "קיט"))
+        {
+            FlickList("PerekPickerPerekList", fromFraction: 0.2, toFraction: 0.8);
+        }
+        Assert.DoesNotContain(Page.RenderedElements("PickerPerekItem"), element => element.Text == "קיט");
+        Page.Tap("PerekPickerCancel");
+        Page.WaitForHidden("PerekPickerPopup");
+        // Cancel is not a navigation: the radial menu it came from is still open.
+        Page.Tap("CircularMenuButton");
+        Page.WaitForHidden("CircularMenuScrim");
+
+        OpenPicker();
+        AssertItemFullyInsidePerekColumn("קיט");
+        Page.Tap("PerekPickerCancel");
+        Page.WaitForHidden("PerekPickerPopup");
+        Page.Tap("CircularMenuButton");
+        Page.WaitForHidden("CircularMenuScrim");
+        AssertRegularReader();
+    });
+
+    [Fact]
+    public void OpenPositionsAtShortBookAndClampsAtTheListEnd() => Scenario(() =>
+    {
+        // איכה's five chapters fit their column whole — the current perek is
+        // inside with no scroll at all and both arrows stay at the boundary.
+        NavigateToPerek("איכה", 5, "ה");
+        OpenPicker();
+        AssertItemFullyInsidePerekColumn("ה");
+        Assert.Equal(TopBoundary, Page.WaitForSpoken("PerekPickerPerekUp"));
+        Assert.Equal(BottomBoundary, Page.WaitForSpoken("PerekPickerPerekDown"));
+        Page.Tap("PerekPickerCancel");
+        Page.WaitForHidden("PerekPickerPopup");
+        Page.Tap("CircularMenuButton");
+        Page.WaitForHidden("CircularMenuScrim");
+
+        // A current-perek change: the long list's end clamps the centering —
+        // קנ lands fully inside the bottom edge with only upward content left.
+        NavigateToPerek("תהילים", 150, "קנ");
+        OpenPicker();
+        AssertItemFullyInsidePerekColumn("קנ");
+        Page.WaitForSpoken("PerekPickerPerekUp", spoken => spoken == MoreAbove);
+        Assert.Equal(BottomBoundary, Page.WaitForSpoken("PerekPickerPerekDown"));
+        Page.Tap("PerekPickerConfirm");
+        Page.WaitForHidden("PerekPickerPopup");
+        Assert.Equal("תהילים קנ", Page.Source);
+    });
+
+    /// <summary>
+    /// Jumps the reader straight to the perek through the search bar —
+    /// deterministic setup regardless of which perek the day opens on. The
+    /// index resolves "תהילים 119" to its "תהילים קיט" row no matter how deep
+    /// that chapter sits inside the picker's column, so the setup does not
+    /// spend the device budget scrolling 150 rows.
+    /// </summary>
+    private void NavigateToPerek(string sefer, int perekNumber, string perek)
+    {
+        var title = $"{sefer} {perek}";
+        if (!Driver!.FindElements(Platform.AutomationId("PerekSearchInput"))
+                .Any(element => element.Displayed))
+        {
+            Page.Tap("PerekSource");
+        }
+        var bar = Page.WaitFor("PerekSearchInput", element => element.Enabled);
+        Platform.Tap(Driver!, bar);
+        var input = bar.TagName.Contains("TextView", StringComparison.Ordinal)
+            || bar.TagName.Contains("EditText", StringComparison.Ordinal)
+            || bar.TagName.Contains("SearchField", StringComparison.Ordinal)
+            || bar.TagName.Contains("TextField", StringComparison.Ordinal)
+            ? bar
+            : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
+        input.Clear();
+        input.SendKeys($"{sefer} {perekNumber}");
+
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        while (DateTime.UtcNow < deadline)
+        {
+            var row = Page.RenderedElements("SearchResultTitle")
+                .FirstOrDefault(element => element.Text == title);
+            if (row.Element != null)
+            {
+                Platform.Tap(Driver!, row.Element);
+                Page.WaitFor("PerekSource", element => element.Text == title);
+                Assert.NotEmpty(Page.FirstPasuk);
+                return;
+            }
+            Thread.Sleep(250);
+        }
+        throw new WebDriverTimeoutException($"The '{title}' search row never rendered.");
+    }
+
+    /// <summary>
+    /// Polls the rendered items — a perek outside the column viewport is not
+    /// realized at all — until the target renders with its complete bounds
+    /// inside the list frame. No swipe or scroll helper runs here: whatever
+    /// position the picker opens with is what gets judged.
+    /// </summary>
+    private void AssertItemFullyInsidePerekColumn(string text)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var last = "no frames read";
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var list = Page.RenderedElements("PerekPickerPerekList").FirstOrDefault();
+                var item = Page.RenderedElements("PickerPerekItem").FirstOrDefault(element => element.Text == text);
+                if (item.Element != null && list.Element != null && FullyInside(list.Frame, item.Frame))
+                {
+                    return;
+                }
+                last = $"item={(item.Element == null ? "absent" : FrameText(item.Frame))}, " +
+                    $"list={(list.Element == null ? "absent" : FrameText(list.Frame))}";
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The column re-realizes while the open scroll lands — retry.
+            }
+            Thread.Sleep(200);
+        }
+        Assert.Fail($"chapter '{text}' never rendered fully inside the perek column viewport ({last}).");
+    }
+
+    /// <summary>
+    /// The same landing check as <see cref="AssertItemFullyInsidePerekColumn"/>,
+    /// plus centering: the item's center sits within one item height of the
+    /// column's center, so a top- or bottom-pinned landing cannot pass. Only
+    /// for targets whose list extent actually allows centering — an item
+    /// clamped at the list end legitimately lands off-center.
+    /// </summary>
+    private void AssertItemCenteredInPerekColumn(string text)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var last = "no frames read";
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var list = Page.RenderedElements("PerekPickerPerekList").FirstOrDefault();
+                var item = Page.RenderedElements("PickerPerekItem").FirstOrDefault(element => element.Text == text);
+                if (item.Element != null && list.Element != null)
+                {
+                    var centerDelta = item.Frame.Location.Y + item.Frame.Size.Height / 2.0
+                        - (list.Frame.Location.Y + list.Frame.Size.Height / 2.0);
+                    if (FullyInside(list.Frame, item.Frame) && Math.Abs(centerDelta) <= item.Frame.Size.Height)
+                    {
+                        return;
+                    }
+                    last = $"item={FrameText(item.Frame)}, list={FrameText(list.Frame)}, centerDelta={centerDelta:0}";
+                }
+                else
+                {
+                    last = $"item={(item.Element == null ? "absent" : FrameText(item.Frame))}, " +
+                        $"list={(list.Element == null ? "absent" : FrameText(list.Frame))}";
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The column re-realizes while the open scroll lands — retry.
+            }
+            Thread.Sleep(200);
+        }
+        Assert.Fail($"chapter '{text}' never rendered centered inside the perek column viewport ({last}).");
+    }
+
+    /// <summary>Every edge of the inner frame lies inside the outer frame.</summary>
+    private static bool FullyInside(
+        (System.Drawing.Point Location, System.Drawing.Size Size) outer,
+        (System.Drawing.Point Location, System.Drawing.Size Size) inner) =>
+        inner.Size.Width > 0 && inner.Size.Height > 0
+        && inner.Location.X >= outer.Location.X
+        && inner.Location.Y >= outer.Location.Y
+        && inner.Location.X + inner.Size.Width <= outer.Location.X + outer.Size.Width
+        && inner.Location.Y + inner.Size.Height <= outer.Location.Y + outer.Size.Height;
+
+    private static string FrameText((System.Drawing.Point Location, System.Drawing.Size Size) frame) =>
+        $"({frame.Location.X},{frame.Location.Y} {frame.Size.Width}x{frame.Size.Height})";
 
     private void OpenPicker()
     {

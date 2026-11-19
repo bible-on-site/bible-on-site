@@ -17,6 +17,7 @@
 		"ios:boot": "node boot-ios.mjs",
 		"ios:boot:start": "node boot-ios.mjs start",
 		"ios:boot:wait": "node boot-ios.mjs wait",
+		"ios:boot:heal": "node boot-ios.mjs heal",
 		"ios:boot:resolve": "node boot-ios.mjs resolve"
 	},
 	"_driverSecurityIssue": "https://github.com/bible-on-site/bible-on-site/issues/1995",

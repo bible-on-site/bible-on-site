@@ -97,47 +97,44 @@ public partial class PerekPickerPopup : ContentView
 
         var seferGroup = SefarimData.GetSeferGroup(perek.SeferId);
 
-        // Select the group
+        // Every column's SelectionChanged loads the next column's items
+        // synchronously, so the whole cascade completes before the popup is
+        // first arranged. Viewport positioning waits for that arrange through
+        // PickerScrollColumns — the selected perek must be scrolled into the
+        // column's viewport, not just marked selected (#3400).
         var groups = (List<SeferGroupItem>)SeferGroupList.ItemsSource;
         var groupItem = groups.FirstOrDefault(g => g.Id == (int)seferGroup);
-        if (groupItem != null)
+        if (groupItem == null)
         {
-            SeferGroupList.SelectedItem = groupItem;
-            _selectedGroup = groupItem;
-
-            // After group is selected, load sefarim and select the right sefer
-            MainThread.BeginInvokeOnMainThread(async () =>
-            {
-                await Task.Delay(50); // Allow UI to update
-
-                var sefarim = (List<SeferItem>?)SeferList.ItemsSource;
-                if (sefarim != null)
-                {
-                    // Find the sefer with matching ID
-                    var seferItem = sefarim.FirstOrDefault(s => s.SeferId == perek.SeferId);
-
-                    if (seferItem != null)
-                    {
-                        SeferList.SelectedItem = seferItem;
-                        _selectedSefer = seferItem;
-
-                        await Task.Delay(50); // Allow UI to update
-
-                        var perakim = (List<PerekItem>?)PerekList.ItemsSource;
-                        if (perakim != null)
-                        {
-                            var perekItem = perakim.FirstOrDefault(p => p.PerekId == perekId);
-                            if (perekItem != null)
-                            {
-                                PerekList.SelectedItem = perekItem;
-                                _selectedPerek = perekItem;
-                                UpdateConfirmButtonState();
-                            }
-                        }
-                    }
-                }
-            });
+            return;
         }
+
+        SeferGroupList.SelectedItem = groupItem;
+        _selectedGroup = groupItem;
+        _scrollColumns.ScrollSelectedIntoView(SeferGroupList);
+
+        var seferItem = (SeferList.ItemsSource as List<SeferItem>)?
+            .FirstOrDefault(s => s.SeferId == perek.SeferId);
+        if (seferItem == null)
+        {
+            return;
+        }
+
+        SeferList.SelectedItem = seferItem;
+        _selectedSefer = seferItem;
+        _scrollColumns.ScrollSelectedIntoView(SeferList);
+
+        var perekItem = (PerekList.ItemsSource as List<PerekItem>)?
+            .FirstOrDefault(p => p.PerekId == perekId);
+        if (perekItem == null)
+        {
+            return;
+        }
+
+        PerekList.SelectedItem = perekItem;
+        _selectedPerek = perekItem;
+        _scrollColumns.ScrollSelectedIntoView(PerekList);
+        UpdateConfirmButtonState();
     }
 
     private void OnSeferGroupSelected(object? sender, SelectionChangedEventArgs e)
