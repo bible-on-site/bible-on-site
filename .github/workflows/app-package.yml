@@ -457,6 +457,9 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         env:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+          # #3440: supplier debug ELFs (e.g. SourceGear libe_sqlite3) are hosted
+          # as release assets addressed by build ID; unset/empty var skips it.
+          ANDROID_VENDOR_SYMBOLS_BASE_URL: ${{ vars.ANDROID_VENDOR_SYMBOLS_BASE_URL }}
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             dotnet run --project devops -- Package --platform Android --configuration Release \
