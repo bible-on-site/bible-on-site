@@ -153,18 +153,57 @@ function refStr(ref) {
 	return `${ref.perek}:${ref.pasuk}`;
 }
 
-// sefer (Hebrew name) → perek → pasuk count, from the same corpus the
-// site serves — needed when a variant boundary lands on a perek's
-// first pasuk and the previous aliyah ends on the previous perek's
-// last (e.g. נח weekday aliyah 3 ends ו:כב before שבת day2 at ז:א).
+// sefer (Hebrew name) → perek → pasuk count — needed when a variant
+// boundary lands on a perek's first pasuk and the previous aliyah ends
+// on the previous perek's last (e.g. נח weekday aliyah 3 ends ו:כב
+// before שבת day2 at ז:א). Only Torah sefarim are ever queried, so the
+// canonical lengths copied from the site's sefaria-dump corpus are
+// embedded below: the generated dump is not committed, and --check must
+// gate drift in fresh clones too. When a dump *is* present it is used
+// instead and the embedded table is verified against it — a regenerated
+// corpus that disagrees fails loudly rather than silently diverging.
+const TORAH_PEREK_LENGTHS = new Map(
+	Object.entries({
+		בראשית: [
+			31, 25, 24, 26, 32, 22, 24, 22, 29, 32, 32, 20, 18, 24, 21, 16, 27, 33,
+			38, 18, 34, 24, 20, 67, 34, 35, 46, 22, 35, 43, 54, 33, 20, 31, 29, 43,
+			36, 30, 23, 23, 57, 38, 34, 34, 28, 34, 31, 22, 33, 26,
+		],
+		שמות: [
+			22, 25, 22, 31, 23, 30, 29, 28, 35, 29, 10, 51, 22, 31, 27, 36, 16, 27,
+			25, 23, 37, 30, 33, 18, 40, 37, 21, 43, 46, 38, 18, 35, 23, 35, 35, 38,
+			29, 31, 43, 38,
+		],
+		ויקרא: [
+			17, 16, 17, 35, 26, 23, 38, 36, 24, 20, 47, 8, 59, 57, 33, 34, 16, 30,
+			37, 27, 24, 33, 44, 23, 55, 46, 34,
+		],
+		במדבר: [
+			54, 34, 51, 49, 31, 27, 89, 26, 23, 36, 35, 16, 33, 45, 41, 35, 28, 32,
+			22, 29, 35, 41, 30, 25, 18, 65, 23, 31, 39, 17, 54, 42, 56, 29, 34, 13,
+		],
+		דברים: [
+			46, 37, 29, 49, 30, 25, 26, 20, 29, 22, 32, 31, 19, 29, 23, 22, 20, 22,
+			21, 20, 23, 29, 26, 22, 19, 19, 26, 69, 28, 20, 30, 52, 29, 12,
+		],
+	}).map(([sefer, lengths]) => [
+		sefer,
+		new Map(lengths.map((count, index) => [index + 1, count])),
+	]),
+);
+
 let perekLengths = null;
 function loadPerekLengths() {
 	if (perekLengths) return perekLengths;
 	const corpusFiles = corpusDumpFiles();
-	if (corpusFiles.length !== 1) {
+	if (corpusFiles.length > 1) {
 		throw new Error(
-			`expected exactly one sefaria-dump-*.tanah_view.json, found ${corpusFiles.length}`,
+			`expected at most one sefaria-dump-*.tanah_view.json, found ${corpusFiles.length}`,
 		);
+	}
+	if (corpusFiles.length === 0) {
+		perekLengths = TORAH_PEREK_LENGTHS;
+		return perekLengths;
 	}
 	const corpus = JSON.parse(
 		readFileSync(join(CORPUS_DIR, corpusFiles[0]), "utf8"),
@@ -176,6 +215,18 @@ function loadPerekLengths() {
 			lengths.set(index + 1, perek.pesukim.length);
 		}
 		perekLengths.set(book.name, lengths);
+	}
+	for (const [sefer, lengths] of TORAH_PEREK_LENGTHS) {
+		const actual = perekLengths.get(sefer);
+		if (
+			!actual ||
+			actual.size !== lengths.size ||
+			[...lengths].some(([perek, count]) => actual.get(perek) !== count)
+		) {
+			throw new Error(
+				`TORAH_PEREK_LENGTHS diverges from the corpus for ${sefer} — regenerate the table`,
+			);
+		}
 	}
 	return perekLengths;
 }
@@ -404,17 +455,6 @@ const BOOK_PARASHA_COUNT = {
 };
 
 async function main() {
-	// --check needs perek lengths from the site's canonical corpus — a
-	// generated artifact that trees predating its commit (or partial
-	// checkouts) don't carry. Self-skip when it is absent, like the other
-	// local gates (docs/devops/pre-commit.md): drift still gates wherever
-	// the corpus is committed.
-	if (process.argv.includes("--check") && corpusDumpFiles().length === 0) {
-		console.log(
-			"Skipping parasha-aliyot drift check — no sefaria-dump-*.tanah_view.json in this tree.",
-		);
-		return;
-	}
 	const division = JSON.parse(readFileSync(DIVISION, "utf8"));
 	if (process.argv.includes("--refresh")) {
 		const upstream = await (await fetch(HEBCAL_URL)).text();
