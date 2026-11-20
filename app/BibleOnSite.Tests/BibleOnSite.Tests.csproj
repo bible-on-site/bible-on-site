@@ -140,8 +140,7 @@
   <ItemGroup>
     <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
-    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
-    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
+    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/AlHeperekUI-outlines.json" LogicalName="AlHeperekUI-outlines.json" />
   </ItemGroup>
 
 </Project>

@@ -19,14 +19,10 @@ jest.mock("pdf-lib", () => {
 		name: "AlHeperekUI-Bold",
 		widthOfTextAtSize: jest.fn().mockReturnValue(55),
 	};
-	const mockScriptureFont = {
-		name: "Taamey_D",
-		widthOfTextAtSize: jest.fn().mockReturnValue(50),
-	};
 	const mockDoc = {
 		registerFontkit: jest.fn(),
 		embedFont: jest.fn().mockImplementation((_bytes, _opts) => {
-			const faces = [mockFont, mockBoldFont, mockScriptureFont];
+			const faces = [mockFont, mockBoldFont];
 			return Promise.resolve(faces[mockDoc.embedFont.mock.calls.length - 1]);
 		}),
 		addPage: jest.fn(() => {
@@ -46,7 +42,6 @@ jest.mock("pdf-lib", () => {
 		__mockPages: pages,
 		__mockFont: mockFont,
 		__mockBoldFont: mockBoldFont,
-		__mockScriptureFont: mockScriptureFont,
 	};
 });
 
@@ -81,7 +76,6 @@ import {
 	segmentsToText,
 	semanticPagesToPerekIds,
 	stripHtml,
-	stripTaamim,
 	wrapText,
 } from "../../../src/lib/download/tanach-pdf";
 import { getPerushimByPerekId } from "../../../src/lib/perushim";
@@ -168,26 +162,6 @@ describe("segmentsToText", () => {
 			{ type: "ptuha" as const, value: "" },
 		];
 		expect(segmentsToText(segments)).toBe("");
-	});
-});
-
-describe("stripTaamim", () => {
-	it("removes cantillation marks (U+0591–U+05AF)", () => {
-		// pashta (U+0599) and revii (U+05A7) are taamim
-		expect(stripTaamim("וַיְדַבֵּ֨ר")).toBe("וַיְדַבֵּר");
-		expect(stripTaamim("יְהוָ֧ה")).toBe("יְהוָה");
-	});
-
-	it("keeps nikud (vowels, U+05B0–U+05BD)", () => {
-		expect(stripTaamim("בְּרֵאשִׁית")).toBe("בְּרֵאשִׁית");
-	});
-
-	it("keeps maqaf (U+05BE) and sof pasuq (U+05C3)", () => {
-		expect(stripTaamim("אֶל־מֹשֶׁה׃")).toBe("אֶל־מֹשֶׁה׃");
-	});
-
-	it("handles empty string", () => {
-		expect(stripTaamim("")).toBe("");
 	});
 });
 
@@ -377,11 +351,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		pdfLib.__mockPages.length = 0;
 		// Reset embedFont call counter
 		pdfLib.__mockDoc.embedFont.mockImplementation(() => {
-			const faces = [
-				pdfLib.__mockFont,
-				pdfLib.__mockBoldFont,
-				pdfLib.__mockScriptureFont,
-			];
+			const faces = [pdfLib.__mockFont, pdfLib.__mockBoldFont];
 			return Promise.resolve(
 				faces[pdfLib.__mockDoc.embedFont.mock.calls.length - 1],
 			);
@@ -403,7 +373,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(pdfLib.__mockDoc.save).toHaveBeenCalled();
 	});
 
-	it("registers fontkit and embeds the brand and scripture fonts", async () => {
+	it("registers fontkit and embeds the Al Heperek regular and bold faces", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
 				typeof getPerekByPerekId
@@ -413,16 +383,18 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		expect(pdfLib.__mockDoc.registerFontkit).toHaveBeenCalled();
-		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledTimes(3);
+		// Regular + bold only — marked scripture stays on the same faces now
+		// that Al Heperek covers the whole mark block (#3685).
+		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledTimes(2);
 		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledWith(
 			expect.any(Uint8Array),
-			{ subset: true },
+			{ subset: true, features: { locl: false } },
 		);
 	});
 
-	it("uses the scripture face for meteg and sof pasuq in canonical text", async () => {
+	it("draws canonical marked text on the Al Heperek body face", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
-			makePerek("בראשית", "א", "פרק א", ["הָאָֽרֶץ׃"]) as ReturnType<
+			makePerek("בראשית", "א", "פרק א", ["הָאָֽרֶ֖ץ׃"]) as ReturnType<
 				typeof getPerekByPerekId
 			>,
 		);
@@ -430,15 +402,18 @@ describe("buildTanachPdfForPerekRange", () => {
 		const scripture = pdfLib.__mockPages[0].drawText.mock.calls
 			.filter(
 				(call: [string, { font: unknown }]) =>
-					call[1].font === pdfLib.__mockScriptureFont,
+					call[1].font === pdfLib.__mockFont,
 			)
 			.map((call: [string]) => call[0])
 			.join("");
-		expect(scripture).toContain("\u05bd");
-		expect(scripture).toContain("\u05c3");
+		// Taamim stay in the canonical text — Al Heperek shapes them on the
+		// regular face (#3685), so no scripture-face rerouting remains.
+		expect(scripture).toContain("הָאָֽרֶ֖ץ׃");
 	});
 
-	it("uses scripture glyphs in pointed chapter headings and article abstracts", async () => {
+	it("keeps marked clusters on the preferred face in headings and abstracts", async () => {
+		// A pointed title stays bold and a pointed abstract stays regular —
+		// marked runs no longer drop to a separate scripture face (#3685).
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "אֹתָֽם׃", []) as ReturnType<
 				typeof getPerekByPerekId
@@ -449,12 +424,17 @@ describe("buildTanachPdfForPerekRange", () => {
 		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
 		await buildTanachPdfForPerekRange([1]);
 		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
-		const pointed = calls.filter((call: [string]) =>
-			/[\u05bd\u059e]/u.test(call[0]),
+		const titleMark = calls.find((call: [string]) =>
+			call[0].includes("ֽ"),
 		);
-		expect(pointed.length).toBeGreaterThanOrEqual(3);
-		for (const call of pointed)
-			expect(call[1].font).toBe(pdfLib.__mockScriptureFont);
+		expect(titleMark[0]).toContain("אֹתָֽם׃");
+		expect(titleMark[1].font).toBe(pdfLib.__mockBoldFont);
+		const abstractMarks = calls.filter((call: [string]) =>
+			call[0].includes("הָאָֽרֶץ׃"),
+		);
+		expect(abstractMarks.length).toBeGreaterThanOrEqual(1);
+		for (const call of abstractMarks)
+			expect(call[1].font).toBe(pdfLib.__mockFont);
 		expect(calls.find((call: [string]) => call[0].includes("•"))[1].font).toBe(
 			pdfLib.__mockBoldFont,
 		);
@@ -465,7 +445,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		}
 	});
 
-	it("routes a stray mark in an LTR run to the scripture face without reordering", async () => {
+	it("keeps a stray mark in an LTR run on the preferred face", async () => {
 		// A nonspacing mark after a Latin base stays inside the LTR embedding
 		// level, so the run must keep its logical chunk order (no reversal).
 		mockGetPerekByPerekId.mockReturnValue(
@@ -474,12 +454,12 @@ describe("buildTanachPdfForPerekRange", () => {
 			>,
 		);
 		mockGetArticlesByPerekId.mockResolvedValue([
-			{ name: "מאמר", authorName: "מחבר", abstract: "<p>x\u0591</p>" },
+			{ name: "מאמר", authorName: "מחבר", abstract: "<p>x֑</p>" },
 		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
 		await buildTanachPdfForPerekRange([1]);
 		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
-		const mark = calls.find((call: [string]) => call[0] === "\u0591");
-		expect(mark[1].font).toBe(pdfLib.__mockScriptureFont);
+		const mark = calls.find((call: [string]) => call[0].includes("֑"));
+		expect(mark[1].font).toBe(pdfLib.__mockFont);
 		const latin = calls.find((call: [string]) => call[0].includes("x"));
 		expect(latin[1].font).toBe(pdfLib.__mockFont);
 	});

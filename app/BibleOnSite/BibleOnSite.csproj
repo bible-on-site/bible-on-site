@@ -210,11 +210,12 @@
 		<MauiImage Include="Resources\AppIcon\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
 
 		<!-- Custom Fonts -->
-		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
-		<EmbeddedResource Include="Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
 		<MauiAsset Include="Resources\Fonts\AlHeperek-license.txt" LogicalName="AlHeperek-license.txt" />
 		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
+		<!-- Drawn scripture (תיקון קוראים) shapes against the embedded Al
+		     Heperek TTF — its pre-baked base/mark contours ship beside it (#3685). -->
+		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-outlines.json" LogicalName="AlHeperekUI-outlines.json" />
 		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
 		     attribution inside the package too (#2623). -->
 		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />

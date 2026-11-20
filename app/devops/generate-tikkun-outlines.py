@@ -1,9 +1,10 @@
 """Export base and mark contours without changing the bundled font's glyph geometry."""
 
-# Run with Python and fonttools installed after changing TaameyD-Regular.ttf.
-# HarfBuzz shapes complete marked words at runtime; these contours let the
-# canvas paint base and annotation layers separately, including marks inside
-# composite glyphs such as yoddagesh and trueshin.
+# Run with Python and fonttools installed after changing the bundled scripture
+# font (#3685: Al Heperek). HarfBuzz shapes complete marked words at runtime;
+# these contours let the canvas paint base and annotation layers separately.
+# Al Heperek attaches every mark through GPOS — mark glyphs are separate
+# outlines, so the layer split follows the GDEF classes directly.
 
 import hashlib
 import json
@@ -56,7 +57,7 @@ class LayerPen(BasePen):
 def main():
     """Write deterministic contour data paired to the exact packaged font."""
     fonts = Path(__file__).resolve().parents[1] / "BibleOnSite/Resources/Fonts"
-    font_path = fonts / "TaameyD-Regular.ttf"
+    font_path = fonts / "AlHeperekUI-Regular.ttf"
     font = TTFont(font_path)
     glyph_set = font.getGlyphSet()
     classes = font["GDEF"].table.GlyphClassDef.classDefs
@@ -67,18 +68,6 @@ def main():
     composites = {name for name in font.getGlyphOrder() if font["glyf"][name].isComposite()}
     glyphs = []
     for name in font.getGlyphOrder():
-        # Taamey D's U+FB1F is the one pointed presentation form drawn as a
-        # simple glyph. Its final rectangle is the patach below the two yods.
-        # Assert the contour contract so a future font update needs review.
-        if name == "yodyodpatax":
-            pen = LayerPen(glyph_set, classes, composites, False)
-            glyph_set[name].draw(pen)
-            cut = pen.contour_ends[-2]
-            base, marks = pen.commands[:cut], pen.commands[cut:]
-            if marks != [0, 852, 287, 1, 76, 287, 1, 76, 381, 1, 852, 381, 4]:
-                raise ValueError("Review the pointed yod ligature's contours after changing Taamey D")
-            glyphs.append({"Name": name, "Base": base, "Marks": marks})
-            continue
         layers = []
         for marks in (False, True):
             pen = LayerPen(glyph_set, classes, composites, marks)
@@ -95,7 +84,7 @@ def main():
         "Descent": font["hhea"].descent,
         "Glyphs": glyphs,
     }
-    output = fonts / "TaameyD-outlines.json"
+    output = fonts / "AlHeperekUI-outlines.json"
     output.write_text(json.dumps(result, separators=(",", ":")) + "\n", encoding="utf-8", newline="\n")
     print(f"Exported {len(glyphs)} glyphs to {output.name} ({output.stat().st_size} bytes)")
 

@@ -16,6 +16,7 @@ import {
 	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings,
 	setStoredReaderSettings,
+	TANAKH_FONT_LABELS,
 } from "@/lib/reader-settings";
 import {
 	applySiteA11ySettings,
@@ -286,7 +287,7 @@ export function TopNavAccessibility() {
 							>
 								{PEREK_TANAKH_FONTS.map((font, index) => (
 									<option key={font || "default"} value={index}>
-										{font === "noto" ? "Noto Serif Hebrew" : "Taamey D"}
+										{TANAKH_FONT_LABELS[font]}
 									</option>
 								))}
 							</select>

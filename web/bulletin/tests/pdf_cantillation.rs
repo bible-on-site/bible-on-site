@@ -1,10 +1,11 @@
-//! #2961: daily bulletin articles must render cantillated scripture quotes.
-//! The daily article face (Al Heperek Font UI) has zero glyphs for
-//! U+0591–U+05AF (and U+05C4–U+05C6); quotes must run through a bundled
-//! cantillation-capable face so marks stay attached to their bases.
+//! #3685: Al Heperek v0.9.5 covers the whole Hebrew block — every taam
+//! (U+0591–U+05AF), meteg, and the rare marks U+05C4–U+05C6 — so daily
+//! bulletin articles, quotes, headings and pesukim all shape on the bundled
+//! Al Heperek faces. Taamey Frank CLM remains only where a real italic or
+//! bold-italic outline is needed (Al Heperek has no italic face).
 //!
 //! These tests inspect real PDF content/glyph/font output — a `%PDF` header
-//! or a markup assertion cannot detect the missing-glyph defect.
+//! or a markup assertion cannot detect a missing-glyph or wrong-face defect.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,19 +17,30 @@ fn fonts_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts")
 }
 
-/// Every mark Al Heperek Font UI lacks, per its bundled cmap.
-const FRL_MISSING_MARKS: [char; 35] = [
+/// Marks Al Heperek lacked before v0.9.5 — the regression specimen set.
+const HEPEREK_MARKS: [char; 35] = [
     // All taamim U+0591–U+05AF …
     '\u{0591}', '\u{0592}', '\u{0593}', '\u{0594}', '\u{0595}', '\u{0596}', '\u{0597}', '\u{0598}',
     '\u{0599}', '\u{059A}', '\u{059B}', '\u{059C}', '\u{059D}', '\u{059E}', '\u{059F}', '\u{05A0}',
     '\u{05A1}', '\u{05A2}', '\u{05A3}', '\u{05A4}', '\u{05A5}', '\u{05A6}', '\u{05A7}', '\u{05A8}',
     '\u{05A9}', '\u{05AA}', '\u{05AB}', '\u{05AC}', '\u{05AD}', '\u{05AE}', '\u{05AF}',
-    // … plus the rare upper/lower marks U+05C4–U+05C6.
+    // … plus the rare upper/lower marks U+05C4–U+05C6 and meteg U+05BD.
     '\u{05C4}', '\u{05C5}', '\u{05C6}', '\u{05BD}',
 ];
 
-fn is_missing_mark(c: char) -> bool {
-    FRL_MISSING_MARKS.contains(&c)
+fn is_mark(c: char) -> bool {
+    HEPEREK_MARKS.contains(&c)
+}
+
+/// Combining marks and points (U+0591–U+05C7: taamim, niqqud, dagesh,
+/// shin/sin dot, rafe). Typst's ToUnicode maps each shaped glyph to its
+/// whole source cluster — a base glyph shared between a cantillated cluster
+/// and plain text decodes as the cluster — so word-level assertions must
+/// compare letter sequences, not raw cluster strings.
+fn unmarked(text: &str) -> String {
+    text.chars()
+        .filter(|c| !('\u{0591}'..='\u{05C7}').contains(c))
+        .collect()
 }
 
 /// Article fixture quoting the issue's affected verses: the block quote cites
@@ -40,7 +52,7 @@ fn melachim_article() -> String {
     let quote_yud_gimel = &perek.pesukim[12];
     assert!(quote_lamed_he.contains('֣'));
     assert!(quote_yud_gimel.contains('֣'));
-    let specimen: String = FRL_MISSING_MARKS
+    let specimen: String = HEPEREK_MARKS
         .iter()
         .map(|mark| format!("א{mark}"))
         .collect();
@@ -50,6 +62,7 @@ fn melachim_article() -> String {
          <p>וכן נאמר {quote_yud_gimel} (מלכים א כ יג) inline.</p>\
          <p>דגש: <strong>הַכֵּ֣ינִי נָ֑א</strong> וגם \
          <span style='font-style:italic'>כֹּ֥ה אָמַ֣ר</span> ועוד \
+         <em>מֶ֥רְחָ֣א</em> ועוד \
          <span style='font-weight:bold'>וַיֹּאמֶ֞ר אֵלָ֑יו</span> תמיד.</p>\
          <p>סימנים: {specimen} — perek 307 (2026) הָאָֽרֶץ׃.</p>"
     )
@@ -284,8 +297,17 @@ fn shown_texts(doc: &Document) -> Vec<ShownText> {
     out
 }
 
+/// Every distinct embedded face name in the document.
+fn embedded_faces(doc: &Document) -> Vec<String> {
+    doc.objects
+        .values()
+        .filter_map(|o| o.as_dict().ok()?.get(b"BaseFont").ok()?.as_name().ok())
+        .map(|n| String::from_utf8_lossy(n).into_owned())
+        .collect()
+}
+
 #[test]
-fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
+fn daily_article_scripture_quotes_render_all_marks_in_al_heperek() {
     let buf = pdf::build_daily_pdf(
         &melachim_request(melachim_article()),
         &fonts_dir(),
@@ -307,38 +329,31 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         "missing-glyph (.notdef) output: {notdef:?}"
     );
 
-    // Every FRL-missing mark must be drawn — and only by cantillation fonts:
-    // Taamey Frank CLM (article) or Taamey D (perek), never Al Heperek Font UI.
-    let clm_text: String = shown
+    // Every specimen mark must be drawn by an Al Heperek face, attached to
+    // its Hebrew base. The specimen draws `א` + mark; the cluster's ToUnicode
+    // text keeps base and mark contiguous — either order, since RTL visual
+    // layout may emit the mark glyph beside its base — proving attachment.
+    let heperek_text: String = shown
         .iter()
-        .filter(|s| s.font.contains("TaameyFrankCLM"))
+        .filter(|s| s.font.contains("AlHeperekUI"))
         .map(|s| s.text.as_str())
         .collect();
-    for mark in FRL_MISSING_MARKS {
-        // The specimen draws `א` + mark; the cluster's ToUnicode text keeps
-        // base and mark contiguous — either order, since RTL visual layout
-        // may emit the mark glyph beside its base — proving attachment.
+    let heperek_letters = unmarked(&heperek_text);
+    for mark in HEPEREK_MARKS {
         assert!(
-            clm_text.contains(&format!("א{mark}")) || clm_text.contains(&format!("{mark}א")),
-            "mark U+{:04X} missing from TaameyFrankCLM output",
+            heperek_text.contains(&format!("א{mark}"))
+                || heperek_text.contains(&format!("{mark}א")),
+            "mark U+{:04X} missing from AlHeperekUI output",
             mark as u32
         );
     }
     for s in &shown {
-        if s.font.contains("AlHeperekUI") {
-            assert!(
-                !s.text.chars().any(is_missing_mark),
-                "{} drew a mark it has no glyph for: {:?}",
-                s.font,
-                s.text
-            );
-        }
         // A mark must sit beside a Hebrew char in its op — either side, since
         // RTL visual order may emit the mark glyph before or after its base.
         // A mark alone in an op means it was styled in isolation.
         let chars: Vec<char> = s.text.chars().collect();
         for (i, c) in chars.iter().enumerate() {
-            if is_missing_mark(*c) {
+            if is_mark(*c) {
                 let hebrew =
                     |c: Option<&char>| c.is_some_and(|c| ('\u{0590}'..='\u{05FF}').contains(c));
                 assert!(
@@ -352,25 +367,42 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         }
     }
 
-    // Complete cantillated clusters from the quoted pesukim survive intact:
-    // אִ֨ from וְאִ֨ישׁ, כֵּ֣ from הַכֵּ֣ינִי, חָ֜ from אֶחָ֜ד (מלכים א כ לה).
+    // Complete cantillated clusters from the quoted pesukim survive on Al
+    // Heperek: אִ֨ from וְאִ֨ישׁ, כֵּ֣ from הַכֵּ֣ינִי, חָ֜ from אֶחָ֜ד
+    // (מלכים א כ לה). Each mark glyph decodes to its whole cluster, so a
+    // mark asserts its presence in the output while its base letter asserts
+    // in mark-free comparison — together they prove the cluster shapes.
     for cluster in ["אִ֨", "כֵּ֣", "חָ֜"] {
+        for mark in cluster.chars().filter(|c| is_mark(*c)) {
+            assert!(
+                heperek_text.contains(mark),
+                "mark U+{:04X} of cluster {cluster:?} missing from Al Heperek output",
+                mark as u32
+            );
+        }
+        let base = unmarked(cluster);
+        let flipped: String = base.chars().rev().collect();
         assert!(
-            clm_text.contains(cluster),
-            "cantillated cluster {cluster:?} missing from article output"
+            heperek_letters.contains(&base) || heperek_letters.contains(&flipped),
+            "base {base:?} of cluster {cluster:?} missing from Al Heperek output"
         );
     }
 
-    // Emphasis inside quotes resolves to the real CLM styled faces (#2924).
+    // Bold emphasis inside quotes resolves to the real Al Heperek bold face —
+    // the munach mark of the cantillated strong run decodes on it.
     let bold_text: String = shown
         .iter()
-        .filter(|s| s.font.contains("TaameyFrankCLM-Bold"))
+        .filter(|s| s.font.contains("AlHeperekUI-Bold"))
         .map(|s| s.text.as_str())
         .collect();
     assert!(
-        bold_text.contains("כֵּ֣"),
+        bold_text.contains('֣') && unmarked(&bold_text).contains('כ'),
         "bold cantillated cluster missing: {bold_text:?}"
     );
+
+    // Italic runs keep the real italic outlines — Taamey Frank CLM Italic is
+    // the only non-Al Heperek face allowed (Al Heperek has no italic). Both
+    // the styled span (כֹּ֥ה) and the semantic <em> (מֶ֥רְחָ֣א) decode on it.
     let italic_text: String = shown
         .iter()
         .filter(|s| {
@@ -380,35 +412,47 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         .map(|s| s.text.as_str())
         .collect();
     assert!(
-        italic_text.contains("כֹּ֥"),
+        italic_text.contains('֥') && unmarked(&italic_text).contains('כ'),
         "italic cantillated cluster missing: {italic_text:?}"
     );
-
-    // Plain prose (source refs, Latin, digits) stays on the article font.
-    // Visual-order decoding may flip multi-glyph words — accept both.
-    let frl_text: String = shown
-        .iter()
-        .filter(|s| s.font.contains("AlHeperekUI"))
-        .map(|s| s.text.as_str())
-        .collect();
-    for prose in ["מלכים", "לה", "יג", "307", "perek"] {
-        let flipped: String = prose.chars().rev().collect();
+    // Sheva appears only inside the semantic <em>מֶ֥רְחָ֣א</em> (the styled
+    // span's clusters carry none) — glyph runs split clusters, so look for
+    // the mark anywhere on the italic face.
+    assert!(
+        italic_text.contains('\u{5b0}'),
+        "semantic <em> must also ride the italic face: {italic_text:?}"
+    );
+    for s in &shown {
         assert!(
-            frl_text.contains(prose) || frl_text.contains(&flipped),
-            "prose {prose:?} not in FRL output"
+            !s.font.contains("TaameyFrankCLM")
+                || s.font.contains("Italic")
+                || s.font.contains("Oblique"),
+            "non-italic text on TaameyFrankCLM — a legacy font switch remains: {:?}",
+            s.text
         );
     }
 
-    // The perek scripture still renders via Taamey D, untouched by the fix —
-    // its cantillated pesukim produce FRL-missing marks on that face.
-    let taamey_text: String = shown
+    // Plain prose (source refs, Latin, digits) stays on the article font.
+    // Compare letter sequences (marks stripped): base glyphs shared with
+    // cantillated runs decode to their whole cluster, and visual-order
+    // decoding may flip multi-glyph words — accept both.
+    for prose in ["מלכים", "לה", "יג", "307", "perek"] {
+        let flipped: String = prose.chars().rev().collect();
+        assert!(
+            heperek_letters.contains(prose) || heperek_letters.contains(&flipped),
+            "prose {prose:?} not in Al Heperek output"
+        );
+    }
+
+    // The perek scripture itself renders on Al Heperek with its full marks.
+    let pesukim_text: String = shown
         .iter()
-        .filter(|s| s.font.contains("Taamey_D"))
+        .filter(|s| s.font.contains("AlHeperekUI-Regular"))
         .map(|s| s.text.as_str())
         .collect();
     assert!(
-        taamey_text.chars().any(is_missing_mark),
-        "perek scripture must keep Taamey D cantillation: {taamey_text:?}"
+        pesukim_text.chars().any(is_mark),
+        "perek scripture must keep its Al Heperek cantillation: {pesukim_text:?}"
     );
 }
 
@@ -432,13 +476,19 @@ fn adjacent_citations_compile_in_sefer_and_daily_exports() {
                 .filter(|run| run.font.contains("AlHeperekUI"))
                 .map(|run| run.text.as_str())
                 .collect();
-            assert!(citation.contains("בראשית") || citation.contains("תישארב"));
+            // Base glyphs shared with cantillated pesukim decode to their
+            // whole cluster — compare the letter sequence, marks stripped.
+            let citation = unmarked(&citation);
+            assert!(
+                citation.contains("בראשית") || citation.contains("תישארב"),
+                "citation letters missing from Al Heperek output: {citation:?}"
+            );
         }
     }
 }
 
 #[test]
-fn pointed_chapter_headings_use_complete_scripture_runs() {
+fn pointed_chapter_headings_use_complete_al_heperek_runs() {
     let mut req = melachim_request(String::new());
     req.perakim[0].header = "אֹתָֽם׃".into();
     req.perakim[0].pesukim.clear();
@@ -450,25 +500,25 @@ fn pointed_chapter_headings_use_complete_scripture_runs() {
         let doc = Document::load_mem(&bytes).unwrap();
         let shown = shown_texts(&doc);
         assert!(shown.iter().all(|run| run.notdef == 0));
+        // The whole pointed heading — marks included — shapes as one run on
+        // the Al Heperek face.
+        let heperek_text: String = shown
+            .iter()
+            .filter(|run| run.font.contains("AlHeperekUI"))
+            .map(|run| run.text.as_str())
+            .collect();
         assert!(
-            shown
-                .iter()
-                .filter(|run| run.font.contains("AlHeperekUI"))
-                .all(|run| !run
-                    .text
-                    .chars()
-                    .any(|c| ('\u{05B0}'..='\u{05BD}').contains(&c))),
-            "a pointed scripture heading must shape as one run: {shown:?}"
+            heperek_text.contains('ֽ') && heperek_text.contains('׃'),
+            "a pointed scripture heading must shape on Al Heperek: {shown:?}"
         );
     }
 }
 
 #[test]
-fn marked_article_titles_shape_on_the_cantillation_face() {
-    // A cantillated quote inside an article h1 becomes the PDF heading. The
-    // sefer exporter once escaped that text on the UI-first stack, so Typst
-    // per-glyph fallback re-shaped bases and duplicated glyphs; marked runs
-    // must travel the article cantillation face like the body does (#2961).
+fn marked_article_titles_shape_on_al_heperek() {
+    // A cantillated quote inside an article h1 becomes the PDF heading. Marked
+    // runs shape on the same Al Heperek face as the body — base and marks
+    // together (#3685).
     let mut req = melachim_request(String::new());
     req.perakim[0].pesukim.clear();
     req.perakim[0].articles.clear();
@@ -484,65 +534,58 @@ fn marked_article_titles_shape_on_the_cantillation_face() {
         let doc = Document::load_mem(&bytes).unwrap();
         let shown = shown_texts(&doc);
         assert!(shown.iter().all(|run| run.notdef == 0));
-        // The defect mechanism: a mark the UI face lacks drawn on that face.
-        assert!(
-            shown
-                .iter()
-                .filter(|run| run.font.contains("AlHeperekUI"))
-                .all(|run| !run.text.chars().any(is_missing_mark)),
-            "article title marks must not shape on the UI face: {shown:?}"
-        );
-        // The whole marked run survives on the article cantillation face.
-        let clm_text: String = shown
-            .iter()
-            .filter(|run| run.font.contains("TaameyFrankCLM"))
-            .map(|run| run.text.as_str())
-            .collect();
-        assert!(
-            clm_text.contains('֞') && clm_text.contains('֑'),
-            "title marks missing from TaameyFrankCLM output: {clm_text:?}"
-        );
-        // The unpointed author suffix stays on the article font.
-        let ui_text: String = shown
+        // The whole marked run survives on an Al Heperek face.
+        let heperek_text: String = shown
             .iter()
             .filter(|run| run.font.contains("AlHeperekUI"))
             .map(|run| run.text.as_str())
             .collect();
         assert!(
+            heperek_text.contains('֞') && heperek_text.contains('֑'),
+            "title marks missing from Al Heperek output: {heperek_text:?}"
+        );
+        // No Taamey D face may remain anywhere in the document.
+        assert!(
+            embedded_faces(&doc).iter().all(|f| !f.contains("Taamey_D")),
+            "Taamey D face embedded in the bulletin PDF: {:?}",
+            embedded_faces(&doc)
+        );
+        // The unpointed author suffix stays on the article font — compare
+        // letter sequences since shared base glyphs decode to clusters.
+        let ui_text = unmarked(&heperek_text);
+        assert!(
             ui_text.contains("שוויגר") || ui_text.contains("רגיווש"),
-            "title author missing from UI-face output: {ui_text:?}"
+            "title author missing from Al Heperek output: {ui_text:?}"
         );
     }
 }
 
 #[test]
-fn daily_article_without_taamim_never_loads_cantillation_face() {
+fn daily_article_italic_runs_keep_real_italic_faces() {
+    // Without italics the daily embeds only Al Heperek faces.
     let mut req = melachim_request("<h1>כותרת רגילה</h1><p>טקסט רגיל ללא טעמים כלל.</p>".into());
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
     let doc = Document::load_mem(&buf).unwrap();
-    let faces: Vec<String> = doc
-        .objects
-        .values()
-        .filter_map(|o| o.as_dict().ok()?.get(b"BaseFont").ok()?.as_name().ok())
-        .map(|n| String::from_utf8_lossy(n).into_owned())
-        .collect();
+    let faces = embedded_faces(&doc);
     assert!(
-        !faces.iter().any(|f| f.contains("TaameyFrankCLM")),
-        "cantillation face embedded despite no cantillation: {faces:?}"
+        !faces.iter().any(|f| f.contains("Taamey")),
+        "a legacy face embedded despite plain Al Heperek text: {faces:?}"
+    );
+    assert!(
+        faces.iter().any(|f| f.contains("AlHeperekUI")),
+        "Al Heperek faces not embedded: {faces:?}"
     );
 
-    // …but when marks appear, the face is actually embedded and used.
-    req.perakim[0].articles[0].2 = "<p>וַיֹּאמֶ֞ר</p>".into();
+    // An italic span resolves to the real CLM italic outlines — the only
+    // remaining non-Al Heperek face (#3685).
+    req.perakim[0].articles[0].2 = "<p>רגיל <span style='font-style:italic'>נטוי</span></p>".into();
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
     let doc = Document::load_mem(&buf).unwrap();
-    let faces: Vec<String> = doc
-        .objects
-        .values()
-        .filter_map(|o| o.as_dict().ok()?.get(b"BaseFont").ok()?.as_name().ok())
-        .map(|n| String::from_utf8_lossy(n).into_owned())
-        .collect();
+    let faces = embedded_faces(&doc);
     assert!(
-        faces.iter().any(|f| f.contains("TaameyFrankCLM")),
-        "cantillation face not embedded: {faces:?}"
+        faces.iter().any(
+            |f| f.contains("TaameyFrankCLM") && (f.contains("Italic") || f.contains("Oblique"))
+        ),
+        "italic face not embedded for an italic run: {faces:?}"
     );
 }

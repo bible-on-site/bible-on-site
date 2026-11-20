@@ -51,13 +51,16 @@ public static class MauiProgram
 #pragma warning restore CA1416
             .ConfigureFonts(fonts =>
             {
-                fonts.AddFont("AlHeperekUI-Regular.ttf", "AlHeperekRegular");
+                // Al Heperek is the brand face and — since v0.9.5 covers the
+                // whole Hebrew mark block — the native pasuk face (#3685).
+                fonts.AddFont("AlHeperekUI-Regular.ttf", ScriptureFonts.Family);
                 fonts.AddFont("AlHeperekUI-SemiBold.ttf", "AlHeperekSemibold");
                 fonts.AddFont("AlHeperekUI-Bold.ttf", "AlHeperekBold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
-                // The native pasuk face (#2623) — packaged offline via MauiFont
+                // The previous pasuk face stays registered as the bundled
+                // taamim alternative — packaged offline via MauiFont
                 // (Resources\Fonts\*.ttf glob), license beside the file.
-                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.Family);
+                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.TaameyDFamily);
             })
             .ConfigureMauiHandlers(handlers =>
             {
