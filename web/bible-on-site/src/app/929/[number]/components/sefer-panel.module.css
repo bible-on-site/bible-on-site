@@ -663,8 +663,19 @@
 	overflow: hidden;
 }
 
+/* Keep the abstract a single inline flow: block children inside a
+   line-clamped box are height-clipped while their extra lines keep
+   painting, so the next block paints on top of them (#3676). The \A
+   break between sibling paragraphs preserves each block's line
+   boundary (#2290). */
 .articleCardAbstract p {
+	display: inline;
 	margin: 0;
+}
+
+.articleCardAbstract p + p::before {
+	content: "\A";
+	white-space: pre;
 }
 
 /* Full-article reading-time estimate under the card abstract (#2607). */

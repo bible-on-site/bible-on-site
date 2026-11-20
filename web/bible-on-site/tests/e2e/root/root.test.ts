@@ -35,13 +35,13 @@ test.describe("Root page", () => {
 		await expect(
 			section.getByRole("heading", { name: "מספרים על הפרק" }),
 		).toBeVisible();
-		// Scroll trigger starts the shared count-up; fixture data (4 public
+		// Scroll trigger starts the shared count-up; fixture data (5 public
 		// articles) must settle at the exact totals. רבנים is the fixed word
 		// עשרות by design, never a number (#2397).
 		await section.scrollIntoViewIfNeeded();
 		const expected: [string, RegExp][] = [
 			["רבנים כותבים על הפרק", /^עשרות$/],
-			["מאמרים על הפרק", /^4$/],
+			["מאמרים על הפרק", /^5$/],
 			["ערכים על הפרק בתנכפדיה", /^\d[\d,]*$/],
 			["איורים על הפרק", /^\d[\d,]*$/],
 			["פרקים מוקלטים", /^\d[\d,]*$/],

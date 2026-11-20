@@ -174,10 +174,21 @@ button.carouselItem {
 }
 
 /* Abstract headings arrive as .abstractHeading paragraphs
-   (normalizeAbstractHtml): block-level, so consecutive headings keep their
-   line boundary instead of running together (issue #2290). */
+   (normalizeAbstractHtml). They must stay inline here: block children inside
+   a line-clamped box get their height clipped at the clamp point while their
+   remaining lines keep painting, so the next sibling is laid out on top of
+   them — overlapping glyphs (issue #3676, seen in Chromium, WebKit and
+   Gecko). A single inline flow clamps line-by-line correctly, and the \A
+   break between sibling paragraphs preserves the line boundary fixed by
+   #2290. */
 .articleAbstract p {
+  display: inline;
   margin: 0;
+}
+
+.articleAbstract p + p::before {
+  content: "\A";
+  white-space: pre;
 }
 
 .articleAbstract :global(.abstractHeading) {
