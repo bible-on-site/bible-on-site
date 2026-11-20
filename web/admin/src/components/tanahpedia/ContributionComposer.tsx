@@ -27,7 +27,9 @@ import {
 } from "~/server/tanahpedia/family-api-spec";
 import {
 	ContributionArticleLinkFields,
+	type DiscoverContributionArticleLinks,
 	type PreviewContributionArticle,
+	type SearchContributionArticles,
 } from "./ContributionArticleLinks";
 import { ContributionIssueScopeFields } from "./ContributionIssueScope";
 import {
@@ -261,12 +263,18 @@ function ChangeFields({
 	onChange,
 	catalogue,
 	previewArticle,
+	searchArticles,
+	discoverLinks,
+	openPr,
 	allowArticleLinks,
 }: {
 	value: DraftChange;
 	onChange: (value: DraftChange) => void;
 	catalogue: ContributionCatalogue;
 	previewArticle?: PreviewContributionArticle;
+	searchArticles?: SearchContributionArticles;
+	discoverLinks?: DiscoverContributionArticleLinks;
+	openPr?: (id: string) => unknown;
 	allowArticleLinks: boolean;
 }) {
 	const targets = catalogue.targets.filter(
@@ -377,6 +385,9 @@ function ChangeFields({
 					commands={value.fields.commands}
 					references={catalogue.references}
 					previewArticle={previewArticle}
+					searchArticles={searchArticles}
+					discoverLinks={discoverLinks}
+					openPr={openPr}
 					onTargetChange={(targetId) => onChange({ ...value, targetId })}
 					onCommandsChange={(commands) =>
 						onChange({ ...value, fields: { commands } })
@@ -592,6 +603,9 @@ export function ContributionComposer({
 	onCancel,
 	agents,
 	previewArticle,
+	searchArticles,
+	discoverLinks,
+	openPr,
 }: {
 	kind: "issue" | "pr";
 	initial?: Contribution;
@@ -602,6 +616,9 @@ export function ContributionComposer({
 	onCancel: () => void;
 	agents?: ContributionAgentSummary[];
 	previewArticle?: PreviewContributionArticle;
+	searchArticles?: SearchContributionArticles;
+	discoverLinks?: DiscoverContributionArticleLinks;
+	openPr?: (id: string) => unknown;
 }) {
 	const formId = useId();
 	const [title, setTitle] = useState(
@@ -853,6 +870,9 @@ export function ContributionComposer({
 									value={change}
 									catalogue={catalogue}
 									previewArticle={previewArticle}
+									searchArticles={searchArticles}
+									discoverLinks={discoverLinks}
+									openPr={openPr}
 									allowArticleLinks={changes.length === 1}
 									onChange={(next) =>
 										setChanges(
