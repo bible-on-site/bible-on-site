@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -163,15 +164,129 @@ User-agent: *
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Allow: /
 Allow: /api/search
+Allow: /api/health
 Disallow: /api/
 Disallow: /dev
 
 # SEO/scraper bucket (MJ12bot, AhrefsBot,
 # SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou,
-# DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
+# DataForSeoBot): hard-blocked at the edge/proxy - they ignore robots.
 
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
+# Agentmap: ${SITE_ORIGIN}/.well-known/ard.json
+# (parked in a comment, not a live directive: strict robots.txt validators -
+# Lighthouse's robots-txt audit - reject any directive outside RFC 9309 plus
+# the common extensions, and conforming ARD consumers only require the
+# /.well-known/ard.json URI and rel="ard" links this origin also serves)
 `,
 		);
+	});
+
+	// Agent-readiness surfaces (issue #3257): every discovery artifact is
+	// prerendered at build time and served identically to any host.
+	const AGENT_SURFACES = [
+		"/llms.txt",
+		"/auth.md",
+		"/openapi.json",
+		"/.well-known/ai-catalog.json",
+		"/.well-known/ard.json",
+		"/.well-known/agent-skills/index.json",
+		"/.well-known/agent-skills/tanah-corpus-map/SKILL.md",
+		"/.well-known/agent-skills/tanah-corpus-search/SKILL.md",
+		"/.well-known/agent-skills/tanah-corpus-citation/SKILL.md",
+	] as const;
+
+	for (const route of AGENT_SURFACES) {
+		test(`${route} serves its prerendered artifact for GET and HEAD`, async ({
+			request,
+		}) => {
+			const manifestPath = resolve(NEXT_BUILD_DIR, "prerender-manifest.json");
+			const manifest: PrerenderManifest = JSON.parse(
+				readFileSync(manifestPath, "utf8"),
+			);
+			expect(
+				manifest.routes[route],
+				`${route} must be prerendered`,
+			).toBeDefined();
+			expect(manifest.routes[route].initialRevalidateSeconds).toBe(false);
+
+			const response = await request.get(route);
+			expect(response.status()).toBe(200);
+			const head = await request.head(route);
+			expect(head.status()).toBe(200);
+			expect(await head.body()).toHaveLength(0);
+		});
+	}
+
+	test("skills index digests match the exact SKILL.md bytes served", async ({
+		request,
+	}) => {
+		const indexResponse = await request.get(
+			"/.well-known/agent-skills/index.json",
+		);
+		expect(indexResponse.status()).toBe(200);
+		const index = await indexResponse.json();
+		expect(index.$schema).toBe(
+			"https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+		);
+		for (const skill of index.skills) {
+			const artifact = await request.get(new URL(skill.url).pathname);
+			expect(artifact.status()).toBe(200);
+			const body = await artifact.text();
+			expect(
+				`sha256:${createHash("sha256").update(body, "utf8").digest("hex")}`,
+			).toBe(skill.digest);
+		}
+	});
+
+	test("the ARD manifest advertises only URLs that really resolve", async ({
+		request,
+	}) => {
+		const manifest = await (await request.get("/.well-known/ard.json")).json();
+		for (const entry of manifest.entries) {
+			const path = new URL(entry.url).pathname;
+			const probe =
+				path === "/api/search"
+					? `${path}?q=${encodeURIComponent("בראשית")}`
+					: path;
+			expect(
+				(await request.get(probe)).status(),
+				`${entry.identifier} -> ${entry.url} must resolve`,
+			).toBe(200);
+		}
+	});
+
+	test("crawler buckets hold on the production server", async ({ request }) => {
+		for (const ua of [
+			"Googlebot/2.1",
+			"GPTBot/1.2",
+			"ClaudeBot/1.0",
+			"Bytespider",
+			"totally-unknown-agent/9.9",
+		]) {
+			expect(
+				(await request.get("/", { headers: { "user-agent": ua } })).status(),
+				`${ua} must read the public corpus`,
+			).toBe(200);
+		}
+		for (const ua of ["AhrefsBot/7.0", "MJ12bot/v1.4.8", "SemrushBot/7~bl"]) {
+			expect(
+				(await request.get("/", { headers: { "user-agent": ua } })).status(),
+				`${ua} stays in the blocked bucket`,
+			).toBe(403);
+		}
+	});
+
+	test("HTML responses advertise all four discovery Link relations", async ({
+		request,
+	}) => {
+		for (const method of ["GET", "HEAD"] as const) {
+			const link =
+				(await request.fetch("/", { method })).headers().link ?? "";
+			expect(link).toContain('</llms.txt>; rel="help"');
+			expect(link).toContain('rel="api-catalog"');
+			expect(link).toContain('rel="ard"');
+			expect(link).toContain('rel="sitemap"');
+		}
 	});
 });

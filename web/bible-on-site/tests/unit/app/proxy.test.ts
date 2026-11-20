@@ -72,7 +72,7 @@ describe("proxy", () => {
 		});
 
 		it("consolidates deeper ASCII-root paths verbatim under the Hebrew root", async () => {
-			// Book-chrome depth paths keep their remaining segments — the
+			// Book-chrome depth paths keep their remaining segments - the
 			// Hebrew root's own chrome handling (noindex / 404) applies
 			// after the redirect.
 			const result = await proxy(makeRequest("/parasha/בראשית/כריכה"));
@@ -84,7 +84,7 @@ describe("proxy", () => {
 
 		it.each([
 			// Unknown and out-of-range segments fall through to the router's
-			// 404 — the proxy never redirects to a dead end.
+			// 404 - the proxy never redirects to a dead end.
 			"/פרשה/55",
 			"/פרשה/not-a-unit",
 			"/פרשה/1garbage",
@@ -134,7 +134,7 @@ describe("proxy", () => {
 			"/%invalid/1?book",
 		])("does not exclude unrelated %s", async (path) => {
 			const response = await proxy(makeRequest(path));
-			// Corpus paths now pass through with discovery Link headers —
+			// Corpus paths now pass through with discovery Link headers -
 			// the assertion that matters is that noindex never leaks out
 			// of the parasha family.
 			expect(response?.headers.get("x-robots-tag") ?? null).toBeNull();
@@ -221,7 +221,14 @@ describe("proxy", () => {
 			"/מסורה/7",
 			"/pedia",
 			"/dev/dashboard",
-			// Even a defunct `.md` path gets the same plain pass-through —
+			// The agent-facing manifests get the same links - they are
+			// public reads like any page.
+			"/.well-known/ard.json",
+			"/.well-known/ai-catalog.json",
+			"/.well-known/agent-skills/index.json",
+			"/.well-known/agent-skills/tanah-corpus-map/SKILL.md",
+			"/auth.md",
+			// Even a defunct `.md` path gets the same plain pass-through -
 			// there is no Markdown representation to discover (PR #3299
 			// review).
 			"/929/1.md",
@@ -231,6 +238,9 @@ describe("proxy", () => {
 			const link = response?.headers.get("link") ?? "";
 			expect(link).toContain('</llms.txt>; rel="help"');
 			expect(link).toContain('rel="api-catalog"');
+			expect(link).toContain(
+				'</.well-known/ard.json>; rel="ard"; type="application/ard+json"',
+			);
 			expect(link).toContain('</sitemap.xml>; rel="sitemap"');
 			// No alternate representation and no negotiation contract.
 			expect(link).not.toContain('rel="alternate"');
@@ -308,7 +318,7 @@ describe("proxy", () => {
 
 		it("does not redirect an already-canonical category slug", async () => {
 			// /pedia/אישים resolves to the canonical Hebrew slug with no
-			// filters — no redirect, just the corpus discovery headers.
+			// filters - no redirect, just the corpus discovery headers.
 			const result = await proxy(
 				makeRequest(`/pedia/${encodeURIComponent("אישים")}`),
 			);
@@ -342,7 +352,7 @@ describe("proxy", () => {
 		it("passes through when no key is configured", async () => {
 			delete process.env.INDEXNOW_KEY;
 			const result = await proxy(makeRequest(`/${KEY}.txt`));
-			// A plain pass-through (discovery headers only) — the key body
+			// A plain pass-through (discovery headers only) - the key body
 			// is never emitted.
 			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
