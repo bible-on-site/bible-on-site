@@ -31,6 +31,7 @@ import {
 	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
+	TANAKH_FONT_LABELS,
 } from "@/lib/reader-settings";
 import {
 	DEFAULT_RECITATION_SETTINGS,
@@ -372,11 +373,11 @@ export default function ReaderSettings() {
 									>
 										{PEREK_TANAKH_FONTS.map((font, index) => (
 											<option key={font || "default"} value={index}>
-												{font === "noto" ? "Noto Serif Hebrew" : "Taamey D"}
+												{TANAKH_FONT_LABELS[font]}
 											</option>
 										))}
 									</select>
-									<small>גופן טעמים מסורתי</small>
+									<small>גופני טעמים לפסוקים</small>
 								</label>
 								<Disclosure
 									label="ריווח"

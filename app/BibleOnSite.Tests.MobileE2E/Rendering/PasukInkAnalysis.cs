@@ -78,9 +78,14 @@ internal static class PasukInkAnalysis
 
     // A reached edge still keeps a few pixels clear: antialiasing fades and
     // glyph side bearings sit inside the advance, so "edge" means within this
-    // width-scaled band.
+    // width-scaled band. The left gate must stay inside justification slack —
+    // a justified line's last word lands on the boundary — because a wider one
+    // lets a genuinely short final line (ending a word inside the column)
+    // read as "full" and escape verification (#3685: Al Heperek's metrics
+    // pushed a line ending 11.9% short of the left edge into the old 12%
+    // band, which zeroed the landscape qualifier).
     private const double RightEdgeFraction = 0.06;
-    private const double LeftEdgeFraction = 0.12;
+    private const double LeftEdgeFraction = 0.04;
     private const int EdgeTolerancePixels = 8;
 
     // A text line — even a short one — spans a few words; a lone accent mark

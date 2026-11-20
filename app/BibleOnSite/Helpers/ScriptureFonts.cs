@@ -5,27 +5,35 @@ using GraphicsFontStyleType = Microsoft.Maui.Graphics.FontStyleType;
 namespace BibleOnSite.Helpers;
 
 /// <summary>
-/// The single scripture-font contract (#2623): Taamey D — the traditional
-/// taamim face the website reader already uses (#1260, delivered #2011) — is
-/// the native pasuk font everywhere the app renders verse glyphs: the perek,
-/// parasha and masora readers (<see cref="Controls.PasukTextLabel"/>), the
-/// focused-pasuk overlay, and the drawn presentations (תיקון קוראים, שניים
-/// מקרא). The alias is registered once in <c>MauiProgram</c> and consumed
-/// only through this class, so the packaged file, the registrar alias and
-/// every consumer cannot drift apart.
+/// The single scripture-font contract (#3685): Al Heperek — the brand face
+/// that gained complete niqqud and taamim coverage in v0.9.5 — is the native
+/// pasuk font everywhere the app renders verse glyphs: the perek, parasha and
+/// masora readers (<see cref="Controls.PasukTextLabel"/>), the focused-pasuk
+/// overlay, and the drawn presentations (תיקון קוראים, שניים מקרא). It shares
+/// the brand registrar alias, so the packaged file, the registrar alias and
+/// every consumer cannot drift apart. Taamey D — the previous scripture face
+/// (#2623) — stays registered under <see cref="TaameyDFamily"/> as the bundled
+/// alternative.
 /// </summary>
 public static class ScriptureFonts
 {
     /// <summary>
     /// The <c>ConfigureFonts</c> alias for the bundled
-    /// <c>TaameyD-Regular.ttf</c> — what <see cref="Microsoft.Maui.Controls.Label.FontFamily"/>
+    /// <c>AlHeperekUI-Regular.ttf</c> — what <see cref="Microsoft.Maui.Controls.Label.FontFamily"/>
     /// resolves through the font registrar.
     /// </summary>
-    public static readonly string Family = "TaameyD";
+    public static readonly string Family = "AlHeperekRegular";
 
-    private const string FileName = "TaameyD-Regular.ttf";
-    private const string PostScriptName = "Taamey_D";
-    private const string FamilyName = "Taamey D";
+    /// <summary>
+    /// The <c>ConfigureFonts</c> alias for the bundled
+    /// <c>TaameyD-Regular.ttf</c> — kept registered as the traditional taamim
+    /// alternative (#3685).
+    /// </summary>
+    public static readonly string TaameyDFamily = "TaameyD";
+
+    private const string FileName = "AlHeperekUI-Regular.ttf";
+    private const string PostScriptName = "AlHeperekUI-Regular";
+    private const string FamilyName = "Al Heperek Font UI";
 
     // Canvas fonts can't use the alias: a GraphicsView's ICanvas resolves
     // IFont.Name through the platform text stack, which never consults the

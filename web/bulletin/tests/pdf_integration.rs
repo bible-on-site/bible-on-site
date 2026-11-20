@@ -24,10 +24,13 @@ mod pdf_generation {
     #[test]
     fn generates_valid_pdf_for_single_perek() {
         let fonts = fonts_dir();
-        assert!(
-            fonts.join("TaameyD-Regular.ttf").exists(),
-            "TaameyD-Regular.ttf font must exist"
-        );
+        for name in [
+            "AlHeperekUI-Regular.ttf",
+            "AlHeperekUI-SemiBold.ttf",
+            "AlHeperekUI-Bold.ttf",
+        ] {
+            assert!(fonts.join(name).exists(), "{name} font must exist");
+        }
 
         // Look up perek 1 (בראשית א') from embedded data
         let perek_data = tanach::get_perek(1).expect("perek 1 must exist");

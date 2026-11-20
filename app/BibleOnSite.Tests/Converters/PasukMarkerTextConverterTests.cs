@@ -54,8 +54,9 @@ public class PasukMarkerTextConverterTests
         merged.Spans[2].FontSize.Should().Be(14);
     }
 
-    // #2623: the marker is reader chrome — it keeps the app's main font while
-    // the pasuk text around it renders in Taamey D.
+    // #2623/#3685: the marker is reader chrome — it pins the brand face
+    // explicitly rather than inheriting whatever scripture contract the
+    // label resolves (both are Al Heperek since #3685).
     [Fact]
     public void the_marker_letter_stays_on_the_app_main_font()
     {

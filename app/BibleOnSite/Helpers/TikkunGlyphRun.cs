@@ -9,9 +9,10 @@ namespace BibleOnSite.Helpers;
 
 /// <summary>
 /// A complete marked word shaped once in the bundled scripture font. Both
-/// layers use those same glyph origins and advances. Marks inside composite
-/// glyphs (dagesh, shin/sin dots) are separate contours too: hiding annotations
-/// never substitutes a different letter glyph or shapes a stripped string.
+/// layers use those same glyph origins and advances. Al Heperek draws every
+/// annotation as a separate GDEF mark glyph (dagesh, shin/sin dots, niqqud,
+/// taamim): hiding them never substitutes a different letter glyph or shapes
+/// a stripped string (#3685).
 /// </summary>
 internal sealed record TikkunGlyphRun(
     float Width, float Ascent, float Descent, PathF Bases, PathF Marks,
@@ -26,8 +27,8 @@ internal static class TikkunFont
     private static TikkunFontData LoadReference()
     {
         var assembly = typeof(TikkunFont).Assembly;
-        using var font = assembly.GetManifestResourceStream("TikkunFont.ttf")!;
-        using var outlines = assembly.GetManifestResourceStream("TikkunFont.outlines.json")!;
+        using var font = assembly.GetManifestResourceStream("AlHeperekUI-Regular.ttf")!;
+        using var outlines = assembly.GetManifestResourceStream("AlHeperekUI-outlines.json")!;
         return Load(font, outlines);
     }
 
@@ -42,7 +43,7 @@ internal static class TikkunFont
         if (!string.Equals(Convert.ToHexString(SHA256.HashData(fontBytes)),
             fontHash, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("Regenerate TaameyD-outlines.json for the packaged scripture font.");
+            throw new InvalidDataException("Regenerate AlHeperekUI-outlines.json for the packaged scripture font.");
         }
         // The asset has a fixed schema. Explicit parsing avoids reflection
         // in trimmed apps and needs no generated serialization declaration.

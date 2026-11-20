@@ -26,7 +26,6 @@ export function embedUiFont(
 
 let regularFontCache: Uint8Array | null = null;
 let boldFontCache: Uint8Array | null = null;
-let scriptureFontCache: Uint8Array | null = null;
 
 function loadFont(filename: string): Uint8Array {
 	const fontPath = resolve(
@@ -48,11 +47,6 @@ export function getRegularFontBytes(): Uint8Array {
 export function getBoldFontBytes(): Uint8Array {
 	if (!boldFontCache) boldFontCache = loadFont("AlHeperekUI-Bold.ttf");
 	return boldFontCache;
-}
-
-export function getScriptureFontBytes(): Uint8Array {
-	if (!scriptureFontCache) scriptureFontCache = loadFont("TaameyD-Regular.ttf");
-	return scriptureFontCache;
 }
 
 let logoCache: Uint8Array | null = null;

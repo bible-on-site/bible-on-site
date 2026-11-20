@@ -101,6 +101,20 @@ public sealed class PasukInkAnalysisTests
     }
 
     [Fact]
+    public void RightAnchoredLineEndingJustInsideTheOldLeftGateStillQualifies()
+    {
+        // #3685: a right-anchored final line ending ~a word inside the column
+        // is short, not justified — a justified line's left edge lands on the
+        // boundary. The old 12% left gate read the landscape pasuk's 11.9%
+        // line as "full" and the assert found no verifiable line at all.
+        var profile = Measure(100, 40, new Line(10, 24, 12, 99));
+
+        Assert.Equal("right", profile.LastLine);
+        Assert.True(profile.HasShortFinalLine);
+        Assert.False(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
     public void BackgroundOnlyImageHasNoInk()
     {
         var profile = Measure(100, 40);

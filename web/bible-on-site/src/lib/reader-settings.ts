@@ -28,16 +28,33 @@ export const PEREK_WORD_SPACINGS = [0.12, 0.2, 0.28, 0.36, 0.44] as const;
 
 /**
  * Tanakh font choices applied to the perek text. Index 0 is the default
- * (Taamey D — no `data-tanakh-font` attribute); index 1 opts out to
- * Noto Serif Hebrew. Applied as `data-tanakh-font` on <html>, which CSS
- * selectors match.
+ * face (no `data-tanakh-font` attribute) — Al Heperek since its
+ * niqqud/taamim release (#3685); index 1 opts out to Noto Serif Hebrew;
+ * index 2 opts in to Taamey D. Applied as `data-tanakh-font` on <html>,
+ * which CSS selectors match.
+ *
+ * Stored indices never change identity: Taamey D was appended at index 2
+ * when Al Heperek became the default, so a saved Noto opt-out keeps
+ * Noto Serif Hebrew while index 0 follows the current default face.
  */
-export const PEREK_TANAKH_FONTS = ["", "noto"] as const;
+export const PEREK_TANAKH_FONTS = ["", "noto", "taamey"] as const;
+
+/** Display labels for PEREK_TANAKH_FONTS — the reader settings pickers. */
+export const TANAKH_FONT_LABELS: Record<
+	(typeof PEREK_TANAKH_FONTS)[number],
+	string
+> = {
+	"": "Al Heperek",
+	noto: "Noto Serif Hebrew",
+	taamey: "Taamey D",
+};
 
 /**
  * Storage schema version. v1 indexed fonts as [0=default(Noto), 1=taamey];
- * after Taamey became the default both meanings resolve to index 0, so v1
- * payloads are migrated rather than reinterpreted as an opt-out.
+ * when Taamey became the v2 default both meanings resolved to index 0, so
+ * v1 payloads are migrated rather than reinterpreted as an opt-out. The v2
+ * choice list only ever appends (Noto at 1, Taamey at 2 since #3685), so
+ * index 0 always means "the current default face".
  */
 export const READER_SETTINGS_VERSION = 2;
 
@@ -108,8 +125,8 @@ export function getStoredReaderSettings(): ReaderSettings {
 		const stored = JSON.parse(
 			localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null",
 		);
-		// v1 fontId semantics predate the Taamey default; collapse to default
-		// so experiment opt-ins keep Taamey and nobody flips to an opt-out.
+		// v1 fontId semantics predate index-0-means-default; collapse to
+		// default so legacy payloads get the current face, not an opt-out.
 		const migrated =
 			stored?.v === READER_SETTINGS_VERSION ? stored : { ...stored, fontId: 0 };
 		return normalizeSettings(migrated);
@@ -177,4 +194,4 @@ export function applyReaderSettings(
  * storage key, arrays and default indices are duplicated here verbatim. The
  * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3,1.5,1.7,2],l=[1.5,1.75,2,2.25,2.5],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m,d){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):d}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[c(s.fontStep,f.length-1,2)]));e.style.setProperty("--perek-line-height",String(l[c(s.lineStep,l.length-1,2)]));e.style.setProperty("--perek-word-spacing",String(w[c(s.wordStep,w.length-1,2)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1,0):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3,1.5,1.7,2],l=[1.5,1.75,2,2.25,2.5],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto","taamey"];function c(v,m,d){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):d}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[c(s.fontStep,f.length-1,2)]));e.style.setProperty("--perek-line-height",String(l[c(s.lineStep,l.length-1,2)]));e.style.setProperty("--perek-word-spacing",String(w[c(s.wordStep,w.length-1,2)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1,0):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
