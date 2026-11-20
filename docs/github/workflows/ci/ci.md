@@ -111,6 +111,27 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
+  - `docs_only` (#3621) means every touched path sits under the
+    repository-root `docs/` tree with an inert documentation format
+    (`DOCUMENTATION_PATH` in the router) **and** no module check fired. When
+    it is true the validation surface skips — `workflow_timeouts`,
+    `root_evidence_guard`, the independent suites (`database_backups`,
+    `transcription_ci`, `perushim_data`) and every module job — so docs-only
+    PRs, master pushes and queue entries cost only detection plus the
+    status-resolution tail. The detection tier (`setup_env`, both
+    availability detectors) still runs, and the prerequisite gate always
+    evaluates their results so a failed detector cannot ride a skipped
+    check to green. A missing coverage baseline keeps its normal recovery
+    path: `baseline_recovery_required` re-fires the owning module job (and
+    `build_sefaria_mongo_docker` mirrors every consumer trigger so a
+    recovery run never waits on an image nobody built), while the checks
+    for suites that stay skipped keep their docs gate inside the gate
+    script. Renames still count both paths, `docs/aws/**` is
+    operational source (CloudFormation, Lambda, nginx) that never
+    qualifies, and source/script/manifest formats under `docs/` (e.g. the
+    device-tests POC) are never documentation. A merge group whose
+    combined delta includes non-documentation work is not docs-only, so
+    the queue's conservative force-all still validates it.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.

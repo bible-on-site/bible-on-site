@@ -21,7 +21,7 @@
 		"worktree:cleanup": "node ./worktree-cleanup.mts",
 		"test:dependency-snapshots": "node --test github/ci/dependency-snapshots.test.mjs github/ci/dependency-comparison-base.test.mjs github/ci/dependency-workloads.test.mjs",
 		"test:review-audit": "node --test review-audit/scan-catch.test.mjs",
-		"test:workflow-timeouts": "node --test github/ci/workflow-timeouts.test.mjs github/ci/codeql-workflow.test.mjs github/ci/codacy-coverage.test.mjs",
+		"test:workflow-timeouts": "node --test github/ci/workflow-timeouts.test.mjs github/ci/codeql-workflow.test.mjs github/ci/docs-only-gating.test.mjs github/ci/codacy-coverage.test.mjs",
 		"verify:workflow-timeouts": "node github/ci/workflow-timeouts.mjs",
 		"test:cargo-make-zip-guard": "node --test github/ci/cargo-make-zip-guard.test.mjs",
 		"verify:dependency-snapshots": "node github/ci/dependency-snapshots.mjs",
