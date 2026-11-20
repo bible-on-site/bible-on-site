@@ -81,7 +81,7 @@ export function canonicalPediaTarget(url: URL): string | null {
  * Hebrew segments and `new URL` percent-encodes them exactly once.
  * Unresolvable segments under the ASCII root still consolidate to the
  * Hebrew root so the 404 surfaces on the canonical host path, while
- * unknowns already under `/פרשה` fall through to the router's 404 —
+ * unknowns already under `/פרשה` fall through to the router's 404 -
  * never a redirect loop. Book-chrome three-segment paths
  * (`/פרשה/{sefer}/{cover-slug}`) are untouched here.
  */
@@ -191,7 +191,7 @@ export async function proxy(
 
 	// Agent discovery headers on public read responses: HTML-bound
 	// pages (everything outside /api/) advertise the agent guide and
-	// machine catalogs. GET/HEAD only — writes/POSTs (incl. Server
+	// machine catalogs. GET/HEAD only - writes/POSTs (incl. Server
 	// Actions) and API calls never take this branch.
 	if (
 		(request.method === "GET" || request.method === "HEAD") &&

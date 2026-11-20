@@ -1,6 +1,6 @@
 /**
  * AI Catalog / ARD manifest (issue #3257): the machine-readable index of
- * the agent-facing resources this origin really serves — the RFC 9727 API
+ * the agent-facing resources this origin really serves - the RFC 9727 API
  * linkset, the OpenAPI description, the agent guide, the Agent Skills
  * index and its SKILL.md files, and the anonymous search endpoint.
  *
@@ -13,7 +13,7 @@
  * (2-5 natural-language asks per entry) is what registries index for
  * capability search.
  *
- * Only real artifacts are listed — no MCP/A2A/OAuth entries the site
+ * Only real artifacts are listed - no MCP/A2A/OAuth entries the site
  * does not actually run (per the issue: no fake capabilities).
  */
 import "server-only";
@@ -94,7 +94,7 @@ export function aiCatalogManifest() {
 			"Agent Skills discovery index (v0.2.0)",
 			"application/json",
 			`${SITE_ORIGIN}/.well-known/agent-skills/index.json`,
-			"Discovery index of the Agent Skills below — how to traverse, search and cite the corpus correctly.",
+			"Discovery index of the Agent Skills below - how to traverse, search and cite the corpus correctly.",
 			[
 				"how do I traverse the whole Tanah corpus",
 				"how do I search this site's content as an agent",
@@ -118,7 +118,7 @@ export function aiCatalogManifest() {
 			"Anonymous corpus search",
 			"application/json",
 			`${SITE_ORIGIN}/api/search`,
-			"GET /api/search?q={query}&type={csv}&limit={1-50} — anonymous JSON search over perakim, pesukim, perushim, authors, articles and Tanahpedia. Nonempty availability notices mean retryable partial results.",
+			"GET /api/search?q={query}&type={csv}&limit={1-50} - anonymous JSON search over perakim, pesukim, perushim, authors, articles and Tanahpedia. Nonempty availability notices mean retryable partial results.",
 			[
 				"find pesukim containing a phrase",
 				"which perakim mention a topic",

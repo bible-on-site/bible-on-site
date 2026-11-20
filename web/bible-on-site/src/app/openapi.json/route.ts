@@ -1,5 +1,5 @@
 /**
- * `/openapi.json` — OpenAPI 3.1 description of the PUBLIC read surface
+ * `/openapi.json` - OpenAPI 3.1 description of the PUBLIC read surface
  * (issue #3257). Only anonymous GET endpoints appear here; nothing in
  * this document grants or implies access to management/write APIs.
  */
@@ -16,7 +16,7 @@ const DOCUMENT = {
 		version: "1.0.0",
 		description:
 			"Anonymous read-only endpoints over the public learning corpus. " +
-			"זיכוי הרבים project — content may be indexed and used in AI " +
+			"זיכוי הרבים project - content may be indexed and used in AI " +
 			"answers and model training, including learning in model weights " +
 			"without referrals (see /llms.txt and /robots.txt).",
 	},
@@ -253,7 +253,7 @@ const DOCUMENT = {
 				responses: {
 					"200": {
 						description:
-							"No authentication exists for public reads — plain markdown note.",
+							"No authentication exists for public reads - plain markdown note.",
 						content: { "text/markdown": {} },
 					},
 				},

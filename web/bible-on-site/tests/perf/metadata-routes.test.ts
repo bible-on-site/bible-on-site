@@ -170,12 +170,12 @@ Disallow: /dev
 
 # SEO/scraper bucket (MJ12bot, AhrefsBot,
 # SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou,
-# DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
+# DataForSeoBot): hard-blocked at the edge/proxy - they ignore robots.
 
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
 # Agentmap: ${SITE_ORIGIN}/.well-known/ard.json
-# (parked in a comment, not a live directive: strict robots.txt validators —
-# Lighthouse's robots-txt audit — reject any directive outside RFC 9309 plus
+# (parked in a comment, not a live directive: strict robots.txt validators -
+# Lighthouse's robots-txt audit - reject any directive outside RFC 9309 plus
 # the common extensions, and conforming ARD consumers only require the
 # /.well-known/ard.json URI and rel="ard" links this origin also serves)
 `,

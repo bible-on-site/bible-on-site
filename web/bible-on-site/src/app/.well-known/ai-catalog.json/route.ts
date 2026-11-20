@@ -1,5 +1,5 @@
 /**
- * `/.well-known/ai-catalog.json` — AI Catalog manifest (issue #3257).
+ * `/.well-known/ai-catalog.json` - AI Catalog manifest (issue #3257).
  * Predecessor path of `/.well-known/ard.json` (ARD v0.91); the Cloudflare
  * readiness scanner and clients written against the earlier draft still
  * probe here, so both paths serve the same real-artifact manifest.

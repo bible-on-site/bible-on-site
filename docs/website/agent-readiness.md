@@ -1,4 +1,4 @@
-# Agent Readiness — Open Public Corpus
+# Agent Readiness - Open Public Corpus
 
 Implementation of
 [issue #3257](https://github.com/bible-on-site/bible-on-site/issues/3257)
@@ -13,7 +13,7 @@ stay protected; source-specific licences and attribution still apply.
 
 | Surface | File | Content |
 | ------- | ---- | ------- |
-| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exceptions for `/api/search` and `/api/health`, disallow for `/api/` and `/dev`, Content Signals `search=yes, ai-input=yes, ai-train=yes` in the wildcard group, and the `Agentmap:` ARD-manifest hint parked in a comment — a live directive would fail strict robots.txt validation (Lighthouse's `robots-txt` audit caps the SEO score below the required 100%) |
+| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exceptions for `/api/search` and `/api/health`, disallow for `/api/` and `/dev`, Content Signals `search=yes, ai-input=yes, ai-train=yes` in the wildcard group, and the `Agentmap:` ARD-manifest hint parked in a comment - a live directive would fail strict robots.txt validation (Lighthouse's `robots-txt` audit caps the SEO score below the required 100%) |
 | `llms.txt` | `src/app/llms.txt/route.ts` | Project purpose, open-corpus policy, crawler buckets, canonical URL families, source references, attribution and licence guidance |
 | `/.well-known/api-catalog` | `src/app/.well-known/api-catalog/route.ts` | RFC 9727 linkset catalog of the public read APIs |
 | `/openapi.json` | `src/app/openapi.json/route.ts` | OpenAPI description of `/api/search` and the discovery endpoints |
@@ -26,24 +26,24 @@ stay protected; source-specific licences and attribution still apply.
 Crawler access remains bucketized; both surfacing and training uses
 are welcome:
 
-- **Surfacing bots — welcome.** Search engines (Googlebot, bingbot,
+- **Surfacing bots - welcome.** Search engines (Googlebot, bingbot,
   Applebot, Baiduspider, YandexBot) and AI answer/retrieval agents
   (ChatGPT-User, OAI-SearchBot, PerplexityBot/Perplexity-User,
   Claude-User, Claude-SearchBot, Amazonbot/Alexa, FacebookBot link
   previews) receive identical content to browsers, and `robots.txt`
   grants `Content-Signal: search=yes, ai-input=yes`.
-- **AI-training crawlers — welcome.** `GPTBot`,
+- **AI-training crawlers - welcome.** `GPTBot`,
   `ClaudeBot`, `CCBot`, `meta-externalagent`, `Google-Extended`,
   `Applebot-Extended`, `Diffbot`, `TikTokSpider` and `Bytespider` share
   the wildcard public/private rules in `robots.txt`, with `ai-train=yes`.
   They receive the same public content as browsers. Crawler rate limits
   still protect site availability.
-- **SEO/scrapers — blocked.** The
+- **SEO/scrapers - blocked.** The
   `BLOCKED_BOTS`/`BOT_BLOCKING_ENABLED` denylist in `src/proxy.ts`
   stays in force (MJ12bot, AhrefsBot, SemrushBot, DotBot,
   PetalBot, BLEXBot, MegaIndex, Sogou, DataForSeoBot). Bytespider is
   removed from this denylist and joins the rate-limited AI crawlers.
-- **Everything else — open.** Browsers and unknown agents receive the
+- **Everything else - open.** Browsers and unknown agents receive the
   full public corpus; `ai-train=yes` applies as a declared
   signal.
 
@@ -53,7 +53,7 @@ view-param `noindex` handling are unchanged.
 ## Reading the corpus
 
 Every public learning page is served as fully rendered HTML
-(SSG — no client rendering required); scripture qri/ktiv,
+(SSG - no client rendering required); scripture qri/ktiv,
 stuma/ptuha markers, footnotes, verse references and source licences
 are present in the served markup. The sitemap lists indexable
 canonical URLs; Masora (`/מסורה`) pages are intentionally
@@ -94,7 +94,7 @@ get, discovered through the sitemap and `/api/search`.
 ## Cloudflare Agent Readiness findings
 
 Real scan of the production origin (`https://xn--febl3a.co.il`) through
-the public `isitagentready.com` scanner API, 2026-11-16 — result
+the public `isitagentready.com` scanner API, 2026-11-16 - result
 **level 2 "Bot-Aware"** after #3299 deployed (a pre-#3299 "before" is not
 reproducible; that is the recorded baseline). Outcomes below carry their
 disposition; per the issue, no nonexistent capability is advertised to
@@ -113,29 +113,29 @@ inflate the score.
 
 ### Neutral / unscored checks
 
-`webBotAuth` (informational — Web Bot Auth signatures need edge signing
+`webBotAuth` (informational - Web Bot Auth signatures need edge signing
 infrastructure the site does not run) and the commerce checks (`x402`,
-`mpp`, `ucp`, `acp`, `ap2`), which do not apply — this is not a commerce
+`mpp`, `ucp`, `acp`, `ap2`), which do not apply - this is not a commerce
 site.
 
 ### Failing checks and their disposition
 
 | Check | Disposition |
 | ----- | ----------- |
-| `markdownNegotiation` | **Deliberate gap.** A whole-corpus Markdown mirror was removed per the owner's PR #3299 review — duplicating gigabytes of textual content as a second representation is not acceptable while the SSG surface is already heavy. Agents read the same fully-rendered HTML readers get. |
-| `dnsAid` | Requires `_index._agents`/related DNS records — an infrastructure (DNS) change outside the website diff; per the issue it needs Dorad's explicit approval like any AWS/edge change. Not implemented here. |
-| `ard` | **Fixed in this increment** — `/.well-known/ard.json` + `/.well-known/ai-catalog.json` manifest, an `Agentmap:` robots.txt comment and `<link rel="ard"/"ai-catalog">` head links. |
-| `agentSkills` | **Fixed in this increment** — `/.well-known/agent-skills/index.json` + three real SKILL.md artifacts. |
-| `authMd` | **Fixed in this increment** — `/auth.md` states honestly that no authentication exists for public reads. |
-| `oauthDiscovery`, `oauthProtectedResource` | Not applicable — public reads are anonymous; publishing OAuth metadata for a nonexistent auth server would be a fake capability. |
-| `mcpServerCard`, `a2aAgentCard`, `webMcp`, `personalAgentProtocol` | Not applicable — the site runs no MCP server, A2A agent, in-page tools or personal-agent endpoint; cards must not be fabricated. |
+| `markdownNegotiation` | **Deliberate gap.** A whole-corpus Markdown mirror was removed per the owner's PR #3299 review - duplicating gigabytes of textual content as a second representation is not acceptable while the SSG surface is already heavy. Agents read the same fully-rendered HTML readers get. |
+| `dnsAid` | Requires `_index._agents`/related DNS records - an infrastructure (DNS) change outside the website diff; per the issue it needs Dorad's explicit approval like any AWS/edge change. Not implemented here. |
+| `ard` | **Fixed in this increment** - `/.well-known/ard.json` + `/.well-known/ai-catalog.json` manifest, an `Agentmap:` robots.txt comment and `<link rel="ard"/"ai-catalog">` head links. |
+| `agentSkills` | **Fixed in this increment** - `/.well-known/agent-skills/index.json` + three real SKILL.md artifacts. |
+| `authMd` | **Fixed in this increment** - `/auth.md` states honestly that no authentication exists for public reads. |
+| `oauthDiscovery`, `oauthProtectedResource` | Not applicable - public reads are anonymous; publishing OAuth metadata for a nonexistent auth server would be a fake capability. |
+| `mcpServerCard`, `a2aAgentCard`, `webMcp`, `personalAgentProtocol` | Not applicable - the site runs no MCP server, A2A agent, in-page tools or personal-agent endpoint; cards must not be fabricated. |
 
 Re-run the scanner after deploy to confirm the fixed rows flip; the DNS
 row can only move with an approved infrastructure change.
 
 ## Edge / proxy audit
 
-Application layer: the proxy denylist is the only UA-based blocking —
+Application layer: the proxy denylist is the only UA-based blocking -
 it is kept for the SEO/scraper bucket (above). Sitemap, canonical
 redirects, and `next.config.mjs` headers/rewrites contain no other
 crawler discrimination. The assets CDN module (`devops/assets-cdn.mjs`)

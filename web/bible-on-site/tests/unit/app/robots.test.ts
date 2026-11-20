@@ -56,7 +56,7 @@ describe("/robots.txt (issue #3257)", () => {
 		}
 	});
 
-	it("graces the surfacing siblings — they are not in a disallow group", async () => {
+	it("graces the surfacing siblings - they are not in a disallow group", async () => {
 		const body = await GET().text();
 		for (const ua of [
 			"Googlebot",

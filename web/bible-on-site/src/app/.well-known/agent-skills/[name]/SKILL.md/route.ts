@@ -1,5 +1,5 @@
 /**
- * `/.well-known/agent-skills/{name}/SKILL.md` — the skill-md artifacts the
+ * `/.well-known/agent-skills/{name}/SKILL.md` - the skill-md artifacts the
  * index lists (issue #3257). `generateStaticParams` + `dynamicParams =
  * false` bound the served names to the AGENT_SKILLS allowlist: any other
  * name is a build-time 404, never a lookup.

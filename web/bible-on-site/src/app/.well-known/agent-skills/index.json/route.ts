@@ -1,5 +1,5 @@
 /**
- * `/.well-known/agent-skills/index.json` — Agent Skills discovery index
+ * `/.well-known/agent-skills/index.json` - Agent Skills discovery index
  * (issue #3257), v0.2.0 shape: `$schema` marker plus a `skills` array of
  * `skill-md` entries with sha256 digests of the served SKILL.md bodies.
  */

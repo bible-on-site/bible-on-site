@@ -1,5 +1,5 @@
 /**
- * `/.well-known/ard.json` — ARD v0.91 capability manifest (issue #3257).
+ * `/.well-known/ard.json` - ARD v0.91 capability manifest (issue #3257).
  * The current canonical well-known path; `/.well-known/ai-catalog.json`
  * serves the same document for clients on the earlier draft.
  */

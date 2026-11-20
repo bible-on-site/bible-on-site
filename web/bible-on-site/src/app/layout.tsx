@@ -51,7 +51,7 @@ export default function RootLayout({
 			dir="rtl"
 			data-scroll-behavior="smooth"
 			/* The root layout's inline bootstrap applies stored reader settings
-			   (CSS vars) to <html> before first paint — suppress the resulting
+			   (CSS vars) to <html> before first paint - suppress the resulting
 			   hydration-mismatch warning on this element's attributes. */
 			suppressHydrationWarning
 		>
@@ -64,7 +64,7 @@ export default function RootLayout({
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
-				{/* Site-wide accessibility preferences (contrast/links) — same
+				{/* Site-wide accessibility preferences (contrast/links) - same
 				    pre-paint contract for the root data attributes (#2767). */}
 				<script>{SITE_A11Y_BOOTSTRAP}</script>
 				<AhrefsAnalytics />

@@ -63,7 +63,7 @@ describe("/llms.txt (issue #3257)", () => {
 
 	it("welcomes training without requiring referrals and keeps the crawler buckets", async () => {
 		const body = await llmsGET().text();
-		expect(body).toContain("AI-training crawlers — welcome");
+		expect(body).toContain("AI-training crawlers - welcome");
 		expect(body).toContain("Training is welcome even without a link or");
 		expect(body).toContain("model weights is welcome in itself");
 		expect(body).not.toMatch(/ai-train=no|withheld|pending.*decision/);
@@ -116,7 +116,7 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 		expect(hrefs).toEqual(["https://canonical.example/api/search"]);
 	});
 
-	it("advertises only public endpoints — no private/admin APIs", async () => {
+	it("advertises only public endpoints - no private/admin APIs", async () => {
 		const body = (await catalogGET().json()) as {
 			linkset: Record<string, { href: string }[] | undefined>[];
 		};
@@ -226,7 +226,7 @@ describe("ARD / AI Catalog manifest (issue #3257)", () => {
 		expect(await ard.text()).toBe(await ai.text());
 	});
 
-	it("lists only real artifacts — no MCP, A2A, OAuth or commerce entries", async () => {
+	it("lists only real artifacts - no MCP, A2A, OAuth or commerce entries", async () => {
 		const manifest = (await ardGET().json()) as Manifest;
 		expect(manifest.specVersion).toBe("1.0");
 		expect(manifest.host.identifier).toBe("canonical.example");

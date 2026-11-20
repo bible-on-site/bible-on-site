@@ -3,8 +3,8 @@ import { expect, test } from "../util/playwright/test-fixture";
 
 /**
  * Real-HTTP coverage for the agent-readiness surfaces (issue #3257).
- * These tests exercise the whole request pipeline — proxy, redirects,
- * route handlers — not just handler functions. The same file runs on
+ * These tests exercise the whole request pipeline - proxy, redirects,
+ * route handlers - not just handler functions. The same file runs on
  * `next dev` (e2e suite) and the production standalone build (the perf
  * suite re-checks the key assertions in tests/perf/metadata-routes).
  */
@@ -127,7 +127,7 @@ test.describe("discovery documents over real HTTP", () => {
 		expect(await ai.text()).toBe(await ard.text());
 
 		// Every advertised artifact must be a real fetchable URL on this
-		// origin — a catalog that lists dead ends is worse than none.
+		// origin - a catalog that lists dead ends is worse than none.
 		for (const entry of manifest.entries) {
 			const path = new URL(entry.url).pathname;
 			// /api/search requires q: the manifest advertises the endpoint,
@@ -193,7 +193,7 @@ test.describe("discovery documents over real HTTP", () => {
 		const traversal = await request.get(
 			"/.well-known/agent-skills/..%2F..%2Frobots.txt/SKILL.md",
 		);
-		// Normalization or the allowlist must stop it — never a served file.
+		// Normalization or the allowlist must stop it - never a served file.
 		expect(traversal.status()).not.toBe(200);
 	});
 

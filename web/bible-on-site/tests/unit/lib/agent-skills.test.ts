@@ -92,8 +92,8 @@ describe("SKILL.md artifacts", () => {
 			);
 			const body = await response.text();
 			expect(body.startsWith("---\n")).toBe(true);
-			// Frontmatter repeats what the index advertises — name and the
-			// one-sentence description — so a fetched artifact and the index
+			// Frontmatter repeats what the index advertises - name and the
+			// one-sentence description - so a fetched artifact and the index
 			// cannot drift apart.
 			expect(body).toContain(`name: ${entry.name}`);
 			expect(body).toContain(`description: ${entry.description}`);
@@ -111,7 +111,7 @@ describe("SKILL.md artifacts", () => {
 		expect(second.status).toBe(404);
 	});
 
-	it("covers the three real corpus competencies — no filler skills", () => {
+	it("covers the three real corpus competencies - no filler skills", () => {
 		expect(AGENT_SKILLS.map((skill) => skill.name)).toEqual([
 			"tanah-corpus-map",
 			"tanah-corpus-search",
