@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      app_store_notes_only:
+        description: "Publish only the Hebrew App Store What's New for the artifact's exact release — skips every binary and distribution phase"
+        required: false
+        default: false
+        type: boolean
       release_notes_override:
         description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
         required: false
@@ -379,7 +384,7 @@ jobs:
   deploy_app_store:
     timeout-minutes: 60
     name: Deploy to App Store (TestFlight)
-    if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build && !inputs.app_store_notes_only }}
     permissions:
       # contents:write publishes the asset-pack publication receipt beside the
       # release assets; the receipt is the provenance record reused packs need.
@@ -481,15 +486,16 @@ jobs:
           mkdir -p $HOME/private_keys
           # Decode the .p8 key file
           echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
-          # Create JSON file that Fastlane expects
-          cat > $HOME/private_keys/api_key.json << EOF
-          {
-            "key_id": "${API_KEY_ID}",
-            "issuer_id": "${API_ISSUER_ID}",
-            "key": "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8 | sed 's/$/\\n/' | tr -d '\n')",
-            "in_house": false
-          }
-          EOF
+          # Create the shared api_key.json Apple credential file; jq owns
+          # the JSON escaping — the old sed newline escape relied on BSD-sed
+          # replacement semantics and produced a corrupt single-line key
+          # under GNU sed (#3679).
+          jq -n \
+            --arg key_id "$API_KEY_ID" \
+            --arg issuer_id "$API_ISSUER_ID" \
+            --arg key "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8)" \
+            '{key_id: $key_id, issuer_id: $issuer_id, key: $key, in_house: false}' \
+            > $HOME/private_keys/api_key.json
           echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
 
       - name: Install Fastlane
@@ -589,22 +595,47 @@ jobs:
   # app-ios guard skipped as already delivered — so an editable version
   # record created after the TestFlight upload can still receive the notes.
   # No deployment record and no binary ever move in this job.
+  # Everything here is metadata-only — checkout, a POSIX credential file, a
+  # Node App Store Connect publisher and a gh release attach — so it runs on
+  # the Linux pool: hosted macOS capacity repeatedly starved the job before
+  # its first step and cancelled the notes (#3679). Apple-native upload
+  # tooling stays in deploy_app_store on macos-15. A notes-only dispatch
+  # (app_store_notes_only) skips the binary phase entirely — recovery for a
+  # cancelled run, whose re-dispatch otherwise pins the pre-fix workflow.
   publish_app_store_notes:
     timeout-minutes: 60
     name: Publish Hebrew What's New to the App Store
     needs: deploy_app_store
-    if: ${{ always() && needs.deploy_app_store.result == 'success' && needs.deploy_app_store.outputs.ref != '' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ always() && ((needs.deploy_app_store.result == 'success' && needs.deploy_app_store.outputs.ref != '') || (inputs.app_store_notes_only == true && needs.deploy_app_store.result == 'skipped')) && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       # contents:write attaches the notes manifest to the GitHub release.
       contents: write
       actions: read
-    runs-on: macos-15
+    runs-on: ubuntu-latest
 
     env:
       MODULE_VERSION: ${{ needs.deploy_app_store.outputs.module_version }}
       ARTIFACT_REF: ${{ needs.deploy_app_store.outputs.ref }}
 
     steps:
+      # A notes-only dispatch has no deploy job outputs; the release identity
+      # comes from the same artifact name the deployment guard binds. The tag
+      # is the exact released source — the guard proved it identical to the
+      # verified CI commit when the release shipped.
+      - name: Resolve the recovered release identity
+        id: notes_identity
+        if: ${{ inputs.app_store_notes_only }}
+        env:
+          IOS_ARTIFACT: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+        run: |
+          VERSION=$(printf '%s' "$IOS_ARTIFACT" | sed -n 's/^app-ios-v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Notes-only recovery requires ios_artifact_name in the form app-ios-vX.Y.Z (got '$IOS_ARTIFACT')"
+            exit 1
+          fi
+          echo "MODULE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ref=app-v$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
@@ -619,7 +650,7 @@ jobs:
       - name: Checkout the released source
         uses: actions/checkout@v7
         with:
-          ref: ${{ env.ARTIFACT_REF }}
+          ref: ${{ env.ARTIFACT_REF || steps.notes_identity.outputs.ref }}
           # Notes diff the curated entry directory between the delivered
           # baseline tag and this tag — full history is required.
           fetch-depth: 0
@@ -631,15 +662,18 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           mkdir -p $HOME/private_keys
+          # Decode the .p8 key file
           echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
-          cat > $HOME/private_keys/api_key.json << EOF
-          {
-            "key_id": "${API_KEY_ID}",
-            "issuer_id": "${API_ISSUER_ID}",
-            "key": "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8 | sed 's/$/\\n/' | tr -d '\n')",
-            "in_house": false
-          }
-          EOF
+          # Create the shared api_key.json Apple credential file; jq owns
+          # the JSON escaping — the old sed newline escape relied on BSD-sed
+          # replacement semantics and produced a corrupt single-line key
+          # under GNU sed (#3679).
+          jq -n \
+            --arg key_id "$API_KEY_ID" \
+            --arg issuer_id "$API_ISSUER_ID" \
+            --arg key "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8)" \
+            '{key_id: $key_id, issuer_id: $issuer_id, key: $key, in_house: false}' \
+            > $HOME/private_keys/api_key.json
           echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
 
       # Writes only onto an editable version record (prepare_for_submission
