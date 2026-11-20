@@ -274,9 +274,9 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
     decode_html_entity(&entity)
 }
 
-/// Al Heperek covers the whole Hebrew block — letters, niqqud, meteg and the
-/// full taamim range — since v0.9.5 (#3685), so every run shapes on the active
-/// face and no cantillation re-routing remains.
+// Al Heperek covers the whole Hebrew block — letters, niqqud, meteg and the
+// full taamim range — since v0.9.5 (#3685), so every run shapes on the active
+// face and no cantillation re-routing remains.
 
 /// Convert article HTML to Typst markup, preserving semantic structure.
 ///
@@ -298,11 +298,7 @@ fn daily_html_to_typst(html: &str, files: &mut TypstFiles) -> String {
     html_to_typst_with_headings(html, files, true)
 }
 
-fn html_to_typst_with_headings(
-    html: &str,
-    files: &mut TypstFiles,
-    daily_headings: bool,
-) -> String {
+fn html_to_typst_with_headings(html: &str, files: &mut TypstFiles, daily_headings: bool) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
     let mut bold_open = false;
@@ -943,9 +939,7 @@ mod tests {
         assert!(typst.contains("#strong[bold]"));
         // Semantic italics ride the bundled Hebrew italic family — Al
         // Heperek has no italic outlines (#3685).
-        assert!(typst.contains(
-            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[italic]"
-        ));
+        assert!(typst.contains("#text(font: \"Taamey Frank CLM\", style: \"italic\")[italic]"));
     }
 
     #[test]
@@ -1021,10 +1015,7 @@ mod tests {
             "<p>אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו (מלכים א כ לה) ועוד</p>",
             &mut Vec::new(),
         );
-        assert!(
-            daily.contains("אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו"),
-            "{daily}"
-        );
+        assert!(daily.contains("אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו"), "{daily}");
         assert!(!daily.contains("Taamey Frank CLM"));
         assert!(!daily.contains("Taamey D"));
         // The source reference and following prose keep the article font.
@@ -1048,15 +1039,15 @@ mod tests {
         // has no italic face).
         assert!(daily.contains("#strong[דָּבָ֖ר]"));
         assert!(daily.contains("#text(weight: 700)[אֵלָ֑יו];"));
-        assert!(daily.contains(
-            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[כֹּ֥ה]"
-        ));
+        assert!(daily.contains("#text(font: \"Taamey Frank CLM\", style: \"italic\")[כֹּ֥ה]"));
         assert!(daily.contains("וַיֹּאמֶ֣ר׃"));
         // Meteg and the rare marks U+05C4–U+05C6 are in Al Heperek too.
         let daily = daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new());
         assert!(daily.contains("הָאָֽרֶץ") && !daily.contains("font:"));
         let daily = daily_html_to_typst("<p>א\u{05C4}ב\u{05C5}ג\u{05C6} דבר</p>", &mut Vec::new());
-        assert!(daily.contains("א\u{05C4}ב\u{05C5}ג\u{05C6} דבר") && !daily.contains("#text(font:"));
+        assert!(
+            daily.contains("א\u{05C4}ב\u{05C5}ג\u{05C6} דבר") && !daily.contains("#text(font:")
+        );
 
         // A run that is only marks stays plain article text.
         let daily = daily_html_to_typst("<p>֑֒֓</p>", &mut Vec::new());
@@ -1072,9 +1063,7 @@ mod tests {
         );
         // The whole heading phrase (maqaf included) is one marked run on the
         // article face.
-        assert!(daily.contains(
-            "#heading(level: 3, numbering: none)[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];"
-        ));
+        assert!(daily.contains("#heading(level: 3, numbering: none)[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];"));
     }
 
     #[test]
@@ -1200,10 +1189,7 @@ mod tests {
         assert!(markup.contains("tracking: 0.05em, \"Genesis\")"));
         assert!(!markup.contains("tracking: 0.08em"));
         assert!(markup.contains("Genesis 1"));
-        assert!(markup.contains(&format!(
-            "*{}* First \\/ escaped",
-            to_hebrew_letter(1)
-        )));
+        assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
         assert!(markup.contains("[Article \\/ Name \\/ Author]"));
         assert!(markup.contains("#strong[bold]"));
@@ -1227,9 +1213,7 @@ mod tests {
         // `#strong[...](...)`, which Typst parses as call arguments.
         let typst = to_typst("<b>אֹתָֽם׃<br></b>(בראשית א כז) <i>x</i>.y <u>z</u>[w]");
         assert!(typst.contains("];(בראשית א כז)"));
-        assert!(typst.contains(
-            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[x];.y"
-        ));
+        assert!(typst.contains("#text(font: \"Taamey Frank CLM\", style: \"italic\")[x];.y"));
         assert!(typst.contains("#underline[z];\\[w\\]"));
     }
 

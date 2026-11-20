@@ -240,9 +240,7 @@ mod tests {
         // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
         req.perakim[0].articles[0].2 = "<h1>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
         let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
-        assert!(source.contains(
-            "fill: rgb(\"173E52\"))[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]"
-        ));
+        assert!(source.contains("fill: rgb(\"173E52\"))[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]"));
         assert!(source.contains("וַיֹּאמֶ֞ר אֵלָ֑יו"));
         assert!(!source.contains("Taamey Frank CLM"));
         assert!(!source.contains("Taamey D"));

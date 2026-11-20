@@ -546,9 +546,7 @@ fn marked_article_titles_shape_on_al_heperek() {
         );
         // No Taamey D face may remain anywhere in the document.
         assert!(
-            embedded_faces(&doc)
-                .iter()
-                .all(|f| !f.contains("Taamey_D")),
+            embedded_faces(&doc).iter().all(|f| !f.contains("Taamey_D")),
             "Taamey D face embedded in the bulletin PDF: {:?}",
             embedded_faces(&doc)
         );
@@ -565,8 +563,7 @@ fn marked_article_titles_shape_on_al_heperek() {
 #[test]
 fn daily_article_italic_runs_keep_real_italic_faces() {
     // Without italics the daily embeds only Al Heperek faces.
-    let mut req =
-        melachim_request("<h1>כותרת רגילה</h1><p>טקסט רגיל ללא טעמים כלל.</p>".into());
+    let mut req = melachim_request("<h1>כותרת רגילה</h1><p>טקסט רגיל ללא טעמים כלל.</p>".into());
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
     let doc = Document::load_mem(&buf).unwrap();
     let faces = embedded_faces(&doc);
@@ -581,16 +578,14 @@ fn daily_article_italic_runs_keep_real_italic_faces() {
 
     // An italic span resolves to the real CLM italic outlines — the only
     // remaining non-Al Heperek face (#3685).
-    req.perakim[0].articles[0].2 =
-        "<p>רגיל <span style='font-style:italic'>נטוי</span></p>".into();
+    req.perakim[0].articles[0].2 = "<p>רגיל <span style='font-style:italic'>נטוי</span></p>".into();
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
     let doc = Document::load_mem(&buf).unwrap();
     let faces = embedded_faces(&doc);
     assert!(
-        faces
-            .iter()
-            .any(|f| f.contains("TaameyFrankCLM")
-                && (f.contains("Italic") || f.contains("Oblique"))),
+        faces.iter().any(
+            |f| f.contains("TaameyFrankCLM") && (f.contains("Italic") || f.contains("Oblique"))
+        ),
         "italic face not embedded for an italic run: {faces:?}"
     );
 }
