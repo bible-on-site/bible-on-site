@@ -29,7 +29,30 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Shared router classification: docs-only PRs cannot alter dependency
+  # manifests, so the MAUI snapshot restore and review scan are skipped while
+  # the required submit-nuget check still reports (#3621).
+  detect_docs:
+    timeout-minutes: 10
+    name: Docs-only change detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Detect docs-only change
+        id: detect
+        run: node devops/github/ci/determine-changes.ts
   nuget-snapshots:
+    needs: detect_docs
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
     permissions:
       contents: write
       id-token: write
@@ -37,7 +60,7 @@ jobs:
   # Reusable jobs have prefixed check names; retain the repository's PR gate.
   submit-nuget:
     timeout-minutes: 60
-    needs: nuget-snapshots
+    needs: [nuget-snapshots, detect_docs]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions: {}
@@ -45,10 +68,17 @@ jobs:
       - name: Verify both dependency graphs were submitted
         env:
           SUBMISSION_RESULT: ${{ needs.nuget-snapshots.result }}
-        run: test "$SUBMISSION_RESULT" = success
+          DOCS_ONLY: ${{ needs.detect_docs.outputs.docs_only }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Docs-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          test "$SUBMISSION_RESULT" = success
   dependency-review:
     timeout-minutes: 60
-    needs: submit-nuget
+    needs: [submit-nuget, detect_docs]
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout repository'

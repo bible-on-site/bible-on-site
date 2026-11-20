@@ -26,6 +26,14 @@ public class SharedTopBar : ContentView
     public static double PillHeight => 40;
     public static double PillCornerRadius => 14;
 
+    /// <summary>
+    /// Nav-capsule segment width (#3683): the border's old 2-unit side inset
+    /// is folded into each button's bounds so interaction fills (pressed,
+    /// hovered, disabled) paint all the way to the capsule's rounded edge
+    /// while the capsule keeps its exact footprint and segment divider.
+    /// </summary>
+    public static double CapsuleSegmentWidth => EdgeWidth + 2;
+
     internal static readonly Color BandLight = Color.FromArgb("#F2F7FE");
     internal static readonly Color BandDark = Color.FromArgb("#20304A");
     internal static readonly Color SeparatorLight = Color.FromArgb("#DBE8F8");
@@ -158,7 +166,7 @@ public class SharedTopBar : ContentView
             Text = Fonts.FluentUI.navigation_24_regular,
             FontFamily = "FluentIcons",
             FontSize = 24,
-            WidthRequest = EdgeWidth,
+            WidthRequest = CapsuleSegmentWidth,
             Padding = 0,
             BackgroundColor = Colors.Transparent,
             VerticalOptions = LayoutOptions.Fill,
@@ -177,7 +185,7 @@ public class SharedTopBar : ContentView
             Text = BackGlyph(FlowDirection.RightToLeft),
             FontFamily = "FluentIcons",
             FontSize = 22,
-            WidthRequest = EdgeWidth,
+            WidthRequest = CapsuleSegmentWidth,
             Padding = 0,
             BackgroundColor = Colors.Transparent,
             VerticalOptions = LayoutOptions.Fill,
@@ -203,7 +211,12 @@ public class SharedTopBar : ContentView
             },
             Stroke = Colors.Transparent,
             StrokeThickness = 0,
-            Padding = new Thickness(2, 0),
+            // Zero inner padding on purpose (#3683): the old 2-unit side inset
+            // left a pill-colored sliver beside the active segment fill. The
+            // inset now lives inside each segment's width
+            // (CapsuleSegmentWidth), so fills reach the rounded edge while the
+            // capsule keeps its footprint; the border's shape clip still keeps
+            // them inside the outer curve.
             HeightRequest = PillHeight,
             Margin = new Thickness(4, 0),
             VerticalOptions = LayoutOptions.Center,
@@ -400,5 +413,25 @@ public class SharedTopBar : ContentView
         {
             plainShell.FlyoutIsPresented = true;
         }
+    }
+
+    /// <summary>
+    /// Focuses the first top bar's hamburger under <paramref name="root"/> —
+    /// the shared keyboard entry point every top-barred page offers (#2766).
+    /// Returns false when the tree has no usable bar, so callers can keep a
+    /// page-specific fallback.
+    /// </summary>
+    public static bool FocusNavigationButton(Element root)
+    {
+        var button = root.GetVisualTreeDescendants()
+            .OfType<SharedTopBar>()
+            .Select(topBar => topBar.NavigationButton)
+            .FirstOrDefault(button => button is { IsEnabled: true, IsVisible: true });
+        if (button is null)
+        {
+            return false;
+        }
+        button.Focus();
+        return true;
     }
 }

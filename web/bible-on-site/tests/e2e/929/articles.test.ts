@@ -114,6 +114,78 @@ test.describe("Articles Section", () => {
 		);
 	});
 
+	test("keeps clamped abstract paragraphs from painting over each other (#3676)", async ({
+		page,
+	}, testInfo) => {
+		// Fixture article on perek 320 mirrors production article 3336: a long
+		// <h1> heading that wraps past the three-line clamp plus a separate
+		// <p> source line. Block children inside a line-clamped box get their
+		// box height clipped at the clamp point while their remaining lines
+		// keep painting, so the source line painted on top of the heading's
+		// last line. Assert the line boxes of distinct paragraphs never share
+		// vertical space, at desktop and phone widths.
+		for (const width of [1366, 390]) {
+			await page.setViewportSize({ width, height: 850 });
+			await page.goto("/929/320");
+
+			const card = page.locator("a", {
+				has: page.locator("text=מלכות עתליה ביהודה"),
+			});
+			await expect(card).toBeVisible();
+			// Fonts swap after load; geometry must be measured with the active
+			// font so line boxes match what the user sees.
+			await card.evaluate(() => document.fonts.ready);
+
+			const report = await card.evaluate((el) => {
+				const abstract = el.querySelector(
+					'[class*="articleAbstract"]',
+				) as HTMLElement;
+				const paras = [...abstract.querySelectorAll("p")];
+				const lineRects = paras.map((p) => {
+					const range = document.createRange();
+					range.selectNodeContents(p);
+					return [...range.getClientRects()].filter((r) => r.height > 1);
+				});
+				const overlapping: [number, number][] = [];
+				for (let i = 0; i < lineRects.length; i++) {
+					for (let j = i + 1; j < lineRects.length; j++) {
+						const sharesVerticalBand = lineRects[i].some((a) =>
+							lineRects[j].some(
+								(b) =>
+									Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2,
+							),
+						);
+						if (sharesVerticalBand) overlapping.push([i, j]);
+					}
+				}
+				return {
+					paragraphs: paras.length,
+					overlapping,
+					clipped: abstract.scrollHeight > abstract.clientHeight,
+				};
+			});
+
+			expect(
+				report.paragraphs,
+				`fixture abstract should keep two paragraphs at ${width}px`,
+			).toBe(2);
+			expect(
+				report.overlapping,
+				`abstract paragraphs overlap at ${width}px viewport`,
+			).toEqual([]);
+			// The abstract still exceeds its clamp: a clipped box proves the
+			// line-clamp stayed active instead of expanding the card.
+			expect(report.clipped).toBe(true);
+
+			// Card capture lands in the HTML report artifact as visual
+			// evidence for the clamp state at this width.
+			await testInfo.attach(`article-card-${width}px`, {
+				body: await card.screenshot(),
+				contentType: "image/png",
+			});
+		}
+	});
+
 	test("does not display articles section when no articles exist", async ({
 		page,
 	}) => {

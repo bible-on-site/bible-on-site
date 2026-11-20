@@ -28,8 +28,32 @@ permissions:
   id-token: write
 
 jobs:
+  # Shared router classification: dependency manifests cannot change inside a
+  # docs-only change, so the expensive MAUI restore is skipped while the
+  # required submit-nuget check still reports (#3621).
+  detect_docs:
+    timeout-minutes: 10
+    name: Docs-only change detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Detect docs-only change
+        id: detect
+        run: node devops/github/ci/determine-changes.ts
+
   submit-snapshots:
     timeout-minutes: 60
+    needs: detect_docs
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -154,9 +178,11 @@ jobs:
           snapshot-ref: ${{ env.SNAPSHOT_REF }}
 
   # Repository rules require this exact check name in merge-group/master runs.
+  # Docs-only changes carry no dependency delta: the required check resolves
+  # successfully while the snapshot submission work is skipped (#3621).
   submit-nuget:
     timeout-minutes: 60
-    needs: submit-snapshots
+    needs: [submit-snapshots, detect_docs]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions: {}
@@ -164,4 +190,10 @@ jobs:
       - name: Verify every snapshot submission succeeded
         env:
           SUBMISSION_RESULT: ${{ needs.submit-snapshots.result }}
-        run: test "$SUBMISSION_RESULT" = success
+          DOCS_ONLY: ${{ needs.detect_docs.outputs.docs_only }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Docs-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          test "$SUBMISSION_RESULT" = success

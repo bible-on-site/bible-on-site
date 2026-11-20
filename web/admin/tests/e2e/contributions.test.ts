@@ -724,15 +724,35 @@ test.describe("Issues and typed pull requests", () => {
 				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
 				.click();
 
-			// Discovery and a repeated checkpoint request open the very same PR.
+			// Discovery runs inside the same ordinary composer: pick the article
+			// by title, then generate. A repeated checkpoint request opens the
+			// very same PR — no duplicate suggestions.
 			const discover = async () => {
-				await page.goto("/?tab=prs");
-				await page.getByText("איתור קישורים למאמר", { exact: true }).click();
+				await page.goto("/?tab=prs&id=new");
 				await page
-					.getByLabel("מספר מאמר לאיתור", { exact: true })
-					.fill(String(articleId));
+					.getByRole("combobox", { name: "סוג שינוי", exact: true })
+					.selectOption("article_links");
 				await page
-					.getByRole("button", { name: "איתור ופתיחת PR", exact: true })
+					.getByLabel("חיפוש מאמר לפי שם", { exact: true })
+					.fill(articleName);
+				const results = page.getByRole("list", {
+					name: "תוצאות חיפוש המאמרים",
+				});
+				await results
+					.getByRole("button", { name: articleName })
+					.first()
+					.waitFor();
+				await capture(page, testInfo, "article-link-title-search-picker");
+				await results.getByRole("button", { name: articleName }).click();
+				await expect(page.getByLabel("מספר מאמר", { exact: true })).toHaveValue(
+					String(articleId),
+				);
+				await expect(
+					page.getByRole("region", { name: "המאמר שנבחר" }),
+				).toContainText(articleName);
+				await capture(page, testInfo, "article-link-composer-with-discovery");
+				await page
+					.getByRole("button", { name: "איתור קישורים ופתיחת PR", exact: true })
 					.click();
 				await expect(page).toHaveURL(
 					(url) =>

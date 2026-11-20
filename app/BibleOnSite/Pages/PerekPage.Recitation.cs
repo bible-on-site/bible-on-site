@@ -741,16 +741,7 @@ public partial class PerekPage
         // overlay cannot intercept the press meant for it — the perushim
         // sheet covered by the focused pasuk must not swallow the first Back
         // (the sheet keeps its state; #3307).
-        var owner = ReaderBackPolicy.Resolve(
-            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
-            unitPickerOpen: PerekPickerPopup.IsVisible,
-            fanMenuOpen: FanMenu.IsOpen,
-            menuOverlayOpen: ReaderMenuOverlay.IsOpen,
-            chapterSearchOpen: ChapterSearch.IsSearchOpen,
-            focusedPasuk: _focusedPasuk != null,
-            perushimSheetOpen: PerushimPanel.IsOpen,
-            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
-                _chapterRecitationSelection, focusedPasuk: false, _recitationCursor.PlayingKey != null));
+        var owner = ResolveBackOwner();
         switch (owner)
         {
             case ReaderBackSurface.ExitFullScreen:
@@ -783,4 +774,21 @@ public partial class PerekPage
                 return false;
         }
     }
+
+    /// <summary>
+    /// The transient surface that owns input right now, in the shared
+    /// foreground-first order — <see cref="ReaderBackSurface.None"/> means a
+    /// plain Back falls through to navigation and PgUp/PgDn may step units
+    /// (#2766).
+    /// </summary>
+    private ReaderBackSurface ResolveBackOwner() => ReaderBackPolicy.Resolve(
+        exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+        unitPickerOpen: PerekPickerPopup.IsVisible,
+        fanMenuOpen: FanMenu.IsOpen,
+        menuOverlayOpen: ReaderMenuOverlay.IsOpen,
+        chapterSearchOpen: ChapterSearch.IsSearchOpen,
+        focusedPasuk: _focusedPasuk != null,
+        perushimSheetOpen: PerushimPanel.IsOpen,
+        selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
+            _chapterRecitationSelection, focusedPasuk: false, _recitationCursor.PlayingKey != null));
 }

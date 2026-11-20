@@ -54,6 +54,23 @@ public class PasukTextLabel : Label
         set => SetValue(JustifyProperty, value);
     }
 
+    /// <summary>
+    /// Opt-in native text selection, currently honored on Windows where it
+    /// maps to TextBlock.IsTextSelectionEnabled (#2766). Deliberately NOT a
+    /// default: the reader's pasuk cell carries a five-handler input chain
+    /// (tap, double-tap, right-tap, pointer press/release, long-press) and a
+    /// selectable TextBlock would compete for the same pointer stream. Only
+    /// gesture-free surfaces — the focused-pasuk overlay — set this.
+    /// </summary>
+    public static readonly BindableProperty SelectableProperty = BindableProperty.Create(
+        nameof(Selectable), typeof(bool), typeof(PasukTextLabel), false);
+
+    public bool Selectable
+    {
+        get => (bool)GetValue(SelectableProperty);
+        set => SetValue(SelectableProperty, value);
+    }
+
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         base.OnPropertyChanged(propertyName);

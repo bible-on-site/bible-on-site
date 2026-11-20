@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -13,7 +14,7 @@ namespace BibleOnSite.Pages;
 [QueryProperty(nameof(AuthorName), "authorName")]
 // Codacy: S2333 false positive — partial is required by the XAML code generator.
 #pragma warning disable S2333
-public partial class ArticlesPage : ContentPage, IAnalyticsScreenName //NOSONAR
+public partial class ArticlesPage : ContentPage, IAnalyticsScreenName, IWindowsDesktopSurface, IWindowsSearchSurface //NOSONAR
 #pragma warning restore S2333
 {
     private readonly ArticlesViewModel _viewModel;
@@ -92,5 +93,42 @@ public partial class ArticlesPage : ContentPage, IAnalyticsScreenName //NOSONAR
     {
         ClearSearchButton.IsVisible = !string.IsNullOrEmpty(e.NewTextValue);
         await _viewModel.ApplySearchAsync(e.NewTextValue);
+    }
+
+    /// <summary>Ctrl+F lands in the inline filter when this page shows one —
+    /// the perek-scoped view paints a title pill instead (#2766).</summary>
+    void IWindowsSearchSurface.OpenDesktopSearch()
+    {
+        if (ArticlesSearchInput.IsVisible)
+        {
+            ArticlesSearchInput.Focus();
+        }
+    }
+
+    /// <summary>Esc in the focused filter clears the query first, then leaves
+    /// the field — the desktop two-step, never navigation (#2766).</summary>
+    bool IWindowsDesktopSurface.DismissTopmostSurface()
+    {
+        if (!ArticlesSearchInput.IsFocused)
+        {
+            return false;
+        }
+        if (ArticlesSearchInput.Text is { Length: > 0 })
+        {
+            ArticlesSearchInput.Text = string.Empty;
+        }
+        else
+        {
+            ArticlesSearchInput.Unfocus();
+        }
+        return true;
+    }
+
+    void IWindowsDesktopSurface.FocusInitialElement()
+    {
+        if (!ArticlesSearchInput.IsFocused)
+        {
+            Controls.SharedTopBar.FocusNavigationButton(this);
+        }
     }
 }

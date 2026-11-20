@@ -111,6 +111,27 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
+  - `docs_only` (#3621) means every touched path sits under the
+    repository-root `docs/` tree with an inert documentation format
+    (`DOCUMENTATION_PATH` in the router) **and** no module check fired. When
+    it is true the validation surface skips — `workflow_timeouts`,
+    `root_evidence_guard`, the independent suites (`database_backups`,
+    `transcription_ci`, `perushim_data`) and every module job — so docs-only
+    PRs, master pushes and queue entries cost only detection plus the
+    status-resolution tail. The detection tier (`setup_env`, both
+    availability detectors) still runs, and the prerequisite gate always
+    evaluates their results so a failed detector cannot ride a skipped
+    check to green. A missing coverage baseline keeps its normal recovery
+    path: `baseline_recovery_required` re-fires the owning module job (and
+    `build_sefaria_mongo_docker` mirrors every consumer trigger so a
+    recovery run never waits on an image nobody built), while the checks
+    for suites that stay skipped keep their docs gate inside the gate
+    script. Renames still count both paths, `docs/aws/**` is
+    operational source (CloudFormation, Lambda, nginx) that never
+    qualifies, and source/script/manifest formats under `docs/` (e.g. the
+    device-tests POC) are never documentation. A merge group whose
+    combined delta includes non-documentation work is not docs-only, so
+    the queue's conservative force-all still validates it.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.
@@ -218,6 +239,14 @@ PRs and merge-queue events, without publishing release artifacts. Its SSG build
 uses the production DB through SSM and temporary RDS access. Fork PRs cannot
 run this privileged packaging path. Master pushes package website releases
 when website content changes; Website Performance validates the app pre-merge.
+Its `deps` stage layers cache through the `website-deps-cache.master.<arch>`
+baseline artifacts — trusted master pushes export the stage's BuildKit cache
+(`type=local`) and each packaging run restores the matching architecture's
+latest unexpired artifact; a missing or stale cache just builds cold.
+Artifact names are attacker-controlled, so only artifacts produced by a run on
+this repository's `master` branch are eligible — the restore filters the
+producing `workflow_run`'s repository and branch, never the name alone. The
+database-backed `builder` stage always runs fresh (`--no-cache-filter`).
 
 The shared package job normally removes its temporary database ingress in an
 `always()` step. If its hosted runner disappears, that step cannot run.

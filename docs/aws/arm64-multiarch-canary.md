@@ -224,10 +224,10 @@ Three properties constrain the design:
    Before index publication, test `resume-image.mts` with an index media type
    and all referenced children present in the same repository. No support
    claim substitutes for that end-to-end qualification.
-3. **Per-arch build caches.** The website `deps-cache` ECR tag is a
-   single-arch amd64 image; arm64 builds need a parallel ref
-   (`bible-on-site:deps-cache-arm64`). The `type=gha` scopes for api/admin
-   similarly gain `-arm64` scopes so arch layers never cross-pollinate.
+3. **Per-arch build caches.** The website `deps` stage caches as a
+   `website-deps-cache.master.<arch>` Actions artifact published by trusted
+   master pushes, so the amd64 and arm64 baselines never cross-pollinate.
+   The `type=gha` scopes for api/admin similarly gain `-arm64` scopes.
 4. **Gate it.** Any added arm64 job must enter `cross_module_ci` under the
    same trigger condition as its amd64 twin (the merge-gating rule in
    `.github/instructions/aws-workflows.instructions.md`), so a broken arm64

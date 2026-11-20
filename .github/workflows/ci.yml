@@ -179,6 +179,9 @@ jobs:
     name: Workflow timeout policy
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Docs-only changes cannot alter workflows; skip the policy checks (#3621).
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -197,6 +200,9 @@ jobs:
     timeout-minutes: 5
     name: Root evidence guard
     runs-on: ubuntu-latest
+    # Docs-only changes cannot add repository-root files; skip the scan (#3621).
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -217,6 +223,8 @@ jobs:
     timeout-minutes: 60
     name: Setup Environment Variables
     runs-on: ubuntu-latest
+    # Always runs: module recovery after a missing baseline still needs the
+    # resolved directories and is_master_branch even on docs-only runs (#3621).
     outputs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -250,7 +258,11 @@ jobs:
       contents: read
       actions: read
     runs-on: ubuntu-latest
+    # Always runs (#3621): a missing baseline must still trigger the module
+    # recovery run — including on docs-only changes, where nothing else can
+    # republish it — and tells the aggregator whether any job actually ran.
     outputs:
+      baseline_recovery_required: ${{ steps.check_master_coverage_artifacts.outputs.baseline_recovery_required }}
       is_api_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available }}
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
       is_bulletin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available }}
@@ -317,6 +329,14 @@ jobs:
           echo "is_app_e2e_android_coverage_available=$IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
+          # Any trigger-bearing baseline gap (module coverage or perushim data)
+          # re-enables validation on docs-only runs so the gap self-heals (#3621).
+          if echo "$IS_API_MASTER_COVERAGE_AVAILABLE$IS_APP_MASTER_COVERAGE_AVAILABLE$IS_BULLETIN_MASTER_COVERAGE_AVAILABLE$IS_ADMIN_MASTER_COVERAGE_AVAILABLE$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE$IS_DATA_MASTER_COVERAGE_AVAILABLE$IS_PERUSHIM_DATA_SQL_AVAILABLE$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" | grep -q false; then
+            echo "baseline_recovery_required=true" >> $GITHUB_OUTPUT
+          else
+            echo "baseline_recovery_required=false" >> $GITHUB_OUTPUT
+          fi
+
   determine_docker_image_availability:
     timeout-minutes: 60
     name: Docker / Image availability detection
@@ -324,6 +344,8 @@ jobs:
       contents: read
       packages: read
     runs-on: ubuntu-latest
+    # Always runs (#3621): a data/perushim recovery run triggered by a missing
+    # baseline needs the image lookup even on docs-only changes.
     outputs:
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
@@ -375,6 +397,9 @@ jobs:
       data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
+      # Every touched path sits under root docs/ and no module check fired:
+      # downstream jobs skip while required checks still resolve (#3621).
+      docs_only: ${{ steps.determine.outputs.docs_only }}
       release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}
       release_recovery_modules: ${{ steps.recovery.outputs.recovery_modules }}
       normal_master_ci: ${{ steps.recovery.outputs.normal_master_ci }}
@@ -404,7 +429,7 @@ jobs:
         id: pending-api
         # Ordinary API changes keep their existing release/version-bump path.
         # Recovery only selects real API code left unpublished by an older run.
-        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.determine.outputs.api_module_changed != 'true' }}
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.determine.outputs.api_module_changed != 'true' && steps.determine.outputs.docs_only != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: node devops/github/ci/pending-api-release.mjs
@@ -890,8 +915,31 @@ jobs:
   build_sefaria_mongo_docker:
     timeout-minutes: 60
     name: Build Sefaria MongoDB Docker Image
-    needs: [setup_env, determine_changes, determine_docker_image_availability]
-    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
+    needs:
+      [
+        setup_env,
+        determine_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+      ]
+    # The image consumers are data_ci and perushim_data: mirror their triggers
+    # exactly, including baseline-recovery runs on docs-only changes, so a
+    # triggered consumer never pulls an image nobody built (#3621).
+    if: >-
+      ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (
+        needs.determine_changes.outputs.data_module_changed == 'true' ||
+        needs.determine_changes.outputs.data_ci_changed == 'true' ||
+        needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false' ||
+        (
+          (needs.determine_changes.outputs.docs_only != 'true' || needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true') &&
+          (
+            needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
+            (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
+            needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
+            needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
+          )
+        )
+      ) }}
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -3215,6 +3263,9 @@ jobs:
       ]
     if: >-
       ${{ always() && !cancelled() && !failure() && (
+        needs.determine_changes.outputs.docs_only != 'true' ||
+        needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true'
+      ) && (
         needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
         (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
@@ -3432,10 +3483,16 @@ jobs:
 
   database_backups:
     name: Database backup recovery
+    needs: determine_changes
+    # Backup/restore validation is CI work docs-only changes skip (#3621).
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     uses: ./.github/workflows/ci-db-backup.yml
 
   transcription_ci:
     name: Local transcription
+    needs: determine_changes
+    # Transcription contract tests are CI work docs-only changes skip (#3621).
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     uses: ./.github/workflows/ci-transcription.yml
 
   cross_module_ci:
@@ -3487,25 +3544,33 @@ jobs:
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
+        # Always runs: the detection tier runs on docs-only changes too, so its
+        # results must always be evaluated — a failed detector may never ride a
+        # skipped gate to green. Suites that intentionally skip on docs-only
+        # runs are gated inside the script by their exact triggers (#3621).
         run: |
-          if [ "${{ needs.workflow_timeouts.result }}" != "success" ]; then
-            echo "Workflow timeout policy did not pass."
-            exit 1
-          fi
+          # These suites stay skipped on docs-only runs; baseline recovery
+          # re-enables this gate without re-enabling them.
+          if [ "${{ needs.determine_changes.outputs.docs_only }}" != "true" ]; then
+            if [ "${{ needs.workflow_timeouts.result }}" != "success" ]; then
+              echo "Workflow timeout policy did not pass."
+              exit 1
+            fi
 
-          if [ "${{ needs.root_evidence_guard.result }}" != "success" ]; then
-            echo "Root evidence guard did not pass."
-            exit 1
-          fi
+            if [ "${{ needs.root_evidence_guard.result }}" != "success" ]; then
+              echo "Root evidence guard did not pass."
+              exit 1
+            fi
 
-          if [ "${{ needs.database_backups.result }}" != "success" ]; then
-            echo "Database backup and restore validation did not pass."
-            exit 1
-          fi
+            if [ "${{ needs.database_backups.result }}" != "success" ]; then
+              echo "Database backup and restore validation did not pass."
+              exit 1
+            fi
 
-          if [ "${{ needs.transcription_ci.result }}" != "success" ]; then
-            echo "Local transcription validation did not pass."
-            exit 1
+            if [ "${{ needs.transcription_ci.result }}" != "success" ]; then
+              echo "Local transcription validation did not pass."
+              exit 1
+            fi
           fi
 
           if [ "${{ needs.determine_changes.result }}" != "success" ]; then
@@ -3913,6 +3978,8 @@ jobs:
 
       - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
+        # Devops test tooling is validation work docs-only runs skip (#3621).
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         uses: ./.github/actions/setup-js
         with:
           module: devops
@@ -3921,33 +3988,39 @@ jobs:
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
       - name: Save bun store cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && needs.determine_changes.outputs.docs_only != 'true' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: ./.github/actions/save-bun-store
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Restore database backup coverage
+        # Skipped on docs-only runs: the producer job did not upload the artifact.
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: database-backup-coverage-${{ github.run_id }}
           path: .coverage/db-backup
 
       - name: Restore transcription coverage
+        # Skipped on docs-only runs: the producer job did not upload the artifact.
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: transcription-coverage-${{ github.run_id }}
           path: .coverage/transcription
 
       - name: Measure release and image-publisher regression coverage
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: bun run coverage:release
 
       - name: Test release, deployment, and CI reporting guards
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs github/ci/website-deps-cache.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
@@ -3981,7 +4054,9 @@ jobs:
           path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
 
       - name: Restore App E2E coverage (master baseline, Android)
-        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true'
+        # On docs-only runs the layers only matter when an app baseline gap
+        # actually ran the suite's recovery (#3621).
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true' && (needs.determine_changes.outputs.docs_only != 'true' || needs.app_ci.result == 'success')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -3994,7 +4069,7 @@ jobs:
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
 
       - name: Restore App E2E coverage (master baseline, iOS)
-        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true'
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true' && (needs.determine_changes.outputs.docs_only != 'true' || needs.app_ci.result == 'success')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -4072,10 +4147,12 @@ jobs:
           fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         run: bun run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish Cross Module Coverage To Codacy
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
         env:
           CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
         run: |

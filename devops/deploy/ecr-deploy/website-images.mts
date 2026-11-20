@@ -10,7 +10,8 @@ import {
 } from "./website-soci.mts";
 
 // Reuse the source/config/layer validation and immutable publication used by API.
-// Website build caches are the only additional mutable tags.
+// The deps-cache tags keep their mutable exclusions from the deployed repository;
+// CI dependency caches moved to Actions artifacts (#3682), so nothing pushes them.
 export const WEBSITE_MUTABLE_TAGS = [
 	"latest",
 	"deps-cache",

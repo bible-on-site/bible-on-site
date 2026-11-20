@@ -7,6 +7,7 @@ import {
 	readArticleLinkContext,
 	readArticleLinkPreview,
 	readArticleLinkState,
+	searchArticleLinkTargets,
 } from "~/server/tanahpedia/contribution-article-links.server";
 
 const db = vi.hoisted(() => ({ one: vi.fn(), query: vi.fn() }));
@@ -82,6 +83,70 @@ beforeEach(() => {
 			];
 		throw new Error(`Unexpected query: ${sql}`);
 	});
+});
+
+it("finds articles by escaped bounded title search with perek and author context", async () => {
+	db.query.mockImplementation(async (_conn, sql: string, params) => {
+		if (sql.includes("LEFT JOIN tanah_author")) {
+			expect(sql).toContain("LIKE ? ESCAPE '\\\\'");
+			expect(sql).toMatch(/LIMIT 25/);
+			expect(params).toEqual(["%לדוג\\%מה%"]);
+			return [
+				{
+					id: 17,
+					name: "מאמר לדוגמה",
+					perekId: 1,
+					authorName: "הרב דוגמה",
+				},
+				{ id: 42, name: "מאמר אחר", perekId: 2, authorName: null },
+			];
+		}
+		if (sql.includes("FROM tanah_perek_view")) {
+			expect(params).toEqual(["[1,2]"]);
+			return [
+				perek(1),
+				{
+					...perek(2),
+					seferName: "שמות",
+					perekInContext: 2,
+					pasukCount: null,
+				},
+			];
+		}
+		throw new Error(`Unexpected query: ${sql}`);
+	});
+	const results = await searchArticleLinkTargets(conn, "לדוג%מה");
+	expect(results).toEqual([
+		{
+			id: "17",
+			title: "מאמר לדוגמה",
+			perekLabel: "בראשית א",
+			authorName: "הרב דוגמה",
+		},
+		{ id: "42", title: "מאמר אחר", perekLabel: "שמות ב", authorName: null },
+	]);
+	// The picker must stay a lightweight lookup — never article prose or hashes.
+	expect(String(db.query.mock.calls[0][1])).not.toMatch(/content|abstract/);
+});
+
+it("returns no rows for an empty hit set without touching the perek catalogue", async () => {
+	db.query.mockResolvedValue([]);
+	expect(await searchArticleLinkTargets(conn, "אין כזה")).toEqual([]);
+	expect(db.query).toHaveBeenCalledTimes(1);
+});
+
+it("labels a hit whose perek is missing from the view by its numeric id", async () => {
+	const original = db.query.getMockImplementation();
+	db.query.mockImplementation((connection, sql, params) =>
+		String(sql).includes("LEFT JOIN tanah_author")
+			? Promise.resolve([
+					{ id: 7, name: "מאמר יתום", perekId: 99, authorName: null },
+				])
+			: original?.(connection, sql, params),
+	);
+	expect((await searchArticleLinkTargets(conn, "יתום"))[0].perekLabel).toBe(
+		"פרק 99",
+	);
 });
 
 it("returns a bounded title/link preview and picker labels without exposing article prose", async () => {

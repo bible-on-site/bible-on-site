@@ -25,7 +25,7 @@ test.describe("/api/health/ready", () => {
 			warmed: true,
 			// Includes the valid bulletin-unapproved article and its author.
 			// The invalid chapter-5000 article is excluded from this corpus.
-			content: { authorCount: 3, articleCount: 4 },
+			content: { authorCount: 3, articleCount: 5 },
 		});
 	});
 

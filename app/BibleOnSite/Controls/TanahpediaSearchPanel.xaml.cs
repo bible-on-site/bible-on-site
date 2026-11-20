@@ -48,6 +48,10 @@ public partial class TanahpediaSearchPanel : ContentView
     {
         if (IsVisible)
         {
+            // Ctrl+F on an already-open panel is a refocus request: land the
+            // keyboard back in the input instead of leaving it in the results
+            // (#2766).
+            SearchInput.Focus();
             return;
         }
         _viewModel.ApplyCategoryPreset(_presetKey);

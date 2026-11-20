@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 	reconcileAgents: vi.fn(),
 	notifyAgents: vi.fn(),
 	preview: vi.fn(),
+	search: vi.fn(),
 }));
 vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
 	listContributionAgents: mocks.agents,
@@ -44,6 +45,7 @@ vi.mock("~/server/tanahpedia/contribution-identity.server", () => ({
 }));
 vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
 	readArticleLinkPreview: mocks.preview,
+	searchArticleLinkTargets: mocks.search,
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	listContributions: mocks.list,
@@ -81,6 +83,7 @@ import {
 	installContributionAgent,
 	mergeContributionItem,
 	recoverContributionItem,
+	searchContributionArticles,
 	updateContributionAgent,
 	updateContributionItem,
 } from "~/server/tanahpedia/contributions";
@@ -102,6 +105,32 @@ describe("contribution RPC boundary", () => {
 			getContributionArticleLinkPreview({ data: "123" }),
 		).rejects.toThrow("Sign in");
 		expect(mocks.preview).not.toHaveBeenCalled();
+	});
+	it("bounds and authenticates article title search without querying empty input", async () => {
+		mocks.search.mockResolvedValue([{ id: "17", title: "מאמר" }]);
+		expect(
+			await searchContributionArticles({ data: { q: "  לדוגמה  " } }),
+		).toEqual([{ id: "17", title: "מאמר" }]);
+		expect(mocks.search).toHaveBeenCalledWith({}, "לדוגמה");
+		expect(
+			await searchContributionArticles({ data: { q: `${"x".repeat(130)}` } }),
+		).toEqual([{ id: "17", title: "מאמר" }]);
+		expect(mocks.search).toHaveBeenLastCalledWith({}, "x".repeat(120));
+		expect(await searchContributionArticles({ data: { q: "   " } })).toEqual(
+			[],
+		);
+		expect(await searchContributionArticles({ data: {} })).toEqual([]);
+		expect(await searchContributionArticles({ data: [] })).toEqual([]);
+		expect(await searchContributionArticles({ data: "  מחרוזת  " })).toEqual([
+			{ id: "17", title: "מאמר" },
+		]);
+		expect(mocks.search).toHaveBeenLastCalledWith({}, "מחרוזת");
+		expect(mocks.search).toHaveBeenCalledTimes(3);
+		mocks.identity.mockRejectedValue(new Error("Sign in"));
+		await expect(
+			searchContributionArticles({ data: { q: "מאמר" } }),
+		).rejects.toThrow("Sign in");
+		expect(mocks.search).toHaveBeenCalledTimes(3);
 	});
 	beforeEach(() => {
 		for (const mock of Object.values(mocks)) mock.mockReset();

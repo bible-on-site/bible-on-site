@@ -36,6 +36,7 @@ import {
 	getContributions,
 	mergeContributionItem,
 	recoverContributionItem,
+	searchContributionArticles,
 	updateContributionItem,
 } from "~/server/tanahpedia/contributions";
 import {
@@ -45,7 +46,6 @@ import {
 	isAgentAssigned,
 	latestAgentResponses,
 } from "./ContributionAgentWork";
-import { ContributionArticleLinkGenerator } from "./ContributionArticleLinkGenerator";
 import {
 	AssigneePicker,
 	type ComposeContribution,
@@ -1099,6 +1099,33 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									previewArticle={(id) =>
 										getContributionArticleLinkPreview({ data: id })
 									}
+									searchArticles={(query) =>
+										searchContributionArticles({ data: { q: query } })
+									}
+									discoverLinks={async (id) => {
+										const result = await generateLinkProposals({
+											data: {
+												articleIds: [Number(id)],
+												engine: "heuristic",
+												force: false,
+												dryRun: false,
+											},
+										});
+										const failure = result.outcomes.find(
+											(outcome) => outcome.outcome === "error",
+										);
+										if (failure)
+											throw new Error(
+												failure.error === "article not found"
+													? "לא נמצא מאמר במספר הזה."
+													: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
+											);
+										return result.prIds;
+									}}
+									openPr={(id) => {
+										setEditingItem(null);
+										return navigate({ to: "/", search: { tab: "prs", id } });
+									}}
 									busy={save.isPending}
 									onSubmit={async (value) => {
 										await save.mutateAsync(value);
@@ -1150,31 +1177,6 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
 						</Link>
 					</div>
-					{kind === "pr" && (
-						<ContributionArticleLinkGenerator
-							generate={async (id) => {
-								const result = await generateLinkProposals({
-									data: {
-										articleIds: [Number(id)],
-										engine: "heuristic",
-										force: false,
-										dryRun: false,
-									},
-								});
-								const failure = result.outcomes.find(
-									(outcome) => outcome.outcome === "error",
-								);
-								if (failure)
-									throw new Error(
-										failure.error === "article not found"
-											? "לא נמצא מאמר במספר הזה."
-											: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
-									);
-								return result.prIds;
-							}}
-							openPr={(id) => navigate({ to: "/", search: { tab: "prs", id } })}
-						/>
-					)}
 					<div className="contribution-filters">
 						<input
 							className="contribution-input"

@@ -1,10 +1,20 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
 	ContributionArticleLinkFields,
 	type ContributionArticlePreview,
+	type ContributionArticleTarget,
+	type DiscoverContributionArticleLinks,
 	type PreviewContributionArticle,
+	type SearchContributionArticles,
 } from "~/components/tanahpedia/ContributionArticleLinks";
 import { ContributionDiff } from "~/components/tanahpedia/ContributionDiff";
 import type {
@@ -49,9 +59,15 @@ const preview: ContributionArticlePreview = {
 function Editor({
 	initial,
 	loader,
+	search,
+	discover,
+	open,
 }: {
 	initial: ArticleLinkCommand[];
 	loader?: PreviewContributionArticle;
+	search?: SearchContributionArticles;
+	discover?: DiscoverContributionArticleLinks;
+	open?: (id: string) => unknown;
 }) {
 	const [targetId, setTargetId] = useState("17");
 	const [commands, setCommands] = useState(JSON.stringify(initial));
@@ -63,6 +79,9 @@ function Editor({
 				onTargetChange={setTargetId}
 				onCommandsChange={setCommands}
 				previewArticle={loader}
+				searchArticles={search}
+				discoverLinks={discover}
+				openPr={open}
 				references={{
 					perek: [{ id: 1, name: "בראשית א" }],
 					dedication: [{ id: 5, name: "להצלחה" }],
@@ -75,8 +94,13 @@ function Editor({
 function setup(
 	initial: ArticleLinkCommand[] = [],
 	loader?: PreviewContributionArticle,
+	extras: {
+		search?: SearchContributionArticles;
+		discover?: DiscoverContributionArticleLinks;
+		open?: (id: string) => unknown;
+	} = {},
 ) {
-	return render(<Editor initial={initial} loader={loader} />);
+	return render(<Editor initial={initial} loader={loader} {...extras} />);
 }
 function draft(): ArticleLinkCommand[] {
 	return JSON.parse(screen.getByLabelText("Draft").textContent ?? "[]");
@@ -352,6 +376,237 @@ describe("article-link contribution fields", () => {
 		expect(
 			screen.getByRole("button", { name: "+ הוספת קישור מוצע" }),
 		).toBeDisabled();
+	});
+});
+
+describe("article title search and link discovery", () => {
+	const found: ContributionArticleTarget[] = [
+		{
+			id: "17",
+			title: "מאמר לדוגמה",
+			perekLabel: "בראשית א",
+			authorName: "הרב דוגמה",
+		},
+		{ id: "42", title: "מאמר לדוגמה", perekLabel: "שמות ב", authorName: null },
+	];
+	it("finds articles by title and selects one, filling the ID and loading the article", async () => {
+		const search = vi.fn().mockResolvedValue(found);
+		const loader = vi.fn().mockResolvedValue(preview);
+		setup([], loader, { search });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "לדוגמה" },
+		});
+		const list = await screen.findByRole("list", {
+			name: "תוצאות חיפוש המאמרים",
+		});
+		expect(search).toHaveBeenCalledWith("לדוגמה");
+		await act(async () =>
+			fireEvent.click(
+				within(list).getAllByRole("button", { name: /מאמר לדוגמה/ })[1],
+			),
+		);
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("42");
+		expect(loader).toHaveBeenCalledWith("42");
+		expect(
+			screen.queryByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).not.toBeInTheDocument();
+	});
+	it("shows enough context to tell same-name articles apart", async () => {
+		setup([], undefined, { search: vi.fn().mockResolvedValue(found) });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "מאמר" },
+		});
+		const list = await screen.findByRole("list", {
+			name: "תוצאות חיפוש המאמרים",
+		});
+		const [first, second] = within(list).getAllByRole("button");
+		expect(first).toHaveTextContent("בראשית א");
+		expect(first).toHaveTextContent("מאמר 17");
+		expect(first).toHaveTextContent("הרב דוגמה");
+		expect(second).toHaveTextContent("שמות ב");
+		expect(second).toHaveTextContent("מאמר 42");
+	});
+	it("reports an empty title search while keeping numeric entry available", async () => {
+		setup([], undefined, { search: vi.fn().mockResolvedValue([]) });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "אין כזה" },
+		});
+		expect(
+			await screen.findByText(/לא נמצאו מאמרים בשם הזה/),
+		).toBeInTheDocument();
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
+	});
+	it("reports a failed search and recovers on the next query", async () => {
+		const search = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Search failed"))
+			.mockResolvedValue(found);
+		setup([], undefined, { search });
+		const input = screen.getByLabelText("חיפוש מאמר לפי שם");
+		fireEvent.change(input, { target: { value: "ראשון" } });
+		expect(await screen.findByRole("alert")).toHaveTextContent("Search failed");
+		fireEvent.change(input, { target: { value: "שני" } });
+		expect(
+			await screen.findByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).toBeInTheDocument();
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+	it("ignores superseded responses and paints only the latest query", async () => {
+		const resolvers: Array<(hits: ContributionArticleTarget[]) => void> = [];
+		const rejecters: Array<(failure: unknown) => void> = [];
+		const search = vi.fn().mockImplementation(
+			() =>
+				new Promise<ContributionArticleTarget[]>((resolve, reject) => {
+					resolvers.push(resolve);
+					rejecters.push(reject);
+				}),
+		);
+		setup([], undefined, { search });
+		const input = screen.getByLabelText("חיפוש מאמר לפי שם");
+		fireEvent.change(input, { target: { value: "ראשון" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("ראשון"));
+		fireEvent.change(input, { target: { value: "שני" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("שני"));
+		// The first query's late resolution must not paint stale results.
+		await act(async () => resolvers[0](found));
+		expect(
+			screen.queryByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).not.toBeInTheDocument();
+		fireEvent.change(input, { target: { value: "שלישי" } });
+		await waitFor(() => expect(search).toHaveBeenCalledWith("שלישי"));
+		// Nor may the second query's late rejection surface a stale error.
+		await act(async () => rejecters[1](new Error("Stale failure")));
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		await act(async () => resolvers[2](found));
+		expect(
+			await screen.findByRole("list", { name: "תוצאות חיפוש המאמרים" }),
+		).toBeInTheDocument();
+	});
+	it("falls back to a generic message for a non-error search failure", async () => {
+		setup([], undefined, { search: vi.fn().mockRejectedValue("offline") });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "מאמר" },
+		});
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"חיפוש המאמרים נכשל",
+		);
+	});
+	it("selects a search hit without a preview when no loader is provided", async () => {
+		setup([], undefined, { search: vi.fn().mockResolvedValue(found) });
+		fireEvent.change(screen.getByLabelText("חיפוש מאמר לפי שם"), {
+			target: { value: "מאמר" },
+		});
+		const list = await screen.findByRole("list", {
+			name: "תוצאות חיפוש המאמרים",
+		});
+		await act(async () =>
+			fireEvent.click(
+				within(list).getAllByRole("button", { name: /מאמר לדוגמה/ })[1],
+			),
+		);
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("42");
+		expect(
+			screen.queryByRole("region", { name: "המאמר שנבחר" }),
+		).not.toBeInTheDocument();
+	});
+	it("discovers links for the chosen article and opens the ordinary PR", async () => {
+		const discover = vi.fn().mockResolvedValue(["existing-pr"]);
+		const open = vi.fn();
+		setup([], undefined, { discover, open });
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(discover).toHaveBeenCalledWith("17");
+		await waitFor(() => expect(open).toHaveBeenCalledWith("existing-pr"));
+	});
+	it("explains an empty discovery without opening a PR", async () => {
+		const discover = vi.fn().mockResolvedValue([]);
+		const open = vi.fn();
+		setup([], undefined, { discover, open });
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(
+			await screen.findByText(/לא נמצאו קישורים חדשים/),
+		).toBeInTheDocument();
+		expect(open).not.toHaveBeenCalled();
+	});
+	it("falls back to a generic message for a non-error discovery failure", async () => {
+		setup([], undefined, {
+			discover: vi.fn().mockRejectedValue("offline"),
+			open: vi.fn(),
+		});
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"איתור הקישורים נכשל",
+		);
+	});
+	it("keeps the article ID after a failed discovery and permits a retry", async () => {
+		const discover = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Discovery failed"))
+			.mockResolvedValue(["existing-pr"]);
+		const open = vi.fn();
+		setup([], undefined, { discover, open });
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Discovery failed",
+		);
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		await waitFor(() => expect(open).toHaveBeenCalledWith("existing-pr"));
+	});
+	it("runs discovery once while pending", async () => {
+		let finish: (ids: string[]) => void = () => {};
+		const discover = vi.fn().mockImplementation(
+			() =>
+				new Promise<string[]>((done) => {
+					finish = done;
+				}),
+		);
+		setup([], undefined, { discover, open: vi.fn() });
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		const pending = screen.getByRole("button", { name: "מאתר קישורים..." });
+		expect(pending).toBeDisabled();
+		fireEvent.click(pending);
+		expect(discover).toHaveBeenCalledTimes(1);
+		await act(async () => finish([]));
+	});
+	it("rejects noncanonical article IDs before running discovery", async () => {
+		const discover = vi.fn();
+		setup([], undefined, { discover, open: vi.fn() });
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
+			target: { value: "017" },
+		});
+		await act(async () =>
+			fireEvent.click(
+				screen.getByRole("button", { name: "איתור קישורים ופתיחת PR" }),
+			),
+		);
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"canonical article ID required",
+		);
+		expect(discover).not.toHaveBeenCalled();
 	});
 });
 

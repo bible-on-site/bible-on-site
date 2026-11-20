@@ -35,9 +35,13 @@
                             Clicked="OnPlayClicked"/>
                 </Grid>
                 <!-- PasukTextLabel carries the shared scripture face (Al Heperek,
-                     #3685) and the reader's justification + size re-render. -->
+                     #3685) and the reader's justification + size re-render.
+                     Selectable opts the deep-reading surface into desktop
+                     text selection/copy — the overlay has no tap chain on
+                     the text, unlike the pasuk cell (#2766). -->
                 <controls:PasukTextLabel x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
-                       FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                       FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"
+                       Selectable="True"/>
                 <Label x:Name="RecitationHintLabel" AutomationId="FocusedRecitationHint"
                        FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
             </VerticalStackLayout>
