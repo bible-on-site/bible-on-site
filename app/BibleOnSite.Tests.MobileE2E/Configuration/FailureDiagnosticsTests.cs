@@ -352,7 +352,16 @@ public sealed class FailureDiagnosticsTests : IDisposable
     private static void Reply(string id, NetworkStream stream, CancellationToken cancellation, string extra = "")
     {
         cancellation.ThrowIfCancellationRequested();
-        stream.Write(Encoding.ASCII.GetBytes(id + "\n" + extra));
+        try
+        {
+            stream.Write(Encoding.ASCII.GetBytes(id + "\n" + extra));
+        }
+        catch (Exception dropped) when (dropped is IOException or ObjectDisposedException)
+        {
+            // The client's own budget may already have closed the socket; a reply
+            // write that loses that race is a missed request, not a supervisor
+            // fault — the client log decides the test outcome.
+        }
     }
 
     private sealed class Supervisor : IDisposable
@@ -381,7 +390,12 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 using var stop = cancellation.Register(_listener.Stop);
                 _listening.Set();
                 using var client = _listener.AcceptTcpClient();
-                using var close = cancellation.Register(client.Dispose);
+                // The accepted socket is never killed by the watchdog: disposing it
+                // mid-exchange produced a clean EOF that the client read as a false
+                // `EndOfStreamException` handshake fault on loaded hosts. The client's
+                // own budget always closes its side, which releases ReadExactly; the
+                // deadline still frees a never-connecting Accept and the receive
+                // callbacks through their cooperative token.
                 using var stream = client.GetStream();
                 var notification = new byte[33];
                 try
