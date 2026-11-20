@@ -9,7 +9,7 @@
 		"emulators:start": "firebase emulators:start --project tanah-al-haperek --only auth,firestore"
 	},
 	"devDependencies": {
-		"firebase-tools": "15.36.0"
+		"firebase-tools": "15.37.0"
 	},
 	"packageManager": "bun@1.4.4"
 }
