@@ -1,7 +1,7 @@
 /**
- * `/robots.txt` — crawl policy + AI Content Signals (issue #3257).
+ * `/robots.txt` - crawl policy + AI Content Signals (issue #3257).
  * Serialized as a plain route handler because `MetadataRoute.Robots`
- * cannot emit the `Content-Signal` directive — the signal must live
+ * cannot emit the `Content-Signal` directive - the signal must live
  * inside a `User-agent: *` group to be valid (contentsignals.org).
  *
  * The owner welcomes search, AI answers, and model training on the
@@ -26,14 +26,20 @@ User-agent: *
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Allow: /
 Allow: /api/search
+Allow: /api/health
 Disallow: /api/
 Disallow: /dev
 
 # SEO/scraper bucket (MJ12bot, AhrefsBot,
 # SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou,
-# DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
+# DataForSeoBot): hard-blocked at the edge/proxy - they ignore robots.
 
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
+# Agentmap: ${SITE_ORIGIN}/.well-known/ard.json
+# (parked in a comment, not a live directive: strict robots.txt validators -
+# Lighthouse's robots-txt audit - reject any directive outside RFC 9309 plus
+# the common extensions, and conforming ARD consumers only require the
+# /.well-known/ard.json URI and rel="ard" links this origin also serves)
 `;
 
 export function GET(): NextResponse {
