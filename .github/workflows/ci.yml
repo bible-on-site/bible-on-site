@@ -3947,7 +3947,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs github/ci/browser-assets-gate.test.mjs github/ci/website-deps-cache.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
