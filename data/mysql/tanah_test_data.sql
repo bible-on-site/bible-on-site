@@ -147,6 +147,33 @@ VALUES (
         FALSE
     );
 
+-- Line-clamp regression fixture (issue #3676). Mirrors production article
+-- 3336 on מלכים ב יא (perek 320): a long <h1> heading that wraps past the
+-- three-line card clamp followed by a separate <p> source line. Nested block
+-- children inside the clamped box painted on top of each other; the card
+-- e2e asserts their line boxes stay disjoint at desktop and mobile widths.
+-- Appended last so its auto-increment id (7) stays stable. Author 4 keeps
+-- the exact-count starter assertions (authors 1-3) untouched, and perek 320
+-- sits outside every moed fixture range and count assertion.
+INSERT INTO tanah_article (
+        PEREK_ID,
+        AUTHOR_ID,
+        ABSTRACT,
+        NAME,
+        PRIORITY,
+        CONTENT,
+        DISTRIBUTABLE
+    )
+VALUES (
+        320,
+        4,
+        '<h1>מלכות עתליה ביהודה, המלכת יואש, ומשמעות האירועים עבור אנשי ממלכת יהודה</h1><p>מלכים ב יא</p>',
+        'מלכות עתליה ביהודה, המלכת יואש, ומשמעות האירועים עבור אנשי ממלכת יהודה',
+        1,
+        '<p>תוכן מאמר לדוגמא עבור בדיקת גלישת שורות בכרטיס הקרוסלה.</p>',
+        TRUE
+    );
+
 -- Representative test data for tanah_article_covering_source. Article 1 gets
 -- verified coverage of its two opening pesukim. Every other fixture article
 -- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
