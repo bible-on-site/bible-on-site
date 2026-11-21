@@ -97,5 +97,10 @@ describe("RabbiEditPage", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("button", { name: "שומר..." })).toBeDisabled(),
 		);
+		expect(
+			screen
+				.getByRole("button", { name: "שומר..." })
+				.querySelector(".animate-spin"),
+		).toBeInTheDocument();
 	});
 });

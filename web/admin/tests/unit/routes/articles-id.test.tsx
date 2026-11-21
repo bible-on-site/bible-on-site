@@ -183,6 +183,11 @@ describe("ArticleEditPage", () => {
 				screen.getByRole("button", { name: "שומר..." }),
 			).toBeDisabled(),
 		);
+		expect(
+			screen
+				.getByRole("button", { name: "שומר..." })
+				.querySelector(".animate-spin"),
+		).toBeInTheDocument();
 	});
 });
 
