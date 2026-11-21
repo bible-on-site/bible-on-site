@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
@@ -165,6 +165,24 @@ describe("ArticleEditPage", () => {
 			false,
 		);
 		expect(server.getArticle).not.toHaveBeenCalled();
+	});
+
+	it("shows the spinner while a save is in flight", async () => {
+		server.updateArticle.mockReturnValue(new Promise(() => {}));
+		renderPage();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור עכשיו" }),
+			).toBeEnabled(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שומר..." }),
+			).toBeDisabled(),
+		);
 	});
 });
 
