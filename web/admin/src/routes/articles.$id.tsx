@@ -6,6 +6,21 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
+import {
+	ArrowLeft,
+	ArrowRight,
+	BookOpen,
+	CalendarDays,
+	FileText,
+	LoaderCircle,
+	NotebookText,
+	Pencil,
+	Plus,
+	Save,
+	Star,
+	Trash2,
+	UserRound,
+} from "lucide-react";
 import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
@@ -235,11 +250,16 @@ function ArticleEditPage() {
 						params={{ perekId: String(formData.perek_id) }}
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לפרק {formData.perek_id}</span>
 					</Link>
-					<h1 className="text-3xl font-bold text-gray-900 mt-2">
-						{isNew ? "➕ מאמר חדש" : "✏️ עריכת מאמר"}
+					<h1 className="text-3xl font-bold text-gray-900 mt-2 flex items-center gap-2">
+						{isNew ? (
+							<Plus className="size-7" aria-hidden="true" />
+						) : (
+							<Pencil className="size-7" aria-hidden="true" />
+						)}
+						{isNew ? "מאמר חדש" : "עריכת מאמר"}
 					</h1>
 				</div>
 				<div className="flex items-center gap-4">
@@ -254,7 +274,7 @@ function ArticleEditPage() {
 							onClick={handleDelete}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
-							<span>🗑️</span>
+							<Trash2 size={16} aria-hidden="true" />
 							<span>מחק מאמר</span>
 						</button>
 					)}
@@ -287,7 +307,11 @@ function ArticleEditPage() {
 								htmlFor="author"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								👤 מחבר
+								<UserRound
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								מחבר
 							</label>
 							<select
 								id="author"
@@ -313,7 +337,11 @@ function ArticleEditPage() {
 								htmlFor="perek"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								📖 פרק (1-929)
+								<BookOpen
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								פרק (1-929)
 							</label>
 							<input
 								id="perek"
@@ -341,7 +369,11 @@ function ArticleEditPage() {
 								htmlFor="priority"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								⭐ עדיפות (1-10)
+								<Star
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								עדיפות (1-10)
 							</label>
 							<input
 								id="priority"
@@ -375,7 +407,11 @@ function ArticleEditPage() {
 							htmlFor="abstract"
 							className="block text-sm font-semibold text-gray-700 mb-2"
 						>
-							📝 תקציר
+							<NotebookText
+								className="inline-block size-4 align-[-0.125em]"
+								aria-hidden="true"
+							/>{" "}
+							תקציר
 						</label>
 						<textarea
 							id="abstract"
@@ -390,7 +426,11 @@ function ArticleEditPage() {
 					{formData.moedIds !== undefined && moadim && moadim.length > 0 && (
 						<div className="border-t border-gray-100 pt-6">
 							<div className="block text-sm font-semibold text-gray-700 mb-2">
-								🗓️ מועדים על הפרק
+								<CalendarDays
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								מועדים על הפרק
 							</div>
 							<div className="flex flex-wrap gap-3">
 								{moadim.map((moed) => (
@@ -455,7 +495,11 @@ function ArticleEditPage() {
 					<div>
 						{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
 						<label className="block text-sm font-semibold text-gray-700 mb-2">
-							📄 תוכן המאמר
+							<FileText
+								className="inline-block size-4 align-[-0.125em]"
+								aria-hidden="true"
+							/>{" "}
+							תוכן המאמר
 						</label>
 						<WysiwygEditor
 							content={formData.content}
@@ -487,7 +531,23 @@ function ArticleEditPage() {
 						disabled={saveMutation.isPending || !formData.name.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
-						{saveMutation.isPending ? "⏳ שומר..." : "💾 שמור עכשיו"}
+						{saveMutation.isPending ? (
+							<>
+								<LoaderCircle
+									className="inline-block size-4 animate-spin align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שומר...
+							</>
+						) : (
+							<>
+								<Save
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שמור עכשיו
+							</>
+						)}
 					</button>
 				</div>
 			</form>
@@ -501,7 +561,11 @@ function ArticleEditPage() {
 						search={{ articleId }}
 						className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
 					>
-						PRs לקישורי מאמר זה ←
+						PRs לקישורי מאמר זה{" "}
+						<ArrowLeft
+							className="inline-block size-3.5 align-[-0.125em]"
+							aria-hidden="true"
+						/>
 					</Link>
 				</div>
 			)}

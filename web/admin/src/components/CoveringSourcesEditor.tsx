@@ -1,3 +1,4 @@
+import { Target, Trash2 } from "lucide-react";
 import {
 	coveringSourceKey,
 	duplicateCoveringSourceKeys,
@@ -116,7 +117,7 @@ export function CoveringSourcesEditor({
 					}
 					className="text-red-600 hover:text-red-700 px-2 py-1 text-sm"
 				>
-					🗑️
+					<Trash2 size={16} aria-hidden="true" />
 				</button>
 			</div>
 		);
@@ -126,7 +127,11 @@ export function CoveringSourcesEditor({
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<span className="block text-sm font-semibold text-gray-700">
-					🎯 כיסוי פסוקים
+					<Target
+						className="inline-block size-4 align-[-0.125em]"
+						aria-hidden="true"
+					/>{" "}
+					כיסוי פסוקים
 				</span>
 				<span className="text-xs text-gray-500">
 					{sources.length === 0

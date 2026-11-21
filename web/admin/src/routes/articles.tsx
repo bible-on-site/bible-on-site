@@ -5,6 +5,7 @@ import {
 	Outlet,
 	useMatch,
 } from "@tanstack/react-router";
+import { ArrowLeft, ChevronDown, Library, Plus, Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getPerakim, type Perek } from "~/server/perakim";
 import { getSefarim, type Sefer } from "~/server/sefarim";
@@ -94,7 +95,7 @@ function ArticlesNavPage() {
 					search={{}}
 					className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow-md font-medium"
 				>
-					<span className="text-lg">+</span>
+					<Plus size={18} aria-hidden="true" />
 					<span>מאמר חדש</span>
 				</Link>
 			</div>
@@ -103,7 +104,7 @@ function ArticlesNavPage() {
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<span>🚀</span>
+						<Rocket size={18} aria-hidden="true" />
 						<span>ניווט מהיר לפי פרק</span>
 					</h2>
 				</div>
@@ -126,7 +127,10 @@ function ArticlesNavPage() {
 							onClick={handleNavigateToPerek}
 							className="bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-all font-medium shadow-sm hover:shadow-md"
 						>
-							עבור לפרק →
+							<span className="inline-flex items-center gap-1.5">
+								עבור לפרק
+								<ArrowLeft size={16} aria-hidden="true" />
+							</span>
 						</button>
 					</div>
 					<p className="text-gray-500 text-sm mt-3">
@@ -139,7 +143,7 @@ function ArticlesNavPage() {
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="bg-linear-to-r from-amber-50 to-orange-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<span>📚</span>
+						<Library size={18} aria-hidden="true" />
 						<span>ספרים ופרקים</span>
 					</h2>
 				</div>
@@ -161,7 +165,7 @@ function ArticlesNavPage() {
 											: "rotate-0"
 									}`}
 								>
-									▼
+									<ChevronDown size={16} aria-hidden="true" />
 								</span>
 							</button>
 							{expandedSefarim.includes(sefer.id) && (

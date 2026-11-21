@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
 	SHORTCUT_EXTRAS_JSON_EXAMPLE,
@@ -58,9 +59,10 @@ export function EditorShortcutModal({
 						<button
 							type="button"
 							onClick={onClose}
+							aria-label="סגירה"
 							className="text-gray-500 hover:text-gray-800 text-sm px-2"
 						>
-							✕
+							<X size={16} aria-hidden="true" />
 						</button>
 					</div>
 					<input

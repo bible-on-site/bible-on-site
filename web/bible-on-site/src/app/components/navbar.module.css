@@ -55,7 +55,7 @@
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: right 1s;
+  transition: right 0.25s ease-in-out;
   z-index: 10;
 }
 
@@ -67,17 +67,13 @@
   min-height: 0;
   overflow-y: auto;
   margin: 0;
-  /* Left room for the ribbon ::after overhang (left: -10px plus its -18deg
-     rotation reach): inside the padding box it creates no horizontal
-     overflow, so no horizontal scrollbar and no clipped sticker. */
-  padding: 0 0 0 16px;
+  padding: 0;
   list-style: none;
 }
 
 .open .menuBox {
   right: 0;
   z-index: 10001;
-  transition: right 0.25s ease-in-out;
 }
 
 @media (hover: hover) {
@@ -136,6 +132,9 @@
      line and it would stay pinned to the row's top edge. */
   align-items: center;
   width: 100%;
+  /* Transparent border keeps the active row aligned with its siblings. */
+  border-inline-start: 3px solid transparent;
+  border-radius: var(--radius-sm, 4px);
 }
 
 .menuItem > * {
@@ -171,33 +170,23 @@
   margin-right: 0.5rem;
 }
 
-/* Ribbon base styles */
-.ribbonBuilding,
-.ribbonComingSoon {
-  position: relative;
+/* Current page: inline-start accent bar plus a muted tint. */
+.menuItem:has(> a[aria-current]) {
+  border-inline-start-color: var(--link-accent);
+  background-color: var(--surface-muted);
+  font-weight: 600;
 }
 
-.ribbonBuilding::after,
-.ribbonComingSoon::after {
-  position: absolute;
-  left: -10px;
-  top: 50%;
-  transform: translateY(-50%) rotate(-18deg);
-  background-color: var(--accent-600);
-  color: white;
-  font-size: 0.6rem;
-  padding: 2px 6px;
-  white-space: nowrap;
-  z-index: 1;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+.menuItem > a:focus-visible {
+  outline: 2px solid var(--link-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm, 4px);
 }
 
-.ribbonBuilding::after {
-  content: "בבניה";
-}
-
-.ribbonComingSoon::after {
-  content: "בקרוב";
+@media (hover: hover) {
+  .menuItem:has(> a:hover) {
+    background-color: var(--surface-muted);
+  }
 }
 
 .menuItem * {
@@ -212,18 +201,31 @@
   margin-right: 2.5rem;
 }
 
-.menuList > li:not(.versionItem)::before {
-  content: " ";
-  display: block;
+.menuGroup {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  border-bottom: 1px solid #888bef4a;
 }
 
-.menuList > li:not(.versionItem):last-of-type::after {
-  content: " ";
-  display: block;
-  width: 100%;
-  border-bottom: 1px solid #888bef4a;
+.menuGroup + .menuGroup {
+  margin-top: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(136, 139, 239, 0.29);
+}
+
+.groupTitle {
+  margin: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-text, #6b7280);
+}
+
+.groupItems {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* Version item at bottom */
@@ -263,4 +265,11 @@
 
 .menuBtn:active {
   scale: var(--press-scale);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .menuBox {
+    transition: none;
+  }
 }

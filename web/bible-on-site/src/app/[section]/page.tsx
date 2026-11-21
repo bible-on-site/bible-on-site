@@ -121,7 +121,7 @@ export default async function Home({ params }: Props) {
 									<Image
 										className="icon-white"
 										src="/icons/calendar-today.svg"
-										alt="עלון יומי"
+										alt=""
 										unoptimized
 										width={48}
 										height={48}
@@ -136,15 +136,17 @@ export default async function Home({ params }: Props) {
 						</article>
 						<article className={styles.headlineArticle}>
 							<h2 className={styles.headlineTitle}>
-								<Image
-									className="icon-white"
-									src="/icons/smartphone.svg"
-									alt="עלון יומי"
-									unoptimized
-									width={48}
-									height={48}
-								/>
-								<span>ישומון תנ&quot;ך על הפרק</span>
+								<Link href="/app">
+									<Image
+										className="icon-white"
+										src="/icons/smartphone.svg"
+										alt=""
+										unoptimized
+										width={48}
+										height={48}
+									/>
+									<span>ישומון תנ&quot;ך על הפרק</span>
+								</Link>
 							</h2>
 							<p>
 								לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.

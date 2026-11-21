@@ -12,7 +12,7 @@ test.describe("Articles Management", () => {
 	test("can navigate to new article form", async ({ page }) => {
 		await page.goto("/articles");
 
-		await page.getByRole("link", { name: "+ מאמר חדש" }).click();
+		await page.getByRole("link", { name: "מאמר חדש" }).click();
 		await expect(page).toHaveURL(/\/articles\/new/);
 		await expect(page.locator("h1")).toContainText("מאמר חדש");
 	});
@@ -51,7 +51,7 @@ test.describe("Articles Management", () => {
 		await expect(
 			page.getByRole("heading", { name: "מועדים", exact: true }),
 		).toBeVisible();
-		await page.getByRole("link", { name: "PRs לקישורי מאמר זה ←" }).click();
+		await page.getByRole("link", { name: "PRs לקישורי מאמר זה" }).click();
 		await expect(page).toHaveURL(
 			(url) => url.pathname === "/" && url.searchParams.get("tab") === "prs",
 		);
