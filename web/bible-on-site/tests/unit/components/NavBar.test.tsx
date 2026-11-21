@@ -107,7 +107,8 @@ describe("NavBar", () => {
 
 	it("groups the menu into לימוד, תוכן and שירות sections", () => {
 		render(<NavBar version="1.2.3" />);
-		const menu = document.getElementById("main-menu") as HTMLElement;
+		// biome-ignore lint/style/noNonNullAssertion: NavBar always renders #main-menu
+		const menu = document.getElementById("main-menu")!;
 		const titles = Array.from(menu.querySelectorAll("h2")).map(
 			(h) => h.textContent,
 		);
@@ -189,7 +190,8 @@ describe("NavBar", () => {
 
 	describe("menu toggle", () => {
 		const getTrigger = () => screen.getByRole("button", { name: "תפריט ראשי" });
-		const getMenu = () => document.getElementById("main-menu") as HTMLElement;
+		// biome-ignore lint/style/noNonNullAssertion: NavBar always renders #main-menu
+		const getMenu = () => document.getElementById("main-menu")!;
 
 		beforeEach(() => {
 			mockPathname = "/";

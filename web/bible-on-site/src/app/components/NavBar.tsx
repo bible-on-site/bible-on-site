@@ -151,8 +151,7 @@ export const NavBar = ({ version }: { version: string }) => {
 
 	const subLink = (sub: NavSubItem) =>
 		sub.external ? (
-			// nosemgrep: typescript.react.security.audit.react-href-var -- hrefs are
-			// repo-owned app-store constants from appPlatforms, never user input
+			// nosemgrep: typescript.react.security.audit.react-href-var -- repo-owned appPlatforms store links, not user input
 			<a
 				href={sub.href || undefined}
 				target="_blank"
@@ -161,8 +160,7 @@ export const NavBar = ({ version }: { version: string }) => {
 				<span>{sub.label}</span>
 			</a>
 		) : (
-			// nosemgrep: typescript.react.security.audit.react-href-var -- href is a
-			// literal menu route constant declared in NAV_GROUPS above
+			// nosemgrep: typescript.react.security.audit.react-href-var -- literal NAV_GROUPS route constant, not user input
 			<Link
 				href={sub.href}
 				aria-current={sub.href === current ? "page" : undefined}

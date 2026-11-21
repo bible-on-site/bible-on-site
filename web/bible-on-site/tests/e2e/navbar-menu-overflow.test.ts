@@ -1,7 +1,7 @@
 import { expect, test } from "../util/playwright/test-fixture";
 
 // Regression coverage for #2477: .menuList is a scroll container
-// (overflow-y: auto), which makes overflow-x compute to `auto` too — any
+// (overflow-y: auto), which makes overflow-x compute to `auto` too - any
 // overhang then produces a redundant bottom scrollbar. The status ribbons
 // that first triggered it are gone (#3702), but grouped sections and the
 // active-item accent still need the same guarantee.

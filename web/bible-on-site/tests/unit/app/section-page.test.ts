@@ -81,7 +81,7 @@ describe("[section]/page", () => {
 			}
 		});
 
-		it("links both hero cards — לימוד to /929 and ישומון to /app", async () => {
+		it("links both hero cards - לימוד to /929 and ישומון to /app", async () => {
 			const textOf = (node: ReactNode): string => {
 				if (node == null || typeof node === "boolean") return "";
 				if (typeof node === "string" || typeof node === "number")
