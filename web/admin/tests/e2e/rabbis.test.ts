@@ -18,7 +18,7 @@ test.describe("Rabbis Management", () => {
 	test("can navigate to new rabbi form", async ({ page }) => {
 		await page.goto("/rabbis");
 
-		await page.getByRole("link", { name: "+ רב חדש" }).click();
+		await page.getByRole("link", { name: "רב חדש" }).click();
 		await expect(page).toHaveURL("/rabbis/new");
 		await expect(page.locator("h1")).toContainText("רב חדש");
 	});
