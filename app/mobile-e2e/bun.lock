@@ -7,7 +7,7 @@
       "devDependencies": {
         "appium": "4.0.0",
         "appium-uiautomator2-driver": "9.2.2",
-        "appium-xcuitest-driver": "13.1.3",
+        "appium-xcuitest-driver": "13.3.0",
       },
     },
   },
@@ -141,7 +141,7 @@
 
     "appium-uiautomator2-driver": ["appium-uiautomator2-driver@9.2.2", "", { "dependencies": { "@appium/css-locator-to-native": "2.0.1", "appium-adb": "17.0.4", "appium-android-driver": "15.4.0", "appium-uiautomator2-server": "11.0.8", "asyncbox": "7.0.0", "axios": "1.21.1", "io.appium.settings": "9.2.1", "teen_process": "5.0.1" }, "optionalDependencies": { "sharp": "0.35.5" }, "peerDependencies": { "appium": "^4.0.0-beta.8" } }, "sha512-v/FMbiSlUInL5Y93tu1yWnwQF9EbGMHB1icq/1Y7iXyPM0egHSnScAmvJ4V4iWTROjwVtwC9JWmndjkM+XX8Fw=="],
 
-    "appium-xcuitest-driver": ["appium-xcuitest-driver@13.1.3", "", { "dependencies": { "@appium/css-locator-to-native": "2.0.1", "@appium/strongbox": "3.0.0", "appium-ios-remotexpc": "6.1.2", "appium-ios-simulator": "11.1.1", "appium-remote-debugger": "19.1.20", "appium-webdriveragent": "17.0.12", "appium-xcode": "8.0.4", "asyncbox": "7.1.0", "axios": "1.21.1", "commander": "15.1.0", "dayjs": "1.11.23", "js2xmlparser2": "0.2.0", "lru-cache": "11.5.3", "node-devicectl": "3.0.3", "semver": "7.8.6", "teen_process": "5.0.1", "winston": "3.19.0", "ws": "8.23.0" }, "optionalDependencies": { "sharp": "0.35.5" }, "peerDependencies": { "appium": "^4.0.0-beta.8" } }, "sha512-iOjpXlnkZx3sPaTga6Pe7Lf8Mbr21Wqwp6LP+pb4MWKI4sWS4lGxjuVN8joyn3Db7U5GWbKlQKdpiw1LZDvrJg=="],
+    "appium-xcuitest-driver": ["appium-xcuitest-driver@13.3.0", "", { "dependencies": { "@appium/css-locator-to-native": "2.0.1", "@appium/strongbox": "3.0.0", "appium-ios-remotexpc": "6.1.2", "appium-ios-simulator": "11.1.1", "appium-remote-debugger": "19.1.21", "appium-webdriveragent": "17.0.12", "appium-xcode": "8.0.4", "asyncbox": "7.1.0", "axios": "1.21.1", "commander": "15.1.0", "dayjs": "1.11.23", "js2xmlparser2": "0.2.0", "lru-cache": "11.5.3", "node-devicectl": "3.0.3", "semver": "7.8.6", "teen_process": "5.0.1", "winston": "3.19.0", "ws": "8.23.0" }, "optionalDependencies": { "@appium/media-proxy": "1.1.0", "sharp": "0.35.5" }, "peerDependencies": { "appium": "^4.0.0" } }, "sha512-PrJ8SpcNZxOHOxXc8m/RFGL6qdVNqZnMrA10sGVTK/EGBDH4/PjXnU50X2koseh/+/CvbWw5tVqiT2BWIV9jwQ=="],
 
     "archiver": ["archiver@8.0.0", "", { "dependencies": { "async": "^3.2.4", "buffer-crc32": "^1.0.0", "is-stream": "^4.0.0", "lazystream": "^1.0.0", "normalize-path": "^3.0.0", "readable-stream": "^4.0.0", "readdir-glob": "^3.0.0", "tar-stream": "^3.0.0", "zip-stream": "^7.0.2" } }, "sha512-fV1orZfsnPn9BaSByR/qE67rJCLJEy2Ox5bq7nJh+jquWaNh6Sfec75kJ2T6PtdGUbPQlrVoSVCEOa5SdiTQ1g=="],
 
@@ -997,6 +997,8 @@
 
     "appium-xcuitest-driver/@appium/logger": ["@appium/logger@3.0.0", "", { "dependencies": { "lru-cache": "^11.5.2" } }, "sha512-Nt7IhGCuZwMb0XyjFKuqhKTmZaCVlKOd3KypvxAlew98K4WafmC5cdmptRJfjkKOvQaavFv1kKNN4xcXUBydow=="],
 
+    "appium-xcuitest-driver/@appium/media-proxy": ["@appium/media-proxy@1.1.0", "", { "dependencies": { "@appium/support": "^8.0.0-beta.7", "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "bundled": true, "hasInstallScript": true }, "sha512-cgwHhG1LJgAudihX+ASpqKY2p02+ReCZDpvI6WTGXKv8GcHc1fFYQ9y1LcWPrIM+Wo3j/s8A1k0oabTC3nHw/A=="],
+
     "appium-xcuitest-driver/@appium/schema": ["@appium/schema@2.0.0", "", { "dependencies": { "@types/json-schema": "^7.0.15" } }, "sha512-r2qLm0ag4AskYnDzV6CZ2y9P479HZ4qbmi1TPPl7f+VJfRF6B2x9Ki9TTXd60dzOBElU0QoLR+fKmmwsqRxDyw=="],
 
     "appium-xcuitest-driver/@appium/strongbox": ["@appium/strongbox@3.0.0", "", { "dependencies": { "env-paths": "^4.0.0" }, "bundled": true }, "sha512-p9GLICYvA1i0gfEo43cMkV3kpBfalXNNmGzaxwdZK30wDYaBrq6cNztuWJXLfCpMzXddPNhlzwLKo0vxVLFMlA=="],
@@ -1051,7 +1053,7 @@
 
     "appium-xcuitest-driver/appium-ios-tuntap": ["appium-ios-tuntap@3.1.1", "", { "dependencies": { "@appium/support": "^8.0.0-beta.7", "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "hasInstallScript": true }, "sha512-kOdMZwn6XwS8VgUOjdh5qdBVOEd/q2XNVKScF6o6kNhuxZ2YAdhhSPGQKzPgPK5S6b3r+m39Vdtq8SHP8NJOjA=="],
 
-    "appium-xcuitest-driver/appium-remote-debugger": ["appium-remote-debugger@19.1.20", "", { "dependencies": { "@appium/base-driver": "^11.0.0-beta.7", "@appium/support": "^8.0.0-beta.7", "appium-ios-remotexpc": "^6.1.2", "asyncbox": "^7.0.0", "teen_process": "^5.0.0" }, "bundled": true }, "sha512-hylsnHHJLvrmqA7RER5VSu4juOMUYhPOzY9VYvd0nW1HPDBzcJ5Vw8qncLMDCB5SOzxtZmaAHZpVz2JYTutugw=="],
+    "appium-xcuitest-driver/appium-remote-debugger": ["appium-remote-debugger@19.1.21", "", { "dependencies": { "@appium/base-driver": "^11.0.0-beta.7", "@appium/support": "^8.0.0-beta.7", "appium-ios-remotexpc": "^6.1.2", "asyncbox": "^7.0.0", "teen_process": "^5.0.0" }, "bundled": true }, "sha512-58RPlLuKfFuHfJl42jGGbDuCRcri6G4ZSQUz229TJesj3XfRmzbXyw1pJq9RcwLF5qurh1Z3Rix2L20NDgVuGA=="],
 
     "appium-xcuitest-driver/appium-webdriveragent": ["appium-webdriveragent@17.0.12", "", { "dependencies": { "@appium/base-driver": "^11.0.0-beta.7", "@appium/strongbox": "^3.0.0-beta.1", "@appium/support": "^8.0.0-beta.7", "asyncbox": "^7.0.0", "axios": "^1.21.0", "teen_process": "^5.0.0" }, "bundled": true }, "sha512-HoD/Lyx2xHaroMtV/IR+CJ9Qde//GQaIU0MU1PwaZTTDPwRcYx7H19/vxFr0l/y+VQPeVA7co//A4vG5X6Tk7w=="],
 
