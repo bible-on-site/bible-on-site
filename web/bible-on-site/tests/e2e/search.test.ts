@@ -78,7 +78,7 @@ test.describe("Site search", () => {
 
 		// Search lives on its own header button; the first regular menu
 		// item is the reader (#2102).
-		const firstItem = menu.locator("ul li").first();
+		const firstItem = menu.locator("ul ul li").first();
 		await expect(firstItem.getByRole("link")).toHaveText(/על הפרק/);
 		await expect(firstItem.getByRole("link")).toHaveAttribute("href", "/929");
 		await expect(menu.getByRole("link", { name: "חיפוש" })).toHaveCount(0);

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 import { getWebsiteRevalidationStatus } from "~/server/website-revalidate";
 
 /**
@@ -19,10 +20,11 @@ export function RevalidationWarning() {
 
 	return (
 		<div className="bg-amber-50 border-b border-amber-200">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-amber-800 font-medium">
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-amber-800 font-medium flex items-center gap-1.5">
+				<TriangleAlert size={16} aria-hidden="true" />
 				{data.lastFailure.unconfigured
-					? "⚠️ עדכון האתר הציבורי אינו מוגדר בשרת (חסרים VITE_WEBSITE_URL/REVALIDATE_SECRET) - השמירות נרשמו אך האתר מציג תוכן ישן עד לתיקון התצורה."
-					: "⚠️ עדכון האתר נכשל - ייתכן שהאתר הציבורי מציג תוכן ישן. שמירה חוזרת תנסה לרענן שוב."}
+					? "עדכון האתר הציבורי אינו מוגדר בשרת (חסרים VITE_WEBSITE_URL/REVALIDATE_SECRET) - השמירות נרשמו אך האתר מציג תוכן ישן עד לתיקון התצורה."
+					: "עדכון האתר נכשל - ייתכן שהאתר הציבורי מציג תוכן ישן. שמירה חוזרת תנסה לרענן שוב."}
 			</div>
 		</div>
 	);

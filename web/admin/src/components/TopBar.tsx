@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { BookOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useArchiveBusy } from "~/lib/archive-busy";
 
@@ -182,7 +183,7 @@ export function TopBar({ archive = false }: { archive?: boolean }) {
 				<div className="admin-header-inner">
 					<Link to={admin ? "/" : "/archive"} className="admin-header-brand">
 						<span className="admin-header-logo" aria-hidden="true">
-							📖
+							<BookOpen size={22} />
 						</span>
 						<span className="admin-header-title font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
 							ניהול תנ"ך על הפרק

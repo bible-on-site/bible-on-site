@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Directory } from "~/lib/archive";
 import { setArchiveBusy } from "~/lib/archive-busy";
@@ -645,7 +646,11 @@ export function ArchiveArea() {
 													aria-label={`פתיחת תיקייה ${file.filename}`}
 													onClick={() => void openDirectory(file.id)}
 												>
-													📁 {file.filename}
+													<Folder
+														className="inline-block size-4 align-[-0.125em]"
+														aria-hidden="true"
+													/>{" "}
+													{file.filename}
 												</button>
 											) : (
 												<strong dir="auto">{file.filename}</strong>

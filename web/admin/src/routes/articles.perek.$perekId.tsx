@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+	ArrowLeft,
+	ArrowRight,
+	BookOpen,
+	Check,
+	FileText,
+	Pencil,
+	Plus,
+	Trash2,
+	UserRound,
+} from "lucide-react";
+import {
 	type Article,
 	deleteArticle,
 	getArticlesByPerek,
@@ -60,11 +71,12 @@ function PerekArticles() {
 						to="/articles"
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לניהול מאמרים</span>
 					</Link>
-					<h1 className="text-3xl font-bold text-gray-900 mt-2">
-						📖 פרק {perek?.perek ?? perekId}
+					<h1 className="text-3xl font-bold text-gray-900 mt-2 flex items-center gap-2">
+						<BookOpen className="size-7" aria-hidden="true" />
+						פרק {perek?.perek ?? perekId}
 					</h1>
 					{perek?.sefer_name && (
 						<p className="text-gray-500 mt-1">ספר {perek.sefer_name}</p>
@@ -76,7 +88,7 @@ function PerekArticles() {
 					search={{ perekId: perekIdNum }}
 					className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow-md font-medium"
 				>
-					<span className="text-lg">+</span>
+					<Plus size={18} aria-hidden="true" />
 					<span>מאמר חדש לפרק זה</span>
 				</Link>
 			</div>
@@ -85,14 +97,18 @@ function PerekArticles() {
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<span>📝</span>
+						<FileText size={18} aria-hidden="true" />
 						<span>מאמרים בפרק זה ({articles?.length ?? 0} מאמרים)</span>
 					</h2>
 				</div>
 
 				{articles?.length === 0 ? (
 					<div className="p-12 text-center">
-						<div className="text-6xl mb-4">📄</div>
+						<FileText
+							size={56}
+							className="mx-auto mb-4 text-gray-300"
+							aria-hidden="true"
+						/>
 						<h3 className="text-xl font-semibold text-gray-700 mb-2">
 							אין מאמרים בפרק זה עדיין
 						</h3>
@@ -103,7 +119,7 @@ function PerekArticles() {
 							search={{ perekId: perekIdNum }}
 							className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
 						>
-							<span>+</span>
+							<Plus size={16} aria-hidden="true" />
 							<span>הוסף מאמר חדש</span>
 						</Link>
 					</div>
@@ -125,12 +141,16 @@ function PerekArticles() {
 									</Link>
 									{article.author_name && (
 										<span className="text-sm text-gray-500 mt-1 block">
-											👤 מאת: {article.author_name}
+											<UserRound
+												className="inline-block size-3.5 align-[-0.125em]"
+												aria-hidden="true"
+											/>{" "}
+											מאת: {article.author_name}
 										</span>
 									)}
 									{Boolean(article.coverage_verified) && (
 										<span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 mt-1">
-											<span>✓</span>
+											<Check size={12} aria-hidden="true" />
 											<span>
 												כיסוי פסוקים מאומת
 												{article.covering_count != null &&
@@ -146,7 +166,7 @@ function PerekArticles() {
 										search={{}}
 										className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 px-4 py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-all font-medium text-sm"
 									>
-										<span>✏️</span>
+										<Pencil size={14} aria-hidden="true" />
 										<span>עריכה</span>
 									</Link>
 									<button
@@ -155,7 +175,7 @@ function PerekArticles() {
 										className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm disabled:opacity-50"
 										disabled={deleteMutation.isPending}
 									>
-										<span>🗑️</span>
+										<Trash2 size={14} aria-hidden="true" />
 										<span>מחיקה</span>
 									</button>
 								</div>
@@ -173,7 +193,7 @@ function PerekArticles() {
 						params={{ perekId: String(perekIdNum - 1) }}
 						className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 px-4 py-2 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>פרק {perekIdNum - 1}</span>
 					</Link>
 				)}
@@ -184,7 +204,7 @@ function PerekArticles() {
 						className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 px-4 py-2 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
 					>
 						<span>פרק {perekIdNum + 1}</span>
-						<span>←</span>
+						<ArrowLeft size={16} aria-hidden="true" />
 					</Link>
 				)}
 			</div>

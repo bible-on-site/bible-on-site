@@ -28,10 +28,15 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
+		...rest
 	}: {
 		children: React.ReactNode;
 		href: string;
-	}) => <a href={href}>{children}</a>,
+	} & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+		<a href={href} {...rest}>
+			{children}
+		</a>
+	),
 }));
 
 import { NavBar } from "@/app/components/NavBar";
@@ -100,6 +105,16 @@ describe("NavBar", () => {
 		);
 	});
 
+	it("groups the menu into לימוד, תוכן and שירות sections", () => {
+		render(<NavBar version="1.2.3" />);
+		// biome-ignore lint/style/noNonNullAssertion: NavBar always renders #main-menu
+		const menu = document.getElementById("main-menu")!;
+		const titles = Array.from(menu.querySelectorAll("h2")).map(
+			(h) => h.textContent,
+		);
+		expect(titles).toEqual(["לימוד", "תוכן", "שירות"]);
+	});
+
 	it("keeps the accessibility statement out of the side nav (#2396)", () => {
 		render(<NavBar version="1.2.3" />);
 		// The entry point moved to the top-bar accessibility menu; the footer
@@ -123,9 +138,60 @@ describe("NavBar", () => {
 		);
 	});
 
+	describe("active item", () => {
+		const currentLink = () =>
+			document.querySelectorAll("#main-menu a[aria-current='page']");
+
+		it.each([
+			["/מסורה", "מסורה על הפרק"],
+			["/masora/12", "מסורה על הפרק"],
+			["/parasha/כי תשא", "פרשה על הפרק"],
+			["/calendar", "לוח לימוד יומי"],
+			["/לוח", "לוח לימוד יומי"],
+			["/pedia/ירושלים", "תנכפדיה"],
+			["/whatsappGroup", "קבוצת ווטסאפ"],
+		])("marks %s as current via %s", (path, name) => {
+			mockPathname = path;
+			render(<NavBar version="1.2.3" />);
+			expect(currentLink()).toHaveLength(1);
+			expect(currentLink()[0]).toHaveTextContent(name);
+			expect(currentLink()[0]).toHaveAttribute("aria-current", "page");
+		});
+
+		it("marks הרבנים and not its /929 parent on /929/authors", () => {
+			mockPathname = "/929/authors/יהודה הלוי";
+			render(<NavBar version="1.2.3" />);
+			expect(currentLink()).toHaveLength(1);
+			expect(currentLink()[0]).toHaveTextContent("הרבנים");
+		});
+
+		it("marks percent-encoded Hebrew paths", () => {
+			mockPathname = encodeURI("/מסורה/12");
+			render(<NavBar version="1.2.3" />);
+			expect(currentLink()).toHaveLength(1);
+			expect(currentLink()[0]).toHaveTextContent("מסורה על הפרק");
+		});
+
+		it("marks nothing on the homepage", () => {
+			mockPathname = "/";
+			render(<NavBar version="1.2.3" />);
+			expect(currentLink()).toHaveLength(0);
+		});
+
+		it("tolerates a malformed percent-encoded pathname", () => {
+			mockPathname = "/%E0%A4%A";
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+			render(<NavBar version="1.2.3" />);
+			expect(currentLink()).toHaveLength(0);
+			expect(warn).toHaveBeenCalled();
+			warn.mockRestore();
+		});
+	});
+
 	describe("menu toggle", () => {
 		const getTrigger = () => screen.getByRole("button", { name: "תפריט ראשי" });
-		const getMenu = () => document.getElementById("main-menu") as HTMLElement;
+		// biome-ignore lint/style/noNonNullAssertion: NavBar always renders #main-menu
+		const getMenu = () => document.getElementById("main-menu")!;
 
 		beforeEach(() => {
 			mockPathname = "/";

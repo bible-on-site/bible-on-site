@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
@@ -678,7 +679,7 @@ function EntryEditPage() {
 					to="/tanahpedia"
 					className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 				>
-					<span>→</span>
+					<ArrowRight size={16} aria-hidden="true" />
 					<span>חזרה לתנכפדיה</span>
 				</Link>
 				<div className="rounded-lg border border-red-300 bg-red-50 p-8 text-center space-y-3">
@@ -717,7 +718,7 @@ function EntryEditPage() {
 						to="/tanahpedia"
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לתנכפדיה</span>
 					</Link>
 					<h1 className="text-3xl font-bold text-gray-900 mt-2">

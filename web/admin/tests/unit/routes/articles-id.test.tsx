@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
@@ -136,7 +136,7 @@ describe("ArticleEditPage", () => {
 			(link) => link.to === "/link-proposals",
 		);
 		expect(proposalsLink?.search).toEqual({ articleId: 7 });
-		expect(screen.getByText("PRs לקישורי מאמר זה ←")).toBeInTheDocument();
+		expect(screen.getByText("PRs לקישורי מאמר זה")).toBeInTheDocument();
 
 		// The panel receives the live form values for its managed entries.
 		await waitFor(() => expect(server.panelProps.length).toBeGreaterThan(0));
@@ -157,12 +157,37 @@ describe("ArticleEditPage", () => {
 			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
 		);
 
-		expect(screen.queryByText("PRs לקישורי מאמר זה ←")).not.toBeInTheDocument();
+		expect(
+			screen.queryByText("PRs לקישורי מאמר זה"),
+		).not.toBeInTheDocument();
 		expect(screen.queryByTestId("relationships-panel")).not.toBeInTheDocument();
 		expect(server.links.some((link) => link.to === "/link-proposals")).toBe(
 			false,
 		);
 		expect(server.getArticle).not.toHaveBeenCalled();
+	});
+
+	it("shows the spinner while a save is in flight", async () => {
+		server.updateArticle.mockReturnValue(new Promise(() => {}));
+		renderPage();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור עכשיו" }),
+			).toBeEnabled(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שומר..." }),
+			).toBeDisabled(),
+		);
+		expect(
+			screen
+				.getByRole("button", { name: "שומר..." })
+				.querySelector(".animate-spin"),
+		).toBeInTheDocument();
 	});
 });
 
@@ -205,7 +230,11 @@ describe("Article edit Hebrew dates (#3098)", () => {
 		server.params = { id: "7" };
 		server.getArticle.mockResolvedValue({ ...article, hebrewDates: undefined });
 		renderPage();
-		await waitFor(() => expect(screen.getByText("✏️ עריכת מאמר")).toBeTruthy());
+		await waitFor(() =>
+			expect(
+				screen.getByRole("heading", { name: "עריכת מאמר" }),
+			).toBeTruthy(),
+		);
 		expect(screen.queryByTestId("hebrew-dates-editor")).toBeNull();
 	});
 

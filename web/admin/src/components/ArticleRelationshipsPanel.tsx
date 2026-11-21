@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Check, Link2 } from "lucide-react";
 import {
 	ARTICLE_RELATIONSHIP_REGISTRY,
 	type ArticleRelationshipEntry,
@@ -44,7 +45,9 @@ export function ArticleRelationshipsPanel({
 	return (
 		<section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 			<header className="px-8 py-5 border-b border-gray-100">
-				<h2 className="text-xl font-bold text-gray-900">🔗 קשרי המאמר</h2>
+				<h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+					<Link2 size={20} aria-hidden="true" /> קשרי המאמר
+				</h2>
 				<p className="mt-1 text-sm text-gray-500">
 					כל הקשרים הסמנטיים שהסכמה תומכת בהם — לפי חוזה הקשרים המשותף (v
 					{ARTICLE_RELATIONSHIP_REGISTRY.contractVersion})
@@ -79,7 +82,11 @@ export function ArticleRelationshipsPanel({
 							{coveringCount} מקורות;{" "}
 							{coverageVerified ? (
 								<span className="text-green-700 font-medium">
-									כיסוי מאומת ✓
+									כיסוי מאומת{" "}
+									<Check
+										className="inline-block size-3.5 align-[-0.125em]"
+										aria-hidden="true"
+									/>
 								</span>
 							) : (
 								<span className="text-gray-500">כיסוי לא ידוע</span>

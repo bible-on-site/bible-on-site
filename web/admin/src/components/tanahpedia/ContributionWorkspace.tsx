@@ -5,6 +5,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
@@ -210,7 +211,11 @@ function EvidenceList({ item }: { item: Pick<Contribution, "evidence"> }) {
 						{source.note && <p>{source.note}</p>}
 						{source.url && (
 							<a href={source.url} target="_blank" rel="noreferrer">
-								פתיחת המקור ↗
+								פתיחת המקור{" "}
+								<ArrowUpRight
+									className="inline-block size-3.5 align-[-0.125em]"
+									aria-hidden="true"
+								/>
 							</a>
 						)}
 					</article>
@@ -1063,7 +1068,11 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					search={queueSearch()}
 					onClick={() => setEditingItem(null)}
 				>
-					→ חזרה לרשימה
+					<ArrowRight
+						className="inline-block size-4 align-[-0.125em]"
+						aria-hidden="true"
+					/>{" "}
+					חזרה לרשימה
 				</Link>
 			)}
 			{search.id === "new" || editing ? (
