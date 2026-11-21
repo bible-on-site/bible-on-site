@@ -70,6 +70,19 @@ describe("RabbiEditPage", () => {
 		server.getAuthor.mockResolvedValue(author);
 	});
 
+	it("renders the new-rabbi form with the save-first placeholder", async () => {
+		server.params.id = "new";
+		renderPage();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("heading", { name: "רב חדש" }),
+			).toBeInTheDocument(),
+		);
+		expect(screen.getByText("שמור את הרב לפני העלאת תמונה")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "שמור עכשיו" })).toBeDisabled();
+		expect(server.getAuthor).not.toHaveBeenCalled();
+	});
+
 	it("shows the spinner while a save is in flight", async () => {
 		server.updateAuthor.mockReturnValue(new Promise(() => {}));
 		renderPage();

@@ -152,8 +152,7 @@ export const NavBar = ({ version }: { version: string }) => {
 	const subLink = (sub: NavSubItem) =>
 		sub.external ? (
 			<a
-				// nosemgrep: typescript.react.security.audit.react-href-var -- repo-owned appPlatforms store links, not user input
-				href={sub.href || undefined}
+				href={sub.href || undefined} // nosemgrep: typescript.react.security.audit.react-href-var -- repo-owned appPlatforms store links, not user input
 				target="_blank"
 				rel="noopener noreferrer"
 			>
@@ -161,8 +160,7 @@ export const NavBar = ({ version }: { version: string }) => {
 			</a>
 		) : (
 			<Link
-				// nosemgrep: typescript.react.security.audit.react-href-var -- literal NAV_GROUPS route constant, not user input
-				href={sub.href}
+				href={sub.href} // nosemgrep: typescript.react.security.audit.react-href-var -- literal NAV_GROUPS route constant, not user input
 				aria-current={sub.href === current ? "page" : undefined}
 			>
 				<span>{sub.label}</span>
