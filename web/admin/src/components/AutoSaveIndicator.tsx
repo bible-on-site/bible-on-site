@@ -1,3 +1,5 @@
+import { Check } from "lucide-react";
+
 interface AutoSaveIndicatorProps {
 	/** A commit (server save) is in flight. */
 	isSaving: boolean;
@@ -32,7 +34,7 @@ export function AutoSaveIndicator({
 			{isSaving ? (
 				<>
 					<div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-blue-600" />
-					<span className="text-blue-600 font-medium">⏳ שומר בשרת...</span>
+					<span className="text-blue-600 font-medium">שומר בשרת...</span>
 				</>
 			) : saveFailed ? (
 				<>
@@ -50,7 +52,11 @@ export function AutoSaveIndicator({
 				<>
 					<div className="h-2.5 w-2.5 rounded-full bg-green-500" />
 					<span className="text-green-700 font-medium">
-						✓ נשמר בשרת ב-{lastSaved.toLocaleTimeString("he-IL")}
+						<Check
+							className="inline-block size-4 align-[-0.125em]"
+							aria-hidden="true"
+						/>{" "}
+						נשמר בשרת ב-{lastSaved.toLocaleTimeString("he-IL")}
 					</span>
 				</>
 			) : null}

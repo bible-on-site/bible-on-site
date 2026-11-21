@@ -123,9 +123,9 @@ describe("TanahpediaLayout", () => {
 		expect(screen.getByText("1 ערכים")).toBeInTheDocument();
 		expect(screen.getByText("3 ערכים")).toBeInTheDocument();
 		expect(
-			screen.getAllByRole("link", { name: "אתר ↗" }).length,
+			screen.getAllByRole("link", { name: "אתר" }).length,
 		).toBeGreaterThan(0);
-		expect(screen.getByRole("link", { name: "+ ערך חדש" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "ערך חדש" })).toHaveAttribute(
 			"href",
 			"/tanahpedia/entries/$id",
 		);

@@ -168,7 +168,7 @@ describe("Chapter article list", () => {
 		getArticlesByPerek.mockResolvedValue([]);
 		renderPage();
 		expect(
-			await screen.findByRole("heading", { name: "📖 פרק 2" }),
+			await screen.findByRole("heading", { name: "פרק 2" }),
 		).toBeVisible();
 		expect(screen.getByText("אין מאמרים בפרק זה עדיין")).toBeVisible();
 		expect(screen.queryByText(/^ספר /)).not.toBeInTheDocument();
@@ -186,7 +186,7 @@ describe("Chapter article list", () => {
 		routeParams.perekId = "invalid";
 		renderPage();
 		expect(
-			screen.getByRole("heading", { name: "📖 פרק invalid" }),
+			screen.getByRole("heading", { name: "פרק invalid" }),
 		).toBeVisible();
 		expect(screen.getByText("מאמרים בפרק זה (0 מאמרים)")).toBeVisible();
 		expect(getPerek).not.toHaveBeenCalled();

@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type { LinkProposal, ProposalTarget } from "~/lib/article-linking/types";
 import { relationshipFor } from "~/lib/article-relationships";
@@ -136,7 +137,11 @@ export function LinkProposalCard({
 
 				{proposal.conflict && (
 					<p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-						⚠ {proposal.conflict}
+						<TriangleAlert
+							className="inline-block size-4 align-[-0.125em]"
+							aria-hidden="true"
+						/>{" "}
+						{proposal.conflict}
 					</p>
 				)}
 

@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowLeftRight, ArrowUpRight } from "lucide-react";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -110,7 +111,11 @@ function Relationship({
 		>
 			<span>{shown(names[0], change.labels)}</span>
 			<span className="contribution-connector" aria-hidden="true">
-				{change.kind === "parent_child" ? "↓" : "↔"}
+				{change.kind === "parent_child" ? (
+					<ArrowDown size={14} />
+				) : (
+					<ArrowLeftRight size={14} />
+				)}
 			</span>
 			<span>{shown(names[1], change.labels)}</span>
 			<small>
@@ -217,7 +222,10 @@ function Coordinates({ change }: { change: ReviewedChange }) {
 					<bdi>
 						{String(state?.latitude)}, {String(state?.longitude)}
 					</bdi>{" "}
-					↗
+					<ArrowUpRight
+						className="inline-block size-3.5 align-[-0.125em]"
+						aria-hidden="true"
+					/>
 				</a>
 			))}
 		</figure>

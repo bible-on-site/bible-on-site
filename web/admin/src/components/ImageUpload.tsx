@@ -1,3 +1,4 @@
+import { Upload } from "lucide-react";
 import { useCallback, useState } from "react";
 
 interface ImageUploadProps {
@@ -120,7 +121,11 @@ export function ImageUpload({
 					</div>
 				) : (
 					<>
-						<div className="text-4xl mb-3">📤</div>
+						<Upload
+							size={36}
+							className="mx-auto mb-3 text-gray-400"
+							aria-hidden="true"
+						/>
 						<input
 							type="file"
 							accept="image/*"

@@ -1,3 +1,4 @@
+import { Calendar, X } from "lucide-react";
 import { useRef } from "react";
 import type { HebrewDateAssignment } from "~/server/hebrew-dates";
 
@@ -67,7 +68,11 @@ export function HebrewDatesEditor({ dates, onChange }: HebrewDatesEditorProps) {
 	return (
 		<div>
 			<span className="block text-sm font-semibold text-gray-700 mb-2">
-				📅 שיוך לתאריך עברי (חוזר מדי שנה)
+				<Calendar
+					className="inline-block size-4 align-[-0.125em]"
+					aria-hidden="true"
+				/>{" "}
+				שיוך לתאריך עברי (חוזר מדי שנה)
 			</span>
 			<p className="text-xs text-gray-500 mb-3">
 				בכל תאריך משויך המאמר מוצג כמאמר היחיד של אותו יום על פרק היומי —
@@ -110,7 +115,7 @@ export function HebrewDatesEditor({ dates, onChange }: HebrewDatesEditorProps) {
 							className="text-red-600 hover:text-red-800 px-2"
 							title="הסר תאריך"
 						>
-							✕
+							<X size={16} aria-hidden="true" />
 						</button>
 					</li>
 				))}

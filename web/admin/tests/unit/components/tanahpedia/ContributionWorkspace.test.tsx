@@ -1010,7 +1010,7 @@ describe("issues and PR administration", () => {
 		show();
 		expect(await screen.findByText("תיאור מפורט")).toBeInTheDocument();
 		expect(screen.getByText("הערה חשובה")).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "פתיחת המקור ↗" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "פתיחת המקור" })).toHaveAttribute(
 			"href",
 			"https://example.com",
 		);

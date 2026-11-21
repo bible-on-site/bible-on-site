@@ -37,7 +37,7 @@ describe("EditorShortcutModal", () => {
 		expect(screen.getByText("קישורים וטקסט")).toBeInTheDocument();
 		expect(screen.getByText("רשימות")).toBeInTheDocument();
 
-		fireEvent.click(screen.getByRole("button", { name: "✕" }));
+		fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
 		fireEvent.click(screen.getByRole("button", { name: "סגור" }));
 
 		expect(onClose).toHaveBeenCalledTimes(2);
