@@ -57,8 +57,7 @@ export function UndoToastProvider({
 	const previousFocusRef = useRef<HTMLElement | null>(null);
 
 	const release = useCallback((id: number) => {
-		const timer = timersRef.current.get(id);
-		if (timer !== undefined) clearTimeout(timer);
+		clearTimeout(timersRef.current.get(id));
 		timersRef.current.delete(id);
 		undoRefs.current.delete(id);
 		for (const [key, value] of keysRef.current)

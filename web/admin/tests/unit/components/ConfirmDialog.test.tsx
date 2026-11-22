@@ -46,6 +46,12 @@ describe("ConfirmDialog", () => {
 		expect(props.onConfirm).not.toHaveBeenCalled();
 	});
 
+	it("ignores non-Escape keys", () => {
+		const props = renderDialog();
+		fireEvent.keyDown(document, { key: "Enter" });
+		expect(props.onCancel).not.toHaveBeenCalled();
+	});
+
 	it("moves focus to the confirm button and restores it on close", () => {
 		const outside = document.createElement("button");
 		document.body.appendChild(outside);

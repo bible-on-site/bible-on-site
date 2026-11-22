@@ -1420,6 +1420,29 @@ describe("EntryEditPage", () => {
 			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
+		it("keeps the edits when the revert dialog is cancelled", async () => {
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "כותרת זמנית" },
+			});
+			await waitFor(() =>
+				expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "בטל שינויים" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "ביטול",
+				}),
+			);
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת זמנית");
+			expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy();
+		});
+
 		it("mirrors /new edits under a stable new-entry draft key and clears it on create", async () => {
 			paramsMock.mockReturnValue({ id: "new" });
 			createEntryMock.mockResolvedValue({

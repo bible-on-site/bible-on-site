@@ -38,7 +38,18 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+function Bare() {
+	useUndoAction();
+	return null;
+}
+
 describe("UndoToastProvider", () => {
+	it("throws when useUndoAction runs outside the provider", () => {
+		expect(() => render(<Bare />)).toThrow(
+			"useUndoAction must be used inside <UndoToastProvider>",
+		);
+	});
+
 	it("commits the pending action once the toast expires", () => {
 		vi.useFakeTimers();
 		const commit = vi.fn();
