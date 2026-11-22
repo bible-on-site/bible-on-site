@@ -2690,12 +2690,13 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Publish App Unit Report To Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/unit/test-results.xml', env.APP_COVERAGE_DIRECTORY)) != '' }}
         uses: codecov/codecov-action@v7
         with:
           override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          files: ${{ env.APP_COVERAGE_DIRECTORY }}/unit/test-results.xml
+          disable_search: true
           flags: app
           report_type: test_results
 
@@ -2723,12 +2724,13 @@ jobs:
           overwrite: true
 
       - name: Publish App Integration Report To Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/integration/test-results.xml', env.APP_COVERAGE_DIRECTORY)) != '' }}
         uses: codecov/codecov-action@v7
         with:
           override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          files: ${{ env.APP_COVERAGE_DIRECTORY }}/integration/test-results.xml
+          disable_search: true
           flags: app
           report_type: test_results
 
