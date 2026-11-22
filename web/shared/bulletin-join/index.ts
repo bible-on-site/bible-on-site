@@ -38,10 +38,11 @@ export function validateJoinDestination(
 	if (raw.length === 0 || raw.length > 2048) return null;
 	let url: URL;
 	try {
-		// nosemgrep -- the user-controlled-URL taint pattern is a false
-		// positive here: this function IS the allow-list validator (HTTPS
-		// only, fixed provider host, no credentials/port/query/fragment),
-		// and its callers re-validate at every read boundary (#2939).
+		// The user-controlled-URL taint pattern is a false positive here:
+		// this function IS the allow-list validator (HTTPS only, fixed
+		// provider host, no credentials/port/query/fragment), and its
+		// callers re-validate at every read boundary (#2939).
+		// nosemgrep
 		url = new URL(raw);
 	} catch {
 		return null;

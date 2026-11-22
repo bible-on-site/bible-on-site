@@ -46,7 +46,9 @@ function frontmatter(body: string): Record<string, unknown> {
 	const match = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
 	if (!match)
 		throw new Error("SKILL.md does not open with a YAML frontmatter block");
-	// nosemgrep: Semgrep_rules_lgpl_javascript_eval_rule-yaml-deserialize -- the rule predates js-yaml 4: `load` no longer constructs unsafe js/* types, and the input here is our own served SKILL.md, not user data
+	// js-yaml 4+ `load` builds no unsafe js/* types, and the input here is
+	// our own served SKILL.md, not user data.
+	// nosemgrep
 	const parsed = yaml.load(match[1]);
 	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
 		throw new Error("SKILL.md frontmatter is not a YAML mapping");
