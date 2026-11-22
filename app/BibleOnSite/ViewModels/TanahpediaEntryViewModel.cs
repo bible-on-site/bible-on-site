@@ -42,6 +42,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private CancellationTokenSource? _loadCts;
     private int _loadVersion;
 
+    /// <summary>Loaded entry bodies by requested name — a Back replay or a
+    /// re-hop restores them without a network round-trip (the pushed page
+    /// used to keep its content alive), while not-found and disambiguation
+    /// states stay uncached so they always re-resolve (#2640).</summary>
+    private readonly Dictionary<string, TanahpediaEntryDetail> _entryCache = new(StringComparer.Ordinal);
+
     /// <summary>True while a family-tree trail is pending above the entry
     /// the page was opened with.</summary>
     public bool HasEntryHistory => _entryHistory.Count > 0;
@@ -226,6 +232,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         try
         {
+            if (_entryCache.TryGetValue(UniqueName, out var cached))
+            {
+                await SetEntryAsync(cached, ct);
+                return;
+            }
+
             var detail = await _service.GetEntryDetailAsync(UniqueName, ct);
             if (version != _loadVersion)
             {
@@ -233,7 +245,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             }
             if (detail != null)
             {
-                await SetEntryAsync(detail);
+                await SetEntryAsync(detail, ct);
                 return;
             }
 
@@ -253,7 +265,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 }
                 if (alias != null)
                 {
-                    await SetEntryAsync(alias);
+                    await SetEntryAsync(alias, ct);
                     return;
                 }
             }
@@ -334,7 +346,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
-    private async Task SetEntryAsync(TanahpediaEntryDetail detail)
+    private async Task SetEntryAsync(TanahpediaEntryDetail detail, CancellationToken ct)
     {
         // The destination may lack the previous entry's deferred sections -
         // reset them with the swap so no stale tree, map or rows linger.
@@ -355,14 +367,16 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
+        // Back/re-hop replay restores the body without a round-trip.
+        _entryCache[UniqueName] = detail;
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
         OnPropertyChanged(nameof(ShowNoContentNotice));
 
         await Task.WhenAll(
             LoadOccurrencesAsync(detail.Occurrences),
-            LoadEntityExtrasAsync(detail),
-            LoadDedicationsAsync(detail.Id));
+            LoadEntityExtrasAsync(detail, ct),
+            LoadDedicationsAsync(detail.Id, ct));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
@@ -372,17 +386,21 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// An in-place entry hop must not show the previous entry's lines — stale
     /// responses are discarded by the entry load version.
     /// </summary>
-    private async Task LoadDedicationsAsync(string entryId)
+    private async Task LoadDedicationsAsync(string entryId, CancellationToken ct)
     {
         var version = _loadVersion;
         try
         {
             var dedications = await _dedicationService.GetDedicationsAsync(
-                new DedicationContext { EntryIds = [entryId] }, CancellationToken.None);
+                new DedicationContext { EntryIds = [entryId] }, ct);
             if (version == _loadVersion)
             {
                 DedicationLines = DedicationFormatter.FormatAll(dedications);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
         catch (Exception ex) //NOSONAR — dedication lines are best-effort.
@@ -403,36 +421,40 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// tolerance as occurrences and the website's try/catch around these
     /// loads).
     /// </summary>
-    private async Task LoadEntityExtrasAsync(TanahpediaEntryDetail detail)
+    private async Task LoadEntityExtrasAsync(TanahpediaEntryDetail detail, CancellationToken ct)
     {
         var tasks = new List<Task>();
 
         var person = detail.Entities.FirstOrDefault(e => e.EntityType == "PERSON");
         if (person is not null)
         {
-            tasks.Add(LoadFamilyAsync(person.EntityId));
+            tasks.Add(LoadFamilyAsync(person.EntityId, ct));
         }
 
         if (detail.Entities.Any(e => e.EntityType == "PLACE"))
         {
-            tasks.Add(LoadMarkersAsync(detail.Id));
+            tasks.Add(LoadMarkersAsync(detail.Id, ct));
         }
 
         await Task.WhenAll(tasks);
     }
 
-    private async Task LoadFamilyAsync(string entityId)
+    private async Task LoadFamilyAsync(string entityId, CancellationToken ct)
     {
         var version = _loadVersion;
         try
         {
-            var family = await _service.GetPersonFamilyAsync(entityId, CancellationToken.None);
+            var family = await _service.GetPersonFamilyAsync(entityId, ct);
             // A superseded hop's late family section must not land on the
             // newer entry - same version guard as dedications (#2640).
             if (family is not null && version == _loadVersion)
             {
                 FamilyTree = TanahpediaFamily.BuildTree(family);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: family-section load is best-effort
         catch (Exception ex) //NOSONAR — family-section load is best-effort.
@@ -442,18 +464,22 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
     }
 
-    private async Task LoadMarkersAsync(string entryId)
+    private async Task LoadMarkersAsync(string entryId, CancellationToken ct)
     {
         var version = _loadVersion;
         try
         {
-            var markers = await _service.GetPlaceMarkersAsync(entryId, CancellationToken.None);
+            var markers = await _service.GetPlaceMarkersAsync(entryId, ct);
             // A superseded hop's late map section must not land on the newer
             // entry (#2640).
             if (version == _loadVersion)
             {
                 PlaceMarkers = markers ?? [];
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: place-marker load is best-effort
         catch (Exception ex) //NOSONAR — place-marker load is best-effort.
