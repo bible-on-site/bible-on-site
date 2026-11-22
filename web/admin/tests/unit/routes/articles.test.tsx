@@ -281,6 +281,8 @@ describe("Article chapter navigation", () => {
 		fireEvent.change(combobox(), { target: { value: "לא קיים" } });
 		expect(options()).toHaveLength(0);
 		expect(screen.getByText("אין פרקים תואמים")).toBeInTheDocument();
+		// Arrows on an empty list leave the first-match selection in place.
+		fireEvent.keyDown(combobox(), { key: "ArrowDown" });
 		expect(
 			navigationDestination(() =>
 				fireEvent.keyDown(combobox(), { key: "Enter" }),

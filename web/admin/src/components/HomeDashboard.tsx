@@ -62,7 +62,7 @@ export function HomeDashboard() {
 	return (
 		<div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
 			{stats.map((stat) => {
-				const Icon = STAT_ICONS[stat.to] ?? FileText;
+				const Icon = STAT_ICONS[stat.to];
 				return (
 					<Link
 						key={stat.to}

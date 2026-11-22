@@ -57,7 +57,8 @@ function ArticlesNavPage() {
 	// Reveal the first option after a reset without touching page scroll.
 	const resetSelection = () => {
 		setActiveIndex(0);
-		if (listboxRef.current) listboxRef.current.scrollTop = 0;
+		// biome-ignore lint/style/noNonNullAssertion: the listbox always renders beside the input
+		listboxRef.current!.scrollTop = 0;
 	};
 
 	return (
