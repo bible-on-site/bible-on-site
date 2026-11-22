@@ -467,8 +467,8 @@ public partial class PerekPage
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
-        FocusedPasukOverlay.HintText = downloading ? "מוריד את הקלטות הספר..." :
-            canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        var hint = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        FocusedPasukOverlay.HintText = downloading ? "מוריד את הקלטות הספר..." : hint;
         if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
