@@ -48,14 +48,6 @@ function ArticlesNavPage() {
 	const options = useMemo(() => buildPerekOptions(perakim ?? []), [perakim]);
 	const matches = filterPerekOptions(options, navQuery);
 	const activeOption = matches[Math.min(activeIndex, matches.length - 1)];
-	const activeOptionId = activeOption?.perekId;
-	// Keep the arrow-key selection inside the scrollable results list.
-	useEffect(() => {
-		if (activeOptionId == null) return;
-		document
-			.getElementById(`perek-option-${activeOptionId}`)
-			?.scrollIntoView?.({ block: "nearest" });
-	}, [activeOptionId]);
 
 	const jumpTo = (perekId: number) => {
 		window.location.href = `/articles/perek/${perekId}`;
@@ -109,12 +101,21 @@ function ArticlesNavPage() {
 						placeholder="חיפוש ספר או פרק..."
 						className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
 						onKeyDown={(e) => {
-							if (e.key === "ArrowDown") {
+							if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 								e.preventDefault();
-								setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
-							} else if (e.key === "ArrowUp") {
-								e.preventDefault();
-								setActiveIndex((i) => Math.max(i - 1, 0));
+								const next =
+									e.key === "ArrowDown"
+										? Math.min(activeIndex + 1, matches.length - 1)
+										: Math.max(activeIndex - 1, 0);
+								setActiveIndex(next);
+								// Keep the selection inside the scrollable list; runs
+								// only on arrow keys so the page never scrolls on load.
+								const option = matches[next];
+								if (option) {
+									document
+										.getElementById(`perek-option-${option.perekId}`)
+										?.scrollIntoView?.({ block: "nearest" });
+								}
 							} else if (e.key === "Enter") {
 								// A digit query still jumps straight to the canonical perek
 								// number, even while the option list is still loading.
