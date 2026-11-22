@@ -289,7 +289,10 @@ export function parseSesEvent(
 				if (!record(payload.click)) return null;
 				const clickedAt = timestamp(payload.click.timestamp);
 				const link = payload.click.link;
-				return clickedAt && text(link, 2048) && /^https?:\/\//i.test(link)
+				const scheme = text(link, 2048) ? link.slice(0, 8).toLowerCase() : "";
+				return clickedAt &&
+					text(link, 2048) &&
+					(scheme.startsWith("https://") || scheme.startsWith("http://"))
 					? { ...common, type: "click", timestamp: clickedAt, link }
 					: null;
 			}

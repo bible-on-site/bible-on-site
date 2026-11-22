@@ -332,7 +332,9 @@ async function settleCandidate(
 		// skip to the next eligible member within the same day.
 		const revert = new SesClient(runtime);
 		try {
-			await revert.unsubscribeContact(subscriber.email, "real");
+			// Local consent was withdrawn for the 'real' audience only; mirror the
+			// same scope so a 'test' subscription on the address is not suppressed.
+			await revert.unsubscribeTopic(subscriber.email, "real");
 		} catch {
 			// Local consent is authoritative for every future send; SES events also
 			// reconcile the topic preference once the recipient manages it.

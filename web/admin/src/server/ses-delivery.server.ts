@@ -18,11 +18,11 @@ import { rolloutDelivers } from "~/lib/bulletin-rollout";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
 import { readBulletinEmailContent } from "./daily-bulletins.server";
 import {
-	execute,
 	query,
 	queryOne,
 	transaction,
 	txExecute,
+	txQuery,
 	txQueryOne,
 } from "./db";
 import { isMysqlSchemaMissing } from "./mysql-errors";
@@ -722,29 +722,96 @@ export async function processEmailRecipient(id: number): Promise<void> {
 	}
 }
 
-export async function applySesEvent(event: SesEvent): Promise<void> {
+/**
+ * Consumes one queue notification durably inside the caller's transaction.
+ * Standard SQS can redeliver the same SNS notification, so the notification
+ * id is claimed first: a duplicate insert means this exact delivery was
+ * already applied and must be skipped rather than counted a second time.
+ * A missing ledger table degrades to pre-ledger behavior; anything else
+ * propagates so the message is retried rather than lost.
+ */
+async function consumeNotification(
+	connection: PoolConnection,
+	notificationId: string | undefined,
+	recipientId: number | null,
+	kind: SesEvent["type"],
+): Promise<boolean> {
+	if (!notificationId || notificationId.length > 255) return false;
+	try {
+		await txExecute(
+			connection,
+			`INSERT INTO tanah_daily_bulletin_email_notification
+			 (notification_id, recipient_id, kind, applied_at) VALUES (?, ?, ?, UTC_TIMESTAMP(3))`,
+			[notificationId, recipientId, kind],
+		);
+	} catch (error) {
+		if (
+			typeof error === "object" &&
+			error !== null &&
+			(error as { code?: unknown }).code === "ER_DUP_ENTRY"
+		)
+			return true;
+		if (isMissingEngagementSchema(error)) return false;
+		throw error;
+	}
+	return false;
+}
+
+/**
+ * Locks every subscriber row for an address in primary-key order. This is
+ * the shared first lock for all subscriber-affecting writers — engagement
+ * events, bounce/complaint suppression and subscription updates alike —
+ * because the inactivity opt-out holds its subscriber row while it rechecks
+ * eligibility. Attempt rows are locked only afterwards, so an in-flight
+ * event can never commit engagement between the recheck and the opt-out.
+ */
+async function lockSubscribers(
+	connection: PoolConnection,
+	email: string,
+	subscriberId?: number | null,
+): Promise<void> {
+	await txQuery(
+		connection,
+		`SELECT id FROM tanah_daily_bulletin_subscriber
+		 WHERE email = ? OR id <=> ? ORDER BY id FOR UPDATE`,
+		[email, subscriberId ?? null],
+	);
+}
+
+export async function applySesEvent(
+	event: SesEvent,
+	notificationId?: string,
+): Promise<void> {
 	if (event.type === "subscription") {
-		for (const audience of ["test", "real"] as const) {
-			const preference = event.topics[audience];
-			if (!event.unsubscribeAll && preference === undefined) continue;
-			const optout = event.unsubscribeAll || preference === "OPT_OUT";
-			await execute(
-				`UPDATE tanah_daily_bulletin_subscriber SET
-				 consent_status = CASE WHEN consent_status IN ('bounced', 'complained') THEN consent_status
-				 WHEN ? THEN CASE WHEN consent_status = 'pending' THEN 'pending' ELSE 'unsubscribed' END
-				 WHEN consent_status = 'unsubscribed' AND consented_at IS NOT NULL THEN 'confirmed' ELSE consent_status END,
-				 last_event_at = ? WHERE email = ? AND audience = ? AND (last_event_at IS NULL OR last_event_at < ? OR (? AND last_event_at = ?))`,
-				[
-					optout,
-					sqlTime(event.timestamp),
-					event.email,
-					audience,
-					sqlTime(event.timestamp),
-					optout,
-					sqlTime(event.timestamp),
-				],
-			);
-		}
+		await transaction(async (connection) => {
+			if (await consumeNotification(connection, notificationId, null, event.type))
+				return;
+			// Subscriber rows first — the common lock every writer of
+			// consent-relevant state takes before touching per-attempt data.
+			await lockSubscribers(connection, event.email);
+			for (const audience of ["test", "real"] as const) {
+				const preference = event.topics[audience];
+				if (!event.unsubscribeAll && preference === undefined) continue;
+				const optout = event.unsubscribeAll || preference === "OPT_OUT";
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_subscriber SET
+					 consent_status = CASE WHEN consent_status IN ('bounced', 'complained') THEN consent_status
+					 WHEN ? THEN CASE WHEN consent_status = 'pending' THEN 'pending' ELSE 'unsubscribed' END
+					 WHEN consent_status = 'unsubscribed' AND consented_at IS NOT NULL THEN 'confirmed' ELSE consent_status END,
+					 last_event_at = ? WHERE email = ? AND audience = ? AND (last_event_at IS NULL OR last_event_at < ? OR (? AND last_event_at = ?))`,
+					[
+						optout,
+						sqlTime(event.timestamp),
+						event.email,
+						audience,
+						sqlTime(event.timestamp),
+						optout,
+						sqlTime(event.timestamp),
+					],
+				);
+			}
+		});
 		return;
 	}
 	const separator = event.attemptId.indexOf("_");
@@ -752,6 +819,20 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 	const token = event.attemptId.slice(separator + 1);
 	if (separator < 1 || !Number.isSafeInteger(id) || id <= 0 || !token) return;
 	await transaction(async (connection) => {
+		if (await consumeNotification(connection, notificationId, id, event.type))
+			return;
+		// Resolve the owning subscriber without locking the attempt: subscriber
+		// rows are the common first lock, taken before the attempt lock below.
+		const owner = await txQueryOne<{
+			subscriber_id: number;
+			email: string;
+		}>(
+			connection,
+			"SELECT subscriber_id, email FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+			[id],
+		);
+		if (!owner) return;
+		await lockSubscribers(connection, owner.email, owner.subscriber_id);
 		const row = await txQueryOne<RecipientRow>(
 			connection,
 			"SELECT r.*, DATE_FORMAT(r.event_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS event_at FROM tanah_daily_bulletin_email_recipient r WHERE id = ? FOR UPDATE",
@@ -788,6 +869,8 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			}
 			// A tracked open or click is itself proof of delivery; lift a row
 			// still mid-flight so rates stay inside the delivered denominator.
+			// The engagement timestamp is also the first delivery evidence, so it
+			// feeds delivered_at exactly like a Delivery event does.
 			if (
 				row.status === "sending" ||
 				row.status === "accepted" ||
@@ -796,9 +879,16 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 				await txExecute(
 					connection,
 					`UPDATE tanah_daily_bulletin_email_recipient
-					 SET status = 'delivered', event_at = ?, last_error = NULL
+					 SET status = 'delivered', event_at = ?,
+					 delivered_at = LEAST(COALESCE(delivered_at, ?), ?), last_error = NULL
 					 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'accepted', 'uncertain')`,
-					[sqlTime(event.timestamp), id, token],
+					[
+						sqlTime(event.timestamp),
+						sqlTime(event.timestamp),
+						sqlTime(event.timestamp),
+						id,
+						token,
+					],
 				);
 				await applyRecipientTransition(
 					connection,
@@ -845,6 +935,23 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			bounced: 4,
 			complained: 5,
 		};
+		// The earliest proven delivery instant — never the edition's nominal
+		// date, which a backdated send cannot move. Stamped before the
+		// staleness checks so an out-of-order earlier Delivery still moves the
+		// evidence back; opens/clicks stamp it via the promotion above.
+		if (event.type === "delivery") {
+			try {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET delivered_at = LEAST(COALESCE(delivered_at, ?), ?)
+					 WHERE id = ? AND attempt_token = ?`,
+					[sqlTime(event.timestamp), sqlTime(event.timestamp), id, token],
+				);
+			} catch (error) {
+				if (!isMissingEngagementSchema(error)) throw error;
+			}
+		}
 		const older =
 			row.event_at !== null && isoTime(row.event_at) > event.timestamp;
 		const equal =
@@ -1049,7 +1156,7 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
-							await applySesEvent(event);
+							await applySesEvent(event, message.MessageId);
 							handled = true;
 						}
 					}

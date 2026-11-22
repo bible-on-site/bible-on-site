@@ -183,6 +183,35 @@ export function BulletinEmailEngagement({
 							</p>
 						)}
 					</section>
+					{data.pendingMirror.length > 0 && (
+						<section className="space-y-2">
+							<h4 className="font-semibold">הסרות הממתינות לסנכרון אל SES</h4>
+							<p className="text-sm text-gray-600">
+								המנויים הבאים הוסרו מקומית מהדיוור, אך סנכרון ההסרה אל SES טרם
+								הושלם. ההסרה המקומית תקפה; ניתן לנסות את הסנכרון שוב.
+							</p>
+							<ul className="space-y-2">
+								{data.pendingMirror.map((subscriber) => (
+									<li
+										key={subscriber.id}
+										className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-3"
+									>
+										<bdi className="font-mono text-sm">{subscriber.email}</bdi>
+										<button
+											type="button"
+											disabled={busy}
+											onClick={() => unsubscribe.mutate(subscriber.id)}
+											className="rounded-lg border border-blue-600 px-3 py-1 text-blue-700 disabled:opacity-50"
+										>
+											{unsubscribe.isPending
+												? "מסנכרן..."
+												: "ניסיון סנכרון חוזר"}
+										</button>
+									</li>
+								))}
+							</ul>
+						</section>
+					)}
 				</>
 			)}
 		</div>

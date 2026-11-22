@@ -383,9 +383,6 @@ export function DailyBulletinPage() {
 										disabled={busy || email.isFetching || !!email.error}
 									/>
 								)}
-								<BulletinEmailEngagement
-									disabled={busy || email.isFetching || !!email.error}
-								/>
 							</>
 						)}
 						{(email.error || queueEmail.error || changeAudience.error) && (
@@ -475,6 +472,12 @@ export function DailyBulletinPage() {
 					</section>
 				</>
 			)}
+			{/* Cross-edition engagement and the inactivity review are not tied to
+			    the selected date — admins must reach them even when this date
+			    has no prepared bulletin yet. */}
+			<BulletinEmailEngagement
+				disabled={busy || email.isFetching || !!email.error}
+			/>
 		</div>
 	);
 }

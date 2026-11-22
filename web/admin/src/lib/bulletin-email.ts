@@ -49,6 +49,11 @@ export interface InactiveSubscriber {
 export interface EmailEngagementPanel {
 	editions: EmailEditionStats[];
 	inactive: InactiveSubscriber[];
+	/**
+	 * Admin opt-outs whose SES mirror has not completed; local consent is
+	 * already removed and each row offers an explicit mirror retry.
+	 */
+	pendingMirror: { id: number; email: string }[];
 }
 
 export interface EmailReadiness {

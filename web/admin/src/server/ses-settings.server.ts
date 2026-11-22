@@ -269,7 +269,9 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 		);
 		const client = new SesClient(runtime);
 		try {
-			await client.unsubscribeContact(value.email, value.audience);
+			// The local update above covers every audience row for the address,
+			// so the provider mirror is intentionally global.
+			await client.unsubscribeContact(value.email);
 		} finally {
 			client.destroy();
 		}

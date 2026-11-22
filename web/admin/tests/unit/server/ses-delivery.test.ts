@@ -151,6 +151,7 @@ interface Recipient {
 	message_id: string | null;
 	started_at: string | null;
 	event_at: string | null;
+	delivered_at: string | null;
 	last_error: string | null;
 	opened_at: string | null;
 	open_count: number;
@@ -161,6 +162,7 @@ interface State {
 	jobs: Job[];
 	subscribers: Subscriber[];
 	recipients: Recipient[];
+	notifications: Set<string>;
 	settings: { audience: Audience; revision: number };
 	rollout: string | null;
 	channel: string;
@@ -224,6 +226,7 @@ function seed(audience: Audience = "test", status = "queued"): Recipient {
 			status === "queued" || status === "sending" ? null : "message-1",
 		started_at: status === "queued" ? null : "2026-10-28 12:00:00.000",
 		event_at: null,
+		delivered_at: null,
 		last_error: null,
 		opened_at: null,
 		open_count: 0,
@@ -255,6 +258,10 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 					).length,
 				},
 			];
+		if (sql.includes("WHERE email = ? OR id <=> ?"))
+			return state.subscribers
+				.filter((s) => s.email === params[0] || s.id === params[1])
+				.map((s) => ({ id: s.id }));
 		return state.subscribers
 			.filter(
 				(s) => s.audience === params[0] && s.consent_status === "confirmed",
@@ -383,6 +390,16 @@ function write(sqlRaw: string, p: unknown[] = []) {
 		affectedRows,
 		insertId: state.recipients.length,
 	});
+	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_notification")) {
+		// One durable row per consumed notification; the unique key rejects a
+		// redelivery exactly like the production constraint.
+		if (state.notifications.has(String(p[0])))
+			throw Object.assign(new Error("Duplicate entry"), {
+				code: "ER_DUP_ENTRY",
+			});
+		state.notifications.add(String(p[0]));
+		return result();
+	}
 	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_job")) {
 		state.jobs.push({
 			id: String(p[0]),
@@ -412,6 +429,7 @@ function write(sqlRaw: string, p: unknown[] = []) {
 				message_id: null,
 				started_at: null,
 				event_at: null,
+				delivered_at: null,
 				last_error: null,
 				opened_at: null,
 				open_count: 0,
@@ -552,18 +570,31 @@ function write(sqlRaw: string, p: unknown[] = []) {
 			engagement[counter] += 1;
 			return result();
 		}
-		// A tracked open or click lifts a mid-flight row to delivered.
+		// A tracked open or click lifts a mid-flight row to delivered and
+		// stamps its first delivery evidence at the engagement instant.
 		if (sql.includes("SET status = 'delivered', event_at = ?")) {
 			const lifted = state.recipients.find(
 				(r) =>
-					r.id === p[1] &&
-					r.attempt_token === p[2] &&
+					r.id === p[3] &&
+					r.attempt_token === p[4] &&
 					["sending", "accepted", "uncertain"].includes(r.status),
 			);
 			if (!lifted) return result(0);
 			lifted.status = "delivered";
 			lifted.event_at = String(p[0]);
+			if (!lifted.delivered_at || lifted.delivered_at > String(p[1]))
+				lifted.delivered_at = String(p[1]);
 			lifted.last_error = null;
+			return result();
+		}
+		// A Delivery event records the earliest proven delivery instant.
+		if (sql.includes("SET delivered_at = LEAST")) {
+			const stamped = state.recipients.find(
+				(r) => r.id === p[2] && r.attempt_token === p[3],
+			);
+			if (!stamped) return result(0);
+			if (!stamped.delivered_at || stamped.delivered_at > String(p[0]))
+				stamped.delivered_at = String(p[0]);
 			return result();
 		}
 		const r = state.recipients.find(
@@ -604,6 +635,7 @@ beforeEach(() => {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
 		recipients: [],
+		notifications: new Set(),
 		settings: { audience: "test", revision: 0 },
 		rollout: null,
 		channel: "pending",
@@ -638,6 +670,7 @@ beforeEach(() => {
 		for (const collection of [state.jobs, state.subscribers, state.recipients])
 			for (const item of collection) snapshot.set(item, { ...item });
 		const channel = state.channel;
+		const notifications = new Set(state.notifications);
 		try {
 			return await callback({});
 		} catch (error) {
@@ -646,6 +679,7 @@ beforeEach(() => {
 			state.recipients = state.recipients.filter((r) => snapshot.has(r));
 			for (const [live, saved] of snapshot) Object.assign(live, saved);
 			state.channel = channel;
+			state.notifications = notifications;
 			throw error;
 		} finally {
 			release();
@@ -1407,6 +1441,47 @@ describe("SES events", () => {
 		await applySesEvent({ ...delivery("bounce"), permanent: true });
 		expect(row.status).toBe("bounced");
 	});
+	it("applies a redelivered notification exactly once", async () => {
+		const row = seed("test", "accepted");
+		const event = delivery("delivery");
+		await applySesEvent(event, "sqs-notification-1");
+		await applySesEvent({ ...event }, "sqs-notification-1");
+		expect(row.status).toBe("delivered");
+		// The job counters moved only once for both receipts of the message.
+		expect(state.jobs[0].status).toBe("delivered");
+		expect(
+			state.writes.filter(({ sql }) => sql.includes("email_notification")),
+		).toHaveLength(2);
+		// A different notification carrying the same event does apply again.
+		await applySesEvent({ ...event }, "sqs-notification-2");
+		expect(row.status).toBe("delivered");
+	});
+	it("locks the subscriber rows before the delivery attempt", async () => {
+		const row = seed("test", "accepted");
+		state.subscribers.push({ ...subscriber(9, "real"), email: row.email });
+		const order: string[] = [];
+		mocks.txQuery.mockImplementation(async (_c, sql, p) => {
+			if (compact(String(sql)).includes("tanah_daily_bulletin_subscriber"))
+				order.push("subscriber");
+			return read(sql, p);
+		});
+		mocks.txQueryOne.mockImplementation(async (_c, sql, p) => {
+			const compacted = compact(String(sql));
+			if (
+				compacted.includes("tanah_daily_bulletin_email_recipient") &&
+				compacted.includes("FOR UPDATE")
+			)
+				order.push("attempt");
+			return read(sql, p)[0] ?? null;
+		});
+		await applySesEvent(delivery());
+		expect(order).toEqual(["subscriber", "attempt"]);
+		expect(mocks.txQuery).toHaveBeenCalledWith(
+			{},
+			expect.stringContaining("ORDER BY id FOR UPDATE"),
+			[row.email, 1],
+		);
+	});
 	it("orders UTC event strings independently of the process timezone", async () => {
 		const previous = process.env.TZ;
 		process.env.TZ = "Asia/Jerusalem";
@@ -1604,6 +1679,39 @@ describe("tracked engagement events", () => {
 		await applySesEvent({ ...delivery("open"), ...change });
 		expect(row.opened_at).toBeNull();
 		expect(row.open_count).toBe(0);
+	});
+	it("counts a redelivered open notification once but separate opens fully", async () => {
+		const row = seed("test", "delivered");
+		const open = delivery("open");
+		await applySesEvent(open, "notification-1");
+		await applySesEvent({ ...open }, "notification-1");
+		expect(row.open_count).toBe(1);
+		await applySesEvent({ ...open }, "notification-2");
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
+	});
+	it("stamps the earliest proven delivery instant, never the edition date", async () => {
+		const row = seed("real", "accepted");
+		await applySesEvent(delivery("delivery"));
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+		// An earlier-dated late event keeps the earlier instant; a later one
+		// never moves it forward.
+		await applySesEvent(delivery("delivery", "2026-10-28T11:00:00.000Z"));
+		expect(row.delivered_at).toBe("2026-10-28 11:00:00.000");
+		await applySesEvent(delivery("delivery", "2026-10-28T12:05:00.000Z"));
+		expect(row.delivered_at).toBe("2026-10-28 11:00:00.000");
+	});
+	it("stamps delivery evidence when tracked engagement proves delivery", async () => {
+		const row = seed("real", "accepted");
+		await applySesEvent(delivery("open"));
+		expect(row.status).toBe("delivered");
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+	});
+	it("applies an event without a notification id exactly as before", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open"));
+		await applySesEvent(delivery("open"));
+		expect(row.open_count).toBe(2);
 	});
 	it("degrades summary engagement to nulls while the schema is not deployed", async () => {
 		seed("test", "delivered");

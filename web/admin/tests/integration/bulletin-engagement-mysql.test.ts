@@ -15,6 +15,7 @@ import {
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 
 const unsubscribedInSes: { email: string; topic: string }[] = [];
+let failSesMirror = false;
 vi.mock("~/server/ses-client.server", () => {
 	class SesError extends Error {
 		constructor(
@@ -38,7 +39,11 @@ vi.mock("~/server/ses-client.server", () => {
 			async ensureSubscribedContact() {
 				return "subscribed";
 			}
-			async unsubscribeContact(email: string, topic: string) {
+			async unsubscribeContact(email: string) {
+				unsubscribedInSes.push({ email, topic: "*" });
+			}
+			async unsubscribeTopic(email: string, topic: string) {
+				if (failSesMirror) throw new SesError("mirror failed", "uncertain");
 				unsubscribedInSes.push({ email, topic });
 			}
 			async sendOne() {
@@ -357,6 +362,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
 	for (const table of [
+		"tanah_daily_bulletin_email_notification",
 		"tanah_daily_bulletin_email_admission",
 		"tanah_daily_bulletin_email_cohort",
 		"tanah_daily_bulletin_email_recipient",
@@ -372,6 +378,7 @@ beforeEach(async () => {
 		"UPDATE tanah_daily_bulletin_email_rollout SET state = 'disabled', revision = 0, last_error = NULL, started_at = NULL, completed_at = NULL WHERE id = 1",
 	);
 	unsubscribedInSes.length = 0;
+	failSesMirror = false;
 	nextSubscriber = 0;
 	vi.stubEnv("BULLETIN_SES_TRACKING_ENABLED", "");
 });
@@ -389,14 +396,33 @@ describe("engagement schema upgrade", () => {
 		const columns = await db.query<{ COLUMN_NAME: string }>(
 			`SELECT COLUMN_NAME FROM information_schema.COLUMNS
 			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_email_recipient'
-			 AND COLUMN_NAME IN ('opened_at','open_count','clicked_at','click_count')`,
+			 AND COLUMN_NAME IN ('opened_at','open_count','clicked_at','click_count','delivered_at')`,
 			[schema],
 		);
 		expect(columns.map((c) => c.COLUMN_NAME).sort()).toEqual([
 			"click_count",
 			"clicked_at",
+			"delivered_at",
 			"open_count",
 			"opened_at",
+		]);
+		const tables = await db.query<{ TABLE_NAME: string }>(
+			`SELECT TABLE_NAME FROM information_schema.TABLES
+			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_email_notification'`,
+			[schema],
+		);
+		expect(tables).toHaveLength(1);
+		const mirror = await db.query<{ COLUMN_NAME: string }>(
+			`SELECT COLUMN_NAME FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_subscriber'
+			 AND COLUMN_NAME IN ('ses_mirrored','admin_action','admin_actor','admin_action_at')`,
+			[schema],
+		);
+		expect(mirror.map((c) => c.COLUMN_NAME).sort()).toEqual([
+			"admin_action",
+			"admin_action_at",
+			"admin_actor",
+			"ses_mirrored",
 		]);
 	});
 });
@@ -472,6 +498,23 @@ describe("tracked SES engagement events", () => {
 		expect(next?.inactive.map((i) => i.email)).not.toContain(
 			"t-probe@example.invalid",
 		);
+	});
+	it("applies a redelivered notification once without inflating counters", async () => {
+		const subscriber = await seedSubscriber("dupe@example.invalid");
+		const { recipientId, token } = await seedDelivered({
+			date: bulletinDate,
+			subscriberId: subscriber,
+		});
+		const open = event("open", recipientId, token, "dupe@example.invalid");
+		await delivery.applySesEvent(open, "sqs-notification-1");
+		await delivery.applySesEvent(open, "sqs-notification-1");
+		// A genuinely different notification of the same event still counts.
+		await delivery.applySesEvent(open, "sqs-notification-2");
+		const row = await db.queryOne<{ open_count: number }>(
+			"SELECT open_count FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+			[recipientId],
+		);
+		expect(Number(row?.open_count)).toBe(2);
 	});
 	it("keeps the newest activity timestamp across out-of-order events", async () => {
 		const subscriber = await seedSubscriber("b@example.invalid");
@@ -580,6 +623,7 @@ describe("one-year inactivity review", () => {
 		email: string,
 		editions: {
 			monthsAgo: number;
+			deliveredAgo?: number;
 			tracked?: number;
 			opened?: number;
 			clicked?: number;
@@ -589,24 +633,32 @@ describe("one-year inactivity review", () => {
 		const subscriberId = await seedSubscriber(email, consent);
 		for (const edition of editions) {
 			const date = await db.queryOne<{ d: string }>(
-				`SELECT DATE_FORMAT(UTC_DATE() - INTERVAL ${edition.monthsAgo} MONTH, '%Y-%m-%d') AS d`,
+				"SELECT DATE_FORMAT(UTC_DATE() - INTERVAL ? MONTH, '%Y-%m-%d') AS d",
+				[edition.monthsAgo],
 			);
 			const { recipientId } = await seedDelivered({
 				date: String(date?.d),
 				subscriberId,
 				tracked: edition.tracked ?? 1,
 			});
+			// Eligibility keys on the actual delivery instant, never the nominal
+			// edition date — stamp delivered_at for the seeded history.
+			await db.execute(
+				`UPDATE tanah_daily_bulletin_email_recipient
+				 SET delivered_at = UTC_TIMESTAMP(3) - INTERVAL ? MONTH WHERE id = ?`,
+				[edition.deliveredAgo ?? edition.monthsAgo, recipientId],
+			);
 			if (edition.opened !== undefined)
 				await db.execute(
 					`UPDATE tanah_daily_bulletin_email_recipient
-					 SET opened_at = UTC_TIMESTAMP(3) - INTERVAL ${edition.opened} MONTH WHERE id = ?`,
-					[recipientId],
+					 SET opened_at = UTC_TIMESTAMP(3) - INTERVAL ? MONTH WHERE id = ?`,
+					[edition.opened, recipientId],
 				);
 			if (edition.clicked !== undefined)
 				await db.execute(
 					`UPDATE tanah_daily_bulletin_email_recipient
-					 SET clicked_at = UTC_TIMESTAMP(3) - INTERVAL ${edition.clicked} MONTH WHERE id = ?`,
-					[recipientId],
+					 SET clicked_at = UTC_TIMESTAMP(3) - INTERVAL ? MONTH WHERE id = ?`,
+					[edition.clicked, recipientId],
 				);
 		}
 		return subscriberId;
@@ -642,6 +694,12 @@ describe("one-year inactivity review", () => {
 		]);
 		// No actual delivery inside the trailing year.
 		await seedHistory("old@example.invalid", [{ monthsAgo: 14 }]);
+		// A backdated edition actually delivered months later cannot fake a
+		// year of history: eligibility follows the delivery instant.
+		await seedHistory("late@example.invalid", [
+			{ monthsAgo: 13, deliveredAgo: 6 },
+			{ monthsAgo: 1 },
+		]);
 		// Non-confirmed consent never qualifies.
 		await seedHistory(
 			"gone@example.invalid",
@@ -688,6 +746,41 @@ describe("one-year inactivity review", () => {
 		expect(after?.consent_status).toBe("unsubscribed");
 	});
 
+	it("keeps a failed SES mirror pending for an explicit retry", async () => {
+		const quiet = await seedHistory("mirror@example.invalid", [
+			{ monthsAgo: 13 },
+			{ monthsAgo: 2 },
+		]);
+		failSesMirror = true;
+		await expect(
+			engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1"),
+		).rejects.toThrow("mirror failed");
+		const row = await db.queryOne<{
+			consent_status: string;
+			ses_mirrored: number;
+		}>(
+			"SELECT consent_status, ses_mirrored FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+			[quiet],
+		);
+		// Local consent is already gone; only the provider mirror is pending.
+		expect(row?.consent_status).toBe("unsubscribed");
+		expect(Number(row?.ses_mirrored)).toBe(0);
+		const panel = await engagement.readEmailEngagementPanel();
+		expect(panel?.pendingMirror).toEqual([
+			{ id: quiet, email: "mirror@example.invalid" },
+		]);
+		// The retry path re-mirrors without re-checking engagement eligibility.
+		failSesMirror = false;
+		await engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1");
+		const after = await db.queryOne<{ ses_mirrored: number }>(
+			"SELECT ses_mirrored FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+			[quiet],
+		);
+		expect(Number(after?.ses_mirrored)).toBe(1);
+		expect((await engagement.readEmailEngagementPanel())?.pendingMirror).toEqual(
+			[],
+		);
+	});
 	it("refuses removal once eligibility vanished and never calls SES", async () => {
 		const recent = await seedHistory("recent@example.invalid", [
 			{ monthsAgo: 13 },

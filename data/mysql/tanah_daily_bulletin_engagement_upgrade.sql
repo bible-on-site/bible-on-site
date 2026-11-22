@@ -9,6 +9,14 @@
 --     so untracked history stays distinguishable from a measured zero
 --   subscriber admin_action/admin_actor/admin_action_at - the recorded admin
 --     inactivity-review unsubscribe
+--   recipient delivered_at - the earliest timestamp that first proved
+--     delivery, so a backdated edition sent later cannot fake a year of
+--     delivery history
+--   subscriber ses_mirrored - whether an admin-recorded opt-out finished
+--     mirroring to SES, so a failed mirror stays visible for an admin retry
+--   tanah_daily_bulletin_email_notification - one durable row per consumed
+--     queue notification so SQS redelivery can never inflate engagement
+--     counters or reapply an event
 -- Engagement lives on the retained delivery attempt itself, so retention
 -- matches delivery history and always covers the one-year review window.
 
@@ -96,6 +104,39 @@ SET @engagementSql = (
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_subscriber'
         AND COLUMN_NAME = 'admin_action_at'
 );
+PREPARE engagementUpgrade FROM @engagementSql;
+EXECUTE engagementUpgrade;
+DEALLOCATE PREPARE engagementUpgrade;
+
+SET @engagementSql = (
+    SELECT IF(COUNT(*) > 0, 'SELECT 1',
+        'ALTER TABLE tanah_daily_bulletin_email_recipient ADD COLUMN delivered_at DATETIME(3) NULL')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_email_recipient'
+        AND COLUMN_NAME = 'delivered_at'
+);
+PREPARE engagementUpgrade FROM @engagementSql;
+EXECUTE engagementUpgrade;
+DEALLOCATE PREPARE engagementUpgrade;
+
+SET @engagementSql = (
+    SELECT IF(COUNT(*) > 0, 'SELECT 1',
+        'ALTER TABLE tanah_daily_bulletin_subscriber ADD COLUMN ses_mirrored TINYINT(1) NULL')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_subscriber'
+        AND COLUMN_NAME = 'ses_mirrored'
+);
+PREPARE engagementUpgrade FROM @engagementSql;
+EXECUTE engagementUpgrade;
+DEALLOCATE PREPARE engagementUpgrade;
+
+SET @engagementSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_email_notification (
+    notification_id VARCHAR(255) NOT NULL PRIMARY KEY,
+    recipient_id BIGINT UNSIGNED NULL,
+    kind VARCHAR(40) NOT NULL,
+    applied_at DATETIME(3) NOT NULL,
+    KEY ix_bulletin_email_notification_recipient (recipient_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 PREPARE engagementUpgrade FROM @engagementSql;
 EXECUTE engagementUpgrade;
 DEALLOCATE PREPARE engagementUpgrade;

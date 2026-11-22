@@ -4,7 +4,7 @@ import type {
 	EmailEngagementPanel,
 	InactiveSubscriber,
 } from "~/lib/bulletin-email";
-import { query, transaction, txExecute, txQueryOne } from "./db";
+import { execute, query, transaction, txExecute, txQueryOne } from "./db";
 import { SesClient } from "./ses-client.server";
 import { isMissingEngagementSchema } from "./ses-delivery.server";
 import { loadEmailRuntime } from "./ses-settings.server";
@@ -19,6 +19,13 @@ import { loadEmailRuntime } from "./ses-settings.server";
  * enqueued before tracking was enabled (`tracked = 0`) report as untracked
  * history rather than a measured zero. Test-audience jobs stay out of every
  * production number below.
+ *
+ * The inactivity review never trusts an edition's nominal `bulletin_date`: a
+ * backdated bulletin sent yesterday is a recent delivery, not a year of
+ * history. Eligibility runs on the earliest timestamp that actually proved
+ * each delivery — `delivered_at`, stamped by the Delivery event or by the
+ * first tracked open/click that itself proved delivery, falling back to the
+ * recorded `event_at` for rows written before that column existed.
  */
 
 /** Delivered real editions with per-edition tracked engagement. */
@@ -33,19 +40,25 @@ const EDITION_STATS_SQL = `SELECT j.id AS job_id, DATE_FORMAT(j.bulletin_date, '
 	ORDER BY j.bulletin_date DESC, j.created_at DESC
 	LIMIT 30`;
 
+/** Earliest proven delivery instant for the joined attempt row `r`. */
+const DELIVERY_EVIDENCE = "COALESCE(r.delivered_at, r.event_at)";
+
 /**
  * The shared inactivity predicate, used verbatim by both the review list and
  * the confirmation recheck so a listed subscriber is confirmed under the same
  * rule: no delivered-but-untracked edition inside the trailing year (an
  * outage there cannot prove inactivity) and no recorded open or click during
  * that year (a tracked content click counts as activity even without opens).
+ * An untracked delivery whose actual time is unknown is conservatively
+ * treated as inside the year — silence must never be inferred from a gap.
  */
 const INACTIVITY_FILTER = `
 	AND NOT EXISTS (
 		SELECT 1 FROM tanah_daily_bulletin_email_recipient ux
 		JOIN tanah_daily_bulletin_email_job uj ON uj.id = ux.job_id
 		WHERE ux.subscriber_id = s.id AND uj.audience = 'real' AND ux.status = 'delivered'
-			AND uj.tracked = 0 AND uj.bulletin_date >= (UTC_DATE() - INTERVAL 1 YEAR))
+			AND uj.tracked = 0 AND (COALESCE(ux.delivered_at, ux.event_at) IS NULL
+				OR COALESCE(ux.delivered_at, ux.event_at) >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
 	AND NOT EXISTS (
 		SELECT 1 FROM tanah_daily_bulletin_email_recipient ax
 		JOIN tanah_daily_bulletin_email_job aj ON aj.id = ax.job_id
@@ -55,8 +68,8 @@ const INACTIVITY_FILTER = `
 
 /**
  * Eligible subscribers: at least one year of reliable tracked delivery
- * history (first tracked delivered edition a full year back), at least one
- * actual tracked delivery inside the trailing year, and no recorded activity
+ * history (earliest proven delivery a full year back), at least one actual
+ * tracked delivery inside the trailing year, and no recorded activity
  * during it — measured from delivery, not from signup or cohort membership.
  */
 const INACTIVITY_TABLES = `
@@ -68,12 +81,12 @@ const INACTIVITY_TABLES = `
 
 const INACTIVITY_GROUP = `
 	GROUP BY s.id, s.email
-	HAVING MIN(j.bulletin_date) <= (UTC_DATE() - INTERVAL 1 YEAR)
-		AND COALESCE(SUM(j.bulletin_date >= (UTC_DATE() - INTERVAL 1 YEAR)), 0) >= 1`;
+	HAVING MIN(${DELIVERY_EVIDENCE}) <= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)
+		AND COALESCE(SUM(${DELIVERY_EVIDENCE} >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)), 0) >= 1`;
 
 const INACTIVITY_LIST_SQL = `SELECT s.id, s.email,
-	DATE_FORMAT(MIN(j.bulletin_date), '%Y-%m-%d') AS first_tracked_delivery,
-	COALESCE(SUM(j.bulletin_date >= (UTC_DATE() - INTERVAL 1 YEAR)), 0) AS tracked_last_year
+	DATE_FORMAT(MIN(${DELIVERY_EVIDENCE}), '%Y-%m-%d') AS first_tracked_delivery,
+	COALESCE(SUM(${DELIVERY_EVIDENCE} >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)), 0) AS tracked_last_year
 	${INACTIVITY_TABLES}
 	WHERE s.audience = 'real' AND s.consent_status = 'confirmed'
 	${INACTIVITY_FILTER}
@@ -87,10 +100,23 @@ const INACTIVITY_RECHECK_SQL = `SELECT s.id, s.email
 	${INACTIVITY_FILTER}
 	${INACTIVITY_GROUP}`;
 
+/**
+ * Admin opt-outs whose SES mirror did not finish — the reachable retry path.
+ * Local consent already removed these subscribers, so the list is keyed by
+ * the recorded admin action rather than by eligibility.
+ */
+const PENDING_MIRROR_SQL = `SELECT s.id, s.email
+	FROM tanah_daily_bulletin_subscriber s
+	WHERE s.audience = 'real' AND s.consent_status = 'unsubscribed'
+		AND s.admin_action = 'inactivity-unsubscribe'
+		AND COALESCE(s.ses_mirrored, 0) = 0
+	ORDER BY s.id
+	LIMIT 200`;
+
 /** Aggregate engagement panel; `null` while the engagement schema is absent. */
 export async function readEmailEngagementPanel(): Promise<EmailEngagementPanel | null> {
 	try {
-		const [editions, inactive] = await Promise.all([
+		const [editions, inactive, pendingMirror] = await Promise.all([
 			query<{
 				job_id: string;
 				date: string;
@@ -105,6 +131,7 @@ export async function readEmailEngagementPanel(): Promise<EmailEngagementPanel |
 				first_tracked_delivery: string;
 				tracked_last_year: number | string;
 			}>(INACTIVITY_LIST_SQL),
+			query<{ id: number; email: string }>(PENDING_MIRROR_SQL),
 		]);
 		return {
 			editions: editions.map(
@@ -125,6 +152,10 @@ export async function readEmailEngagementPanel(): Promise<EmailEngagementPanel |
 					trackedLastYear: Number(row.tracked_last_year),
 				}),
 			),
+			pendingMirror: pendingMirror.map((row) => ({
+				id: Number(row.id),
+				email: row.email,
+			})),
 		};
 	} catch (error) {
 		if (isMissingEngagementSchema(error)) return null;
@@ -134,12 +165,15 @@ export async function readEmailEngagementPanel(): Promise<EmailEngagementPanel |
 
 /**
  * Confirms the admin inactivity unsubscribe for one subscriber (#3707).
- * Eligibility is re-derived under the subscriber lock — a late open or click
- * cancels the action — then the opt-out is recorded locally with the acting
- * admin before SES mirrors the native unsubscribe. Local consent stays
- * authoritative, so a removed member can never be re-admitted by the
- * original-list rollout, and a failed SES call never restores the
- * subscription.
+ * Eligibility is re-derived under the subscriber lock — the same lock every
+ * engagement, bounce, complaint and subscription writer takes before it can
+ * commit activity for that subscriber, so a late open or click cancels the
+ * action. The opt-out is then recorded locally with the acting admin and
+ * `ses_mirrored = 0`; only a successful topic-scoped SES mirror flips it to
+ * 1, so a failed mirror keeps the subscriber on the panel's pending list for
+ * an explicit retry. Local consent stays authoritative, so a removed member
+ * can never be re-admitted by the original-list rollout, and a failed SES
+ * call never restores the subscription.
  */
 export async function confirmInactivityUnsubscribe(
 	subscriberId: number,
@@ -164,10 +198,14 @@ export async function confirmInactivityUnsubscribe(
 			subscriber.admin_action === "inactivity-unsubscribe"
 		)
 			// Idempotent retry: the local opt-out already landed and only the
-			// SES mirror below failed on a previous attempt.
+			// SES mirror below is still pending or being re-asserted.
 			return subscriber.email;
 		if (subscriber.consent_status !== "confirmed")
 			throw new Error("המנוי אינו פעיל או שאינו נמצא");
+		// First consistent read of this transaction: its snapshot is taken after
+		// the subscriber lock above was granted, so it sees every engagement
+		// write committed before that moment. A writer that has not passed the
+		// shared subscriber lock yet can only land after this decision.
 		const eligible = await txQueryOne<{ id: number; email: string }>(
 			connection,
 			INACTIVITY_RECHECK_SQL,
@@ -180,7 +218,7 @@ export async function confirmInactivityUnsubscribe(
 		const removed = await txExecute(
 			connection,
 			`UPDATE tanah_daily_bulletin_subscriber SET consent_status = 'unsubscribed',
-			 last_event_at = UTC_TIMESTAMP(3),
+			 last_event_at = UTC_TIMESTAMP(3), ses_mirrored = 0,
 			 admin_action = 'inactivity-unsubscribe', admin_actor = ?, admin_action_at = UTC_TIMESTAMP(3)
 			 WHERE id = ? AND consent_status = 'confirmed'`,
 			[actor.slice(0, 120), subscriberId],
@@ -191,7 +229,15 @@ export async function confirmInactivityUnsubscribe(
 	});
 	const client = new SesClient(runtime);
 	try {
-		await client.unsubscribeContact(email, "real");
+		// Topic-scoped mirror: the local opt-out covered only the 'real'
+		// audience, so SES must not suppress the address's other topics.
+		await client.unsubscribeTopic(email, "real");
+		await execute(
+			`UPDATE tanah_daily_bulletin_subscriber SET ses_mirrored = 1
+			 WHERE id = ? AND consent_status = 'unsubscribed'
+			 AND admin_action = 'inactivity-unsubscribe'`,
+			[subscriberId],
+		);
 	} finally {
 		client.destroy();
 	}

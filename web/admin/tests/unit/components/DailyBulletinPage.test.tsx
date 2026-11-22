@@ -232,6 +232,16 @@ describe("daily bulletin preview and SES delivery", () => {
 		});
 		expect(mocks.emailRead).not.toHaveBeenCalled();
 	});
+	it("keeps the engagement review reachable when no bulletin was prepared", async () => {
+		mocks.read.mockResolvedValue(null);
+		renderPage();
+		// Cross-edition statistics and the inactivity review are independent
+		// of the selected date's preparation state.
+		expect(
+			await screen.findByText(/מדידת פתיחות וקליקים טרם הופעלה/),
+		).toBeDefined();
+		expect(mocks.engagement).toHaveBeenCalled();
+	});
 
 	it("prepares once and preserves chapter, PDF, email and channel previews", async () => {
 		mocks.read.mockResolvedValue(null);

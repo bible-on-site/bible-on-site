@@ -458,11 +458,7 @@ export class SesClient {
 	}
 
 	/** Global suppression is monotonic and never replaces topic preferences. */
-	async unsubscribeContact(
-		email: string,
-		audience?: SesAudience,
-	): Promise<void> {
-		if (audience !== undefined) audienceName(audience);
+	async unsubscribeContact(email: string): Promise<void> {
 		const normalized = emailAddress(email);
 		const contact = await this.getContact(normalized);
 		if (!contact || contact.unsubscribeAll) return;
@@ -472,6 +468,53 @@ export class SesClient {
 					ContactListName: this.config.contactListName,
 					EmailAddress: normalized,
 					UnsubscribeAll: true,
+				}),
+				{ abortSignal: AbortSignal.timeout(15_000) },
+			);
+		} catch (error) {
+			throw requestError(error, true, "update-contact");
+		}
+	}
+
+	/**
+	 * Audience-scoped opt-out mirror: marks one topic OPT_OUT and carries the
+	 * contact's other preferences and attributes unchanged, so a mailbox with
+	 * subscriptions to other topics keeps them. Used when the local opt-out
+	 * targets a single audience; a global local removal uses
+	 * `unsubscribeContact` instead. Never clears a global suppression and
+	 * never creates a missing contact.
+	 */
+	async unsubscribeTopic(
+		email: string,
+		audience: SesAudience,
+	): Promise<void> {
+		const topic = audienceName(audience);
+		const normalized = emailAddress(email);
+		const contact = await this.getContact(normalized);
+		if (
+			!contact ||
+			contact.unsubscribeAll ||
+			contact.topics[topic] === "OPT_OUT"
+		)
+			return;
+		// UpdateContact replaces the whole preference set, so the merged map
+		// re-declares every existing topic; SES offers no compare-and-swap, and
+		// the window is the same one ensureSubscribedContact already accepts.
+		const TopicPreferences = Object.entries({
+			...contact.topics,
+			[topic]: "OPT_OUT" as SubscriptionStatus,
+		}).map(([TopicName, SubscriptionStatus]) => ({
+			TopicName,
+			SubscriptionStatus,
+		}));
+		try {
+			await this.client.send(
+				new UpdateContactCommand({
+					ContactListName: this.config.contactListName,
+					EmailAddress: normalized,
+					TopicPreferences,
+					UnsubscribeAll: false,
+					AttributesData: contact.attributesData,
 				}),
 				{ abortSignal: AbortSignal.timeout(15_000) },
 			);

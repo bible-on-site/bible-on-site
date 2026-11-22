@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 	txQueryOne: vi.fn(),
 	txExecute: vi.fn(),
 	runtime: vi.fn(),
-	unsubscribeContact: vi.fn(),
+	unsubscribeTopic: vi.fn(),
 	sesConfig: vi.fn(),
 	sesDestroy: vi.fn(),
 }));
@@ -20,7 +20,7 @@ vi.mock("~/server/ses-client.server", () => ({
 		constructor(config: unknown) {
 			mocks.sesConfig(config);
 		}
-		unsubscribeContact = mocks.unsubscribeContact;
+		unsubscribeTopic = mocks.unsubscribeTopic;
 		destroy = mocks.sesDestroy;
 	},
 }));
@@ -55,7 +55,8 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.runtime.mockReturnValue(runtime);
 	mocks.transaction.mockImplementation(async (callback) => callback({}));
-	mocks.unsubscribeContact.mockResolvedValue(undefined);
+	mocks.unsubscribeTopic.mockResolvedValue(undefined);
+	mocks.execute.mockResolvedValue({ affectedRows: 1 });
 });
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -89,7 +90,8 @@ describe("engagement panel", () => {
 					first_tracked_delivery: "2025-10-28",
 					tracked_last_year: "40",
 				},
-			]);
+			])
+			.mockResolvedValueOnce([{ id: 9, email: "mirror@example.com" }]);
 		expect(await readEmailEngagementPanel()).toEqual({
 			editions: [
 				{
@@ -117,6 +119,7 @@ describe("engagement panel", () => {
 					trackedLastYear: 40,
 				},
 			],
+			pendingMirror: [{ id: 9, email: "mirror@example.com" }],
 		});
 	});
 	it("degrades to null rather than zero while the schema is not deployed", async () => {
@@ -146,18 +149,35 @@ describe("inactivity unsubscribe confirmation", () => {
 			.mockResolvedValueOnce({ id: 7, email: "silent@example.com" });
 		mocks.txExecute.mockResolvedValue({ affectedRows: 1 });
 	}
-	it("rechecks eligibility, records the admin and mirrors the SES opt-out", async () => {
+	it("rechecks eligibility, records the admin and mirrors the SES opt-out scoped to the audience", async () => {
 		eligibleSubscriber();
 		await confirmInactivityUnsubscribe(7, "admin-1234");
 		const update = mocks.txExecute.mock.calls.find((call) =>
 			String(call[1]).includes("inactivity-unsubscribe"),
 		);
 		expect(update?.[2]).toEqual(["admin-1234", 7]);
-		expect(mocks.unsubscribeContact).toHaveBeenCalledExactlyOnceWith(
+		// Topic-scoped mirror: a global suppression must never touch the
+		// address's other SES subscriptions.
+		expect(mocks.unsubscribeTopic).toHaveBeenCalledExactlyOnceWith(
 			"silent@example.com",
 			"real",
 		);
 		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
+	});
+	it("marks the opt-out pending before the mirror and mirrored afterwards", async () => {
+		eligibleSubscriber();
+		await confirmInactivityUnsubscribe(7, "admin-1234");
+		const pendingIndex = mocks.txExecute.mock.calls.findIndex((call) =>
+			String(call[1]).includes("ses_mirrored = 0"),
+		);
+		expect(pendingIndex).toBeGreaterThanOrEqual(0);
+		const mirrored = mocks.execute.mock.calls.find((call) =>
+			String(call[0]).includes("ses_mirrored = 1"),
+		);
+		expect(mirrored?.[1]).toEqual([7]);
+		expect(
+			mocks.txExecute.mock.invocationCallOrder[pendingIndex],
+		).toBeLessThan(mocks.unsubscribeTopic.mock.invocationCallOrder[0]);
 	});
 	it("rejects a subscriber whose eligibility vanished after listing", async () => {
 		mocks.txQueryOne
@@ -172,7 +192,7 @@ describe("inactivity unsubscribe confirmation", () => {
 			"אינו עומד בתנאי ההסרה",
 		);
 		expect(mocks.txExecute).not.toHaveBeenCalled();
-		expect(mocks.unsubscribeContact).not.toHaveBeenCalled();
+		expect(mocks.unsubscribeTopic).not.toHaveBeenCalled();
 	});
 	it.each([
 		{ consent_status: "unsubscribed", admin_action: null },
@@ -187,7 +207,7 @@ describe("inactivity unsubscribe confirmation", () => {
 		await expect(confirmInactivityUnsubscribe(7, "admin-1234")).rejects.toThrow(
 			"אינו פעיל",
 		);
-		expect(mocks.unsubscribeContact).not.toHaveBeenCalled();
+		expect(mocks.unsubscribeTopic).not.toHaveBeenCalled();
 	});
 	it("retries the SES mirror when a previous confirm already opted out", async () => {
 		mocks.txQueryOne.mockResolvedValueOnce({
@@ -198,17 +218,23 @@ describe("inactivity unsubscribe confirmation", () => {
 		});
 		await confirmInactivityUnsubscribe(7, "admin-1234");
 		expect(mocks.txExecute).not.toHaveBeenCalled();
-		expect(mocks.unsubscribeContact).toHaveBeenCalledExactlyOnceWith(
+		expect(mocks.unsubscribeTopic).toHaveBeenCalledExactlyOnceWith(
 			"silent@example.com",
 			"real",
 		);
+		expect(mocks.execute).toHaveBeenCalledWith(
+			expect.stringContaining("ses_mirrored = 1"),
+			[7],
+		);
 	});
-	it("keeps the local opt-out when the SES mirror fails", async () => {
+	it("keeps the local opt-out pending when the SES mirror fails", async () => {
 		eligibleSubscriber();
-		mocks.unsubscribeContact.mockRejectedValue(new Error("SES timeout"));
+		mocks.unsubscribeTopic.mockRejectedValue(new Error("SES timeout"));
 		await expect(confirmInactivityUnsubscribe(7, "admin-1234")).rejects.toThrow(
 			"SES timeout",
 		);
+		// ses_mirrored stays 0: the panel's pending list keeps a retry reachable.
+		expect(mocks.execute).not.toHaveBeenCalled();
 		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 	it("refuses to run without a configured mail runtime", async () => {

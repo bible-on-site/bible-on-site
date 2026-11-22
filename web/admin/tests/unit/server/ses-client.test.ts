@@ -368,6 +368,55 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("update")).toHaveLength(0);
 		expect(calls("create")).toHaveLength(0);
 	});
+	it("opts out one topic while carrying every other preference and attribute unchanged", async () => {
+		mocks.send.mockResolvedValueOnce({
+			...contact(),
+			TopicPreferences: [
+				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+				{ TopicName: "real", SubscriptionStatus: "OPT_IN" },
+			],
+		});
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		const update = calls("update")[0][0].input;
+		expect(update.EmailAddress).toBe(request.to);
+		expect(update.UnsubscribeAll).toBe(false);
+		expect(update.TopicPreferences).toEqual([
+			{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+			{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+		]);
+		// UpdateContact replaces the whole preference set; attributes ride along
+		// so provider-side metadata is never dropped by the mirror.
+		expect(update.AttributesData).toBe('{"source":"legacy"}');
+	});
+	it.each([
+		{ ...contact(), UnsubscribeAll: true },
+		{
+			...contact(),
+			TopicPreferences: [{ TopicName: "real", SubscriptionStatus: "OPT_OUT" }],
+		},
+	])("never rewrites an already-suppressed or opted-out topic (%j)", async (response) => {
+		mocks.send.mockResolvedValueOnce(response);
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		expect(calls("update")).toHaveLength(0);
+	});
+	it("does not create a missing contact for a topic opt-out", async () => {
+		mocks.send.mockRejectedValueOnce(sdkError(404, "NotFoundException"));
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		expect(calls("update")).toHaveLength(0);
+		expect(calls("create")).toHaveLength(0);
+	});
+	it("reports a failed topic opt-out safely", async () => {
+		mocks.send
+			.mockResolvedValueOnce(contact())
+			.mockRejectedValueOnce(sdkError(500));
+		await expect(
+			new SesClient(config).unsubscribeTopic(request.to, "real"),
+		).rejects.toMatchObject({ outcome: "uncertain" });
+		expect(console.error).toHaveBeenCalledExactlyOnceWith(
+			"SES operation failed",
+			expect.objectContaining({ operation: "update-contact" }),
+		);
+	});
 	it.each([403, 500, 408])(
 		"reports global unsubscribe failures safely (HTTP %s)",
 		async (status) => {

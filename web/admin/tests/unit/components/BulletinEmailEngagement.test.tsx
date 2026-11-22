@@ -46,6 +46,7 @@ function panel(
 				trackedLastYear: 40,
 			},
 		],
+		pendingMirror: [],
 		...overrides,
 	};
 }
@@ -139,5 +140,24 @@ describe("BulletinEmailEngagement", () => {
 		);
 		expect(await screen.findByRole("alert")).toHaveTextContent("נרשמה פעילות");
 		expect(mocks.confirm).toHaveBeenCalledTimes(1);
+	});
+	it("keeps a failed SES mirror reachable with an explicit retry", async () => {
+		mocks.read.mockResolvedValue(
+			panel({ pendingMirror: [{ id: 9, email: "mirror@example.com" }] }),
+		);
+		mocks.confirm.mockResolvedValue(undefined);
+		mount();
+		expect(
+			await screen.findByText(/הסרות הממתינות לסנכרון אל SES/),
+		).toBeDefined();
+		expect(screen.getByText("mirror@example.com")).toBeDefined();
+		fireEvent.click(
+			screen.getByRole("button", { name: "ניסיון סנכרון חוזר" }),
+		);
+		await waitFor(() =>
+			expect(mocks.confirm).toHaveBeenCalledExactlyOnceWith({
+				data: { subscriberId: 9 },
+			}),
+		);
 	});
 });

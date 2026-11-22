@@ -14,6 +14,7 @@ vi.mock("~/server/ses-client.server", () => ({
 	SesClient: class {
 		ensureSubscribedContact = m.ensureSubscribed;
 		unsubscribeContact = m.unsubscribe;
+		unsubscribeTopic = m.unsubscribe;
 		destroy = m.sesDestroy;
 	},
 }));
