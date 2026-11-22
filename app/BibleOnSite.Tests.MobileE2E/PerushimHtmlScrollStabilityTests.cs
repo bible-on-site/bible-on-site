@@ -179,9 +179,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
                 Page.WaitForHidden("PerushimContentViewport", TimeSpan.FromSeconds(5));
                 break;
             }
-            catch (OpenQA.Selenium.WebDriverTimeoutException) when (attempt < 3)
+            catch (OpenQA.Selenium.WebDriverTimeoutException exception)
+                when (attempt < 3 && !DeviceSessionDeath.Matches(exception))
             {
-                Page.Tap("PerushimChevronButton");
+                // The chevron is static bottom chrome — cap each tap's own
+                // wait instead of spending the default 45-second budget.
+                Page.Tap("PerushimChevronButton", _ => true, TimeSpan.FromSeconds(10));
             }
         }
         return tapped.Count;
