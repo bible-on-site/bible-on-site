@@ -601,6 +601,21 @@ describe("TanahpediaEntryPreview", () => {
 		expect(tip).toHaveStyle({ top: "320px" });
 	});
 
+	it("picks up an anchor that was focused before the delegate mounted", async () => {
+		mockFetchJson({ title: "Early", snippet: "s" });
+		// A link focused before hydration never fires focusin for the
+		// delegate's listeners - mounting must pick it up explicitly.
+		render(entityAnchor("early-focus-entry", "Early"));
+		const link = screen.getByRole("link", { name: "Early" });
+		await act(async () => {
+			link.focus();
+		});
+
+		render(<TanahpediaEntryPreview />);
+
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("Early");
+	});
+
 	it("hides a focused preview while its link is clipped out, then re-shows it", async () => {
 		mockFetchJson({ title: "Clip", snippet: "s" });
 		render(

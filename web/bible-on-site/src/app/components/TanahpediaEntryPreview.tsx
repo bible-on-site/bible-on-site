@@ -210,6 +210,11 @@ export function TanahpediaEntryPreview() {
 		document.addEventListener("click", onClick);
 		document.addEventListener("scroll", onScrollOrResize, true);
 		window.addEventListener("resize", onScrollOrResize);
+		// Listeners attach only after hydration: an entity anchor that holds
+		// focus already was focused before they existed and never fires
+		// focusin for them - pick it up once here.
+		const alreadyFocused = entityPreviewLink(document.activeElement);
+		if (alreadyFocused) show(alreadyFocused);
 		return () => {
 			document.removeEventListener("mouseover", onPointerOver);
 			document.removeEventListener("mouseout", onPointerOut);

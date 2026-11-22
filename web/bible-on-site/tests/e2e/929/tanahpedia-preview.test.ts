@@ -31,40 +31,45 @@ test.describe("Tanahpedia entity preview", () => {
 			.first();
 		await expect(link).toBeVisible({ timeout: 10_000 });
 
-		// Keyboard focus opens the preview tooltip.
+		// Keyboard focus opens the preview tooltip; the delegate also picks
+		// up anchors focused before hydration, so this cannot flake on the
+		// listener-registration race.
 		await link.focus();
 		const tooltip = page.locator(TOOLTIP);
 		await expect(tooltip).toBeVisible({ timeout: 10_000 });
 		await expect(tooltip).toContainText("אלהים");
 
-		const scrollLinkOut = () =>
-			link.evaluate((anchor) => {
-				let scroller = anchor.parentElement;
-				while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
-					scroller = scroller.parentElement;
-				}
-				if (!scroller) {
-					throw new Error("entity link has no scrollable ancestor");
-				}
-				scroller.scrollTop = scroller.scrollHeight;
-			});
-		const scrollLinkBack = () =>
-			link.evaluate((anchor) => {
-				let scroller = anchor.parentElement;
-				while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
-					scroller = scroller.parentElement;
-				}
-				if (!scroller) {
-					throw new Error("entity link has no scrollable ancestor");
-				}
-				scroller.scrollTop = 0;
-			});
-
-		// Scrolled out of the reader's scrollport the focused link keeps the
-		// preview mounted but clipped away, and scrolling back re-shows it.
-		await scrollLinkOut();
+		// Scroll the link just above the reader's top edge while keeping its
+		// rect inside the window: the reader's scrollport clip is then the
+		// only thing that can hide the preview.
+		const clipped = await link.evaluate((anchor) => {
+			let scroller = anchor.parentElement;
+			while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+				scroller = scroller.parentElement;
+			}
+			if (!scroller) {
+				throw new Error("entity link has no scrollable ancestor");
+			}
+			const clipTop = scroller.getBoundingClientRect().top;
+			scroller.scrollTop +=
+				anchor.getBoundingClientRect().bottom - clipTop / 2;
+			return { bottom: anchor.getBoundingClientRect().bottom, clipTop };
+		});
+		expect(clipped.bottom).toBeGreaterThan(0);
+		expect(clipped.bottom).toBeLessThan(clipped.clipTop);
 		await expect(tooltip).toBeHidden();
-		await scrollLinkBack();
+
+		// Scrolling back re-anchors the same focused preview.
+		await link.evaluate((anchor) => {
+			let scroller = anchor.parentElement;
+			while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+				scroller = scroller.parentElement;
+			}
+			if (!scroller) {
+				throw new Error("entity link has no scrollable ancestor");
+			}
+			scroller.scrollTop = 0;
+		});
 		await expect(tooltip).toBeVisible();
 	});
 });
