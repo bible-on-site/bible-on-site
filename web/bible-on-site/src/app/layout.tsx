@@ -18,6 +18,7 @@ import { AhrefsAnalytics } from "./components/AhrefsAnalytics";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
+import { TanahpediaEntryPreview } from "./components/TanahpediaEntryPreview";
 import { TopNav } from "./components/TopNav";
 
 export const metadata: Metadata = {
@@ -76,6 +77,8 @@ export default function RootLayout({
 
 				<NavBar version={packageJson.version} />
 				{children}
+				{/* Site-wide entity-link preview delegate (#3712). */}
+				<TanahpediaEntryPreview />
 			</body>
 		</html>
 	);
