@@ -77,10 +77,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// accessibility tree entirely on iOS, but a closing animation or a stale
     /// snapshot can keep a copy around briefly.
     /// </summary>
-    public void WaitForHidden(string automationId)
+    public void WaitForHidden(string automationId) =>
+        WaitForHidden(automationId, TimeSpan.FromSeconds(30));
+
+    /// <inheritdoc cref="WaitForHidden(string)"/>
+    public void WaitForHidden(string automationId, TimeSpan timeout)
     {
         var locator = platform.AutomationId(automationId);
-        var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
