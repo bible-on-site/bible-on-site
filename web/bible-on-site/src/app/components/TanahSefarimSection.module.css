@@ -83,10 +83,12 @@
 }
 
 /* The compact sefer index (#3711) is far shorter than the four-shelf scene
-   the 1650px reservation was sized for. */
+   the 1650px reservation was sized for, but it still needs its own reserve
+   (~902px measured at 390px) so the section does not jump when the
+   client-side bookshelf mounts over the SSR single shelf. */
 @media screen and (max-width: 479px) {
   .bookshelfContainer {
-    min-height: 0;
+    min-height: 905px;
   }
 }
 

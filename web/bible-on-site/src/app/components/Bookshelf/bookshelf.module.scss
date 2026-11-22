@@ -428,7 +428,7 @@ button.block {
     }
 
     &:active {
-      scale: var(--n);
+      scale: var(--press-scale);
     }
   }
 

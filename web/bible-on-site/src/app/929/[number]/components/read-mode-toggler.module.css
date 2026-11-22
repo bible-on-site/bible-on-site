@@ -8,7 +8,19 @@
 }
 
 .input {
-  display: none;
+  /* Visually hidden but kept in the a11y tree and tab order - display:none
+     would make the toggle unreachable for AT and keyboard users (#3711). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.input:focus-visible + .toggleDiv {
+  outline: 2px solid var(--accent-600, #1a56db);
+  outline-offset: 2px;
 }
 
 .toggleDiv {
