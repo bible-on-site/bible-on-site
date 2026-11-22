@@ -251,6 +251,46 @@ describe("anchorFullyClipped", () => {
 		expect(anchorFullyClipped(anchor)).toBe(true);
 		shell.remove();
 	});
+
+	it("clips through a static scroller above the reader's containing block", () => {
+		// A static overflow ancestor that wraps the reader's containing block
+		// still clips: it clips the positioned wrapper the reader hangs off,
+		// and that clip carries down to the anchor.
+		const scroller = document.createElement("div");
+		scroller.style.overflowY = "auto";
+		const wrapper = document.createElement("div");
+		wrapper.style.position = "relative";
+		const reader = document.createElement("div");
+		reader.style.position = "absolute";
+		reader.style.overflowY = "auto";
+		const anchor = document.createElement("a");
+		reader.appendChild(anchor);
+		wrapper.appendChild(reader);
+		scroller.appendChild(wrapper);
+		document.body.appendChild(scroller);
+		stubRect(scroller, { top: 0, bottom: 100, left: 0, right: 500 });
+		stubRect(wrapper, { top: 0, bottom: 300, left: 0, right: 500 });
+		stubRect(reader, { top: 0, bottom: 300, left: 0, right: 500 });
+		const anchorRect = stubRect(anchor, {
+			top: 150,
+			bottom: 170,
+			left: 0,
+			right: 10,
+		});
+
+		// Inside the reader and wrapper but below the outer scroller's box.
+		expect(anchorFullyClipped(anchor)).toBe(true);
+
+		// Visible inside every box, no clip applies.
+		anchorRect.mockReturnValue({
+			top: 50,
+			bottom: 70,
+			left: 0,
+			right: 10,
+		} as DOMRect);
+		expect(anchorFullyClipped(anchor)).toBe(false);
+		scroller.remove();
+	});
 });
 
 describe("computePreviewPosition", () => {

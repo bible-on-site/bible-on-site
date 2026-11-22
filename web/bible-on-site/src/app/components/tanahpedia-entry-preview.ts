@@ -116,20 +116,21 @@ function establishesContainingBlock(style: CSSStyleDeclaration): boolean {
 export function anchorFullyClipped(anchor: Element): boolean {
 	const { top, bottom, left, right } = anchor.getBoundingClientRect();
 	const visible = { top, bottom, left, right };
-	// Once an absolute or fixed ancestor is crossed, further ancestors clip
-	// only when they form that positioned box's containing block.
-	let outOfFlow = false;
+	// While `escaping`, ancestors between the crossed out-of-flow element and
+	// its containing block do not clip. Reaching the containing-block
+	// establisher hands clipping back to that element's own ancestor chain,
+	// so the escape persists only while the establisher is itself out of
+	// flow.
+	let escaping = false;
 	for (
 		let clipper = anchor.parentElement;
 		clipper;
 		clipper = clipper.parentElement
 	) {
 		const style = getComputedStyle(clipper);
+		if (escaping && !establishesContainingBlock(style)) continue;
 		const overflow = `${style.overflow} ${style.overflowX} ${style.overflowY}`;
-		if (
-			CLIPPING_OVERFLOW.test(overflow) &&
-			(!outOfFlow || establishesContainingBlock(style))
-		) {
+		if (CLIPPING_OVERFLOW.test(overflow)) {
 			const clip = clipper.getBoundingClientRect();
 			visible.top = Math.max(visible.top, clip.top);
 			visible.bottom = Math.min(visible.bottom, clip.bottom);
@@ -139,9 +140,8 @@ export function anchorFullyClipped(anchor: Element): boolean {
 				return true;
 			}
 		}
-		if (style.position === "absolute" || style.position === "fixed") {
-			outOfFlow = true;
-		}
+		escaping =
+			style.position === "absolute" || style.position === "fixed";
 	}
 	return false;
 }
