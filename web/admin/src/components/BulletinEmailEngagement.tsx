@@ -60,7 +60,9 @@ export function BulletinEmailEngagement({
 		mutationFn: (subscriberId: number) =>
 			confirmDailyBulletinInactivityUnsubscribe({ data: { subscriberId } }),
 		retry: false,
-		onSuccess: () => {
+		onSettled: () => {
+			// Refetch even on failure: a rejected mirror leaves the local opt-out
+			// on the pending-sync list, which the panel must show immediately.
 			setConfirming(null);
 			return queryClient.invalidateQueries({
 				queryKey: ["bulletin-email-engagement"],

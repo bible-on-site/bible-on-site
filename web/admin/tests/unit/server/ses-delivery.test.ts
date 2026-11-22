@@ -1444,17 +1444,19 @@ describe("SES events", () => {
 	it("applies a redelivered notification exactly once", async () => {
 		const row = seed("test", "accepted");
 		const event = delivery("delivery");
-		await applySesEvent(event, "sqs-notification-1");
-		await applySesEvent({ ...event }, "sqs-notification-1");
+		await applySesEvent(event);
+		await applySesEvent({ ...event });
 		expect(row.status).toBe("delivered");
-		// The job counters moved only once for both receipts of the message.
+		// The job counters moved only once for every copy of the event —
+		// whether the same SQS message is redelivered or SNS publishes the
+		// notification twice, identical content dedupes identically.
 		expect(state.jobs[0].status).toBe("delivered");
-		expect(
-			state.writes.filter(({ sql }) => sql.includes("email_notification")),
-		).toHaveLength(2);
-		// A different notification carrying the same event does apply again.
-		await applySesEvent({ ...event }, "sqs-notification-2");
-		expect(row.status).toBe("delivered");
+		expect(state.notifications.size).toBe(1);
+		// A genuinely different delivery event still applies.
+		await applySesEvent(delivery("delivery", "2026-10-28T12:02:00.000Z"));
+		expect(row.event_at).toBe("2026-10-28 12:02:00.000");
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+		expect(state.notifications.size).toBe(2);
 	});
 	it("locks the subscriber rows before the delivery attempt", async () => {
 		const row = seed("test", "accepted");
@@ -1623,7 +1625,7 @@ describe("tracked engagement events", () => {
 		expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
 		expect(row.open_count).toBe(1);
 		expect(row.status).toBe("delivered");
-		await applySesEvent(delivery("open"));
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
 		expect(row.open_count).toBe(2);
 		expect(await readLatestEmailJob(date, "test")).toMatchObject({
 			tracked: false,
@@ -1680,13 +1682,13 @@ describe("tracked engagement events", () => {
 		expect(row.opened_at).toBeNull();
 		expect(row.open_count).toBe(0);
 	});
-	it("counts a redelivered open notification once but separate opens fully", async () => {
+	it("counts a redelivered open once but separate instants fully", async () => {
 		const row = seed("test", "delivered");
 		const open = delivery("open");
-		await applySesEvent(open, "notification-1");
-		await applySesEvent({ ...open }, "notification-1");
+		await applySesEvent(open);
+		await applySesEvent({ ...open });
 		expect(row.open_count).toBe(1);
-		await applySesEvent({ ...open }, "notification-2");
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
 		expect(row.open_count).toBe(2);
 		expect(state.notifications.size).toBe(2);
 	});
@@ -1707,10 +1709,10 @@ describe("tracked engagement events", () => {
 		expect(row.status).toBe("delivered");
 		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
 	});
-	it("applies an event without a notification id exactly as before", async () => {
+	it("counts two opens at different instants as separate events", async () => {
 		const row = seed("test", "delivered");
 		await applySesEvent(delivery("open"));
-		await applySesEvent(delivery("open"));
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
 		expect(row.open_count).toBe(2);
 	});
 	it("degrades summary engagement to nulls while the schema is not deployed", async () => {

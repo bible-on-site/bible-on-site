@@ -369,16 +369,27 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("create")).toHaveLength(0);
 	});
 	it("opts out one topic while carrying every other preference and attribute unchanged", async () => {
-		mocks.send.mockResolvedValueOnce({
-			...contact(),
-			TopicPreferences: [
-				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
-				{ TopicName: "real", SubscriptionStatus: "OPT_IN" },
-			],
-		});
+		mocks.send
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_IN" },
+				],
+			})
+			.mockResolvedValueOnce({}) // UpdateContact
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			});
 		await new SesClient(config).unsubscribeTopic(request.to, "real");
 		const update = calls("update")[0][0].input;
 		expect(update.EmailAddress).toBe(request.to);
+		// The request echoes the freshly read flag rather than asserting a
+		// guessed false over a just-landed recipient opt-out.
 		expect(update.UnsubscribeAll).toBe(false);
 		expect(update.TopicPreferences).toEqual([
 			{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
@@ -387,6 +398,42 @@ describe("SES managed-subscription transport", () => {
 		// UpdateContact replaces the whole preference set; attributes ride along
 		// so provider-side metadata is never dropped by the mirror.
 		expect(update.AttributesData).toBe('{"source":"legacy"}');
+	});
+	it("re-reads after the write and never touches a just-landed global opt-out", async () => {
+		mocks.send
+			.mockResolvedValueOnce(contact())
+			.mockResolvedValueOnce({}) // UpdateContact
+			.mockResolvedValueOnce({ ...contact(), UnsubscribeAll: true });
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		// The recipient's global opt-out won the race; the mirror returns
+		// without a second write rather than re-asserting the old snapshot.
+		expect(calls("update")).toHaveLength(1);
+	});
+	it("retries the write when a concurrent writer dropped the topic opt-out", async () => {
+		mocks.send
+			.mockResolvedValueOnce(contact()) // read
+			.mockResolvedValueOnce({}) // first UpdateContact
+			.mockResolvedValueOnce(contact()) // settle read: opt-out lost to a racing write
+			.mockResolvedValueOnce(contact()) // fresh read for the retry
+			.mockResolvedValueOnce({}) // second UpdateContact
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			});
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		expect(calls("update")).toHaveLength(2);
+	});
+	it("fails uncertain rather than looping forever when the opt-out never settles", async () => {
+		mocks.send.mockImplementation(async (command: { kind: string }) =>
+			command.kind === "get" ? contact() : {},
+		);
+		await expect(
+			new SesClient(config).unsubscribeTopic(request.to, "real"),
+		).rejects.toMatchObject({ outcome: "uncertain" });
+		expect(calls("update")).toHaveLength(3);
 	});
 	it.each([
 		{ ...contact(), UnsubscribeAll: true },

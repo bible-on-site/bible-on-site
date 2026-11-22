@@ -438,7 +438,9 @@ describe("tracked SES engagement events", () => {
 			event("open", recipientId, token, "a@example.invalid"),
 		);
 		await delivery.applySesEvent(
-			event("open", recipientId, token, "a@example.invalid"),
+			event("open", recipientId, token, "a@example.invalid", {
+				timestamp: "2026-11-03T12:01:30.000Z",
+			}),
 		);
 		await delivery.applySesEvent(
 			event("click", recipientId, token, "a@example.invalid", {
@@ -506,10 +508,15 @@ describe("tracked SES engagement events", () => {
 			subscriberId: subscriber,
 		});
 		const open = event("open", recipientId, token, "dupe@example.invalid");
-		await delivery.applySesEvent(open, "sqs-notification-1");
-		await delivery.applySesEvent(open, "sqs-notification-1");
-		// A genuinely different notification of the same event still counts.
-		await delivery.applySesEvent(open, "sqs-notification-2");
+		await delivery.applySesEvent(open);
+		// Identical content dedupes whether it arrives as an SQS redelivery or
+		// as a second SNS publication of the same event.
+		await delivery.applySesEvent({ ...open });
+		// A genuinely different instant still counts as a separate open.
+		await delivery.applySesEvent({
+			...open,
+			timestamp: "2026-11-03T12:02:00.000Z",
+		});
 		const row = await db.queryOne<{ open_count: number }>(
 			"SELECT open_count FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
 			[recipientId],

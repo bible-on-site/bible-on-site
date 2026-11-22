@@ -483,6 +483,17 @@ export class SesClient {
 	 * targets a single audience; a global local removal uses
 	 * `unsubscribeContact` instead. Never clears a global suppression and
 	 * never creates a missing contact.
+	 *
+	 * UpdateContact has no compare-and-swap and replaces the whole preference
+	 * set, so the mirror converges instead of asserting a snapshot: read
+	 * fresh, echo the read UnsubscribeAll and AttributesData (omitted fields
+	 * are cleared, and a guessed `false` could erase a recipient opt-out that
+	 * just landed), write, then re-read. A concurrent writer that landed in
+	 * between either shows up in the re-read — their preference or global
+	 * suppression stands; it is never the mirror's to undo — or dropped this
+	 * topic's opt-out, which the bounded retry re-asserts. A change landing
+	 * inside the provider call itself remains a SES last-writer window no
+	 * client can close.
 	 */
 	async unsubscribeTopic(
 		email: string,
@@ -490,37 +501,47 @@ export class SesClient {
 	): Promise<void> {
 		const topic = audienceName(audience);
 		const normalized = emailAddress(email);
-		const contact = await this.getContact(normalized);
-		if (
-			!contact ||
-			contact.unsubscribeAll ||
-			contact.topics[topic] === "OPT_OUT"
-		)
-			return;
-		// UpdateContact replaces the whole preference set, so the merged map
-		// re-declares every existing topic; SES offers no compare-and-swap, and
-		// the window is the same one ensureSubscribedContact already accepts.
-		const TopicPreferences = Object.entries({
-			...contact.topics,
-			[topic]: "OPT_OUT" as SubscriptionStatus,
-		}).map(([TopicName, SubscriptionStatus]) => ({
-			TopicName,
-			SubscriptionStatus,
-		}));
-		try {
-			await this.client.send(
-				new UpdateContactCommand({
-					ContactListName: this.config.contactListName,
-					EmailAddress: normalized,
-					TopicPreferences,
-					UnsubscribeAll: false,
-					AttributesData: contact.attributesData,
-				}),
-				{ abortSignal: AbortSignal.timeout(15_000) },
-			);
-		} catch (error) {
-			throw requestError(error, true, "update-contact");
+		for (let attempt = 0; attempt < 3; attempt++) {
+			const contact = await this.getContact(normalized);
+			if (
+				!contact ||
+				contact.unsubscribeAll ||
+				contact.topics[topic] === "OPT_OUT"
+			)
+				return;
+			const TopicPreferences = Object.entries({
+				...contact.topics,
+				[topic]: "OPT_OUT" as SubscriptionStatus,
+			}).map(([TopicName, SubscriptionStatus]) => ({
+				TopicName,
+				SubscriptionStatus,
+			}));
+			try {
+				await this.client.send(
+					new UpdateContactCommand({
+						ContactListName: this.config.contactListName,
+						EmailAddress: normalized,
+						TopicPreferences,
+						UnsubscribeAll: contact.unsubscribeAll,
+						AttributesData: contact.attributesData,
+					}),
+					{ abortSignal: AbortSignal.timeout(15_000) },
+				);
+			} catch (error) {
+				throw requestError(error, true, "update-contact");
+			}
+			const settled = await this.getContact(normalized);
+			if (
+				!settled ||
+				settled.unsubscribeAll ||
+				settled.topics[topic] === "OPT_OUT"
+			)
+				return;
 		}
+		throw new SesError(
+			"SES topic opt-out did not settle after retrying",
+			"uncertain",
+		);
 	}
 
 	async sendOne(input: {

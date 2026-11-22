@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	DeleteMessageCommand,
@@ -723,20 +723,36 @@ export async function processEmailRecipient(id: number): Promise<void> {
 }
 
 /**
+ * Stable identity of one SES notification, derived from the event content
+ * rather than from any single queue delivery. SQS may redeliver one message
+ * and SNS may publish the same event twice; both copies carry identical
+ * content, so this key deduplicates either path. Distinct opens or clicks at
+ * different instants keep distinct keys; two indistinguishable records of the
+ * same instant are one event for counting purposes.
+ */
+function notificationKey(event: SesEvent): string {
+	const raw =
+		event.type === "subscription"
+			? `subscription|${event.email}|${event.timestamp}|${event.unsubscribeAll}|${JSON.stringify(event.topics)}`
+			: `${event.type}|${event.messageId}|${event.attemptId}|${event.timestamp}|${event.link ?? ""}`;
+	// Hashed so a long click URL cannot push distinguishing content past the
+	// column's length and collide two different events into one key.
+	return `evt:${createHash("sha256").update(raw).digest("hex")}`;
+}
+
+/**
  * Consumes one queue notification durably inside the caller's transaction.
- * Standard SQS can redeliver the same SNS notification, so the notification
- * id is claimed first: a duplicate insert means this exact delivery was
- * already applied and must be skipped rather than counted a second time.
- * A missing ledger table degrades to pre-ledger behavior; anything else
- * propagates so the message is retried rather than lost.
+ * The content-derived key is claimed first: a duplicate insert means this
+ * exact event was already applied and must be skipped rather than counted a
+ * second time. A missing ledger table degrades to pre-ledger behavior;
+ * anything else propagates so the message is retried rather than lost.
  */
 async function consumeNotification(
 	connection: PoolConnection,
-	notificationId: string | undefined,
+	notificationId: string,
 	recipientId: number | null,
 	kind: SesEvent["type"],
 ): Promise<boolean> {
-	if (!notificationId || notificationId.length > 255) return false;
 	try {
 		await txExecute(
 			connection,
@@ -778,13 +794,17 @@ async function lockSubscribers(
 	);
 }
 
-export async function applySesEvent(
-	event: SesEvent,
-	notificationId?: string,
-): Promise<void> {
+export async function applySesEvent(event: SesEvent): Promise<void> {
 	if (event.type === "subscription") {
 		await transaction(async (connection) => {
-			if (await consumeNotification(connection, notificationId, null, event.type))
+			if (
+				await consumeNotification(
+					connection,
+					notificationKey(event),
+					null,
+					event.type,
+				)
+			)
 				return;
 			// Subscriber rows first — the common lock every writer of
 			// consent-relevant state takes before touching per-attempt data.
@@ -819,7 +839,14 @@ export async function applySesEvent(
 	const token = event.attemptId.slice(separator + 1);
 	if (separator < 1 || !Number.isSafeInteger(id) || id <= 0 || !token) return;
 	await transaction(async (connection) => {
-		if (await consumeNotification(connection, notificationId, id, event.type))
+		if (
+			await consumeNotification(
+				connection,
+				notificationKey(event),
+				id,
+				event.type,
+			)
+		)
 			return;
 		// Resolve the owning subscriber without locking the attempt: subscriber
 		// rows are the common first lock, taken before the attempt lock below.
@@ -1156,7 +1183,7 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
-							await applySesEvent(event, message.MessageId);
+							await applySesEvent(event);
 							handled = true;
 						}
 					}
