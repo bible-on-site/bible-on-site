@@ -323,6 +323,7 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_engagement_upgrade.sql",
 	]);
 	const hasBulletinMigration = dataFiles.some((file) =>
 		bulletinMigrations.has(file),

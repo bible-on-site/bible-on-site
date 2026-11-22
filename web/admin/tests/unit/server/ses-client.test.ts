@@ -428,6 +428,18 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("create")).toHaveLength(0);
 		expect(calls("update")).toHaveLength(0);
 	});
+	it("marks only the native unsubscribe link as exempt from click tracking", async () => {
+		await new SesClient(config).sendOne(request);
+		const html = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
+		const parsed = parseEmail(html);
+		const untracked = [...parsed.querySelectorAll("a")].filter((a) =>
+			a.hasAttribute("ses:no-track"),
+		);
+		expect(untracked).toHaveLength(1);
+		expect(untracked[0].getAttribute("href")).toBe(
+			"{{amazonSESUnsubscribeUrl}}",
+		);
+	});
 	it("creates a valid Hebrew friendly-sender header without splitting multibyte names", async () => {
 		const senderName = "מ".repeat(100);
 		await new SesClient({ ...config, senderName }).sendOne(request);

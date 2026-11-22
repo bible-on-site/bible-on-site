@@ -265,6 +265,8 @@ Resources:
           - REJECT
           - RENDERING_FAILURE
           - SUBSCRIPTION
+          - OPEN
+          - CLICK
         SnsDestination:
           TopicARN: !Ref BulletinEventsTopic
 

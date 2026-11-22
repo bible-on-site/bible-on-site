@@ -131,6 +131,7 @@ interface Job {
 	created_at: string;
 	idempotency_key: string;
 	last_error?: string | null;
+	tracked?: number;
 }
 interface Subscriber {
 	id: number;
@@ -151,6 +152,10 @@ interface Recipient {
 	started_at: string | null;
 	event_at: string | null;
 	last_error: string | null;
+	opened_at: string | null;
+	open_count: number;
+	clicked_at: string | null;
+	click_count: number;
 }
 interface State {
 	jobs: Job[];
@@ -220,6 +225,10 @@ function seed(audience: Audience = "test", status = "queued"): Recipient {
 		started_at: status === "queued" ? null : "2026-10-28 12:00:00.000",
 		event_at: null,
 		last_error: null,
+		opened_at: null,
+		open_count: 0,
+		clicked_at: null,
+		click_count: 0,
 	};
 	state.recipients = [row];
 	return row;
@@ -323,6 +332,23 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 			return state.recipients
 				.filter((r) => r.job_id === params[0] && r.status === "queued")
 				.map((r) => ({ id: r.id }));
+		if (sql.includes("SUM(") && sql.includes("opened_at"))
+			return [
+				{
+					opened: state.recipients.filter(
+						(r) =>
+							r.job_id === params[0] &&
+							r.status === "delivered" &&
+							r.opened_at !== null,
+					).length,
+					clicked: state.recipients.filter(
+						(r) =>
+							r.job_id === params[0] &&
+							r.status === "delivered" &&
+							r.clicked_at !== null,
+					).length,
+				},
+			];
 		const row = state.recipients.find(
 			(r) =>
 				r.id === params[0] &&
@@ -366,6 +392,7 @@ function write(sqlRaw: string, p: unknown[] = []) {
 			settings_revision: Number(p[4]),
 			status: "queued",
 			created_at: "2026-10-28T12:00:00Z",
+			tracked: sql.includes("tracked") ? Number(p[5]) : 0,
 		});
 		return result();
 	}
@@ -386,6 +413,10 @@ function write(sqlRaw: string, p: unknown[] = []) {
 				started_at: null,
 				event_at: null,
 				last_error: null,
+				opened_at: null,
+				open_count: 0,
+				clicked_at: null,
+				click_count: 0,
 			});
 		return result(enrolled.length);
 	}
@@ -505,6 +536,34 @@ function write(sqlRaw: string, p: unknown[] = []) {
 					r.last_error = null;
 				if (["sending", "uncertain"].includes(r.status)) r.status = "accepted";
 			}
+			return result();
+		}
+		// Tracked engagement: latest activity per metric plus the raw event
+		// count (GREATEST keeps the newest timestamp across out-of-order events).
+		if (sql.includes("GREATEST(COALESCE(")) {
+			const column = sql.includes("opened_at") ? "opened_at" : "clicked_at";
+			const counter = column === "opened_at" ? "open_count" : "click_count";
+			const engagement = state.recipients.find(
+				(r) => r.id === p[2] && r.attempt_token === p[3],
+			);
+			if (!engagement) return result(0);
+			if (!engagement[column] || engagement[column] < String(p[1]))
+				engagement[column] = String(p[1]);
+			engagement[counter] += 1;
+			return result();
+		}
+		// A tracked open or click lifts a mid-flight row to delivered.
+		if (sql.includes("SET status = 'delivered', event_at = ?")) {
+			const lifted = state.recipients.find(
+				(r) =>
+					r.id === p[1] &&
+					r.attempt_token === p[2] &&
+					["sending", "accepted", "uncertain"].includes(r.status),
+			);
+			if (!lifted) return result(0);
+			lifted.status = "delivered";
+			lifted.event_at = String(p[0]);
+			lifted.last_error = null;
 			return result();
 		}
 		const r = state.recipients.find(
@@ -1479,6 +1538,106 @@ describe("SES events", () => {
 		await processEmailRecipient(row.id);
 		expect(row.status).toBe("suppressed");
 		expect(mocks.sendOne).not.toHaveBeenCalled();
+	});
+});
+
+describe("tracked engagement events", () => {
+	it("records a tracked open once per recipient while counting each event", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open"));
+		expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.open_count).toBe(1);
+		expect(row.status).toBe("delivered");
+		await applySesEvent(delivery("open"));
+		expect(row.open_count).toBe(2);
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: false,
+			opened: 1,
+			clicked: 0,
+		});
+	});
+	it("keeps the newest open timestamp across out-of-order events", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open", "2026-10-28T12:05:00.000Z"));
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
+		expect(row.opened_at).toBe("2026-10-28 12:05:00.000");
+		expect(row.open_count).toBe(2);
+	});
+	it("records a content click but never a subscription-management link", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent({
+			...delivery("click"),
+			link: "https://xn--febl3a.co.il/perek/1",
+		});
+		expect(row.clicked_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.click_count).toBe(1);
+		await applySesEvent({
+			...delivery("click", "2026-10-28T12:06:00.000Z"),
+			link: "https://abc.subscription.il-central-1.amazonses.com/",
+		});
+		await applySesEvent({
+			...delivery("click", "2026-10-28T12:07:00.000Z"),
+			link: "https://xn--febl3a.co.il/unsubscribe?id=1",
+		});
+		expect(row.clicked_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.click_count).toBe(1);
+	});
+	it.each(["sending", "accepted", "uncertain"] as const)(
+		"lifts a %s row to delivered on tracked engagement",
+		async (status) => {
+			const row = seed("real", status);
+			if (status === "sending") row.message_id = "message-1";
+			await applySesEvent(delivery("open"));
+			expect(row.status).toBe("delivered");
+			expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
+			expect(state.jobs[0].status).toBe("delivered");
+			expect(state.channel).toBe("sent");
+		},
+	);
+	it.each([
+		{ attemptId: "2_token-1" },
+		{ attemptId: "1_other-token" },
+		{ messageId: "another-message" },
+		{ email: "other@example.com" },
+	])("ignores engagement on mismatched delivery context %j", async (change) => {
+		const row = seed("test", "delivered");
+		await applySesEvent({ ...delivery("open"), ...change });
+		expect(row.opened_at).toBeNull();
+		expect(row.open_count).toBe(0);
+	});
+	it("degrades summary engagement to nulls while the schema is not deployed", async () => {
+		seed("test", "delivered");
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return read(sql, p)[0] ?? null;
+		});
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: null,
+			opened: null,
+			clicked: null,
+		});
+	});
+	it("marks jobs tracked when the runtime enables engagement collection", async () => {
+		mocks.runtime.mockReturnValue({ ...config, trackingEnabled: true });
+		await enqueueBulletinEmail(date, key, expected);
+		expect(state.jobs[0].tracked).toBe(1);
+	});
+	it("falls back to an untracked insert while the job column is missing", async () => {
+		const engaged = config;
+		mocks.runtime.mockReturnValue({ ...engaged, trackingEnabled: true });
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes(", tracked) VALUES"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await enqueueBulletinEmail(date, key, expected);
+		expect(state.jobs[0].tracked).toBe(0);
 	});
 });
 

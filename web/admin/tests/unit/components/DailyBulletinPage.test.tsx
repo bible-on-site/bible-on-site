@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 	emailRead: vi.fn(),
 	emailSend: vi.fn(),
 	audience: vi.fn(),
+	engagement: vi.fn(),
+	confirmUnsubscribe: vi.fn(),
 	telegramRead: vi.fn(),
 	telegramQueue: vi.fn(),
 	telegramAudience: vi.fn(),
@@ -40,6 +42,8 @@ vi.mock("~/server/bulletin-email", () => ({
 	getDailyBulletinEmail: mocks.emailRead,
 	queueDailyBulletinEmail: mocks.emailSend,
 	setDailyBulletinEmailAudience: mocks.audience,
+	getDailyBulletinEmailEngagement: mocks.engagement,
+	confirmDailyBulletinInactivityUnsubscribe: mocks.confirmUnsubscribe,
 }));
 vi.mock("~/server/bulletin-telegram", () => ({
 	getDailyBulletinTelegram: mocks.telegramRead,
@@ -86,6 +90,9 @@ function job(
 		status,
 		counts: { [status]: 2 },
 		createdAt: "2026-10-08T12:00:00Z",
+		tracked: null,
+		opened: null,
+		clicked: null,
 		...overrides,
 	};
 }
@@ -162,6 +169,8 @@ describe("daily bulletin preview and SES delivery", () => {
 			serverState = { ...serverState, settings };
 			return Promise.resolve(settings);
 		});
+		mocks.engagement.mockReset().mockResolvedValue(null);
+		mocks.confirmUnsubscribe.mockReset();
 		mocks.telegramRead.mockReset().mockResolvedValue({
 			settings: { audience: "test", revision: 0 },
 			readiness: {

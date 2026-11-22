@@ -11,6 +11,7 @@ import type { PoolConnection } from "mysql2/promise";
 import {
 	type EmailJobStatus,
 	type EmailJobSummary,
+	isSubscriptionManagementLink,
 	validateEmailQueueRequest,
 } from "~/lib/bulletin-email";
 import { rolloutDelivers } from "~/lib/bulletin-rollout";
@@ -24,6 +25,7 @@ import {
 	txExecute,
 	txQueryOne,
 } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 import { runOutboxSweep } from "./outbox-deadline.server";
 import { rolloutDeliveryStateForUpdate } from "./rollout-state.server";
 import {
@@ -49,6 +51,13 @@ const QUEUE_FAILED =
 // It is not an email event or a send request. Acknowledge only the exact message.
 const SES_SNS_VALIDATION_MESSAGE =
 	"Successfully validated SNS topic for Amazon SES event publishing.";
+
+/** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the engagement upgrade is not deployed yet. */
+export function isMissingEngagementSchema(error: unknown): boolean {
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"],
+	});
+}
 
 const TELEGRAM_JOB_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -93,6 +102,8 @@ interface JobRow {
 	status: EmailJobStatus;
 	last_error: string | null;
 	created_at: Date | string;
+	/** Present once the engagement upgrade is deployed; absent before it. */
+	tracked?: number;
 }
 interface RecipientRow {
 	id: number;
@@ -153,6 +164,25 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 		"SELECT status, COUNT(*) AS count FROM tanah_daily_bulletin_email_recipient WHERE job_id = ? GROUP BY status",
 		[job.id],
 	);
+	// A missing engagement schema degrades to nulls, never a fake measured 0.
+	let engagement: { opened: number; clicked: number } | null = null;
+	try {
+		const rows = await queryOne<{
+			opened: number | string | null;
+			clicked: number | string | null;
+		}>(
+			`SELECT COALESCE(SUM(status = 'delivered' AND opened_at IS NOT NULL), 0) AS opened,
+				COALESCE(SUM(status = 'delivered' AND clicked_at IS NOT NULL), 0) AS clicked
+			 FROM tanah_daily_bulletin_email_recipient WHERE job_id = ?`,
+			[job.id],
+		);
+		engagement = {
+			opened: Number(rows?.opened ?? 0),
+			clicked: Number(rows?.clicked ?? 0),
+		};
+	} catch (error) {
+		if (!isMissingEngagementSchema(error)) throw error;
+	}
 	return {
 		id: job.id,
 		date: dateOnly(job.bulletin_date),
@@ -160,6 +190,9 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 		status: aggregate(countsMap(counts)),
 		counts: countsMap(counts),
 		createdAt: isoTime(job.created_at),
+		tracked: engagement === null ? null : Boolean(job.tracked),
+		opened: engagement?.opened ?? null,
+		clicked: engagement?.clicked ?? null,
 	};
 }
 
@@ -461,11 +494,23 @@ async function enqueueEmailJob(
 		);
 		if (!Number(confirmed?.n)) throw new NoConfirmedRecipientsError();
 		const id = randomUUID();
-		await txExecute(
-			connection,
-			"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
-			[id, date, expected.audience, key, expected.revision],
-		);
+		// The tracked flag records whether the deployed destination collected
+		// OPEN/CLICK at enqueue time — never inferred later from events.
+		const tracked = loadEmailRuntime()?.trackingEnabled ? 1 : 0;
+		try {
+			await txExecute(
+				connection,
+				"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision, tracked) VALUES (?, ?, ?, ?, ?, ?)",
+				[id, date, expected.audience, key, expected.revision, tracked],
+			);
+		} catch (error) {
+			if (!isMissingEngagementSchema(error)) throw error;
+			await txExecute(
+				connection,
+				"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
+				[id, date, expected.audience, key, expected.revision],
+			);
+		}
 		// One set-based insert instead of a row per subscriber under the locks.
 		const enrolled = await txExecute(
 			connection,
@@ -719,6 +764,51 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			(row.message_id !== null && row.message_id !== event.messageId)
 		)
 			return null;
+		if (event.type === "open" || event.type === "click") {
+			// Tracked engagement: private per-recipient aggregates only. A
+			// subscription-management click is never engagement evidence.
+			if (
+				event.type === "click" &&
+				isSubscriptionManagementLink(event.link ?? "")
+			)
+				return;
+			const column = event.type === "open" ? "opened_at" : "clicked_at";
+			const counter = event.type === "open" ? "open_count" : "click_count";
+			try {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET ${column} = GREATEST(COALESCE(${column}, ?), ?), ${counter} = ${counter} + 1
+					 WHERE id = ? AND attempt_token = ?`,
+					[sqlTime(event.timestamp), sqlTime(event.timestamp), id, token],
+				);
+			} catch (error) {
+				if (!isMissingEngagementSchema(error)) throw error;
+				return;
+			}
+			// A tracked open or click is itself proof of delivery; lift a row
+			// still mid-flight so rates stay inside the delivered denominator.
+			if (
+				row.status === "sending" ||
+				row.status === "accepted" ||
+				row.status === "uncertain"
+			) {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET status = 'delivered', event_at = ?, last_error = NULL
+					 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'accepted', 'uncertain')`,
+					[sqlTime(event.timestamp), id, token],
+				);
+				await applyRecipientTransition(
+					connection,
+					row.job_id,
+					row.status,
+					"delivered",
+				);
+			}
+			return;
+		}
 		const status: RecipientStatus =
 			event.type === "delivery"
 				? "delivered"

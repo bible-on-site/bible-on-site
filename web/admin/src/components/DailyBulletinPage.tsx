@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinEmailEngagement } from "~/components/BulletinEmailEngagement";
 import { BulletinEmailRollout } from "~/components/BulletinEmailRollout";
 import { BulletinJoinLinks } from "~/components/BulletinJoinLinks";
 import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
@@ -382,6 +383,9 @@ export function DailyBulletinPage() {
 										disabled={busy || email.isFetching || !!email.error}
 									/>
 								)}
+								<BulletinEmailEngagement
+									disabled={busy || email.isFetching || !!email.error}
+								/>
 							</>
 						)}
 						{(email.error || queueEmail.error || changeAudience.error) && (

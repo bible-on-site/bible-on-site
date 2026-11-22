@@ -10,12 +10,16 @@ export interface SesDeliveryEvent {
 		| "bounce"
 		| "complaint"
 		| "reject"
-		| "renderingFailure";
+		| "renderingFailure"
+		| "open"
+		| "click";
 	messageId: string;
 	attemptId: string;
 	email: string;
 	timestamp: string;
 	permanent?: boolean;
+	/** The original destination URL on click events. */
+	link?: string;
 }
 
 export interface SesSubscriptionEvent {
@@ -272,6 +276,21 @@ export function parseSesEvent(
 				return changedAt &&
 					singleEmail(payload.complaint.complainedRecipients, true) === email
 					? { ...common, type: "complaint", timestamp: changedAt }
+					: null;
+			}
+			case "Open": {
+				if (!record(payload.open)) return null;
+				const openedAt = timestamp(payload.open.timestamp);
+				return openedAt
+					? { ...common, type: "open", timestamp: openedAt }
+					: null;
+			}
+			case "Click": {
+				if (!record(payload.click)) return null;
+				const clickedAt = timestamp(payload.click.timestamp);
+				const link = payload.click.link;
+				return clickedAt && text(link, 2048) && /^https?:\/\//i.test(link)
+					? { ...common, type: "click", timestamp: clickedAt, link }
 					: null;
 			}
 			case "Reject":

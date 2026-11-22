@@ -93,7 +93,12 @@ function authored(value: string): string {
 	return value.replace(/״/g, '"').replace(/׳/g, "'").replace(/[־–—]/g, "-");
 }
 
-function footerLink(href: string, label: string, ltr = false): ReactElement {
+function footerLink(
+	href: string,
+	label: string,
+	ltr = false,
+	extraProps: Record<string, string> = {},
+): ReactElement {
 	const style: CSSProperties = {
 		color: "#28758a",
 		textDecoration: "underline",
@@ -105,7 +110,7 @@ function footerLink(href: string, label: string, ltr = false): ReactElement {
 	}
 	return createElement(
 		"a",
-		{ href, dir: ltr ? "ltr" : undefined, style },
+		{ href, dir: ltr ? "ltr" : undefined, style, ...extraProps },
 		label,
 	);
 }
@@ -200,7 +205,16 @@ function footerRow(config: SesConfig, replyTo: string): ReactElement {
 					"p",
 					{ style: { margin: "10px 0 0", fontSize: 12 } },
 					"אפשר להסיר את הכתובת מרשימת התפוצה בכל עת: ",
-					footerLink("{{amazonSESUnsubscribeUrl}}", "להסרה מרשימת התפוצה"),
+					// Native unsubscribe stays out of click tracking entirely —
+					// SES never rewrites ses:no-track links into redirect URLs.
+					footerLink(
+						"{{amazonSESUnsubscribeUrl}}",
+						"להסרה מרשימת התפוצה",
+						false,
+						{
+							"ses:no-track": "true",
+						},
+					),
 				),
 			),
 		),
