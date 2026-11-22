@@ -34,20 +34,23 @@ public partial class TanahpediaEntryPage : ContentPage
         // The in-place person trail is a page-owned Back surface: it keeps
         // the capsule Back enabled even at root stack depth (#2467).
         TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
-        // Entry hops rebind this page in place - the outgoing offset is
-        // saved so a Back replay can restore it, while a forward hop opens a
-        // new visit at the top even when that entry was visited before (#2640).
+        // Entry hops rebind this page in place - each forward hop pushes the
+        // outgoing visit's offset onto its own trail frame so a Back replay
+        // restores it, while forward hops open a new visit at the top (#2640).
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
             {
-                if (_currentEntryName.Length > 0)
+                if (_viewModel.LastChangeWasTrailReplay)
                 {
-                    _scrollOffsets[_currentEntryName] = EntryScroll.ScrollY;
+                    _pendingScrollRestore = _scrollTrail.PopForReplay(_viewModel.UniqueName);
+                }
+                else
+                {
+                    _scrollTrail.PushOutgoing(_currentEntryName, EntryScroll.ScrollY);
+                    _pendingScrollRestore = null;
                 }
                 _currentEntryName = _viewModel.UniqueName;
-                _pendingScrollRestore = _viewModel.LastChangeWasTrailReplay &&
-                    _scrollOffsets.TryGetValue(_currentEntryName, out var saved) ? saved : null;
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
             }
             else if (e.PropertyName == nameof(TanahpediaEntryViewModel.HasEntryHistory))
@@ -153,11 +156,11 @@ public partial class TanahpediaEntryPage : ContentPage
     /// to the original route parameter (#2640).</summary>
     private string? _appliedRouteName;
 
-    /// <summary>Per-entry scroll offsets: a hop snapshots where the reader
-    /// left the outgoing entry and a Back replay restores it once the
-    /// content lays out — the pushed page used to keep its scroll alive
-    /// underneath (#2640).</summary>
-    private readonly Dictionary<string, double> _scrollOffsets = new(StringComparer.Ordinal);
+    /// <summary>Per-visit scroll frames: a hop snapshots where the reader
+    /// left the outgoing entry on its own frame, and a Back replay restores
+    /// the popped visit's offset once the content lays out — the pushed page
+    /// used to keep its scroll alive underneath (#2640).</summary>
+    private readonly EntryScrollTrail _scrollTrail = new();
     private string _currentEntryName = string.Empty;
     private double? _pendingScrollRestore;
 

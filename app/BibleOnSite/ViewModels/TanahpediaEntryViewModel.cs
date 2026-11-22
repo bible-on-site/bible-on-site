@@ -393,6 +393,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasOccurrences));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
