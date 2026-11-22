@@ -248,7 +248,7 @@ function RabbiEditPage() {
 							תמונת הרב
 						</label>
 						{isNew ? (
-							<div className="bg-linear-to-br from-gray-50 to-gray-100 rounded-xl p-8 text-center border-2 border-dashed border-gray-300">
+							<div className="bg-gray-50 rounded-xl p-8 text-center border-2 border-dashed border-gray-300">
 								<ImageIcon
 									size={36}
 									className="mx-auto mb-3 text-gray-400"
