@@ -28,6 +28,8 @@ public partial class MasoraPage
     private int _focusedClipEnd = int.MaxValue;
     private CancellationTokenSource? _headerPress;
     private Pasuk? _recitingPasuk;
+    /// <summary>The row last scrolled to — verse transitions only, so follow scrolls stay rare.</summary>
+    private MasoraPasukRow? _recitingRow;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private ReaderRecitationEngine? _recitation;
@@ -111,6 +113,17 @@ public partial class MasoraPage
             row => row.PerekId == perekId && row.PasukNum == pasukNum);
 
     /// <summary>
+    /// The realized scroll surface of the unit on screen — the carousel is
+    /// virtualized, so it is resolved by the current unit's identity rather
+    /// than by carousel position (#3728).
+    /// </summary>
+    private CollectionView? FindReaderPasukList() => MasoraCarousel
+        .GetVisualTreeDescendants()
+        .OfType<CollectionView>()
+        .FirstOrDefault(view => ReferenceEquals(view.BindingContext, _viewModel.Unit)
+            && view.Handler != null && view.Height > 0);
+
+    /// <summary>
     /// Maps the engine's highlighted word onto the displayed row — clipped
     /// rows translate the canonical 1-based segment index into their own
     /// segment list through <see cref="MasoraPasukRow.ClipStartIndex"/>.
@@ -134,6 +147,15 @@ public partial class MasoraPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
+        // Follow the spoken verse (#3728): when playback lands on a new row
+        // off-screen — play, resume or seek — bring it into view. Suppressed
+        // while the user is scrolling, and a no-op while the row is already
+        // visible.
+        if (nextRow != null && !ReferenceEquals(nextRow, _recitingRow) && !IsScrolling)
+        {
+            ReaderScrollTop.ScrollToItem(FindReaderPasukList(), nextRow);
+        }
+        _recitingRow = nextRow;
         if (word != null && nextRow != null)
         {
             nextRow.Pasuk.RecitingSegment = word.Segment - nextRow.ClipStartIndex;

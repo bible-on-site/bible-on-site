@@ -202,6 +202,29 @@ export function RecitationPasukControl({
 	);
 }
 
+/**
+ * Whether the node's vertical span already lies fully inside the nearest
+ * vertically scrollable ancestor (the scripture pane) — or the viewport
+ * when nothing around it scrolls. Anything clipped counts as needing the
+ * follow scroll.
+ */
+function visibleInPane(node: HTMLElement) {
+	const rect = node.getBoundingClientRect();
+	let parent = node.parentElement;
+	while (parent) {
+		const { overflowY } = getComputedStyle(parent);
+		if (
+			(overflowY === "auto" || overflowY === "scroll") &&
+			parent.scrollHeight > parent.clientHeight
+		) {
+			const bounds = parent.getBoundingClientRect();
+			return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+		}
+		parent = parent.parentElement;
+	}
+	return rect.top >= 0 && rect.bottom <= window.innerHeight;
+}
+
 /** Native buttons form atomic text boxes and change Hebrew spacing and wrapping. */
 export function InlineRecitationControl({
 	children,
@@ -218,9 +241,20 @@ export function InlineRecitationControl({
 	pressed?: boolean;
 	onActivate?: () => void;
 }) {
+	const element = useRef<HTMLSpanElement>(null);
+	// Follow the recitation: when this control starts playing while its
+	// verse sits outside the reading pane, bring it into view (#3728).
+	useEffect(() => {
+		if (!pressed) return;
+		const node = element.current;
+		if (node && !visibleInPane(node)) {
+			node.scrollIntoView({ behavior: "instant", block: "nearest" });
+		}
+	}, [pressed]);
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useAriaPropsSupportedByRole: The button role, ARIA, focus and keyboard handlers activate together while preserving inline Hebrew typography.
 		<span
+			ref={element}
 			className={className}
 			data-flipbook-no-flip={onActivate ? true : undefined}
 			role={onActivate ? "button" : undefined}

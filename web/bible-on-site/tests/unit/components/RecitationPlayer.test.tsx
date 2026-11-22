@@ -1124,3 +1124,109 @@ test("perek-scoped controls resolve against the chapter player's pasuk keys", as
 	// though listening mode is on.
 	expect(screen.queryByRole("button", { name: "השמעת פסוק א" })).toBeNull();
 });
+
+const belowFoldRect = {
+	top: 2000,
+	bottom: 2016,
+	left: 0,
+	right: 40,
+	width: 40,
+	height: 16,
+	x: 0,
+	y: 2000,
+	toJSON: () => ({}),
+} as DOMRect;
+const inViewRect = {
+	top: 40,
+	bottom: 56,
+	left: 0,
+	right: 40,
+	width: 40,
+	height: 16,
+	x: 0,
+	y: 40,
+	toJSON: () => ({}),
+} as DOMRect;
+
+test("playback scrolls the spoken word into view when it sits below the fold", async () => {
+	await openPlayer();
+	const scrollIntoView = jest.fn();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	const word = screen.getByRole("button", { name: "השמעת המילה בָּרָא" });
+	jest.spyOn(word, "getBoundingClientRect").mockReturnValue(belowFoldRect);
+	frame(2000);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(scrollIntoView).toHaveBeenCalledWith({
+		behavior: "instant",
+		block: "nearest",
+	});
+});
+
+test("playback leaves the scroll alone while the spoken word is already visible", async () => {
+	await openPlayer();
+	const scrollIntoView = jest.fn();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	jest.spyOn(word, "getBoundingClientRect").mockReturnValue(inViewRect);
+	frame(1250);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(scrollIntoView).not.toHaveBeenCalled();
+});
+
+test("playback follows the spoken word inside its own scrollable pane", async () => {
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+			<div data-testid="pane" style={{ overflowY: "auto" }}>
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	const scrollIntoView = jest.fn();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	const pane = screen.getByTestId("pane");
+	Object.defineProperty(pane, "scrollHeight", {
+		value: 2000,
+		configurable: true,
+	});
+	Object.defineProperty(pane, "clientHeight", {
+		value: 200,
+		configurable: true,
+	});
+	jest.spyOn(pane, "getBoundingClientRect").mockReturnValue({
+		top: 0,
+		bottom: 200,
+		left: 0,
+		right: 400,
+		width: 400,
+		height: 200,
+		x: 0,
+		y: 0,
+		toJSON: () => ({}),
+	} as DOMRect);
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	// The word renders inside the pane's own bounds but past its scroll
+	// window — clipped words count as not visible.
+	jest.spyOn(word, "getBoundingClientRect").mockReturnValue({
+		...inViewRect,
+		top: 260,
+		bottom: 276,
+		y: 260,
+	} as DOMRect);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	frame(1250);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(scrollIntoView).toHaveBeenCalledWith({
+		behavior: "instant",
+		block: "nearest",
+	});
+});
