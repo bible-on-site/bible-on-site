@@ -400,23 +400,23 @@ public sealed class NativeSnapshotTests
     {
         var executor = new SnapshotExecutor([])
         {
-            Respond = criteria => criteria switch
-            {
-                "PerushimChevronButton" => new object[] { Entry("chevron") },
-                _ => Array.Empty<object>()
-            }
+            Respond = criteria => criteria is "PerushimChevronButton"
+                ? new object[] { Entry("chevron") }
+                : Array.Empty<object>()
         };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         new PerekPage(driver, new IosPlatformAdapter())
-            .TapToDismiss("PerushimChevronButton", "PerushCheckBox");
+            .TapToDismiss("PerushimChevronButton", "PerushCheckBox", "PerushimEmptyState");
         Assert.Single(executor.Commands, command => command == "actions");
-        Assert.Equal("PerushCheckBox", executor.LastParameters!["value"]);
+        Assert.Equal("PerushimEmptyState", executor.LastParameters!["value"]);
     }
 
     [Fact]
     public void TapToDismissRetapsWhileTheContentStaysVisible()
     {
-        // The marker reports visible until the second tap lands. Keying the
+        // The empty sheet's marker reports visible until the second tap lands
+        // — a populated-sheet checkbox is vacuously absent, so the alternate
+        // marker is what proves the panel still sits open (#3737). Keying the
         // fake on the tap count — not the poll count — keeps the tap total
         // exact: a slower runner polls fewer times per hidden window and
         // would otherwise land an extra retap.
@@ -426,15 +426,15 @@ public sealed class NativeSnapshotTests
             Respond = criteria => criteria switch
             {
                 "PerushimChevronButton" => new object[] { Entry("chevron") },
-                "PerushCheckBox" => executor!.Commands.Count(command => command == "actions") < 2
-                    ? new object[] { Entry("checkbox") }
+                "PerushimEmptyState" => executor!.Commands.Count(command => command == "actions") < 2
+                    ? new object[] { Entry("empty state") }
                     : Array.Empty<object>(),
                 _ => Array.Empty<object>()
             }
         };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         new PerekPage(driver, new IosPlatformAdapter())
-            .TapToDismiss("PerushimChevronButton", "PerushCheckBox", TimeSpan.FromMilliseconds(300));
+            .TapToDismiss("PerushimChevronButton", TimeSpan.FromMilliseconds(300), "PerushCheckBox", "PerushimEmptyState");
         Assert.Equal(2, executor.Commands.Count(command => command == "actions"));
     }
 
@@ -453,7 +453,7 @@ public sealed class NativeSnapshotTests
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var failure = Assert.Throws<WebDriverTimeoutException>(() =>
             new PerekPage(driver, new IosPlatformAdapter())
-                .TapToDismiss("PerushimChevronButton", "PerushCheckBox", TimeSpan.FromMilliseconds(200)));
+                .TapToDismiss("PerushimChevronButton", TimeSpan.FromMilliseconds(200), "PerushCheckBox", "PerushimEmptyState"));
         Assert.Contains("stayed visible", failure.Message);
         Assert.Equal(3, executor.Commands.Count(command => command == "actions"));
     }
@@ -469,6 +469,7 @@ public sealed class NativeSnapshotTests
             .WaitForAttached("CommentaryTextSection");
         Assert.Single(attached);
         Assert.Equal(1, executor.Lookups);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
         Assert.Equal("CommentaryTextSection", executor.LastParameters!["value"]);
     }
 

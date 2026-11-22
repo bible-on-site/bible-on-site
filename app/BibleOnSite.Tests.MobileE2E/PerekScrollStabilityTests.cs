@@ -105,10 +105,11 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
                 Output.WriteLine("The rendered perush checkbox never became tappable; scrolling without it.");
             }
         }
-        // With no rendered checkboxes the marker is already absent, so this
-        // returns after the single tap exactly like the bare Tap did; with a
-        // rendered sheet it proves the panel closed (#3737).
-        Page.TapToDismiss("PerushimChevronButton", "PerushCheckBox");
+        // An open sheet always renders one of the markers — checkboxes when
+        // the perek has perushim, the empty state when it does not — so
+        // verifying both left the tree proves the panel really closed where
+        // either marker alone would be vacuously absent (#3737).
+        Page.TapToDismiss("PerushimChevronButton", "PerushCheckBox", "PerushimEmptyState");
     }
 
     internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)

@@ -165,17 +165,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// delivered touch can toggle the surface back open — leaving it presented
     /// to cover the elements a later visible==1 wait expects (#3737). A
     /// still-visible content marker retries the tap; the dead-session
-    /// classifier keeps a crashed driver from being retapped.
+    /// classifier keeps a crashed driver from being retapped. Every marker is
+    /// checked because a surface can render different content in different
+    /// states — an open perushim sheet always shows the checkbox rows or the
+    /// empty state, and either one visible means the tap missed.
     /// </summary>
-    public void TapToDismiss(string toggleAutomationId, string contentAutomationId) =>
-        TapToDismiss(toggleAutomationId, contentAutomationId, TimeSpan.FromSeconds(5));
+    public void TapToDismiss(string toggleAutomationId, params string[] contentAutomationIds) =>
+        TapToDismiss(toggleAutomationId, TimeSpan.FromSeconds(5), contentAutomationIds);
 
-    /// <inheritdoc cref="TapToDismiss(string, string)"/>
-    /// <param name="hiddenTimeout">Per-attempt window for the content marker to
-    /// disappear — short on purpose: a tap that reached the toggle hides the
-    /// surface inside its own ~250ms animation, so seconds of still-visible
-    /// content already prove the gesture missed and bound the retry.</param>
-    public void TapToDismiss(string toggleAutomationId, string contentAutomationId, TimeSpan hiddenTimeout)
+    /// <inheritdoc cref="TapToDismiss(string, string[])"/>
+    /// <param name="hiddenTimeout">Per-attempt window for each content marker
+    /// to disappear — short on purpose: a tap that reached the toggle hides
+    /// the surface inside its own ~250ms animation, so seconds of
+    /// still-visible content already prove the gesture missed and bound the
+    /// retry.</param>
+    public void TapToDismiss(string toggleAutomationId, TimeSpan hiddenTimeout, params string[] contentAutomationIds)
     {
         // WaitForHidden only times out after a full window of still-visible
         // polls, so a retap cannot reopen a surface that already closed.
@@ -184,13 +188,16 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Tap(toggleAutomationId);
             try
             {
-                WaitForHidden(contentAutomationId, hiddenTimeout);
+                foreach (var marker in contentAutomationIds)
+                {
+                    WaitForHidden(marker, hiddenTimeout);
+                }
                 return;
             }
             catch (WebDriverTimeoutException exception)
                 when (!DeviceSessionDeath.Matches(exception) && attempt < 3)
             {
-                // The marker still renders — the toggle gesture never landed.
+                // A marker still renders — the toggle gesture never landed.
             }
         }
     }
