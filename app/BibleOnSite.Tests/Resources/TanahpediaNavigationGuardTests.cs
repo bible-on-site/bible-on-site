@@ -44,10 +44,18 @@ public class TanahpediaNavigationGuardTests
         // An async-void handler's catch block is itself a failure path: the
         // DisplayAlertAsync inside it can throw while the transition is dying,
         // and a rethrow into the handler is an unobserved main-thread crash
-        // (#2640). The alert call must carry its own nested failure boundary.
-        var source = File.ReadAllText(Path.Join(PagesRoot, "TanahpediaEntryPage.xaml.cs"));
-        var handler = SliceFrom(source, marker);
-        Assert.Contains(alertGuardLog, handler);
+        // (#2640). The alert call must sit inside its own nested try, whose
+        // catch logs instead of rethrowing — positionally:
+        //   outer catch < nested try < alert call < nested catch < guard log.
+        var handler = SliceFrom(File.ReadAllText(Path.Join(PagesRoot, "TanahpediaEntryPage.xaml.cs")), marker);
+        var outerCatch = handler.IndexOf("catch (Exception", StringComparison.Ordinal);
+        var nestedTry = outerCatch < 0 ? -1 : handler.IndexOf("try", outerCatch, StringComparison.Ordinal);
+        var alertCall = nestedTry < 0 ? -1 : handler.IndexOf("DisplayAlertAsync", nestedTry, StringComparison.Ordinal);
+        var nestedCatch = alertCall < 0 ? -1 : handler.IndexOf("catch (Exception", alertCall, StringComparison.Ordinal);
+        var guardLog = nestedCatch < 0 ? -1 : handler.IndexOf(alertGuardLog, nestedCatch, StringComparison.Ordinal);
+        Assert.True(
+            outerCatch >= 0 && nestedTry > outerCatch && alertCall > nestedTry && nestedCatch > alertCall && guardLog > nestedCatch,
+            $"{marker} must keep its DisplayAlertAsync inside a nested failure boundary");
     }
 
     [Fact]
