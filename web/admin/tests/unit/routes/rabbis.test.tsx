@@ -118,13 +118,17 @@ describe("Rabbis list page", () => {
 	});
 
 	it("cancels the pending delete from the toast undo button", async () => {
-		// A long window keeps the toast alive until ביטול — no timer race.
+		// A long window keeps the toast alive until ביטול — no timer race;
+		// the release-clears-the-timer contract lives in UndoToast.test.tsx.
 		render(<Page durationMs={5000} />);
 		fireEvent.click(await screen.findByRole("button", { name: "מחק" }));
 
 		const toast = await screen.findByRole("status");
 		fireEvent.click(
 			within(toast).getByRole("button", { name: "ביטול" }),
+		);
+		await waitFor(() =>
+			expect(screen.queryByRole("status")).toBeNull(),
 		);
 		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
 		expect(deleteAuthor).not.toHaveBeenCalled();
