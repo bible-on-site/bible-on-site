@@ -4322,8 +4322,10 @@ jobs:
     with:
       module_name: bulletin
       module_directory: web/bulletin
-      # Keep in sync with bulletin extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["web/shared/branding", "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"]'
+      # Keep in sync with bulletin extraModulePaths + the floating corpus
+      # pattern in devops/github/ci/determine-changes.ts. The wildcard is a
+      # git pathspec: release notes follow the corpus across dump renames.
+      extra_module_paths: '["web/shared/branding", "web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json"]'
       module_version: ${{ needs.package_bulletin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
       cd_event_type: deploy-bulletin

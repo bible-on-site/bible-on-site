@@ -218,10 +218,12 @@ export const MODULES = {
 		directory: "web/bulletin",
 		// The Lambda zip ships the shared Al Heperek fonts and the PDF embeds
 		// the canonical header logo (#3708); the pinned website corpus
-		// regenerates the embedded perek text at build time (#3709).
+		// regenerates the embedded perek text at build time (#3709). The corpus
+		// entry is a git pathspec glob so release notes keep tracking it across
+		// dump renames; detection itself uses extraModulePattern below.
 		extraModulePaths: [
 			"web/shared/branding",
-			"web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			"web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json",
 		],
 		// The corpus file carries the dump version in its name — match the
 		// stem so a corpus bump cannot silently stop selecting the bulletin.

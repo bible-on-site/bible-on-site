@@ -29,6 +29,7 @@ on:
       - "web/bible-on-site/scripts/generate-calendar-pdfs.mts"
       - "web/bible-on-site/scripts/generate-client-catalog.mjs"
       - "web/bible-on-site/scripts/publish-calendar-pdfs.mts"
+      - "web/bible-on-site/scripts/stage-brand-assets.mjs"
       - "web/bible-on-site/src/data/db/cycles-types.ts"
       - "web/bible-on-site/src/data/db/cycles.json"
       - "web/bible-on-site/src/data/db/cycles.ts"

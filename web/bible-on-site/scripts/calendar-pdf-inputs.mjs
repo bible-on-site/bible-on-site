@@ -39,10 +39,13 @@ const CALENDAR_PDF_RENDER_INPUT_FILES = [
 	"src/lib/download/calendar-pdf-plan.ts",
 	"src/lib/download/calendar-pdf.ts",
 	// Canonical shared brand files (#3708); the renderer embeds the staged
-	// byte-identical copies under src/lib/download/.
+	// byte-identical copies under src/lib/download/. The staging script itself
+	// carries the canonical→staged mapping, so a mapping-only change must
+	// re-render too.
 	"../shared/branding/derived/logo_header.jpg",
 	"../shared/branding/fonts/AlHeperekUI-Bold.ttf",
 	"../shared/branding/fonts/AlHeperekUI-Regular.ttf",
+	"scripts/stage-brand-assets.mjs",
 	"src/lib/download/pdf-fonts.ts",
 ];
 
