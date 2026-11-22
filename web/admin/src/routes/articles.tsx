@@ -6,7 +6,7 @@ import {
 	useMatch,
 } from "@tanstack/react-router";
 import { Plus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPerekOptions, filterPerekOptions } from "~/lib/perek-options";
 import { getPerakim } from "~/server/perakim";
 
@@ -39,6 +39,7 @@ function ArticlesNavPage() {
 	useEffect(() => setInteractive(true), []);
 	const [navQuery, setNavQuery] = useState("");
 	const [activeIndex, setActiveIndex] = useState(0);
+	const listboxRef = useRef<HTMLDivElement>(null);
 
 	const { data: perakim } = useQuery({
 		queryKey: ["perakim"],
@@ -51,6 +52,12 @@ function ArticlesNavPage() {
 
 	const jumpTo = (perekId: number) => {
 		window.location.href = `/articles/perek/${perekId}`;
+	};
+
+	// Reveal the first option after a reset without touching page scroll.
+	const resetSelection = () => {
+		setActiveIndex(0);
+		if (listboxRef.current) listboxRef.current.scrollTop = 0;
 	};
 
 	return (
@@ -96,7 +103,7 @@ function ArticlesNavPage() {
 						value={navQuery}
 						onChange={(e) => {
 							setNavQuery(e.target.value);
-							setActiveIndex(0);
+							resetSelection();
 						}}
 						placeholder="חיפוש ספר או פרק..."
 						className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
@@ -128,11 +135,12 @@ function ArticlesNavPage() {
 								if (target) jumpTo(target);
 							} else if (e.key === "Escape") {
 								setNavQuery("");
-								setActiveIndex(0);
+								resetSelection();
 							}
 						}}
 					/>
 					<div
+						ref={listboxRef}
 						id="perek-nav-options"
 						role="listbox"
 						aria-label="פרקים"

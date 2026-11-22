@@ -265,6 +265,17 @@ describe("Article chapter navigation", () => {
 		expect(options()).toHaveLength(4);
 	});
 
+	it("reveals the first option again when the search resets", () => {
+		render(<Page />);
+		const listbox = screen.getByRole("listbox", { name: "פרקים" });
+		listbox.scrollTop = 120;
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		expect(listbox.scrollTop).toBe(0);
+		listbox.scrollTop = 120;
+		fireEvent.keyDown(combobox(), { key: "Escape" });
+		expect(listbox.scrollTop).toBe(0);
+	});
+
 	it("reports no matching perakim", () => {
 		render(<Page />);
 		fireEvent.change(combobox(), { target: { value: "לא קיים" } });
