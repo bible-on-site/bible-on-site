@@ -147,7 +147,11 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         }
         Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
-        Page.Tap("PerushimChevronButton");
+        // A close tap that lands mid-relayout — or a double-delivered touch —
+        // leaves the sheet presented over the commentary cells, and the
+        // CommentaryTextSection visible == 1 wait above then starves (#3737).
+        // Verify the panel really left the tree instead of trusting the tap.
+        Page.TapToDismiss("PerushimChevronButton", "PerushCheckBox");
         return tapped.Count;
     }
 }

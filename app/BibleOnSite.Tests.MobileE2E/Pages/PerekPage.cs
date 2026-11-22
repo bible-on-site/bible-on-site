@@ -77,10 +77,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// accessibility tree entirely on iOS, but a closing animation or a stale
     /// snapshot can keep a copy around briefly.
     /// </summary>
-    public void WaitForHidden(string automationId)
+    public void WaitForHidden(string automationId) =>
+        WaitForHidden(automationId, TimeSpan.FromSeconds(30));
+
+    /// <inheritdoc cref="WaitForHidden(string)"/>
+    public void WaitForHidden(string automationId, TimeSpan timeout)
     {
         var locator = platform.AutomationId(automationId);
-        var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
@@ -103,6 +106,43 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
+    }
+
+    /// <summary>
+    /// Taps a toggle control to dismiss a surface, then proves the surface's
+    /// content left the tree before returning. A coordinate tap can land while
+    /// the app is mid-relayout and never reach the control — or a double-
+    /// delivered touch can toggle the surface back open — leaving it presented
+    /// to cover the elements a later visible==1 wait expects (#3737). A
+    /// still-visible content marker retries the tap; the dead-session
+    /// classifier keeps a crashed driver from being retapped.
+    /// </summary>
+    public void TapToDismiss(string toggleAutomationId, string contentAutomationId) =>
+        TapToDismiss(toggleAutomationId, contentAutomationId, TimeSpan.FromSeconds(5));
+
+    /// <inheritdoc cref="TapToDismiss(string, string)"/>
+    /// <param name="hiddenTimeout">Per-attempt window for the content marker to
+    /// disappear — short on purpose: a tap that reached the toggle hides the
+    /// surface inside its own ~250ms animation, so seconds of still-visible
+    /// content already prove the gesture missed and bound the retry.</param>
+    public void TapToDismiss(string toggleAutomationId, string contentAutomationId, TimeSpan hiddenTimeout)
+    {
+        // WaitForHidden only times out after a full window of still-visible
+        // polls, so a retap cannot reopen a surface that already closed.
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            Tap(toggleAutomationId);
+            try
+            {
+                WaitForHidden(contentAutomationId, hiddenTimeout);
+                return;
+            }
+            catch (WebDriverTimeoutException exception)
+                when (!DeviceSessionDeath.Matches(exception) && attempt < 3)
+            {
+                // The marker still renders — the toggle gesture never landed.
+            }
+        }
     }
 
     /// <summary>

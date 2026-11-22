@@ -396,6 +396,65 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void TapToDismissTapsOnceWhenTheContentIsAlreadyHidden()
+    {
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter())
+            .TapToDismiss("PerushimChevronButton", "PerushCheckBox");
+        Assert.Single(executor.Commands, command => command == "actions");
+        Assert.Equal("PerushCheckBox", executor.LastParameters!["value"]);
+    }
+
+    [Fact]
+    public void TapToDismissRetapsWhileTheContentStaysVisible()
+    {
+        var checkboxPolls = 0;
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                "PerushCheckBox" => ++checkboxPolls <= 2
+                    ? new object[] { Entry("checkbox") }
+                    : Array.Empty<object>(),
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter())
+            .TapToDismiss("PerushimChevronButton", "PerushCheckBox", TimeSpan.FromMilliseconds(300));
+        Assert.Equal(2, executor.Commands.Count(command => command == "actions"));
+    }
+
+    [Fact]
+    public void TapToDismissStopsRetappingAndThrowsWhenTheContentNeverHides()
+    {
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                "PerushCheckBox" => new object[] { Entry("checkbox") },
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var failure = Assert.Throws<WebDriverTimeoutException>(() =>
+            new PerekPage(driver, new IosPlatformAdapter())
+                .TapToDismiss("PerushimChevronButton", "PerushCheckBox", TimeSpan.FromMilliseconds(200)));
+        Assert.Contains("stayed visible", failure.Message);
+        Assert.Equal(3, executor.Commands.Count(command => command == "actions"));
+    }
+
+    [Fact]
     public void BottomNavigationAssertionsReadEveryFrameFromThePollSnapshots()
     {
         var executor = new SnapshotExecutor([])
