@@ -9,7 +9,7 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public sealed class ReaderRecitationDownload
 {
-    private (int PerekId, CancellationTokenSource Source)? _pending;
+    private (int PerekId, CancellationTokenSource Source, string? Owner)? _pending;
 
     /// <summary>The perek whose download→play request is in flight, or null.</summary>
     public int? PendingPerekId => _pending?.PerekId;
@@ -35,12 +35,31 @@ public sealed class ReaderRecitationDownload
     }
 
     /// <summary>
+    /// Cancels the pending request only when <paramref name="owner"/> issued it —
+    /// a focused pasuk closing drops its own download→play without touching a
+    /// request the selection bar still shows (#3704).
+    /// </summary>
+    public void CancelOwner(string owner)
+    {
+        if (_pending?.Owner == owner)
+        {
+            Cancel();
+        }
+    }
+
+    /// <inheritdoc cref="RunAsync(int, Func{CancellationToken, Task}, Func{Task}, string?)"/>
+    public Task<bool> RunAsync(int perekId, Func<CancellationToken, Task> download, Func<Task> play) =>
+        RunAsync(perekId, download, play, null);
+
+    /// <summary>
     /// Runs the sefer download, then the stored play. Returns false when the
     /// tap only joined an in-flight request for the same perek (that request
     /// still plays) or when a newer request or a cancel superseded this one
     /// before playback began.
     /// </summary>
-    public async Task<bool> RunAsync(int perekId, Func<CancellationToken, Task> download, Func<Task> play)
+    /// <param name="owner">Identifies who issued the request so a surface can
+    /// cancel only its own (see <see cref="CancelOwner"/>).</param>
+    public async Task<bool> RunAsync(int perekId, Func<CancellationToken, Task> download, Func<Task> play, string? owner)
     {
         if (_pending?.PerekId == perekId)
         {
@@ -50,7 +69,7 @@ public sealed class ReaderRecitationDownload
 
         Cancel();
         using var source = new CancellationTokenSource();
-        _pending = (perekId, source);
+        _pending = (perekId, source, owner);
         try
         {
             await download(source.Token);

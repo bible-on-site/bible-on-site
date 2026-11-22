@@ -138,6 +138,42 @@ public class ReaderRecitationDownloadTests
     }
 
     [Fact]
+    public async Task CancelOwner_MatchingOwner_DropsThePendingAutoPlay()
+    {
+        var request = new ReaderRecitationDownload();
+        var download = new ControllableDownload();
+        var plays = 0;
+
+        // The focused pasuk's tap owns its request through the play key; its
+        // dismiss cancels it without stopping already-playing audio (#3704).
+        var run = request.RunAsync(3, download.Run,
+            () => { plays++; return Task.CompletedTask; }, owner: "pasuk:3:5");
+        request.CancelOwner("pasuk:3:5");
+
+        request.IsPending.Should().BeFalse();
+        await run.Awaiting(r => r).Should().ThrowAsync<OperationCanceledException>();
+        download.CancelObserved.Should().BeTrue("the in-flight download's token fired");
+        plays.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CancelOwner_DifferentOwner_LeavesTheRequestRunning()
+    {
+        var request = new ReaderRecitationDownload();
+        var download = new ControllableDownload();
+        var plays = 0;
+
+        var run = request.RunAsync(3, download.Run,
+            () => { plays++; return Task.CompletedTask; }, owner: "chapter:3");
+        request.CancelOwner("pasuk:3:5");
+
+        request.IsPending.Should().BeTrue("a bar-owned request survives the focused view's dismiss");
+        download.Release();
+        (await run).Should().BeTrue();
+        plays.Should().Be(1);
+    }
+
+    [Fact]
     public async Task FailedDownload_ReleasesTheRequest_AndTheNextTapRetries()
     {
         var request = new ReaderRecitationDownload();

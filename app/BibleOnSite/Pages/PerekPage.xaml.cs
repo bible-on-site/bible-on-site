@@ -1054,7 +1054,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void ClearAllSelections()
     {
         // Closing the focused pasuk keeps playback going (the bar is still
-        // visible); leaving selection or chapter mode stops it.
+        // visible); leaving selection or chapter mode stops it. A download→play
+        // the focused view itself started is dropped with it so no pasuk
+        // suddenly starts on the perek screen after Back (#3704); a bar-owned
+        // request stays — its spinner is still showing there.
+        if (_focusedPasuk is { } dismissing)
+        {
+            _recitationDownload.CancelOwner($"pasuk:{_viewModel.PerekId}:{dismissing.PasukNum}");
+        }
         ResetRecitationContext(stopPlayback: _focusedPasuk == null);
         _viewModel.ClearSelected();
         UpdateSelectionBar();

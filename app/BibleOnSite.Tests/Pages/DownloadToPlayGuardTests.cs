@@ -36,13 +36,17 @@ public class DownloadToPlayGuardTests
     }
 
     [Fact]
-    public void PasukPreviewHelper_DefaultsToLocalOnly()
+    public void PasukPreviewHelper_DefaultsToLocalOnly_AndForwardsTheFlag()
     {
         // The shared pasuk helper carries the opt-in only so its callers can
-        // choose; it must default off so implicit previews never fetch a pack.
+        // choose; it must default off so implicit previews never fetch a pack,
+        // and it must forward the flag — a dropped forward leaves the focused
+        // headphones tap dead again (Devin review on #3723).
         Assert.Contains(
             "Task PlayPasukRecitationAsync(Pasuk pasuk, bool downloadIfMissing = false)",
             RecitationSource);
+        var body = MethodBody(RecitationSource, "Task PlayPasukRecitationAsync");
+        Assert.Contains("downloadIfMissing: downloadIfMissing", body);
     }
 
     [Theory]
@@ -72,6 +76,26 @@ public class DownloadToPlayGuardTests
         var body = MethodBody(RecitationSource, "Task OpenFocusedPasukAsync");
         Assert.Contains("PlayPasukRecitationAsync", body);
         Assert.DoesNotContain("downloadIfMissing", body);
+    }
+
+    [Fact]
+    public void PendingRequest_CarriesItsPlayKeyAsOwner()
+    {
+        // Ownership travels on the play key so dismissing the focused view
+        // cancels only its own request — never a bar-owned one (#3704).
+        var body = MethodBody(RecitationSource, "Task DownloadRecitationThenPlayAsync");
+        Assert.Contains("owner", body);
+        var caller = MethodBody(RecitationSource, "Task PlayRecitationAsync");
+        Assert.Contains("), key)", caller);
+    }
+
+    [Fact]
+    public void FocusedDismiss_CancelsOnlyItsOwnPendingRequest()
+    {
+        // ClearAllSelections preserves playing audio but must still drop a
+        // pasuk-owned download→play so it cannot fire after the view closed.
+        var body = MethodBody(CodeBehindSource, "void ClearAllSelections");
+        Assert.Contains("_recitationDownload.CancelOwner", body);
     }
 
     private static int CountOccurrences(string haystack, string needle)
