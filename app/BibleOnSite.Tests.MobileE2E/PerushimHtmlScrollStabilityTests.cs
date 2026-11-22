@@ -39,8 +39,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Only sections near the viewport are exposed (AccessibleTextSectionsTests
         // proves the split keeps every paragraph); the 2,200-line document must
-        // not put its ~147 sections into every WDA snapshot.
-        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
+        // not put its ~147 sections into every WDA snapshot. A section is one
+        // accessible element for its whole laid-out height, so the first block's
+        // center can sit a few points below the viewport — invisible to every
+        // center-in-viewport wait while its top edge is already on screen.
+        // Scrolling brings the awaited element itself into view (#3735).
+        Page.ScrollToVisible("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
@@ -129,14 +133,21 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         var tapped = new List<(System.Drawing.Point Location, System.Drawing.Size Size)>();
         for (var attempt = 0; tapped.Count < 5 && attempt < 15; attempt++)
         {
-            var next = Page.RenderedElements("PerushCheckBox")
-                .FirstOrDefault(checkbox => !tapped.Contains(checkbox.Frame));
-            if (next.Element == null)
-            {
-                break;
-            }
             try
             {
+                // Rows whose midpoint sits under the notched bottom bar are not
+                // real targets: the touch lands on the bar surface or the
+                // chevron, which toggles the sheet instead of checking the row
+                // (#3735). CanTap's hittable check covers that occlusion; the
+                // "0" switch value skips a row recycled back checked.
+                var next = Page.RenderedElements("PerushCheckBox")
+                    .FirstOrDefault(checkbox => checkbox.Text == "0"
+                        && !tapped.Contains(checkbox.Frame)
+                        && Platform.CanTap(checkbox.Element));
+                if (next.Element == null)
+                {
+                    break;
+                }
                 Platform.Tap(Driver!, next.Element);
                 tapped.Add(next.Frame);
             }
