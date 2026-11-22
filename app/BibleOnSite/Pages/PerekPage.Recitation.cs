@@ -16,6 +16,9 @@ public partial class PerekPage
     private Pasuk? _focusedPasuk;
     private CancellationTokenSource? _recitationRequest;
     private CancellationTokenSource? _headerPress;
+    // One download→play request for a Play tap on a not-yet-installed sefer
+    // (#3704) — repeated taps join it; perek changes and Back cancel it.
+    private readonly ReaderRecitationDownload _recitationDownload = new();
     private bool _recitationBusy;
     private bool _playWhenOpened;
     // Playback identity, chapter-vs-preview distinction and the perek-scoped
@@ -118,6 +121,9 @@ public partial class PerekPage
         // Invalidates any MediaOpened handler still awaiting its seek.
         _recitationGeneration++;
         _recitationRequest?.Cancel();
+        // A deliberate stop (Back, perek change, קריינות off, pack removal)
+        // drops any pending download→play so no stale auto-play fires (#3704).
+        _recitationDownload.Cancel();
         _playWhenOpened = false;
         _recitationCursor.Stop();
         _pendingSeekMs = null;
@@ -319,7 +325,7 @@ public partial class PerekPage
     /// Requires an aligned ("ready") track — without word timings there is no
     /// pasuk boundary to stop at.
     /// </summary>
-    private async Task PlayPasukRecitationAsync(Pasuk pasuk)
+    private async Task PlayPasukRecitationAsync(Pasuk pasuk, bool downloadIfMissing = false)
     {
         if (_viewModel.Perek is not { } perek)
         {
@@ -353,7 +359,7 @@ public partial class PerekPage
         // second tap of a double-tap opens the focused pasuk and keeps it.
         await PlayRecitationAsync($"pasuk:{perek.PerekId}:{pasuk.PasukNum}",
             ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)],
-            resumeFromMs: words[0].StartMs!.Value);
+            resumeFromMs: words[0].StartMs!.Value, downloadIfMissing: downloadIfMissing);
     }
 
     private async void OnPasukDoubleTapped(object? sender, TappedEventArgs e)
@@ -433,9 +439,12 @@ public partial class PerekPage
 
     private async void OnFocusedPlayClicked(object? sender, EventArgs e)
     {
+        // A deliberate tap on the focused view's enabled headphones — it opts
+        // into the pack download like the header Play, while the implicit
+        // preview on opening the pasuk stays local-only (#3704).
         if (_focusedPasuk is { } pasuk)
         {
-            await PlayPasukRecitationAsync(pasuk);
+            await PlayPasukRecitationAsync(pasuk, downloadIfMissing: true);
         }
     }
 
@@ -444,16 +453,22 @@ public partial class PerekPage
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek)
         {
+            FocusedPasukOverlay.PlayButtonBusy = false;
             FocusedPasukOverlay.PlayButtonVisible = false;
             return;
         }
 
         FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
         FocusedPasukOverlay.PlayButtonEnabled = CanPlayWholePasuk(pasuk);
+        // A pack download for this perek swaps the button for a spinner so the
+        // tap visibly took effect — the overlay covers the bar's own spinner.
+        var downloading = _recitationDownload.PendingPerekId == perek.PerekId;
+        FocusedPasukOverlay.PlayButtonBusy = downloading;
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
-        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        var hint = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        FocusedPasukOverlay.HintText = downloading ? "מוריד את הקלטות הספר..." : hint;
         if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
@@ -534,7 +549,7 @@ public partial class PerekPage
         // word or pasuk resumes there instead of restarting the perek (#2157).
         if (_chapterRecitationSelection || _recitationCursor.PlayingKey != null || numbers.Length == 0)
         {
-            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+            await PlayRecitationAsync($"chapter:{perek.PerekId}", downloadIfMissing: true);
             return;
         }
         if (track?.AlignmentStatus != "ready")
@@ -548,11 +563,13 @@ public partial class PerekPage
             return;
         }
 
-        await PlayRecitationAsync($"verses:{perek.PerekId}:{string.Join(',', numbers)}", ranges: ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList());
+        await PlayRecitationAsync($"verses:{perek.PerekId}:{string.Join(',', numbers)}", ranges: ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList(),
+            downloadIfMissing: true);
     }
 
     private async Task PlayRecitationAsync(string key, double? start = null, double? end = null,
-        IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null)
+        IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null,
+        bool downloadIfMissing = false)
     {
         if (!RecitationAvailable || _viewModel.Perek is not { } perek)
         {
@@ -566,8 +583,6 @@ public partial class PerekPage
         {
             _recitationCursor.MarkResume(perek.PerekId, resume);
         }
-        var continuous = start == null && ranges == null;
-
         if (_recitationCursor.PlayingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused or MediaElementState.Buffering)
         {
             if (existing.CurrentState == MediaElementState.Playing)
@@ -581,6 +596,21 @@ public partial class PerekPage
 
             return;
         }
+        // A published-but-not-installed recording downloads its sefer pack in
+        // place, then replays this same request once the audio lands — but only
+        // a deliberate Play tap opts in (#3704): focus and word previews stay
+        // local so browsing a pasuk never starts a pack transfer unasked.
+        if (!RecitationService.Instance.HasAudio(perek.PerekId))
+        {
+            if (downloadIfMissing)
+            {
+                await DownloadRecitationThenPlayAsync(perek,
+                    () => PlayRecitationAsync(key, start, end, ranges, resumeFromMs,
+                        downloadIfMissing: true), key);
+            }
+            return;
+        }
+        var continuous = start == null && ranges == null;
         // Keep the claim across the deliberate gap — stopping the old clip,
         // decoding and opening the new one run through silent player states
         // on the way back to Playing (#2642).
@@ -642,8 +672,73 @@ public partial class PerekPage
         }
     }
 
-    private async void OnRecitationMediaOpened(object? sender, EventArgs e)
+    /// <summary>
+    /// #3704: a deliberate Play on a published-but-not-installed recording
+    /// starts (or joins) the sefer's pack download through the same
+    /// <c>RecitationService.DownloadAsync</c> route Preferences uses,
+    /// shows the button's busy state at once, and replays the stored request
+    /// exactly once when the audio lands. A perek change, Back navigation or
+    /// קריינות-off cancels the pending auto-play (see <see cref="StopRecitation"/>);
+    /// failure reports in place and the next tap retries.
+    /// </summary>
+    private async Task DownloadRecitationThenPlayAsync(Perek perek, Func<Task> play, string? owner = null)
     {
+        var perekId = perek.PerekId;
+        if (RecitationService.Instance.GetTrack(perekId) == null)
+        {
+            return;
+        }
+
+        // The request is pending once RunAsync's synchronous prefix ran — paint
+        // the spinner on the button immediately, before the download's first await.
+        var run = _recitationDownload.RunAsync(perekId,
+            cancellation => RecitationService.Instance.DownloadAsync([perekId], null, cancellation),
+            async () =>
+            {
+                // Auto-play only while the requesting perek is still displayed
+                // and recitation is still enabled — the cancel already ran for
+                // a swipe, Back or the קריינות toggle; this re-check guards the
+                // race where the download outlived a stale request.
+                if (_viewModel.Perek?.PerekId == perekId && RecitationAvailable)
+                {
+                    await play();
+                }
+            }, owner);
+        _viewModel.IsRecitationDownloading = _recitationDownload.IsPending;
+        UpdateSelectionBar();
+        RefreshFocusedRecitation();
+        try
+        {
+            await run;
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigation, Back or the קריינות toggle cancelled the request.
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: download failure shows a retriable alert in place
+        catch (Exception ex) //NOSONAR — download failure shows a retriable alert in place.
+        {
+            #pragma warning restore S2221
+            System.Diagnostics.Debug.WriteLine($"Recitation sefer download: {ex}");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הורדת הקראה",
+                "לא ניתן להוריד את ההקלטה. בדקו את החיבור ונסו שוב.", "אישור");
+        }
+        finally
+        {
+            // Mirror the live state: a tap that merely joined a pending request,
+            // or one a newer request superseded, must not clear its spinner.
+            _viewModel.IsRecitationDownloading = _recitationDownload.IsPending;
+            UpdateSelectionBar();
+            RefreshFocusedRecitation();
+        }
+    }
+
+    // Windows raises MediaElement events on a media thread, while the seek,
+    // Play and selection paint below touch marshalled UI objects — hop to the
+    // dispatcher like the service-event handlers above (0x8001010E without it).
+    private async void OnRecitationMediaOpened(object? sender, EventArgs e) =>
+        await Dispatcher.DispatchAsync(async () =>
+        {
         if (!_playWhenOpened || !RecitationAvailable || sender is not MediaElement player)
         {
             return;
@@ -660,8 +755,10 @@ public partial class PerekPage
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await player.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
             }
+            #pragma warning disable S2221 // Deliberate failure boundary: a platform that cannot seek here still plays from the start
             catch (Exception ex) //NOSONAR — a platform that cannot seek here still plays from the start.
             {
+                #pragma warning restore S2221
                 System.Diagnostics.Debug.WriteLine($"Recitation resume: {ex.Message}");
             }
         }
@@ -671,8 +768,8 @@ public partial class PerekPage
             return;
         }
         ResumeRecitationPlayback(player);
-    }
-    private void OnRecitationMediaEnded(object? sender, EventArgs e)
+        });
+    private void OnRecitationMediaEnded(object? sender, EventArgs e) => Dispatcher.Dispatch(() =>
     {
         // iOS can keep CurrentState at Playing once an item finishes, so the
         // end event releases the audio claim itself (#2642).
@@ -681,8 +778,8 @@ public partial class PerekPage
         _recitationCursor.End();
         ClearRecitationHighlight();
         UpdateSelectionBar();
-    }
-    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
+    });
+    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e) => Dispatcher.Dispatch(() =>
     {
         // The lease follows audible states only — buffering/opening keep the
         // claim so intentional gaps don't churn the session (#2642).
@@ -712,9 +809,10 @@ public partial class PerekPage
             SetRecitingWord(null);
         }
         UpdateSelectionBar();
-    }
-    private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e)
-    {
+    });
+    private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e) =>
+        await Dispatcher.DispatchAsync(async () =>
+        {
         if (_recitationCursor.PlayingKey == null)
         {
             return;
@@ -725,7 +823,7 @@ public partial class PerekPage
         System.Diagnostics.Debug.WriteLine($"Recitation media failed: {e.ErrorMessage}");
         StopRecitation(); UpdateSelectionBar();
         await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
-    }
+        });
 
     protected override bool OnBackButtonPressed()
     {

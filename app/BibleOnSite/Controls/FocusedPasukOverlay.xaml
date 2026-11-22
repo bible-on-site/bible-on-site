@@ -33,6 +33,13 @@
                             ToolTipProperties.Text="השמעת הפסוק"
                             IsVisible="False"
                             Clicked="OnPlayClicked"/>
+                    <!-- #3704: a focused-tap pack download swaps the button for
+                         this spinner so the tap visibly took effect. -->
+                    <ActivityIndicator Grid.Column="1" x:Name="PlaySpinner"
+                                       AutomationId="FocusedPlaySpinner"
+                                       IsRunning="True" WidthRequest="20" HeightRequest="20"
+                                       Color="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                       IsVisible="False"/>
                 </Grid>
                 <!-- PasukTextLabel carries the shared scripture face (Al Heperek,
                      #3685) and the reader's justification + size re-render.

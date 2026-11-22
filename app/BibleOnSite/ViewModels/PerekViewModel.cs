@@ -28,8 +28,9 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     /// stale perek's lines — the latest perek always wins (#2731).</summary>
     private int _dedicationVersion;
 
-    /// <summary>Reports whether a perek has downloaded recitation audio (production: RecitationService).</summary>
-    private readonly Func<int, bool>? _hasPerekAudio;
+    /// <summary>Reports whether a perek has a published recitation — catalogued track,
+    /// downloaded or not (production: RecitationService).</summary>
+    private readonly Func<int, bool>? _hasPerekRecitation;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -162,12 +163,14 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             // notifications; raise them here too for the unsaved toggle path.
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowHeaderPlayButton));
+            OnPropertyChanged(nameof(HeaderPlayVisible));
         }
     }
 
-    /// <summary>Whether a recitation is downloaded for the currently displayed perek.</summary>
+    /// <summary>Whether a recitation is published for the currently displayed perek.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
+    [NotifyPropertyChangedFor(nameof(HeaderPlayVisible))]
     private bool _hasCurrentPerekRecitation;
 
     /// <summary>
@@ -178,8 +181,20 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     [ObservableProperty]
     private double _readingProgress;
 
-    /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
+    /// <summary>
+    /// True while a Play tap's sefer pack is still downloading (#3704) — the
+    /// header button yields its slot to a spinner for the wait.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeaderPlayVisible))]
+    private bool _isRecitationDownloading;
+
+    /// <summary>The header play button shows while קריינות is checked and a
+    /// recitation is published for this perek — installed or not (#3704).</summary>
     public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentPerekRecitation;
+
+    /// <summary>The headphones glyph itself hides while its sefer downloads.</summary>
+    public bool HeaderPlayVisible => ShowHeaderPlayButton && !IsRecitationDownloading;
 #pragma warning restore MVVMTK0045
 
     partial void OnIsTikkunKorimEnabledChanged(bool value)
@@ -313,7 +328,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     }
 
     /// <summary>
-    /// Re-evaluates whether the currently displayed perek has a downloaded
+    /// Re-evaluates whether the currently displayed perek has a published
     /// recitation — controls the קריינות menu item and header play button.
     /// Called when the perek changes and after the recitation package updates.
     /// </summary>
@@ -321,12 +336,12 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 
     private void RefreshRecitationAvailability(Perek? perek)
     {
-        HasCurrentPerekRecitation = _hasPerekAudio != null && perek is { } current &&
-            _hasPerekAudio(current.PerekId);
+        HasCurrentPerekRecitation = _hasPerekRecitation != null && perek is { } current &&
+            _hasPerekRecitation(current.PerekId);
     }
 
     public PerekViewModel() : this(PreferencesService.Instance, null,
-        hasPerekAudio: perekId => RecitationService.Instance.HasAudio(perekId))
+        hasPerekRecitation: perekId => RecitationService.Instance.GetTrack(perekId) != null)
     {
     }
 
@@ -336,8 +351,8 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     }
 
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
-        Func<int, bool>? hasPerekAudio)
-        : this(preferencesService, perekLoader, null, null, null, null, null, null, hasPerekAudio)
+        Func<int, bool>? hasPerekRecitation)
+        : this(preferencesService, perekLoader, null, null, null, null, null, null, hasPerekRecitation)
     {
     }
 
@@ -353,16 +368,16 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
-        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio)
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekRecitation)
         : this(preferencesService, perekLoader, perekDataService, catalogService, notesService,
-            navigator, fileSystem, share, hasPerekAudio, null)
+            navigator, fileSystem, share, hasPerekRecitation, null)
     {
     }
 
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
-        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio,
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekRecitation,
         IDedicationService? dedicationService)
     {
         _preferencesService = preferencesService;
@@ -373,7 +388,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
-        _hasPerekAudio = hasPerekAudio;
+        _hasPerekRecitation = hasPerekRecitation;
         _dedicationService = dedicationService ?? DedicationService.Instance;
         _perushChapter = null;
 
@@ -1535,6 +1550,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         OnPropertyChanged(nameof(IsQriynotEnabled));
         OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        OnPropertyChanged(nameof(HeaderPlayVisible));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
         OnPropertyChanged(nameof(PerushimSelectionStatus));
