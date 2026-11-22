@@ -584,6 +584,20 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("a native-only corpus rename runs the bulletin parity check without releasing it (#3709)", () => {
+		for (const sqlite of [
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			// The stem floats with the dump — detection must not pin it.
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5785-tishrei-1.tanah_view.sqlite",
+		]) {
+			assert.deepEqual(
+				changed([sqlite], "bulletin"),
+				[{ module_changed: false, ci_changed: true }],
+				sqlite,
+			);
+		}
+	});
+
 	for (const path of [
 		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
 		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",

@@ -2855,6 +2855,17 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26.13.1"
+
+      # The generated bulletin text contract lives here, not in
+      # recitation_ci: bulletin-only extractor edits and native SQLite
+      # corpus renames must run it too (#3709).
+      - name: Verify corpus text extraction contract
+        run: node --test scripts/extract-tanach-text.test.mjs
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -2961,7 +2972,7 @@ jobs:
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/app-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
-        run: bun test devops/daily-bulletin-infra.test.mjs web/bulletin/scripts/extract-tanach-text.test.mjs
+        run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: |

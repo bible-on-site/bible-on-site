@@ -229,6 +229,12 @@ export const MODULES = {
 		// stem so a corpus bump cannot silently stop selecting the bulletin.
 		extraModulePattern:
 			/^web\/bible-on-site\/src\/data\/db\/sefaria-dump-.+\.tanah_view\.json$/,
+		// The bundled native SQLite must stay stem-locked with the corpus
+		// (#3709): a native-only rename changes no bulletin artifact, but the
+		// parity contract test must still run — and fail — until both sides
+		// are bumped together.
+		extraCiPattern:
+			/^app\/BibleOnSite\/Resources\/Raw\/sefaria-dump-.+\.tanah_view\.sqlite$/,
 		// The release image also compiles the API's shared entities crate.
 		ciPaths: [
 			"devops/github/release/recovery-request.mjs",
