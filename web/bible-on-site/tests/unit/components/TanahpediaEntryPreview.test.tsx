@@ -4,6 +4,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { TanahpediaEntryPreview } from "../../../src/app/components/TanahpediaEntryPreview";
 import {
+	anchorFullyClipped,
 	computePreviewPosition,
 	entityPreviewLink,
 	entityPreviewPointerEnabled,
@@ -177,7 +178,43 @@ describe("previewSnippetChildren", () => {
 			<div>{previewSnippetChildren(snippet)}</div>,
 		);
 
-		expect(container.innerHTML).toBe(`<div>${snippet}</div>`);
+		expect(container.firstElementChild?.innerHTML).toBe(snippet);
+	});
+});
+
+describe("anchorFullyClipped", () => {
+	function stubRect(element: Element, rect: Partial<DOMRect>) {
+		return jest
+			.spyOn(element, "getBoundingClientRect")
+			.mockReturnValue(rect as DOMRect);
+	}
+
+	it("reports an anchor scrolled out of its clipping container", () => {
+		const clipper = document.createElement("div");
+		clipper.style.overflowY = "auto";
+		const anchor = document.createElement("a");
+		clipper.appendChild(anchor);
+		document.body.appendChild(clipper);
+		stubRect(clipper, { top: 0, bottom: 100, left: 0, right: 100 });
+		stubRect(anchor, { top: -50, bottom: -10, left: 0, right: 10 });
+
+		expect(anchorFullyClipped(anchor)).toBe(true);
+		clipper.remove();
+	});
+
+	it("keeps visible anchors and non-clipping ancestors unclipped", () => {
+		const outer = document.createElement("div");
+		const clipper = document.createElement("div");
+		clipper.style.overflow = "auto";
+		const anchor = document.createElement("a");
+		clipper.appendChild(anchor);
+		outer.appendChild(clipper);
+		document.body.appendChild(outer);
+		stubRect(clipper, { top: 0, bottom: 100, left: 0, right: 100 });
+		stubRect(anchor, { top: 10, bottom: 20, left: 0, right: 10 });
+
+		expect(anchorFullyClipped(anchor)).toBe(false);
+		outer.remove();
 	});
 });
 
@@ -470,9 +507,90 @@ describe("TanahpediaEntryPreview", () => {
 		);
 		expect(await screen.findByRole("tooltip")).toBeInTheDocument();
 
-		// A later manual scroll re-anchors the still-focused preview.
+		// A later manual scroll re-anchors the still-focused preview: the
+		// popover follows the link's new rect rather than keeping stale
+		// coordinates.
+		const rect = jest
+			.spyOn(link, "getBoundingClientRect")
+			.mockReturnValue({ top: 200, bottom: 210, left: 50, width: 20 } as DOMRect);
 		fireEvent.scroll(document);
-		expect(screen.getByRole("tooltip")).toBeInTheDocument();
+		const tip = screen.getByRole("tooltip");
+		expect(tip).toHaveStyle({ top: "220px" });
+		rect.mockReturnValue({
+			top: 300,
+			bottom: 310,
+			left: 50,
+			width: 20,
+		} as DOMRect);
+		fireEvent.scroll(document);
+		expect(tip).toHaveStyle({ top: "320px" });
+	});
+
+	it("hides a focused preview while its link is clipped out, then re-shows it", async () => {
+		mockFetchJson({ title: "Clip", snippet: "s" });
+		render(
+			<>
+				<TanahpediaEntryPreview />
+				<div id="clip" style={{ overflowY: "auto" }}>
+					{entityAnchor("clipped-entry", "Clipped")}
+				</div>
+			</>,
+		);
+		const link = screen.getByRole("link", { name: "Clipped" });
+		const clipBox = document.getElementById("clip");
+		if (!clipBox) throw new Error("clip container missing");
+		jest.spyOn(clipBox, "getBoundingClientRect").mockReturnValue({
+			top: 0,
+			bottom: 200,
+			left: 0,
+			right: 500,
+		} as DOMRect);
+		const rect = jest
+			.spyOn(link, "getBoundingClientRect")
+			.mockReturnValue({
+				top: 60,
+				bottom: 70,
+				left: 50,
+				right: 70,
+				width: 20,
+			} as DOMRect);
+
+		await focus(link);
+		expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+		// Scrolling the container carries the focused link out of its box:
+		// the popover stays mounted and described but is no longer visible.
+		rect.mockReturnValue({
+			top: -60,
+			bottom: -10,
+			left: 50,
+			right: 70,
+			width: 20,
+		} as DOMRect);
+		await act(async () => {
+			fireEvent.scroll(clipBox);
+		});
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		expect(
+			document.getElementById("tanahpedia-entry-preview"),
+		).not.toBeVisible();
+		expect(link).toHaveAttribute(
+			"aria-describedby",
+			"tanahpedia-entry-preview",
+		);
+
+		// Scrolling it back into view re-anchors the same preview.
+		rect.mockReturnValue({
+			top: 80,
+			bottom: 90,
+			left: 50,
+			right: 70,
+			width: 20,
+		} as DOMRect);
+		await act(async () => {
+			fireEvent.scroll(clipBox);
+		});
+		expect(await screen.findByRole("tooltip")).toBeInTheDocument();
 	});
 
 	it("does not leak hover state when focus moves the preview to another link", async () => {

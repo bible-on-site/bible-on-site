@@ -85,6 +85,42 @@ function snippetNodeToElement(node: ChildNode, index: number): ReactNode {
 	return createElement(tag, { key: index }, ...children);
 }
 
+/**
+ * Overflow values whose box clips descendants. A focused anchor scrolled
+ * out of such a container keeps keyboard focus while the link itself is
+ * invisible - its preview must hide rather than float over header controls.
+ */
+const CLIPPING_OVERFLOW = /auto|scroll|hidden|clip/;
+
+/**
+ * True while the anchor is fully clipped away by a scrolling ancestor: its
+ * rect intersected with every clipping ancestor's box leaves no visible
+ * area. A viewport-clip alone is not checked - an off-viewport anchor also
+ * positions its popover off-viewport, which is already invisible.
+ */
+export function anchorFullyClipped(anchor: Element): boolean {
+	const { top, bottom, left, right } = anchor.getBoundingClientRect();
+	const visible = { top, bottom, left, right };
+	for (
+		let clipper = anchor.parentElement;
+		clipper;
+		clipper = clipper.parentElement
+	) {
+		const style = getComputedStyle(clipper);
+		const overflow = `${style.overflow} ${style.overflowX} ${style.overflowY}`;
+		if (!CLIPPING_OVERFLOW.test(overflow)) continue;
+		const clip = clipper.getBoundingClientRect();
+		visible.top = Math.max(visible.top, clip.top);
+		visible.bottom = Math.min(visible.bottom, clip.bottom);
+		visible.left = Math.max(visible.left, clip.left);
+		visible.right = Math.min(visible.right, clip.right);
+		if (visible.bottom <= visible.top || visible.right <= visible.left) {
+			return true;
+		}
+	}
+	return false;
+}
+
 export interface PreviewPosition {
 	x: number;
 	y: number;

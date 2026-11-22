@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+	anchorFullyClipped,
 	computePreviewPosition,
 	entityPreviewLink,
 	entityPreviewPointerEnabled,
@@ -98,6 +99,12 @@ export function TanahpediaEntryPreview() {
 	const place = useCallback((anchor: HTMLAnchorElement) => {
 		const popover = popoverRef.current;
 		if (!popover) return;
+		if (anchorFullyClipped(anchor)) {
+			// Scrolled behind a clipping container: hide without losing the
+			// anchor so scrolling back re-anchors the same preview.
+			setPosition(null);
+			return;
+		}
 		const rect = anchor.getBoundingClientRect();
 		setPosition(
 			computePreviewPosition(
