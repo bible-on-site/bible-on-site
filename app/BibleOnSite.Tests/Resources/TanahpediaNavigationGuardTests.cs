@@ -36,6 +36,20 @@ public class TanahpediaNavigationGuardTests
         Assert.Contains("Tanahpedia back navigation failed", handler);
     }
 
+    [Theory]
+    [InlineData("OnBackToPediaClicked", "Tanahpedia back navigation alert failed")]
+    [InlineData("OnOccurrenceTapped", "Tanahpedia occurrence navigation alert failed")]
+    public void EntryPage_NavigationAlerts_StayInsideTheFailureBoundary(string marker, string alertGuardLog)
+    {
+        // An async-void handler's catch block is itself a failure path: the
+        // DisplayAlertAsync inside it can throw while the transition is dying,
+        // and a rethrow into the handler is an unobserved main-thread crash
+        // (#2640). The alert call must carry its own nested failure boundary.
+        var source = File.ReadAllText(Path.Join(PagesRoot, "TanahpediaEntryPage.xaml.cs"));
+        var handler = SliceFrom(source, marker);
+        Assert.Contains(alertGuardLog, handler);
+    }
+
     [Fact]
     public void SearchPanelEntrySelection_IsNotARawAsyncLambda()
     {
