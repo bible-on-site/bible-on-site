@@ -5,8 +5,10 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 
 const mocks = vi.hoisted(() => ({
 	getEntryAliases: vi.fn(),
@@ -44,12 +46,14 @@ function renderPanel() {
 	});
 	render(
 		<QueryClientProvider client={client}>
-			<EntryAliasesPanel
-				entryId={SELF.entryId}
-				entryUniqueName={SELF.uniqueName}
-				entryTitle={SELF.title}
-				websiteBase={BASE}
-			/>
+			<UndoToastProvider durationMs={30}>
+				<EntryAliasesPanel
+					entryId={SELF.entryId}
+					entryUniqueName={SELF.uniqueName}
+					entryTitle={SELF.title}
+					websiteBase={BASE}
+				/>
+			</UndoToastProvider>
 		</QueryClientProvider>,
 	);
 	return client;
@@ -91,7 +95,6 @@ describe("EntryAliasesPanel", () => {
 				name: data.name,
 			}),
 		);
-		vi.spyOn(window, "confirm").mockReturnValue(true);
 	});
 
 	it("shows an empty state until names exist", async () => {
@@ -355,7 +358,7 @@ describe("EntryAliasesPanel", () => {
 		).toBeInTheDocument();
 	});
 
-	it("confirms and removes this entry's association without touching others", async () => {
+	it("removes this entry's association once the undo toast expires", async () => {
 		mocks.getEntryAliases.mockResolvedValue([sharedAlias]);
 		mocks.removeEntryFromAlias.mockResolvedValue({
 			name: "משה",
@@ -364,8 +367,11 @@ describe("EntryAliasesPanel", () => {
 		renderPanel();
 
 		fireEvent.click(await screen.findByRole("button", { name: "הסר מהערך" }));
+		// The click schedules — it must not delete synchronously.
+		expect(mocks.removeEntryFromAlias).not.toHaveBeenCalled();
 
-		expect(window.confirm).toHaveBeenCalled();
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('הערך יוסר מהשם המשותף "משה"');
 		await waitFor(() =>
 			expect(mocks.removeEntryFromAlias).toHaveBeenCalledWith({
 				data: { name: "משה", entryId: "e-a" },
@@ -373,19 +379,20 @@ describe("EntryAliasesPanel", () => {
 		);
 	});
 
-	it("does not remove when the confirmation is declined", async () => {
+	it("does not remove when the pending action is undone", async () => {
 		mocks.getEntryAliases.mockResolvedValue([sharedAlias]);
-		vi.spyOn(window, "confirm").mockReturnValue(false);
 		renderPanel();
 
 		fireEvent.click(await screen.findByRole("button", { name: "הסר מהערך" }));
 
+		const toast = await screen.findByRole("status");
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
 		expect(mocks.removeEntryFromAlias).not.toHaveBeenCalled();
 	});
 
 	it("warns that removing the only target deletes the name entirely", async () => {
 		mocks.getEntryAliases.mockResolvedValue([singleAlias]);
-		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 		mocks.removeEntryFromAlias.mockResolvedValue({
 			name: "משה",
 			remainingTargets: 0,
@@ -394,9 +401,8 @@ describe("EntryAliasesPanel", () => {
 
 		fireEvent.click(await screen.findByRole("button", { name: "הסר מהערך" }));
 
-		expect(confirmSpy).toHaveBeenCalledWith(
-			expect.stringContaining("תמחק את השם לגמרי"),
-		);
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('השם "משה" יימחק לגמרי');
 		expect(await screen.findByText(/«משה» נמחק לגמרי/)).toBeInTheDocument();
 	});
 
@@ -516,7 +522,7 @@ describe("EntryAliasesPanel", () => {
 		expect(screen.getByText(/יעד יחיד/)).toBeInTheDocument();
 	});
 
-	it("deletes the whole name after confirmation in edit mode", async () => {
+	it("deletes the whole name once the undo toast expires in edit mode", async () => {
 		mocks.getEntryAliases.mockResolvedValue([sharedAlias]);
 		mocks.deleteAliasName.mockResolvedValue({
 			name: "משה",
@@ -527,9 +533,8 @@ describe("EntryAliasesPanel", () => {
 		fireEvent.click(await screen.findByRole("button", { name: "ערוך יעדים" }));
 		fireEvent.click(screen.getByRole("button", { name: "מחק את השם לחלוטין" }));
 
-		expect(window.confirm).toHaveBeenCalledWith(
-			expect.stringContaining("למחוק את השם «משה» לגמרי"),
-		);
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('השם "משה" יימחק מ-2 ערכים');
 		await waitFor(() =>
 			expect(mocks.deleteAliasName).toHaveBeenCalledWith({
 				data: { name: "משה" },
@@ -540,14 +545,54 @@ describe("EntryAliasesPanel", () => {
 		).toBeInTheDocument();
 	});
 
-	it("keeps the name when the full deletion is declined", async () => {
-		vi.spyOn(window, "confirm").mockReturnValue(false);
+	it("keeps a different open editor when a queued name delete resolves", async () => {
+		mocks.getEntryAliases.mockResolvedValue([
+			sharedAlias,
+			{ ...singleAlias, name: "אהרן" },
+		]);
+		let releaseDelete!: (result: {
+			name: string;
+			removedTargets: number;
+		}) => void;
+		mocks.deleteAliasName.mockReturnValue(
+			new Promise((resolve) => {
+				releaseDelete = resolve;
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(
+			(await screen.findAllByRole("button", { name: "ערוך יעדים" }))[0],
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחק את השם לחלוטין" }));
+		await waitFor(() => expect(mocks.deleteAliasName).toHaveBeenCalled());
+
+		// While the delete mutation is in flight, the admin opens אהרן's editor.
+		fireEvent.click(
+			(await screen.findAllByRole("button", { name: "ערוך יעדים" }))[1],
+		);
+		expect(screen.getByText(/עריכת השם «אהרן»/)).toBeInTheDocument();
+
+		// Its resolution must not discard that unrelated draft.
+		await act(async () => {
+			releaseDelete({ name: "משה", removedTargets: 2 });
+		});
+		expect(
+			await screen.findByText(/«משה» נמחק לגמרי \(2 יעדים\)/),
+		).toBeInTheDocument();
+		expect(screen.getByText(/עריכת השם «אהרן»/)).toBeInTheDocument();
+	});
+
+	it("keeps the name when the full deletion is undone", async () => {
 		mocks.getEntryAliases.mockResolvedValue([sharedAlias]);
 		renderPanel();
 
 		fireEvent.click(await screen.findByRole("button", { name: "ערוך יעדים" }));
 		fireEvent.click(screen.getByRole("button", { name: "מחק את השם לחלוטין" }));
 
+		const toast = await screen.findByRole("status");
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
 		expect(mocks.deleteAliasName).not.toHaveBeenCalled();
 	});
 

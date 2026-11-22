@@ -11,6 +11,7 @@ import {
 	Trash2,
 	UserRound,
 } from "lucide-react";
+import { useUndoAction } from "~/components/UndoToast";
 import {
 	type Article,
 	deleteArticle,
@@ -48,10 +49,14 @@ function PerekArticles() {
 		},
 	});
 
+	const scheduleUndo = useUndoAction();
+
 	const handleDelete = (article: Article) => {
-		if (confirm(`האם למחוק את המאמר "${article.name}"?`)) {
-			deleteMutation.mutate(article.id);
-		}
+		scheduleUndo({
+			key: `article-${article.id}`,
+			message: `המאמר "${article.name}" יימחק`,
+			commit: () => deleteMutation.mutate(article.id),
+		});
 	};
 
 	if (isLoading) {

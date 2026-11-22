@@ -12,6 +12,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { ImageUpload } from "~/components/ImageUpload";
 import {
 	type Author,
@@ -46,6 +47,7 @@ function RabbiEditPage() {
 
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
 
 	const { data: author, isLoading: authorLoading } = useQuery({
 		queryKey: ["author", authorId],
@@ -146,11 +148,7 @@ function RabbiEditPage() {
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => {
-		if (window.confirm("האם אתה בטוח שברצונך למחוק את הרב?")) {
-			deleteMutation.mutate();
-		}
-	};
+	const handleDelete = () => setConfirmDelete(true);
 
 	if (authorLoading) {
 		return (
@@ -303,6 +301,18 @@ function RabbiEditPage() {
 					</button>
 				</div>
 			</form>
+
+			<ConfirmDialog
+				open={confirmDelete}
+				title="מחיקת רב"
+				message="האם אתה בטוח שברצונך למחוק את הרב?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setConfirmDelete(false);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setConfirmDelete(false)}
+			/>
 		</div>
 	);
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import {
 	type MoedSectionInput,
 	type MoedUpsert,
@@ -83,6 +84,7 @@ function MoadimPage() {
 		mutationFn: (id: number) => deleteMoed({ data: id }),
 		onSuccess: invalidate,
 	});
+	const scheduleUndo = useUndoAction();
 	const error = upsertMutation.error ?? deleteMutation.error;
 
 	const openEdit = async (moedId: number) => {
@@ -207,12 +209,13 @@ function MoadimPage() {
 										</button>
 										<button
 											type="button"
-											onClick={() => {
-												if (
-													window.confirm(`למחוק את המועד "${moed.name}"?`)
-												)
-													deleteMutation.mutate(moed.id);
-											}}
+											onClick={() =>
+												scheduleUndo({
+													key: `moed-${moed.id}`,
+													message: `המועד "${moed.name}" יימחק`,
+													commit: () => deleteMutation.mutate(moed.id),
+												})
+											}
 											className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md transition-colors"
 										>
 											מחק

@@ -43,6 +43,32 @@ public class FocusedPasukOverlayLayoutTests
             "the pasuk/commentary text keeps its readable inset");
     }
 
+    [Fact]
+    public void FocusedPlay_keeps_a_spinner_cell_for_download_feedback()
+    {
+        // #3704: a focused-tap pack download swaps the headphones for this
+        // indicator so the tap visibly takes effect inside the overlay.
+        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
+        var doc = XDocument.Load(Path.Join(AppRoot, "Controls", "FocusedPasukOverlay.xaml"));
+
+        var button = doc.Descendants(p + "Button")
+            .First(e => (string?)e.Attribute("AutomationId") == "FocusedPlayButton");
+        var spinner = doc.Descendants(p + "ActivityIndicator")
+            .FirstOrDefault(e => (string?)e.Attribute("AutomationId") == "FocusedPlaySpinner");
+
+        spinner.Should().NotBeNull("the focused download needs its own busy indicator");
+        ((string?)spinner!.Attribute("IsVisible")).Should().Be("False",
+            "the spinner only shows while a request is pending");
+        // The swap lands in the button's own grid cell — anywhere else the
+        // spinner would float over the text instead of replacing the control.
+        // Grid.Column is an attached property: in XDocument it is an
+        // unqualified attribute name, no namespace prefix.
+        spinner.Parent.Should().Be(button.Parent);
+        var spinnerColumn = (string?)spinner.Attribute("Grid.Column");
+        spinnerColumn.Should().NotBeNull("the spinner must share the button's grid column");
+        spinnerColumn.Should().Be((string?)button.Attribute("Grid.Column"));
+    }
+
     private static (double Left, double Top, double Right, double Bottom) ParseThickness(string? value)
     {
         value.Should().NotBeNullOrWhiteSpace();
