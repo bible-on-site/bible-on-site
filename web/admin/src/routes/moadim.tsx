@@ -192,16 +192,16 @@ function MoadimPage() {
 									<td className="px-4 py-2">{moed.articleCount}</td>
 									<td className="px-4 py-2">
 										{moed.published ? (
-											<span className="text-green-700">מפורסם</span>
+											<span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-800 text-xs font-medium">מפורסם</span>
 										) : (
-											<span className="text-gray-500">טיוטה</span>
+											<span className="px-2 py-0.5 rounded-full border border-gray-200 bg-gray-100 text-gray-600 text-xs font-medium">טיוטה</span>
 										)}
 									</td>
 									<td className="px-4 py-2 whitespace-nowrap">
 										<button
 											type="button"
 											onClick={() => void openEdit(moed.id)}
-											className="text-blue-600 hover:underline ml-3"
+											className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md ml-2 transition-colors"
 										>
 											ערוך
 										</button>
@@ -213,7 +213,7 @@ function MoadimPage() {
 												)
 													deleteMutation.mutate(moed.id);
 											}}
-											className="text-red-600 hover:underline"
+											className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md transition-colors"
 										>
 											מחק
 										</button>
@@ -393,7 +393,7 @@ function MoedForm({
 								],
 							})
 						}
-						className="text-blue-600 hover:underline text-sm"
+						className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-1 px-2 py-1 rounded-md text-sm transition-colors"
 					>
 						+ הוסף סעיף
 					</button>
@@ -414,7 +414,7 @@ function MoedForm({
 										ranges: [...section.ranges, emptyRange(nextRowKey)],
 									})
 								}
-								className="text-blue-600 hover:underline text-xs"
+								className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-1 px-2 py-1 rounded-md text-xs transition-colors"
 							>
 								+ טווח
 							</button>
@@ -425,7 +425,7 @@ function MoedForm({
 										sections: form.sections.filter((_, i) => i !== si),
 									})
 								}
-								className="text-red-600 hover:underline text-xs"
+								className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 rounded-md text-xs transition-colors"
 							>
 								הסר סעיף
 							</button>
@@ -488,7 +488,7 @@ function MoedForm({
 											ranges: section.ranges.filter((_, i) => i !== ri),
 										})
 									}
-									className="text-red-600 hover:underline"
+									className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md transition-colors"
 								>
 									הסר
 								</button>

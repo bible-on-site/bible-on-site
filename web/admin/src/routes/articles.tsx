@@ -5,11 +5,10 @@ import {
 	Outlet,
 	useMatch,
 } from "@tanstack/react-router";
-import { ArrowLeft, ChevronDown, Library, Plus, Rocket } from "lucide-react";
-import { useEffect, useState } from "react";
-import { getPerakim, type Perek } from "~/server/perakim";
-import { getSefarim, type Sefer } from "~/server/sefarim";
-import { formatPerekLabel } from "~/utils/hebrew";
+import { Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { buildPerekOptions, filterPerekOptions } from "~/lib/perek-options";
+import { getPerakim } from "~/server/perakim";
 
 export const Route = createFileRoute("/articles")({
 	component: ArticlesLayout,
@@ -38,46 +37,15 @@ function ArticlesLayout() {
 function ArticlesNavPage() {
 	const [interactive, setInteractive] = useState(false);
 	useEffect(() => setInteractive(true), []);
-	const [perekInput, setPerekInput] = useState("");
-	const [expandedSefarim, setExpandedSefarim] = useState<number[]>([]);
-
-	const { data: sefarim } = useQuery({
-		queryKey: ["sefarim"],
-		queryFn: () => getSefarim(),
-	});
+	const [navQuery, setNavQuery] = useState("");
 
 	const { data: perakim } = useQuery({
 		queryKey: ["perakim"],
 		queryFn: () => getPerakim(),
 	});
 
-	const handleNavigateToPerek = () => {
-		const perekNum = Number.parseInt(perekInput, 10);
-		if (perekNum >= 1 && perekNum <= 929) {
-			window.location.href = `/articles/perek/${perekNum}`;
-		}
-	};
-
-	const toggleSefer = (seferId: number) => {
-		setExpandedSefarim((prev) =>
-			prev.includes(seferId)
-				? prev.filter((id) => id !== seferId)
-				: [...prev, seferId],
-		);
-	};
-
-	// Group perakim by sefer
-	const perakimBySefer = perakim?.reduce<Record<number, Perek[]>>(
-		(acc: Record<number, Perek[]>, perek: Perek) => {
-			const seferId = perek.sefer_id ?? 0;
-			if (!acc[seferId]) {
-				acc[seferId] = [];
-			}
-			acc[seferId].push(perek);
-			return acc;
-		},
-		{},
-	);
+	const options = useMemo(() => buildPerekOptions(perakim ?? []), [perakim]);
+	const matches = filterPerekOptions(options, navQuery);
 
 	return (
 		<div className="space-y-8">
@@ -100,95 +68,66 @@ function ArticlesNavPage() {
 				</Link>
 			</div>
 
-			{/* Quick navigation */}
+			{/* Perek navigation */}
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+				<div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<Rocket size={18} aria-hidden="true" />
-						<span>ניווט מהיר לפי פרק</span>
+						<Search size={18} aria-hidden="true" />
+						<span>ניווט לפרק</span>
 					</h2>
 				</div>
 				<div className="p-6">
-					<div className="flex gap-3">
-						<input
-							type="number"
-							min="1"
-							max="929"
-							disabled={!interactive}
-							value={perekInput}
-							onChange={(e) => setPerekInput(e.target.value)}
-							placeholder="מספר פרק (1-929)"
-							className="border border-gray-300 rounded-lg px-4 py-3 w-56 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-							onKeyDown={(e) => e.key === "Enter" && handleNavigateToPerek()}
-						/>
-						<button
-							type="button"
-							disabled={!interactive}
-							onClick={handleNavigateToPerek}
-							className="bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-all font-medium shadow-sm hover:shadow-md"
-						>
-							<span className="inline-flex items-center gap-1.5">
-								עבור לפרק
-								<ArrowLeft size={16} aria-hidden="true" />
-							</span>
-						</button>
-					</div>
-					<p className="text-gray-500 text-sm mt-3">
-						הזן מספר פרק בין 1 ל-929 ולחץ Enter או לחץ על הכפתור
-					</p>
-				</div>
-			</div>
-
-			{/* Sefarim accordion */}
-			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-				<div className="bg-linear-to-r from-amber-50 to-orange-50 px-6 py-4 border-b border-gray-200">
-					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<Library size={18} aria-hidden="true" />
-						<span>ספרים ופרקים</span>
-					</h2>
-				</div>
-				<div className="divide-y divide-gray-100">
-					{sefarim?.map((sefer: Sefer) => (
-						<div key={sefer.id}>
-							<button
-								type="button"
-								onClick={() => toggleSefer(sefer.id)}
-								className="w-full flex justify-between items-center px-6 py-4 hover:bg-gray-50 transition-colors text-right group"
+					<input
+						role="combobox"
+						aria-expanded="true"
+						aria-controls="perek-nav-options"
+						aria-label="חיפוש ספר ופרק"
+						type="search"
+						disabled={!interactive}
+						value={navQuery}
+						onChange={(e) => setNavQuery(e.target.value)}
+						placeholder="חיפוש ספר או פרק..."
+						className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && matches[0]) {
+								window.location.href = `/articles/perek/${matches[0].perekId}`;
+							} else if (e.key === "Escape") {
+								setNavQuery("");
+							}
+						}}
+					/>
+					<div
+						id="perek-nav-options"
+						role="listbox"
+						aria-label="פרקים"
+						className="mt-3 max-h-96 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg"
+					>
+						{matches.map((option) => (
+							<Link
+								key={option.perekId}
+								role="option"
+								aria-selected={false}
+								to="/articles/perek/$perekId"
+								params={{ perekId: String(option.perekId) }}
+								className="flex justify-between items-center gap-4 px-4 py-2.5 hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none transition-colors"
 							>
-								<span className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-									{sefer.name}
+								<span className="font-medium text-gray-900">
+									{option.seferName}
 								</span>
-								<span
-									className={`text-gray-400 transition-transform duration-200 ${
-										expandedSefarim.includes(sefer.id)
-											? "rotate-180"
-											: "rotate-0"
-									}`}
-								>
-									<ChevronDown size={16} aria-hidden="true" />
-								</span>
-							</button>
-							{expandedSefarim.includes(sefer.id) && (
-								<div className="px-6 pb-5 pt-2 bg-gray-50/50">
-									<div className="flex flex-wrap gap-2">
-										{perakimBySefer?.[sefer.id]?.map((perek: Perek) => (
-											<Link
-												key={perek.id}
-												to="/articles/perek/$perekId"
-												params={{ perekId: String(perek.perek_id) }}
-												className="px-4 py-2 bg-white hover:bg-blue-100 hover:text-blue-700 border border-gray-200 hover:border-blue-300 rounded-lg text-sm transition-all font-medium shadow-sm"
-											>
-												{formatPerekLabel(
-													perek.perek_in_context ?? perek.perek ?? 0,
-													perek.additional_letter,
-												)}
-											</Link>
-										))}
-									</div>
-								</div>
-							)}
-						</div>
-					))}
+								<span className="text-gray-600">פרק {option.label}</span>
+							</Link>
+						))}
+						{matches.length === 0 && (
+							<div className="px-4 py-6 text-center text-gray-500">
+								אין פרקים תואמים
+							</div>
+						)}
+					</div>
+					{options.length > matches.length && (
+						<p className="text-gray-400 text-sm mt-2">
+							{matches.length} מתוך {options.length} פרקים
+						</p>
+					)}
 				</div>
 			</div>
 		</div>

@@ -112,7 +112,7 @@ function RabbisListPage() {
 										className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-100"
 									/>
 								) : (
-									<div className="w-16 h-16 rounded-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500 ring-2 ring-gray-100">
+									<div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 ring-2 ring-gray-100">
 										<UserRound size={28} aria-hidden="true" />
 									</div>
 								)}
