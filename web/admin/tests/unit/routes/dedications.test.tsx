@@ -192,7 +192,10 @@ describe("DedicationsPage", () => {
 		const expiredRow = screen.getByText("דוד").closest("tr");
 		expect(expiredRow).toHaveClass("opacity-60");
 		expect(
-			within(expiredRow as HTMLElement).getByText("2026-01-01 00:00:00 (פג)"),
+			within(expiredRow as HTMLElement).getByText("2026-01-01 00:00:00"),
+		).toBeInTheDocument();
+		expect(
+			within(expiredRow as HTMLElement).getByText("פג"),
 		).toBeInTheDocument();
 		expect(
 			screen.getByText("מסורה על הפרק: הכול (עד 2025-12-01 12:00:00 UTC)"),
