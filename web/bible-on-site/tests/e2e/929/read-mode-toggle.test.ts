@@ -34,6 +34,14 @@ test("Hides perek breadcrumbs when toggling to sefer view", async ({
 }) => {
 	const perekId = 1;
 	await page.goto(`${BASE_URL}/${perekId}`);
+
+	// #3711 - the checkbox must stay in the a11y tree (visually hidden, not
+	// display:none) so its accessible name and keyboard toggle work.
+	const checkbox = page
+		.getByTestId("read-mode-toggler")
+		.locator("input");
+	await expect(checkbox).not.toHaveCSS("display", "none");
+
 	const perekBreadCrumbs = page.getByTestId(`perek-breadcrumb-${perekId}`);
 	await expect(perekBreadCrumbs).toBeVisible();
 

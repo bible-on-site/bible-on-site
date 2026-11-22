@@ -16,6 +16,16 @@
   white-space: nowrap;
 }
 
+/* Below ~480px the compact sefer index (#3711) renders flush against the
+   top of .root — drop it below the 72px top nav so the first row stays
+   fully tappable. The 3D shelves at wider widths already clear the bar
+   through their own dead space, so they stay unpadded. */
+@media screen and (max-width: 479px) {
+  .page {
+    padding-top: 72px;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .page {
     background: #0f1219;
