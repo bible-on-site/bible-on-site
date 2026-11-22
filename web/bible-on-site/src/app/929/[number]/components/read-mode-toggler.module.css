@@ -19,7 +19,9 @@
 }
 
 .input:focus-visible + .toggleDiv {
-  outline: 2px solid var(--accent-600, #1a56db);
+  /* The toggle floats over the accent-600 bar, so the ring must be white
+     like the other top-nav controls or it disappears (#3711). */
+  outline: 2px solid #fff;
   outline-offset: 2px;
 }
 
