@@ -61,9 +61,12 @@ public class FocusedPasukOverlayLayoutTests
             "the spinner only shows while a request is pending");
         // The swap lands in the button's own grid cell — anywhere else the
         // spinner would float over the text instead of replacing the control.
+        // Grid.Column is an attached property: in XDocument it is an
+        // unqualified attribute name, no namespace prefix.
         spinner.Parent.Should().Be(button.Parent);
-        ((string?)spinner.Attribute(p + "Grid.Column")).Should()
-            .Be((string?)button.Attribute(p + "Grid.Column"));
+        var spinnerColumn = (string?)spinner.Attribute("Grid.Column");
+        spinnerColumn.Should().NotBeNull("the spinner must share the button's grid column");
+        spinnerColumn.Should().Be((string?)button.Attribute("Grid.Column"));
     }
 
     private static (double Left, double Top, double Right, double Bottom) ParseThickness(string? value)
