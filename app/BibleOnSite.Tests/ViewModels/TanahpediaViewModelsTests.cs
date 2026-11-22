@@ -719,17 +719,38 @@ public class TanahpediaEntryViewModelTests
     public async Task OpenEntry_BackReplay_RestoresCachedEntryWithoutRefetch()
     {
         // Before hops went in place, Back revealed the still-alive source
-        // page - no network. The trail's replay must restore the same entry
-        // from the visit cache so Back never depends on connectivity (#2640).
-        SetupPersonEntries("שמשון", "דלילה");
+        // page - no network. The trail's replay must restore the whole
+        // resolved surface (body plus deferred sections) so Back never
+        // depends on connectivity (#2640).
+        SetupPersonEntries("שמשון");
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "דלילה",
+                Title = "דלילה",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityId = "person-d", EntityName = "דלילה" }],
+            });
+        _service.Setup(s => s.GetPersonFamilyAsync("person-d", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaPersonFamily
+            {
+                FocalDisplayName = "דלילה",
+                Parents = [new TanahpediaFamilyParentEdge
+                {
+                    Related = new TanahpediaFamilyPerson { DisplayName = "אביה" },
+                    ParentRole = "FATHER",
+                }],
+            });
 
         var vm = Create();
         vm.UniqueName = "שמשון";
         await vm.LoadAsync();
 
         await vm.OpenEntryAsync("דלילה");
-        await vm.OpenEntryAsync("שמשון"); // re-hop: same restore path as Back
+        vm.LastChangeWasTrailReplay.Should().BeFalse("a forward hop opens a new visit");
+        await vm.OpenEntryAsync("שמשון");
         await vm.GoBackAsync();
+        vm.LastChangeWasTrailReplay.Should().BeTrue("Back replays the trail");
+        vm.FamilyTree.Should().NotBeNull("the deferred section restores from the snapshot");
         await vm.GoBackAsync();
 
         vm.UniqueName.Should().Be("שמשון");
@@ -737,6 +758,8 @@ public class TanahpediaEntryViewModelTests
         vm.ShowEntry.Should().BeTrue();
         _service.Verify(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()), Times.Once,
             "the source entry restores from the visit cache, not a refetch");
+        _service.Verify(s => s.GetPersonFamilyAsync("person-d", It.IsAny<CancellationToken>()), Times.Once,
+            "a replayed entry's deferred sections restore without refetching");
         _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -954,28 +977,31 @@ public class TanahpediaEntryViewModelTests
     [Fact]
     public async Task GoBack_WhileLoadInFlight_DoesNotConsumeAnotherTrailEntry()
     {
-        // Two rapid Backs while a person-trail reload is in flight must pop one
-        // entry, not skip past two (#2640). The replayed entry restores from
-        // the visit cache, so the in-flight window here is the deferred
-        // section load a cached restore still awaits.
+        // Two rapid Backs while a trail pop is still in flight must pop one
+        // entry, not skip past two (#2640). The pop target here is an entry
+        // whose first visit was superseded before its snapshot landed, so
+        // the replay refetches instead of restoring synchronously.
         SetupPersonEntries("שמשון", "מנוח");
         var familyGate = new TaskCompletionSource<TanahpediaPersonFamily?>();
-        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+        var detailGate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.SetupSequence(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TanahpediaEntryDetail
             {
                 UniqueName = "דלילה",
                 Title = "דלילה",
                 Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityId = "person-d", EntityName = "דלילה" }],
-            });
-        _service.SetupSequence(s => s.GetPersonFamilyAsync("person-d", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TanahpediaPersonFamily?)null)
+            })
+            .Returns(detailGate.Task);
+        _service.Setup(s => s.GetPersonFamilyAsync("person-d", It.IsAny<CancellationToken>()))
             .Returns(familyGate.Task);
 
         var vm = Create();
         vm.UniqueName = "שמשון";
         await vm.LoadAsync();
-        await vm.OpenPersonEntryAsync("דלילה");
-        await vm.OpenPersonEntryAsync("מנוח");
+        var staleHop = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח"); // supersedes דלילה - no snapshot is written
+        familyGate.SetResult(null);
+        await staleHop;
 
         var first = vm.GoBackAsync();
         var second = vm.GoBackAsync();
@@ -983,7 +1009,7 @@ public class TanahpediaEntryViewModelTests
         vm.UniqueName.Should().Be("דלילה", "the second Back is absorbed while the trail pop reloads");
         vm.HasEntryHistory.Should().BeTrue("שמשון remains on the trail");
 
-        familyGate.SetResult(null);
+        detailGate.SetResult(new TanahpediaEntryDetail { UniqueName = "דלילה", Title = "דלילה" });
         await Task.WhenAll(first, second);
         vm.Title.Should().Be("דלילה");
     }

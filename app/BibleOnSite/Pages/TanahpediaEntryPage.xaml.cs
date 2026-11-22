@@ -35,8 +35,8 @@ public partial class TanahpediaEntryPage : ContentPage
         // the capsule Back enabled even at root stack depth (#2467).
         TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
         // Entry hops rebind this page in place - the outgoing offset is
-        // saved so a Back replay can restore it (#2640), and forward hops
-        // land on the top of the destination entry.
+        // saved so a Back replay can restore it, while a forward hop opens a
+        // new visit at the top even when that entry was visited before (#2640).
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
@@ -46,7 +46,7 @@ public partial class TanahpediaEntryPage : ContentPage
                     _scrollOffsets[_currentEntryName] = EntryScroll.ScrollY;
                 }
                 _currentEntryName = _viewModel.UniqueName;
-                _pendingScrollRestore =
+                _pendingScrollRestore = _viewModel.LastChangeWasTrailReplay &&
                     _scrollOffsets.TryGetValue(_currentEntryName, out var saved) ? saved : null;
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
             }
