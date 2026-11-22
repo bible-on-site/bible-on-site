@@ -23,7 +23,14 @@ public sealed class ReaderRecitationDownload
     /// </summary>
     public void Cancel()
     {
-        _pending?.Source.Cancel();
+        try
+        {
+            _pending?.Source.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The request's finally already disposed the token between reads.
+        }
         _pending = null;
     }
 
@@ -62,6 +69,7 @@ public sealed class ReaderRecitationDownload
             {
                 _pending = null;
             }
+            source.Dispose();
         }
     }
 }

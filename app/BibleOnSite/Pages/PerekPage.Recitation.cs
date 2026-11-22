@@ -722,8 +722,12 @@ public partial class PerekPage
         }
     }
 
-    private async void OnRecitationMediaOpened(object? sender, EventArgs e)
-    {
+    // Windows raises MediaElement events on a media thread, while the seek,
+    // Play and selection paint below touch marshalled UI objects — hop to the
+    // dispatcher like the service-event handlers above (0x8001010E without it).
+    private async void OnRecitationMediaOpened(object? sender, EventArgs e) =>
+        await Dispatcher.DispatchAsync(async () =>
+        {
         if (!_playWhenOpened || !RecitationAvailable || sender is not MediaElement player)
         {
             return;
@@ -740,8 +744,10 @@ public partial class PerekPage
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await player.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
             }
+            #pragma warning disable S2221 // Deliberate failure boundary: a platform that cannot seek here still plays from the start
             catch (Exception ex) //NOSONAR — a platform that cannot seek here still plays from the start.
             {
+                #pragma warning restore S2221
                 System.Diagnostics.Debug.WriteLine($"Recitation resume: {ex.Message}");
             }
         }
@@ -751,8 +757,8 @@ public partial class PerekPage
             return;
         }
         ResumeRecitationPlayback(player);
-    }
-    private void OnRecitationMediaEnded(object? sender, EventArgs e)
+        });
+    private void OnRecitationMediaEnded(object? sender, EventArgs e) => Dispatcher.Dispatch(() =>
     {
         // iOS can keep CurrentState at Playing once an item finishes, so the
         // end event releases the audio claim itself (#2642).
@@ -761,8 +767,8 @@ public partial class PerekPage
         _recitationCursor.End();
         ClearRecitationHighlight();
         UpdateSelectionBar();
-    }
-    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
+    });
+    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e) => Dispatcher.Dispatch(() =>
     {
         // The lease follows audible states only — buffering/opening keep the
         // claim so intentional gaps don't churn the session (#2642).
@@ -792,9 +798,10 @@ public partial class PerekPage
             SetRecitingWord(null);
         }
         UpdateSelectionBar();
-    }
-    private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e)
-    {
+    });
+    private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e) =>
+        await Dispatcher.DispatchAsync(async () =>
+        {
         if (_recitationCursor.PlayingKey == null)
         {
             return;
@@ -805,7 +812,7 @@ public partial class PerekPage
         System.Diagnostics.Debug.WriteLine($"Recitation media failed: {e.ErrorMessage}");
         StopRecitation(); UpdateSelectionBar();
         await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
-    }
+        });
 
     protected override bool OnBackButtonPressed()
     {
