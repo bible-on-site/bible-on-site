@@ -35,7 +35,7 @@ describe("buildPerekOptions", () => {
 			perekId: 300,
 			seferName: "מלכים",
 			label: "ב א",
-			text: "מלכים ב א",
+			text: "מלכים ב א מלכים פרק ב א",
 		});
 	});
 
@@ -71,6 +71,19 @@ describe("filterPerekOptions", () => {
 		).toEqual([300]);
 		expect(
 			filterPerekOptions(options, "בראשית ב").map(
+				(option) => option.perekId,
+			),
+		).toEqual([2]);
+	});
+
+	it("matches the label text as displayed, including the פרק prefix", () => {
+		expect(
+			filterPerekOptions(options, "מלכים פרק א").map(
+				(option) => option.perekId,
+			),
+		).toEqual([300]);
+		expect(
+			filterPerekOptions(options, "בראשית פרק ב").map(
 				(option) => option.perekId,
 			),
 		).toEqual([2]);

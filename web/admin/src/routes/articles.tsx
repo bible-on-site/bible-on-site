@@ -38,6 +38,7 @@ function ArticlesNavPage() {
 	const [interactive, setInteractive] = useState(false);
 	useEffect(() => setInteractive(true), []);
 	const [navQuery, setNavQuery] = useState("");
+	const [activeIndex, setActiveIndex] = useState(0);
 
 	const { data: perakim } = useQuery({
 		queryKey: ["perakim"],
@@ -46,6 +47,11 @@ function ArticlesNavPage() {
 
 	const options = useMemo(() => buildPerekOptions(perakim ?? []), [perakim]);
 	const matches = filterPerekOptions(options, navQuery);
+	const activeOption = matches[Math.min(activeIndex, matches.length - 1)];
+
+	const jumpTo = (perekId: number) => {
+		window.location.href = `/articles/perek/${perekId}`;
+	};
 
 	return (
 		<div className="space-y-8">
@@ -81,18 +87,39 @@ function ArticlesNavPage() {
 						role="combobox"
 						aria-expanded="true"
 						aria-controls="perek-nav-options"
+						aria-activedescendant={
+							activeOption ? `perek-option-${activeOption.perekId}` : undefined
+						}
 						aria-label="חיפוש ספר ופרק"
 						type="search"
 						disabled={!interactive}
 						value={navQuery}
-						onChange={(e) => setNavQuery(e.target.value)}
+						onChange={(e) => {
+							setNavQuery(e.target.value);
+							setActiveIndex(0);
+						}}
 						placeholder="חיפוש ספר או פרק..."
 						className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
 						onKeyDown={(e) => {
-							if (e.key === "Enter" && matches[0]) {
-								window.location.href = `/articles/perek/${matches[0].perekId}`;
+							if (e.key === "ArrowDown") {
+								e.preventDefault();
+								setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+							} else if (e.key === "ArrowUp") {
+								e.preventDefault();
+								setActiveIndex((i) => Math.max(i - 1, 0));
+							} else if (e.key === "Enter") {
+								// A digit query still jumps straight to the canonical perek
+								// number, even while the option list is still loading.
+								const numeric = /^\d+$/.test(navQuery.trim())
+									? Number(navQuery.trim())
+									: null;
+								const target =
+									activeOption?.perekId ??
+									(numeric && numeric <= 929 ? numeric : undefined);
+								if (target) jumpTo(target);
 							} else if (e.key === "Escape") {
 								setNavQuery("");
+								setActiveIndex(0);
 							}
 						}}
 					/>
@@ -105,11 +132,14 @@ function ArticlesNavPage() {
 						{matches.map((option) => (
 							<Link
 								key={option.perekId}
+								id={`perek-option-${option.perekId}`}
 								role="option"
-								aria-selected={false}
+								aria-selected={option === activeOption}
 								to="/articles/perek/$perekId"
 								params={{ perekId: String(option.perekId) }}
-								className="flex justify-between items-center gap-4 px-4 py-2.5 hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none transition-colors"
+								className={`flex justify-between items-center gap-4 px-4 py-2.5 hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none transition-colors ${
+									option === activeOption ? "bg-blue-50" : ""
+								}`}
 							>
 								<span className="font-medium text-gray-900">
 									{option.seferName}

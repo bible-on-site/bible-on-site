@@ -28,21 +28,27 @@ const STAT_ICONS: Record<DashboardTarget, LucideIcon> = {
  * links to the management page its number describes - no decorative cards.
  */
 export function HomeDashboard() {
+	// staleTime 0 keeps the counts fresh on every home visit even though the
+	// management mutations invalidate narrower query keys.
 	const articles = useQuery({
 		queryKey: ["articles"],
 		queryFn: () => getArticles(),
+		staleTime: 0,
 	});
 	const rabbis = useQuery({
 		queryKey: ["authors"],
 		queryFn: () => getAuthors(),
+		staleTime: 0,
 	});
 	const dedications = useQuery({
 		queryKey: ["dedications", "", "active"],
 		queryFn: () => listDedications({ data: { show: "active" } }),
+		staleTime: 0,
 	});
 	const moadim = useQuery({
 		queryKey: ["moadim"],
 		queryFn: () => listMoadim(),
+		staleTime: 0,
 	});
 
 	const stats = dashboardStats({

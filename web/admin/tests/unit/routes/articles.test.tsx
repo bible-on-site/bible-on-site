@@ -217,6 +217,31 @@ describe("Article chapter navigation", () => {
 		).toBe("/articles/perek/300");
 	});
 
+	it("moves the active option with arrow keys before Enter", () => {
+		render(<Page />);
+		const input = combobox();
+		expect(input).toHaveAttribute(
+			"aria-activedescendant",
+			"perek-option-1",
+		);
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		expect(input).toHaveAttribute(
+			"aria-activedescendant",
+			"perek-option-2",
+		);
+		expect(
+			screen.getByRole("option", { name: /בראשית\s*פרק ב/ }),
+		).toHaveAttribute("aria-selected", "true");
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		fireEvent.keyDown(input, { key: "ArrowUp" });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(input, { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
+	});
+
 	it("uses Enter for the first match and ignores unrelated keys", () => {
 		render(<Page />);
 		fireEvent.change(combobox(), { target: { value: "מלכים" } });
@@ -274,5 +299,12 @@ describe("Article chapter navigation", () => {
 		render(<Page />);
 		expect(combobox()).toBeEnabled();
 		expect(screen.getByText("אין פרקים תואמים")).toBeInTheDocument();
+		// The canonical-number jump does not wait for the option list.
+		fireEvent.change(combobox(), { target: { value: "300" } });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
 	});
 });
