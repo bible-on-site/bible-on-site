@@ -82,6 +82,14 @@
   }
 }
 
+/* The compact sefer index (#3711) is far shorter than the four-shelf scene
+   the 1650px reservation was sized for. */
+@media screen and (max-width: 479px) {
+  .bookshelfContainer {
+    min-height: 0;
+  }
+}
+
 @media screen and (min-width: 960px) and (max-width: 1280px) {
   .bottomDivider {
     background-image: url(/root/sefarim-bottom-devider-s.svg);

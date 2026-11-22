@@ -28,6 +28,7 @@ const ReadModeToggler = forwardRef<
 			ref={ref ?? toggleRef}
 			className={styles.label}
 			data-testid="read-mode-toggler"
+			title="מעבר בין תצוגה בסיסית לתצוגת ספר"
 		>
 			<input
 				className={styles.input}
@@ -35,6 +36,7 @@ const ReadModeToggler = forwardRef<
 				type="checkbox"
 				checked={toggled}
 				onChange={handleChange}
+				aria-label="מעבר בין תצוגה בסיסית לתצוגת ספר"
 			/>
 			<div className={styles.toggleDiv} />
 			<Image
@@ -42,6 +44,7 @@ const ReadModeToggler = forwardRef<
 				className={styles.bookIcon}
 				src="/icons/open-book.svg"
 				alt="תצוגה בסיסית"
+				title="תצוגה בסיסית"
 				unoptimized
 				width={16}
 				height={16}
@@ -51,6 +54,7 @@ const ReadModeToggler = forwardRef<
 				className={styles.noteIcon}
 				src="/icons/note.svg"
 				alt="תצוגת ספר"
+				title="תצוגת ספר"
 				unoptimized
 				width={16}
 				height={16}

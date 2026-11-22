@@ -150,7 +150,16 @@ export default async function AuthorPage({
 							className={styles.authorImage}
 						/>
 					) : (
-						<div className={styles.authorPlaceholder}>👤</div>
+						<div className={styles.authorPlaceholder}>
+							<Image
+								src="/icons/rabbi.svg"
+								alt=""
+								aria-hidden="true"
+								width={88}
+								height={88}
+								unoptimized
+							/>
+						</div>
 					)}
 				</div>
 				<div className={styles.authorInfo}>

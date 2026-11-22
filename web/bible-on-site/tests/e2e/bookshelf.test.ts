@@ -38,4 +38,20 @@ test.describe("Bookshelf page", () => {
 
 		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
 	});
+
+	// #3711 - below ~480px the 3D spines shrink under ~20px, so a compact
+	// index keeps every sefer button at a tappable size.
+	test("keeps sefer tap targets at least 44px tall on phone viewports", async ({
+		page,
+	}) => {
+		test.skip(
+			(page.viewportSize()?.width ?? 0) >= 480,
+			"compact index renders only below the phone breakpoint",
+		);
+		await page.goto("/bookshelf");
+		const first = page.getByRole("button", { name: "בראשית" });
+		await expect(first).toBeVisible();
+		const box = await first.boundingBox();
+		expect(box?.height).toBeGreaterThanOrEqual(44);
+	});
 });

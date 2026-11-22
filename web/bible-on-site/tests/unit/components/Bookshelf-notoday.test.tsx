@@ -29,6 +29,11 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	coverTitle: "coverTitle",
 	coverSubtitle: "coverSubtitle",
 	shelfLabel: "shelfLabel",
+	mobileIndex: "mobileIndex",
+	mobileIndexLabel: "mobileIndexLabel",
+	mobileIndexGrid: "mobileIndexGrid",
+	mobileIndexBook: "mobileIndexBook",
+	mobileIndexBookToday: "mobileIndexBookToday",
 }));
 
 jest.mock("@/data/db/client-catalog.generated.json", () => ({

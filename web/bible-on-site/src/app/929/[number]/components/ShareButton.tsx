@@ -1,5 +1,6 @@
 "use client";
 
+import { ShareIcon } from "./ArticleActions";
 import styles from "./perushim-section.module.css";
 import { useArticleShare } from "./use-article-share";
 
@@ -28,11 +29,16 @@ export function ShareButton({ canonicalPath, title }: ShareButtonProps) {
 			aria-label="שיתוף"
 			title="שיתוף"
 		>
-			{outcome === "copied"
-				? "הועתק!"
-				: outcome === "failed"
-					? "השיתוף נכשל"
-					: "🔗 שתף"}
+			{outcome === "copied" ? (
+				"הועתק!"
+			) : outcome === "failed" ? (
+				"השיתוף נכשל"
+			) : (
+				<>
+					<ShareIcon className={styles.shareIcon} />
+					שתף
+				</>
+			)}
 		</a>
 	);
 }

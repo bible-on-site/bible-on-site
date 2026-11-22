@@ -211,10 +211,11 @@ describe("[authorParam] page", () => {
 					authorParam: encodeURIComponent("הרב ללא תמונה"),
 				}),
 			});
-			render(jsx);
+			const { container } = render(jsx);
 
 			expect(screen.getByText("הרב ללא תמונה")).toBeTruthy();
-			expect(screen.getByText("👤")).toBeTruthy();
+			// Decorative rabbi-icon placeholder replaces the bare glyph (#3711).
+			expect(container.querySelector(".authorPlaceholder")).toBeTruthy();
 			expect(screen.getByText("אין מאמרים עדיין")).toBeTruthy();
 		});
 

@@ -39,10 +39,10 @@ function BackIcon() {
 	);
 }
 
-function ShareIcon() {
+export function ShareIcon({ className }: { className?: string }) {
 	return (
 		<svg
-			className={styles.actionIcon}
+			className={className ?? styles.actionIcon}
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
