@@ -42,7 +42,8 @@ async function fetchPreview(uniqueName: string): Promise<PreviewData | null> {
 		const data: PreviewData = await res.json();
 		previewCache.set(uniqueName, data);
 		return data;
-	} catch {
+	} catch (error) {
+		console.warn("Tanahpedia preview fetch failed", { uniqueName, error });
 		previewCache.set(uniqueName, null);
 		return null;
 	}
@@ -54,7 +55,7 @@ const HIDE_DELAY_MS = 200;
 
 /**
  * Wikipedia-style entity preview (#3712): one document-level delegate for
- * every entity link — React-rendered `TanahpediaLink` anchors (marked
+ * every entity link - React-rendered `TanahpediaLink` anchors (marked
  * `data-tanahpedia-entry`) and pipeline-injected `a.tanahpedia-mention`
  * anchors inside stored commentary HTML. The preview opens on hover and on
  * keyboard focus, is anchored beside the link with no layout shift, and
@@ -93,12 +94,29 @@ export function TanahpediaEntryPreview() {
 		}, HIDE_DELAY_MS);
 	}, [clearHideTimer]);
 
+	// Re-anchor the mounted popover to its anchor's current rect.
+	const place = useCallback((anchor: HTMLAnchorElement) => {
+		const popover = popoverRef.current;
+		if (!popover) return;
+		const rect = anchor.getBoundingClientRect();
+		setPosition(
+			computePreviewPosition(
+				rect,
+				{ width: popover.offsetWidth, height: popover.offsetHeight },
+				{ width: window.innerWidth, height: window.innerHeight },
+			),
+		);
+	}, []);
+
 	const show = useCallback(
 		(anchor: HTMLAnchorElement) => {
 			if (!entityPreviewPointerEnabled(window)) return;
 			clearHideTimer();
 			if (activeAnchor.current === anchor) return;
 			activeAnchor.current = anchor;
+			// Hover state belongs to the previous anchor; the pointer
+			// handler re-marks it when the switch came from a pointer.
+			pointerInside.current = false;
 			setOpen(null);
 			const uniqueName = previewUniqueNameFromHref(anchor.href);
 			if (!uniqueName) {
@@ -166,8 +184,16 @@ export function TanahpediaEntryPreview() {
 		const onClick = (e: MouseEvent) => {
 			if (entityPreviewLink(e.target)) close();
 		};
-		// Anchors move with their page; a detached popover must not linger.
-		const onScrollOrResize = () => close();
+		const onScrollOrResize = () => {
+			const anchor = activeAnchor.current;
+			// Scrolling may be the browser bringing a freshly focused anchor
+			// into view: a focused preview re-anchors rather than closing.
+			if (anchor && anchor.ownerDocument.activeElement === anchor) {
+				place(anchor);
+				return;
+			}
+			close();
+		};
 
 		document.addEventListener("mouseover", onPointerOver);
 		document.addEventListener("mouseout", onPointerOut);
@@ -187,7 +213,7 @@ export function TanahpediaEntryPreview() {
 			document.removeEventListener("scroll", onScrollOrResize, true);
 			window.removeEventListener("resize", onScrollOrResize);
 		};
-	}, [show, scheduleHide, clearHideTimer, close]);
+	}, [show, scheduleHide, clearHideTimer, close, place]);
 
 	useEffect(
 		() => () => {
@@ -200,22 +226,13 @@ export function TanahpediaEntryPreview() {
 	// unpositioned; the anchor keeps an aria-describedby for its duration.
 	useLayoutEffect(() => {
 		if (!open) return;
-		// biome-ignore lint/style/noNonNullAssertion: the ref attaches with the portal before this layout effect runs
-		const popover = popoverRef.current!;
 		open.anchor.setAttribute("aria-describedby", TOOLTIP_ID);
-		const rect = open.anchor.getBoundingClientRect();
-		setPosition(
-			computePreviewPosition(
-				rect,
-				{ width: popover.offsetWidth, height: popover.offsetHeight },
-				{ width: window.innerWidth, height: window.innerHeight },
-			),
-		);
+		place(open.anchor);
 		return () => {
 			open.anchor.removeAttribute("aria-describedby");
 			setPosition(null);
 		};
-	}, [open]);
+	}, [open, place]);
 
 	if (!open) return null;
 	return createPortal(

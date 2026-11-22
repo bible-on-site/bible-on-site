@@ -10,6 +10,7 @@ import {
 	previewSnippetChildren,
 	previewUniqueNameFromHref,
 } from "../../../src/app/components/tanahpedia-entry-preview";
+import { toPreviewHtml } from "../../../src/lib/tanahpedia/preview-format";
 
 function setPointerCapable(matches: boolean) {
 	Object.defineProperty(window, "matchMedia", {
@@ -110,10 +111,15 @@ describe("previewUniqueNameFromHref", () => {
 		expect(previewUniqueNameFromHref("http://localhost/929/1")).toBeNull();
 		expect(previewUniqueNameFromHref("http://localhost/pedia/")).toBeNull();
 		expect(previewUniqueNameFromHref("http://localhost/pedia/a/b")).toBeNull();
+	});
+
+	it("warns and returns null for unparseable and malformed hrefs", () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		expect(previewUniqueNameFromHref("http://[")).toBeNull();
 		expect(
 			previewUniqueNameFromHref("http://localhost/pedia/%E0%A4%A"),
 		).toBeNull();
+		expect(warn).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -157,6 +163,21 @@ describe("previewSnippetChildren", () => {
 
 		expect(container.querySelector("script, b")).toBeNull();
 		expect(container.textContent).toBe("a&balert(1)bold");
+	});
+
+	it("renders real toPreviewHtml output tag-for-tag", () => {
+		// Drift detector: jest.setup mocks DOMPurify as a passthrough, so the
+		// input stays inside the formatter's own allowlist vocabulary; the
+		// round-trip then fails the moment the API emits a tag the renderer
+		// cannot rebuild.
+		const snippet = toPreviewHtml(
+			"<p>Intro<sup>1</sup> text</p><h2>שמו</h2><h3>משנה</h3><h4>קטן</h4><hr><p>More words</p>",
+		);
+		const { container } = render(
+			<div>{previewSnippetChildren(snippet)}</div>,
+		);
+
+		expect(container.innerHTML).toBe(`<div>${snippet}</div>`);
 	});
 });
 
@@ -417,6 +438,68 @@ describe("TanahpediaEntryPreview", () => {
 		expect(screen.getByRole("tooltip")).toBeInTheDocument();
 	});
 
+	it("keeps a focus-opened preview across the browser's focus scroll", async () => {
+		const resolvers = new Map<string, (value: unknown) => void>();
+		global.fetch = jest.fn(
+			(url: string) =>
+				new Promise((resolve) => {
+					resolvers.set(url, resolve);
+				}),
+		) as unknown as typeof fetch;
+		render(
+			<>
+				<TanahpediaEntryPreview />
+				{entityAnchor("scroll-focus-entry", "Offscreen")}
+			</>,
+		);
+		const link = screen.getByRole("link", { name: "Offscreen" });
+
+		// Tab reaches an offscreen link: the browser scrolls it into view
+		// while the preview fetch is still in flight.
+		await focus(link);
+		fireEvent.scroll(document);
+		const resolve = resolvers.get(
+			"/api/tanahpedia/preview/scroll-focus-entry",
+		);
+		if (!resolve) throw new Error("preview fetch was not issued");
+		await act(async () =>
+			resolve({
+				ok: true,
+				json: async () => ({ title: "Late", snippet: "s" }),
+			}),
+		);
+		expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+		// A later manual scroll re-anchors the still-focused preview.
+		fireEvent.scroll(document);
+		expect(screen.getByRole("tooltip")).toBeInTheDocument();
+	});
+
+	it("does not leak hover state when focus moves the preview to another link", async () => {
+		mockFetchJson({ title: "T", snippet: "s" });
+		render(
+			<>
+				<TanahpediaEntryPreview />
+				{entityAnchor("hovered-entry", "Hovered")}
+				{entityAnchor("focused-entry", "Focused")}
+			</>,
+		);
+		const hovered = screen.getByRole("link", { name: "Hovered" });
+		const focused = screen.getByRole("link", { name: "Focused" });
+
+		// The pointer still rests on the first link when Tab focuses the next.
+		await hover(hovered);
+		await focus(focused);
+		expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+		jest.useFakeTimers();
+		await act(async () => {
+			focused.blur();
+		});
+		act(() => jest.advanceTimersByTime(200));
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+	});
+
 	it("closes on click and on scroll", async () => {
 		preventLinkNavigation();
 		mockFetchJson({ title: "C", snippet: "s" });
@@ -576,6 +659,7 @@ describe("TanahpediaEntryPreview", () => {
 	});
 
 	it("does not render a preview when the fetch rejects", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		global.fetch = jest
 			.fn()
 			.mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
@@ -588,5 +672,6 @@ describe("TanahpediaEntryPreview", () => {
 
 		await hover(screen.getByRole("link", { name: "Reject" }));
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		expect(warn).toHaveBeenCalledTimes(1);
 	});
 });

@@ -34,15 +34,19 @@ export function previewUniqueNameFromHref(href: string): string | null {
 	let pathname: string;
 	try {
 		pathname = new URL(href, "http://localhost").pathname;
-	} catch {
+	} catch (error) {
+		console.warn("Tanahpedia preview: unparseable href", { href, error });
 		return null;
 	}
 	const match = /^\/pedia\/([^/]+)\/?$/.exec(pathname);
 	if (!match) return null;
 	try {
 		return decodeURIComponent(match[1]);
-	} catch {
-		// A malformed escape sequence is not a resolvable entry.
+	} catch (error) {
+		console.warn("Tanahpedia preview: malformed escape in href", {
+			href,
+			error,
+		});
 		return null;
 	}
 }
