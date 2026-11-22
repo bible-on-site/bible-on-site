@@ -42,9 +42,11 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // not put its ~147 sections into every WDA snapshot. A section is one
         // accessible element for its whole laid-out height, so the first block's
         // center can sit a few points below the viewport — invisible to every
-        // center-in-viewport wait while its top edge is already on screen.
-        // Scrolling brings the awaited element itself into view (#3735).
-        Page.ScrollToVisible("CommentaryTextSection");
+        // center-in-viewport wait while its top edge is already on screen, and
+        // taller-than-viewport elements can never satisfy that wait at all.
+        // The assertions below only need the sections present in the tree
+        // (#3735).
+        Page.WaitForPresent("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
