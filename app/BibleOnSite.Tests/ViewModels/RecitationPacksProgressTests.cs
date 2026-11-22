@@ -221,6 +221,23 @@ public class RecitationPacksProgressTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ApplyBookProgress_WithoutSizedPacks_LeavesTheRowsAlone()
+    {
+        // A report whose scope matches no catalogued pack has a zero total —
+        // the guard returns instead of dividing by nothing (#3705).
+        PublishRecitation((1, 1, "genesis"u8.ToArray()));
+        await _recitation.InitializeAsync();
+        var active = AddRow("בראשית", 1);
+        active.IsDownloading = true;
+        var idle = AddRow("שמות", 2);
+
+        _viewModel.ApplyBookProgress(0.5, new HashSet<int> { 999 });
+
+        active.DownloadProgress.Should().Be(0);
+        idle.DownloadProgress.Should().Be(0);
+    }
+
+    [Fact]
     public async Task DownloadAll_UsesAggregateProgress_AndStillAttributesRows()
     {
         PublishRecitation((1, 1, "one"u8.ToArray()), (2, 2, "two"u8.ToArray()));
