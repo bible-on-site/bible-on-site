@@ -93,14 +93,32 @@ function snippetNodeToElement(node: ChildNode, index: number): ReactNode {
 const CLIPPING_OVERFLOW = /auto|scroll|hidden|clip/;
 
 /**
+ * An ancestor only clips an out-of-flow (absolute/fixed) descendant when it
+ * establishes that descendant's containing block: a non-static position or
+ * a transform. A static, zero-height `overflow:hidden` shell therefore
+ * never clips the absolutely positioned reader that escapes it.
+ */
+function establishesContainingBlock(style: CSSStyleDeclaration): boolean {
+	// jsdom reports an unset position/transform as "" - both mean static/none.
+	return (
+		(style.position !== "static" && style.position !== "") ||
+		(style.transform !== "none" && style.transform !== "")
+	);
+}
+
+/**
  * True while the anchor is fully clipped away by a scrolling ancestor: its
- * rect intersected with every clipping ancestor's box leaves no visible
- * area. A viewport-clip alone is not checked - an off-viewport anchor also
- * positions its popover off-viewport, which is already invisible.
+ * rect intersected with the boxes of ancestors in its clip chain leaves no
+ * visible area. A viewport-clip alone is not checked - an off-viewport
+ * anchor also positions its popover off-viewport, which is already
+ * invisible.
  */
 export function anchorFullyClipped(anchor: Element): boolean {
 	const { top, bottom, left, right } = anchor.getBoundingClientRect();
 	const visible = { top, bottom, left, right };
+	// Once an absolute or fixed ancestor is crossed, further ancestors clip
+	// only when they form that positioned box's containing block.
+	let outOfFlow = false;
 	for (
 		let clipper = anchor.parentElement;
 		clipper;
@@ -108,14 +126,21 @@ export function anchorFullyClipped(anchor: Element): boolean {
 	) {
 		const style = getComputedStyle(clipper);
 		const overflow = `${style.overflow} ${style.overflowX} ${style.overflowY}`;
-		if (!CLIPPING_OVERFLOW.test(overflow)) continue;
-		const clip = clipper.getBoundingClientRect();
-		visible.top = Math.max(visible.top, clip.top);
-		visible.bottom = Math.min(visible.bottom, clip.bottom);
-		visible.left = Math.max(visible.left, clip.left);
-		visible.right = Math.min(visible.right, clip.right);
-		if (visible.bottom <= visible.top || visible.right <= visible.left) {
-			return true;
+		if (
+			CLIPPING_OVERFLOW.test(overflow) &&
+			(!outOfFlow || establishesContainingBlock(style))
+		) {
+			const clip = clipper.getBoundingClientRect();
+			visible.top = Math.max(visible.top, clip.top);
+			visible.bottom = Math.min(visible.bottom, clip.bottom);
+			visible.left = Math.max(visible.left, clip.left);
+			visible.right = Math.min(visible.right, clip.right);
+			if (visible.bottom <= visible.top || visible.right <= visible.left) {
+				return true;
+			}
+		}
+		if (style.position === "absolute" || style.position === "fixed") {
+			outOfFlow = true;
 		}
 	}
 	return false;

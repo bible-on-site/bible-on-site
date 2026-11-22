@@ -216,6 +216,41 @@ describe("anchorFullyClipped", () => {
 		expect(anchorFullyClipped(anchor)).toBe(false);
 		outer.remove();
 	});
+
+	it("ignores a static zero-height shell outside an absolute reader's clip chain", () => {
+		// The perek reader is absolutely positioned, so the PageShell
+		// overflow:hidden wrapper that contains no in-flow height never
+		// clips it - only the reader's own scroll box does.
+		const shell = document.createElement("div");
+		shell.style.overflow = "hidden";
+		const reader = document.createElement("div");
+		reader.style.position = "absolute";
+		reader.style.overflowY = "auto";
+		const anchor = document.createElement("a");
+		reader.appendChild(anchor);
+		shell.appendChild(reader);
+		document.body.appendChild(shell);
+		stubRect(shell, { top: 0, bottom: 0, left: 0, right: 0 });
+		stubRect(reader, { top: 0, bottom: 200, left: 0, right: 500 });
+		const anchorRect = stubRect(anchor, {
+			top: 10,
+			bottom: 20,
+			left: 0,
+			right: 10,
+		});
+
+		expect(anchorFullyClipped(anchor)).toBe(false);
+
+		// Scrolled out of the reader's own box, the link is still clipped.
+		anchorRect.mockReturnValue({
+			top: -50,
+			bottom: -10,
+			left: 0,
+			right: 10,
+		} as DOMRect);
+		expect(anchorFullyClipped(anchor)).toBe(true);
+		shell.remove();
+	});
 });
 
 describe("computePreviewPosition", () => {
