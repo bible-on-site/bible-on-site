@@ -43,6 +43,22 @@ public class FocusedPasukOverlayLayoutTests
             "the pasuk/commentary text keeps its readable inset");
     }
 
+    [Fact]
+    public void FocusedPlay_keeps_a_spinner_cell_for_download_feedback()
+    {
+        // #3704: a focused-tap pack download swaps the headphones for this
+        // indicator so the tap visibly takes effect inside the overlay.
+        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
+        var doc = XDocument.Load(Path.Join(AppRoot, "Controls", "FocusedPasukOverlay.xaml"));
+
+        var spinner = doc.Descendants(p + "ActivityIndicator")
+            .FirstOrDefault(e => (string?)e.Attribute("AutomationId") == "FocusedPlaySpinner");
+
+        spinner.Should().NotBeNull("the focused download needs its own busy indicator");
+        ((string?)spinner!.Attribute("IsVisible")).Should().Be("False",
+            "the spinner only shows while a request is pending");
+    }
+
     private static (double Left, double Top, double Right, double Bottom) ParseThickness(string? value)
     {
         value.Should().NotBeNullOrWhiteSpace();
