@@ -39,8 +39,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Only sections near the viewport are exposed (AccessibleTextSectionsTests
         // proves the split keeps every paragraph); the 2,200-line document must
-        // not put its ~147 sections into every WDA snapshot.
-        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
+        // not put its ~147 sections into every WDA snapshot. Attachment, not
+        // visibility, is the gate: a section taller than the collection's
+        // visible slice keeps its frame mostly below the fold — and the
+        // closing perushim sheet can cover it — so visible == 1 starves while
+        // every label the asserts below read is already mounted (#3737).
+        Page.WaitForAttached("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();

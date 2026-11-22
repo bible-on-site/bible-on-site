@@ -55,6 +55,56 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
     }
 
+    /// <summary>
+    /// Waits until at least one element matching the automation id is attached
+    /// to the accessibility tree — unlike <see cref="WaitFor(string)"/>, no
+    /// displayed or viewport requirement applies. An exposed commentary
+    /// section can be taller than the collection's visible slice (or be
+    /// covered while the perushim sheet is still animating away), so
+    /// <c>visible == 1</c> never holds for it even though the element is
+    /// mounted with a real frame — which is all callers that read its label
+    /// or geometry from the tree need (#3737).
+    /// </summary>
+    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId)
+    {
+        var locator = platform.AutomationId(automationId);
+        var timeout = TimeSpan.FromSeconds(45);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                if (driver is IosSnapshotDriver snapshots)
+                {
+                    var attached = snapshots.FindSnapshots(locator)
+                        .Select(match => match.Element).ToArray();
+                    if (attached.Length > 0)
+                    {
+                        return attached;
+                    }
+                }
+                else
+                {
+                    var attached = driver.FindElements(locator).OfType<AppiumElement>().ToArray();
+                    if (attached.Length > 0)
+                    {
+                        return attached;
+                    }
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The carousel can replace its native views between lookup and inspection.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout can retry within this deadline.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"No element matching {locator} attached within {timeout.TotalSeconds} seconds.");
+    }
+
     public string Source => WaitForText("PerekSource");
     public string FirstPasuk => WaitForText("PasukText");
 

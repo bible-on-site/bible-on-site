@@ -455,6 +455,20 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void AttachedElementsReturnWithoutADisplayedOrViewportRequirement()
+    {
+        // A clipped accessibility section is mounted but reports displayed=false
+        // with a center below the window — the gate every WaitFor applies (#3737).
+        var executor = new SnapshotExecutor([Entry("section", displayed: false, x: 200)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var attached = new PerekPage(driver, new IosPlatformAdapter())
+            .WaitForAttached("CommentaryTextSection");
+        Assert.Single(attached);
+        Assert.Equal(1, executor.Lookups);
+        Assert.Equal("CommentaryTextSection", executor.LastParameters!["value"]);
+    }
+
+    [Fact]
     public void BottomNavigationAssertionsReadEveryFrameFromThePollSnapshots()
     {
         var executor = new SnapshotExecutor([])
