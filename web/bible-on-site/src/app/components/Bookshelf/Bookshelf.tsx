@@ -24,6 +24,11 @@ const SHELF_DEPTH = 14;
 // Breakpoint for switching between single and multi-shelf layout
 const MULTI_SHELF_BREAKPOINT = 900;
 
+// Below ~480px the responsive sqSize shrinks each 2-unit spine under ~20px,
+// far below the 44px tap-target floor (#3711) - phones get a compact
+// grouped sefer index instead of the squeezed 3D shelves.
+const MOBILE_INDEX_BREAKPOINT = 480;
+
 // Responsive sizing constants
 const SCREEN_PADDING = 32; // Padding on each side
 const SIZE_SAFETY_FACTOR = 1.15; // Extra margin for 3D perspective effects
@@ -107,6 +112,30 @@ const helekGroups = {
 
 // All Neviim together (for single shelf mode)
 const allNeviim = bookshelfSefarim.filter((s) => s.helek === "נביאים");
+
+// Multi-shelf layout and the narrow-screen index share one group order
+// (תורה first), heading and helek key for the dedication lookup.
+const SHELF_GROUPS = [
+	{ key: "torah", label: "תורה", helek: "תורה", sefarim: helekGroups.תורה },
+	{
+		key: "neviimRishonim",
+		label: "נביאים: ראשונים + גדולים",
+		helek: "נביאים",
+		sefarim: helekGroups.neviimRishonim,
+	},
+	{
+		key: "treiAsar",
+		label: "נביאים (המשך): תרי עשר",
+		helek: "נביאים",
+		sefarim: helekGroups.treiAsar,
+	},
+	{
+		key: "ketuvim",
+		label: "כתובים",
+		helek: "כתובים",
+		sefarim: helekGroups.כתובים,
+	},
+] as const;
 
 // Assign colors to each sefer based on position in their group
 const seferColors = new Map<string, string>();
@@ -618,75 +647,77 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 					(s) => s.perekFrom <= todaysPerekId && s.perekTo >= todaysPerekId,
 				)?.name ?? "");
 
-	if (useMultiShelf) {
-		// Four separate shelves (RTL order: Torah on top)
-		const torahData = calculatePositionsForSefarim(helekGroups.תורה);
-		const neviimRishonimData = calculatePositionsForSefarim(
-			helekGroups.neviimRishonim,
+	if (windowWidth < MOBILE_INDEX_BREAKPOINT) {
+		return (
+			<div className={styles.root}>
+				<div className={styles.mobileIndex}>
+					{SHELF_GROUPS.map((group) => (
+						<section key={group.key}>
+							<div className={styles.mobileIndexLabel}>{group.label}</div>
+							<div className={styles.mobileIndexGrid}>
+								{group.sefarim.map((sefer) => {
+									const isToday = sefer.name === todaySeferName;
+									return (
+										<button
+											key={sefer.name}
+											type="button"
+											className={`${styles.mobileIndexBook}${
+												isToday ? ` ${styles.mobileIndexBookToday}` : ""
+											}`}
+											style={{
+												borderInlineStartColor: seferColors.get(sefer.name),
+											}}
+											aria-current={isToday || undefined}
+											onClick={() => {
+												const targetPerek =
+													isToday && todaysPerekId
+														? todaysPerekId
+														: sefer.perekFrom;
+												onSeferClick?.(sefer.name, targetPerek);
+											}}
+										>
+											{sefer.displayName}
+										</button>
+									);
+								})}
+							</div>
+						</section>
+					))}
+				</div>
+			</div>
 		);
-		const treiAsarData = calculatePositionsForSefarim(helekGroups.treiAsar);
-		const ketuvimData = calculatePositionsForSefarim(helekGroups.כתובים);
+	}
+
+	if (useMultiShelf) {
+		const shelves = SHELF_GROUPS.map((group) => ({
+			...group,
+			...calculatePositionsForSefarim(group.sefarim),
+		}));
 
 		// Find the widest shelf to calculate sqSize
 		const maxShelfWidth = Math.max(
-			torahData.totalWidth,
-			neviimRishonimData.totalWidth,
-			treiAsarData.totalWidth,
-			ketuvimData.totalWidth,
+			...shelves.map((shelf) => shelf.totalWidth),
 		);
 		const sqSize = calculateSqSize(windowWidth, maxShelfWidth);
 
 		return (
 			<div className={styles.root}>
 				<div className={styles.multiShelfContainer}>
-					<SingleShelf
-						positions={torahData.positions}
-						shelfWidth={torahData.totalWidth}
-						sqSize={sqSize}
-						shelfStartX={torahData.shelfStartX}
-						onSeferClick={onSeferClick}
-						label="תורה"
-						todaySeferName={todaySeferName}
-						todaysPerekId={todaysPerekId}
-						seferDedications={shelfDedications?.bySefer}
-						helekDedications={shelfDedications?.byHelek.תורה}
-					/>
-					<SingleShelf
-						positions={neviimRishonimData.positions}
-						shelfWidth={neviimRishonimData.totalWidth}
-						sqSize={sqSize}
-						shelfStartX={neviimRishonimData.shelfStartX}
-						onSeferClick={onSeferClick}
-						label="נביאים: ראשונים + גדולים"
-						todaySeferName={todaySeferName}
-						todaysPerekId={todaysPerekId}
-						seferDedications={shelfDedications?.bySefer}
-						helekDedications={shelfDedications?.byHelek.נביאים}
-					/>
-					<SingleShelf
-						positions={treiAsarData.positions}
-						shelfWidth={treiAsarData.totalWidth}
-						sqSize={sqSize}
-						shelfStartX={treiAsarData.shelfStartX}
-						onSeferClick={onSeferClick}
-						label="נביאים (המשך): תרי עשר"
-						todaySeferName={todaySeferName}
-						todaysPerekId={todaysPerekId}
-						seferDedications={shelfDedications?.bySefer}
-						helekDedications={shelfDedications?.byHelek.נביאים}
-					/>
-					<SingleShelf
-						positions={ketuvimData.positions}
-						shelfWidth={ketuvimData.totalWidth}
-						sqSize={sqSize}
-						shelfStartX={ketuvimData.shelfStartX}
-						onSeferClick={onSeferClick}
-						label="כתובים"
-						todaySeferName={todaySeferName}
-						todaysPerekId={todaysPerekId}
-						seferDedications={shelfDedications?.bySefer}
-						helekDedications={shelfDedications?.byHelek.כתובים}
-					/>
+					{shelves.map((shelf) => (
+						<SingleShelf
+							key={shelf.key}
+							positions={shelf.positions}
+							shelfWidth={shelf.totalWidth}
+							sqSize={sqSize}
+							shelfStartX={shelf.shelfStartX}
+							onSeferClick={onSeferClick}
+							label={shelf.label}
+							todaySeferName={todaySeferName}
+							todaysPerekId={todaysPerekId}
+							seferDedications={shelfDedications?.bySefer}
+							helekDedications={shelfDedications?.byHelek[shelf.helek]}
+						/>
+					))}
 				</div>
 			</div>
 		);

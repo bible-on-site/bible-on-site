@@ -333,8 +333,16 @@
   white-space: nowrap;
   transition: background 0.15s;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   position: relative;
+}
+
+.shareIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 /* Compact chip, 44px-tall hit area. */

@@ -4,6 +4,7 @@
 
 jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({
 	shareButton: "shareButton",
+	shareIcon: "shareIcon",
 }));
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -24,7 +25,7 @@ describe("ShareButton", () => {
 	it("shows share text by default", () => {
 		render(<ShareButton canonicalPath="/929/1/1" />);
 
-		expect(screen.getByText("🔗 שתף")).toBeTruthy();
+		expect(screen.getByText("שתף")).toBeTruthy();
 	});
 
 	it("prevents default navigation on click and copies to clipboard", async () => {
@@ -113,7 +114,7 @@ describe("ShareButton", () => {
 
 		// No clipboard fallback and no failure label on a user cancel (#2786).
 		expect(writeText).not.toHaveBeenCalled();
-		expect(screen.getByText("🔗 שתף")).toBeTruthy();
+		expect(screen.getByText("שתף")).toBeTruthy();
 	});
 
 	it("falls back to the clipboard on a genuine native share failure", async () => {

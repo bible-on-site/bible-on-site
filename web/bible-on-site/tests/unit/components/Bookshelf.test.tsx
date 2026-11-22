@@ -34,6 +34,11 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	coverTitle: "coverTitle",
 	coverSubtitle: "coverSubtitle",
 	shelfLabel: "shelfLabel",
+	mobileIndex: "mobileIndex",
+	mobileIndexLabel: "mobileIndexLabel",
+	mobileIndexGrid: "mobileIndexGrid",
+	mobileIndexBook: "mobileIndexBook",
+	mobileIndexBookToday: "mobileIndexBookToday",
 }));
 
 // Minimal sefarim covering all helek groups (Torah, Neviim Rishonim, Trei Asar, Ketuvim)
@@ -137,6 +142,58 @@ describe("Bookshelf", () => {
 			// Today's perekId 5 falls in בראשית → bookmarkRibbon class should appear
 			// The Proxy mock maps styles.bookmarkRibbon → "bookmarkRibbon" in the DOM
 			expect(container.innerHTML).toContain("bookmarkRibbon");
+		});
+	});
+
+	describe("when very narrow (compact index)", () => {
+		beforeEach(() => {
+			Object.defineProperty(window, "innerWidth", {
+				value: 390,
+				writable: true,
+				configurable: true,
+			});
+		});
+
+		// Below ~480px the 3D spines would shrink under ~20px - below the
+		// tap-target floor (#3711) - so a grouped index replaces the shelves.
+		it("renders grouped sefer buttons instead of the 3D shelves", () => {
+			const { container } = render(<Bookshelf />);
+			expect(container.querySelector(".surface")).toBeNull();
+			expect(container.querySelector(".mobileIndex")).not.toBeNull();
+			for (const name of ["בראשית", "שמות", "יהושע", "עמוס", "תהלים"]) {
+				expect(screen.getByRole("button", { name })).toBeInTheDocument();
+			}
+		});
+
+		it("renders the same group labels as the multi-shelf layout", () => {
+			render(<Bookshelf />);
+			expect(screen.getByText("תורה")).toBeInTheDocument();
+			expect(
+				screen.getByText("נביאים: ראשונים + גדולים"),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText("נביאים (המשך): תרי עשר"),
+			).toBeInTheDocument();
+			expect(screen.getByText("כתובים")).toBeInTheDocument();
+		});
+
+		it("marks today's sefer button", () => {
+			render(<Bookshelf />);
+			const today = screen.getByRole("button", { name: "בראשית" });
+			expect(today).toHaveAttribute("aria-current", "true");
+			expect(today.className).toContain("mobileIndexBookToday");
+			expect(
+				screen.getByRole("button", { name: "שמות" }),
+			).not.toHaveAttribute("aria-current");
+		});
+
+		it("calls onSeferClick with todaysPerekId for today's sefer and perekFrom otherwise", () => {
+			const onSeferClick = jest.fn();
+			render(<Bookshelf onSeferClick={onSeferClick} />);
+			fireEvent.click(screen.getByRole("button", { name: "בראשית" }));
+			expect(onSeferClick).toHaveBeenCalledWith("בראשית", 5);
+			fireEvent.click(screen.getByRole("button", { name: "שמות" }));
+			expect(onSeferClick).toHaveBeenCalledWith("שמות", 51);
 		});
 	});
 

@@ -76,8 +76,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 64px;
-  color: var(--muted-text, #9ca3af);
+}
+
+.authorPlaceholder img {
+  opacity: 0.45;
 }
 
 .authorInfo {
@@ -202,8 +204,8 @@
     border-color: #3b4256;
   }
 
-  .authorPlaceholder {
-    color: var(--muted-text, #64748b);
+  .authorPlaceholder img {
+    filter: invert(1);
   }
 
   .authorDetails {

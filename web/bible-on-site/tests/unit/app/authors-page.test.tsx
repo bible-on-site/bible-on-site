@@ -131,8 +131,11 @@ describe("929/authors/page", () => {
 		mockQuery.mockResolvedValue([{ id: 1, name: "הרב ישראל", details: "" }]);
 
 		const jsx = await AuthorsPage();
-		render(jsx);
+		const { container } = render(jsx);
 
-		expect(screen.getByText("👤")).toBeTruthy();
+		// Decorative rabbi-icon placeholder replaces the bare glyph (#3711).
+		const placeholder = container.querySelector(".authorPlaceholder");
+		expect(placeholder).toBeTruthy();
+		expect(placeholder?.querySelector('[data-alt=""]')).toBeTruthy();
 	});
 });

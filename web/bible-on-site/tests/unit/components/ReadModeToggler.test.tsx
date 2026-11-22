@@ -6,7 +6,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: Record<string, unknown>) => (
-		<span data-testid="mock-image" data-alt={props.alt as string} />
+		<span
+			data-testid={props["data-testid"] as string}
+			data-alt={props.alt as string}
+			title={props.title as string}
+		/>
 	),
 }));
 
@@ -49,5 +53,26 @@ describe("ReadModeToggler", () => {
 
 		rerender(<ReadModeToggler toggled={true} />);
 		expect(checkbox.checked).toBe(true);
+	});
+
+	// The bare icons do not say which view they mean (#3711) - each gets a
+	// tooltip and the switch itself gets a full accessible name.
+	it("labels both mode icons and the switch", () => {
+		render(<ReadModeToggler toggled={false} />);
+		expect(screen.getByTestId("read-mode-toggler")).toHaveAttribute(
+			"title",
+			"מעבר בין תצוגה בסיסית לתצוגת ספר",
+		);
+		expect(
+			screen.getByRole("checkbox", {
+				name: "מעבר בין תצוגה בסיסית לתצוגת ספר",
+			}),
+		).toBeInTheDocument();
+		expect(
+			screen.getByTestId("read-mode-toggler-basic-view-button"),
+		).toHaveAttribute("title", "תצוגה בסיסית");
+		expect(
+			screen.getByTestId("read-mode-toggler-sefer-view-button"),
+		).toHaveAttribute("title", "תצוגת ספר");
 	});
 });

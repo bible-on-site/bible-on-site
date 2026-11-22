@@ -63,7 +63,6 @@
   left: 0.8rem;
   opacity: 0.6;
   transition: opacity 300ms;
-  pointer-events: none;
 }
 
 .input:not(:checked) + .toggleDiv + .bookIcon {
@@ -77,7 +76,6 @@
   right: 0.8rem;
   opacity: 0.6;
   transition: opacity 300ms;
-  pointer-events: none;
 }
 
 .input:not(:checked) + .toggleDiv + .bookIcon + .noteIcon {

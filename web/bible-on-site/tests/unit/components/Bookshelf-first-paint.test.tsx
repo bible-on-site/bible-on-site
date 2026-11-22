@@ -12,6 +12,11 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	surface: "surface",
 	block: "block",
 	book: "book",
+	mobileIndex: "mobileIndex",
+	mobileIndexLabel: "mobileIndexLabel",
+	mobileIndexGrid: "mobileIndexGrid",
+	mobileIndexBook: "mobileIndexBook",
+	mobileIndexBookToday: "mobileIndexBookToday",
 }));
 jest.mock("@/data/perek-calendar", () => ({ getTodaysPerekId: () => 125 }));
 

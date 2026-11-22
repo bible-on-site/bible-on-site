@@ -381,3 +381,59 @@ button.block {
     opacity: 1;
   }
 }
+
+// Compact grouped index below ~480px (#3711): each sefer keeps a usable
+// >=44px tap target that the squeezed 3D spines cannot give at this width.
+// Nested under .mobileIndex so these rules beat the `.root *` reset.
+.mobileIndex {
+  direction: rtl;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  .mobileIndexLabel {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #4c3a28;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .mobileIndexGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+
+  .mobileIndexBook {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid rgba(0, 0, 0, 0.22);
+    // The per-sefer accent color lands on this edge via inline style.
+    border-inline-start: 4px solid transparent;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #3a2c1c;
+    padding: 6px 10px;
+    cursor: pointer;
+
+    @media (hover: hover) {
+      &:hover {
+        background: #fff;
+      }
+    }
+
+    &:active {
+      scale: var(--n);
+    }
+  }
+
+  .mobileIndexBookToday {
+    outline: 2px solid #1a56db;
+    outline-offset: 1px;
+  }
+}
