@@ -288,13 +288,20 @@ describe("Article chapter navigation", () => {
 				fireEvent.keyDown(combobox(), { key: "Enter" }),
 			),
 		).toBe("unchanged");
-		// A real query afterwards still selects and opens the first match.
-		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+	});
+
+	it("keeps the first option selected when matches arrive after arrow keys", () => {
+		getPerakim.mockReturnValue([]);
+		const { rerender } = render(<Page />);
+		fireEvent.keyDown(combobox(), { key: "ArrowDown" });
+		// Options arrive without a query change, so the index must not be -1.
+		getPerakim.mockReturnValue(PERAKIM);
+		rerender(<Page />);
 		expect(
 			navigationDestination(() =>
 				fireEvent.keyDown(combobox(), { key: "Enter" }),
 			),
-		).toBe("/articles/perek/300");
+		).toBe("/articles/perek/1");
 	});
 
 	it("caps the empty-query list and shows the running count", () => {
