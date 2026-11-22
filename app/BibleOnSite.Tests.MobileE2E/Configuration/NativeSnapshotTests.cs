@@ -416,13 +416,17 @@ public sealed class NativeSnapshotTests
     [Fact]
     public void TapToDismissRetapsWhileTheContentStaysVisible()
     {
-        var checkboxPolls = 0;
-        var executor = new SnapshotExecutor([])
+        // The marker reports visible until the second tap lands. Keying the
+        // fake on the tap count — not the poll count — keeps the tap total
+        // exact: a slower runner polls fewer times per hidden window and
+        // would otherwise land an extra retap.
+        SnapshotExecutor? executor = null;
+        executor = new SnapshotExecutor([])
         {
             Respond = criteria => criteria switch
             {
                 "PerushimChevronButton" => new object[] { Entry("chevron") },
-                "PerushCheckBox" => ++checkboxPolls <= 2
+                "PerushCheckBox" => executor!.Commands.Count(command => command == "actions") < 2
                     ? new object[] { Entry("checkbox") }
                     : Array.Empty<object>(),
                 _ => Array.Empty<object>()
