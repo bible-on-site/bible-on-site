@@ -11,6 +11,7 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { RevalidationWarning } from "~/components/RevalidationWarning";
 import { TopBar } from "~/components/TopBar";
+import { UndoToastProvider } from "~/components/UndoToast";
 import appCss from "../styles/app.css?url";
 
 const queryClient = new QueryClient({
@@ -58,12 +59,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body className="bg-gray-50 min-h-screen font-sans">
-				<TopBar archive={archive} />
-				{!archive && <RevalidationWarning />}
-				<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-					{children}
-				</main>
-				{!archive && <TanStackRouterDevtools position="bottom-right" />}
+				<UndoToastProvider>
+					<TopBar archive={archive} />
+					{!archive && <RevalidationWarning />}
+					<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+						{children}
+					</main>
+					{!archive && <TanStackRouterDevtools position="bottom-right" />}
+				</UndoToastProvider>
 				<Scripts />
 			</body>
 		</html>

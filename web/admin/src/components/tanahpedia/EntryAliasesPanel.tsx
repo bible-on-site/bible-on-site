@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import {
 	type EntryLinkOption,
 	EntryLinkPicker,
@@ -221,14 +222,17 @@ export function EntryAliasesPanel({
 		});
 	};
 
+	const scheduleUndo = useUndoAction();
+
 	const confirmRemove = (alias: EntryAliasView) => {
 		const shared = alias.targets.length > 1;
-		const message = shared
-			? `להסיר את הערך מהשם המשותף «${alias.name}»? שאר ${alias.targets.length - 1} היעדים יישארו כפי שהם.`
-			: `הערך הוא היעד היחיד של «${alias.name}» - ההסרה תמחק את השם לגמרי. להמשיך?`;
-		if (window.confirm(message)) {
-			removeMutation.mutate({ name: alias.name, entryId });
-		}
+		scheduleUndo({
+			key: `alias-remove-${alias.name}`,
+			message: shared
+				? `הערך יוסר מהשם המשותף «${alias.name}»`
+				: `השם «${alias.name}» יימחק לגמרי`,
+			commit: () => removeMutation.mutate({ name: alias.name, entryId }),
+		});
 	};
 
 	return (
@@ -312,16 +316,13 @@ export function EntryAliasesPanel({
 					onSave={(name, targets, expectedTargets) =>
 						saveMutation.mutate({ name, targets, expectedTargets })
 					}
-					onDeleteName={(name) => {
-						const count = editor.targets.length;
-						if (
-							window.confirm(
-								`למחוק את השם «${name}» לגמרי? השם יוסר מ-${count} ערכים.`,
-							)
-						) {
-							deleteMutation.mutate(name);
-						}
-					}}
+					onDeleteName={(name) =>
+						scheduleUndo({
+							key: `alias-delete-${name}`,
+							message: `השם «${name}» יימחק מ-${editor.targets.length} ערכים`,
+							commit: () => deleteMutation.mutate(name),
+						})
+					}
 				/>
 			)}
 		</section>

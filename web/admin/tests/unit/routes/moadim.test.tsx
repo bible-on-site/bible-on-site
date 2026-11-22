@@ -1,5 +1,13 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 
 const {
 	getMoed,
@@ -61,7 +69,11 @@ import { Route } from "~/routes/moadim";
 function Page() {
 	const Component = Route.options.component;
 	if (!Component) throw new Error("Moadim route component is missing");
-	return <Component />;
+	return (
+		<UndoToastProvider durationMs={30}>
+			<Component />
+		</UndoToastProvider>
+	);
 }
 
 const MOED = {
@@ -178,19 +190,37 @@ describe("Moadim catalogue page", () => {
 });
 
 describe("Moed delete", () => {
-	it("deletes only after confirmation and refreshes the catalogue", () => {
+	it("commits the delete once the undo toast expires and refreshes the catalogue", async () => {
 		listMoadim.mockReturnValue([MOED]);
 		render(<Page />);
-		vi.spyOn(window, "confirm").mockReturnValue(false);
 		fireEvent.click(screen.getByRole("button", { name: "מחק" }));
+
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('המועד "פסח" יימחק');
 		expect(deleteMoed).not.toHaveBeenCalled();
 
-		vi.spyOn(window, "confirm").mockReturnValue(true);
-		fireEvent.click(screen.getByRole("button", { name: "מחק" }));
-		expect(deleteMoed).toHaveBeenCalledWith({ data: 7 });
+		await waitFor(() =>
+			expect(deleteMoed).toHaveBeenCalledWith({ data: 7 }),
+		);
 		expect(invalidateQueries).toHaveBeenCalledWith({
 			queryKey: ["moadim"],
 		});
+	});
+
+	it("cancels the pending delete from the toast undo button", async () => {
+		listMoadim.mockReturnValue([MOED]);
+		render(<Page />);
+		fireEvent.click(screen.getByRole("button", { name: "מחק" }));
+
+		const toast = await screen.findByRole("status");
+		fireEvent.click(
+			within(toast).getByRole("button", { name: "ביטול" }),
+		);
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+		// Past the undo window the cancelled delete must never fire.
+		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+		expect(deleteMoed).not.toHaveBeenCalled();
 	});
 });
 

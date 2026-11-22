@@ -1,0 +1,108 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider, useUndoAction } from "~/components/UndoToast";
+
+function Trigger({
+	message,
+	commit,
+	actionKey,
+}: {
+	message: string;
+	commit: () => void;
+	actionKey?: string;
+}) {
+	const schedule = useUndoAction();
+	return (
+		<button
+			type="button"
+			onClick={() => schedule({ message, commit, key: actionKey })}
+		>
+			trigger
+		</button>
+	);
+}
+
+function renderToast(
+	commit: () => void = vi.fn(),
+	durationMs = 1000,
+	actionKey?: string,
+) {
+	return render(
+		<UndoToastProvider durationMs={durationMs}>
+			<Trigger message="הפריט יימחק" commit={commit} actionKey={actionKey} />
+		</UndoToastProvider>,
+	);
+}
+
+afterEach(() => {
+	vi.useRealTimers();
+});
+
+describe("UndoToastProvider", () => {
+	it("commits the pending action once the toast expires", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		renderToast(commit, 1000);
+		fireEvent.click(screen.getByRole("button", { name: "trigger" }));
+
+		expect(screen.getByText("הפריט יימחק")).toBeInTheDocument();
+		expect(commit).not.toHaveBeenCalled();
+
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(commit).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("הפריט יימחק")).not.toBeInTheDocument();
+	});
+
+	it("cancels the pending action when ביטול is clicked", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		renderToast(commit, 1000);
+		fireEvent.click(screen.getByRole("button", { name: "trigger" }));
+
+		fireEvent.click(screen.getByRole("button", { name: "ביטול" }));
+		expect(screen.queryByText("הפריט יימחק")).not.toBeInTheDocument();
+
+		act(() => {
+			vi.advanceTimersByTime(2000);
+		});
+		expect(commit).not.toHaveBeenCalled();
+	});
+
+	it("replaces a still-pending action sharing the same key", () => {
+		vi.useFakeTimers();
+		const first = vi.fn();
+		const second = vi.fn();
+		render(
+			<UndoToastProvider durationMs={1000}>
+				<Trigger message="ראשון" commit={first} actionKey="same" />
+				<Trigger message="שני" commit={second} actionKey="same" />
+			</UndoToastProvider>,
+		);
+		const triggers = screen.getAllByRole("button", { name: "trigger" });
+		fireEvent.click(triggers[0]);
+		fireEvent.click(triggers[1]);
+
+		// The first toast is superseded rather than stacked.
+		expect(screen.queryByText("ראשון")).not.toBeInTheDocument();
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(first).not.toHaveBeenCalled();
+		expect(second).toHaveBeenCalledTimes(1);
+	});
+
+	it("never fires a commit scheduled before the provider unmounts", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		const { unmount } = renderToast(commit, 1000);
+		fireEvent.click(screen.getByRole("button", { name: "trigger" }));
+		unmount();
+
+		act(() => {
+			vi.advanceTimersByTime(2000);
+		});
+		expect(commit).not.toHaveBeenCalled();
+	});
+});

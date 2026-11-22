@@ -1,5 +1,6 @@
 import { Folder } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import type { Directory } from "~/lib/archive";
 import { setArchiveBusy } from "~/lib/archive-busy";
 import styles from "./archive.module.css";
@@ -54,6 +55,7 @@ interface UploadItem {
 }
 
 export function ArchiveArea() {
+	const scheduleUndo = useUndoAction();
 	const [loginRequired, setLoginRequired] = useState(false);
 	const [directory, setDirectory] = useState<Directory | null>(null);
 	const [error, setError] = useState("");
@@ -688,11 +690,13 @@ export function ArchiveArea() {
 														type="button"
 														disabled={busy}
 														onClick={() => {
-															if (
-																file.status !== "ready" ||
-																window.confirm(`למחוק את ${file.filename}?`)
-															)
-																void remove(file.id);
+															if (file.status === "ready")
+																scheduleUndo({
+																	key: `archive-${file.id}`,
+																	message: `הקובץ ${file.filename} יימחק`,
+																	commit: () => void remove(file.id),
+																});
+															else void remove(file.id);
 														}}
 													>
 														{file.status === "ready"

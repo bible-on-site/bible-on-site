@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { EntryAliasesPanel } from "~/components/tanahpedia/EntryAliasesPanel";
 import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
@@ -92,6 +93,10 @@ function EntryEditPage() {
 	const [saveError, setSaveError] = useState<ClassifiedSaveError | null>(null);
 	// Informational outcome of a committed save (e.g. rename alias handling).
 	const [saveNotice, setSaveNotice] = useState<string | null>(null);
+	// The destructive action awaiting an explicit confirm-dialog answer.
+	const [pendingConfirm, setPendingConfirm] = useState<
+		"delete" | "revert" | null
+	>(null);
 	// Rename flow: whether to keep the outgoing unique_name as an alias to
 	// this entry — default on, since it preserves inbound links.
 	const [keepOldAsAlias, setKeepOldAsAlias] = useState(true);
@@ -624,11 +629,11 @@ function EntryEditPage() {
 		}
 	};
 
+	const handleRevert = () => setPendingConfirm("revert");
+
 	// Explicit revert: drop every uncommitted edit AND its local draft, then
 	// re-anchor on whatever the server holds.
-	const handleRevert = () => {
-		if (!window.confirm("לבטל את כל השינויים שלא נשמרו? הטיוטה המקומית תימחק."))
-			return;
+	const applyRevert = () => {
 		editCounterRef.current += 1;
 		cleanCounterRef.current = editCounterRef.current;
 		setHasChanges(false);
@@ -737,10 +742,7 @@ function EntryEditPage() {
 					{!isNew && (
 						<button
 							type="button"
-							onClick={() => {
-								if (window.confirm("האם אתה בטוח שברצונך למחוק ערך זה?"))
-									deleteMutation.mutate();
-							}}
+							onClick={() => setPendingConfirm("delete")}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
 							מחק ערך
@@ -1065,6 +1067,29 @@ function EntryEditPage() {
 					</button>
 				</div>
 			</form>
+
+			<ConfirmDialog
+				open={pendingConfirm === "delete"}
+				title="מחיקת ערך"
+				message="האם אתה בטוח שברצונך למחוק ערך זה?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setPendingConfirm(null);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setPendingConfirm(null)}
+			/>
+			<ConfirmDialog
+				open={pendingConfirm === "revert"}
+				title="ביטול שינויים"
+				message="לבטל את כל השינויים שלא נשמרו? הטיוטה המקומית תימחק."
+				confirmLabel="בטל שינויים"
+				onConfirm={() => {
+					setPendingConfirm(null);
+					applyRevert();
+				}}
+				onCancel={() => setPendingConfirm(null)}
+			/>
 		</div>
 	);
 }

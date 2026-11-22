@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import { previewDedicationLine } from "~/lib/dedication-line";
 import { useDebouncedValue } from "~/lib/use-debounced-value";
 import {
@@ -109,6 +110,7 @@ function DedicationsPage() {
 		mutationFn: (id: number) => deleteDedication({ data: id }),
 		onSuccess: invalidate,
 	});
+	const scheduleUndo = useUndoAction();
 	const error =
 		createMutation.error ?? updateMutation.error ?? deleteMutation.error;
 
@@ -225,10 +227,13 @@ function DedicationsPage() {
 										</button>
 										<button
 											type="button"
-											onClick={() => {
-												if (window.confirm(`למחוק את ההקדשה "${d.subject}"?`))
-													deleteMutation.mutate(d.id);
-											}}
+											onClick={() =>
+												scheduleUndo({
+													key: `dedication-${d.id}`,
+													message: `ההקדשה "${d.subject}" תימחק`,
+													commit: () => deleteMutation.mutate(d.id),
+												})
+											}
 											className="text-red-600 hover:underline"
 										>
 											מחק

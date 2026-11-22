@@ -8,6 +8,7 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 import type { AdminDedication } from "~/server/dedications";
 
 const server = vi.hoisted(() => ({
@@ -65,7 +66,9 @@ function renderPage() {
 	};
 	render(
 		<QueryClientProvider client={client}>
-			<Page />
+			<UndoToastProvider durationMs={30}>
+				<Page />
+			</UndoToastProvider>
 		</QueryClientProvider>,
 	);
 	return client;
@@ -448,16 +451,16 @@ describe("DedicationsPage", () => {
 		expect(screen.getByLabelText("מוקדש ל")).toHaveValue("שרה");
 	});
 
-	it("requires confirmation before deleting, then refreshes the list", async () => {
-		const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+	it("delays deletion behind an undo toast, then refreshes the list", async () => {
 		const client = renderPage();
 		const invalidate = vi.spyOn(client, "invalidateQueries");
 		const remove = await screen.findByRole("button", { name: "מחק" });
 		fireEvent.click(remove);
-		expect(confirm).toHaveBeenCalledWith('למחוק את ההקדשה "שרה"?');
+
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('ההקדשה "שרה" תימחק');
 		expect(server.deleteDedication).not.toHaveBeenCalled();
-		confirm.mockReturnValue(true);
-		fireEvent.click(remove);
+
 		await waitFor(() =>
 			expect(server.deleteDedication).toHaveBeenCalledWith({ data: 7 }),
 		);
@@ -466,11 +469,25 @@ describe("DedicationsPage", () => {
 		);
 	});
 
+	it("cancels a pending deletion from the toast undo button", async () => {
+		renderPage();
+		fireEvent.click(await screen.findByRole("button", { name: "מחק" }));
+
+		const toast = await screen.findByRole("status");
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+
+		await waitFor(() =>
+			expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+		);
+		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+		expect(server.deleteDedication).not.toHaveBeenCalled();
+	});
+
 	it("displays delete errors and leaves the row available", async () => {
-		vi.spyOn(window, "confirm").mockReturnValue(true);
 		server.deleteDedication.mockRejectedValue(new Error("Delete failed"));
 		renderPage();
 		fireEvent.click(await screen.findByRole("button", { name: "מחק" }));
+		await waitFor(() => expect(server.deleteDedication).toHaveBeenCalled());
 		expect(await screen.findByText("Delete failed")).toBeInTheDocument();
 		expect(screen.getByText("לעילוי נשמת שרה")).toBeInTheDocument();
 	});

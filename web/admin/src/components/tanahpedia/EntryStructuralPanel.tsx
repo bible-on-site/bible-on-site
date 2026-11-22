@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
@@ -42,6 +43,7 @@ function PersonCard({
 	onSaved: () => void;
 }) {
 	const p = row.person;
+	const scheduleUndo = useUndoAction();
 
 	const [displayName, setDisplayName] = useState(row.displayName);
 	const [mainName, setMainName] = useState(p.mainName ?? "");
@@ -105,9 +107,13 @@ function PersonCard({
 				<button
 					type="button"
 					disabled={busy}
-					onClick={() => {
-						if (window.confirm("להסיר קישור יישות מהערך?")) mutRemove.mutate();
-					}}
+					onClick={() =>
+						scheduleUndo({
+							key: `entity-link-${row.linkId}`,
+							message: "קישור הישות יוסר מהערך",
+							commit: () => mutRemove.mutate(),
+						})
+					}
 					className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
 				>
 					הסר קישור
@@ -208,6 +214,7 @@ function PlaceCard({
 	onSaved: () => void;
 }) {
 	const pl = row.place;
+	const scheduleUndo = useUndoAction();
 
 	const [displayName, setDisplayName] = useState(row.displayName);
 	const [rows, setRows] = useState<PlaceIdentificationRow[]>(
@@ -283,9 +290,13 @@ function PlaceCard({
 				<button
 					type="button"
 					disabled={busy}
-					onClick={() => {
-						if (window.confirm("להסיר קישור יישות מהערך?")) mutRemove.mutate();
-					}}
+					onClick={() =>
+						scheduleUndo({
+							key: `entity-link-${row.linkId}`,
+							message: "קישור הישות יוסר מהערך",
+							commit: () => mutRemove.mutate(),
+						})
+					}
 					className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
 				>
 					הסר קישור
@@ -402,6 +413,7 @@ function GenericEntityCard({
 	row: LinkedEntityStructural;
 	onSaved: () => void;
 }) {
+	const scheduleUndo = useUndoAction();
 	const [displayName, setDisplayName] = useState(row.displayName);
 	const [sayingDate, setSayingDate] = useState(
 		row.saying?.sayingDate?.toString() ?? "",
@@ -447,9 +459,13 @@ function GenericEntityCard({
 				<button
 					type="button"
 					disabled={busy}
-					onClick={() => {
-						if (window.confirm("להסיר קישור יישות מהערך?")) mutRemove.mutate();
-					}}
+					onClick={() =>
+						scheduleUndo({
+							key: `entity-link-${row.linkId}`,
+							message: "קישור הישות יוסר מהערך",
+							commit: () => mutRemove.mutate(),
+						})
+					}
 					className="text-xs text-red-600"
 				>
 					הסר קישור
