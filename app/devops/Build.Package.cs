@@ -33,6 +33,9 @@ partial class Build
     [Parameter("Android key password")]
     readonly string? AndroidKeyPassword;
 
+    [Parameter("Use only the built app bundle and local sidecars for PackageAndroidSymbols")]
+    readonly bool SkipExternalAndroidSymbols;
+
     [Parameter("iOS Team ID")]
     readonly string? IosTeamId;
 
@@ -376,7 +379,8 @@ partial class Build
                 "net11.0-android" / "android-arm64" / "app_shared_libraries";
             Assert.True(sharedLibsDir.DirectoryExists(),
                 $"Android shared libraries not found at {sharedLibsDir} — build the Android release first");
-            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile);
+            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile,
+                includeExternalSymbols: !SkipExternalAndroidSymbols);
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
@@ -394,8 +398,8 @@ partial class Build
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
-    // #3444: public debug ELFs are cached here by GNU build ID and reused
-    // across local and CI builds; the workflows restore/save this path.
+    // #3444: cache debug ELFs by GNU build ID. The release packaging workflow
+    // restores and saves this path.
     AbsolutePath PublicSymbolCacheDirectory => RootDirectory / ".cache" / "android-native-symbols";
 
     /// <summary>
@@ -403,10 +407,11 @@ partial class Build
     /// file on disk — not just the intermediates — meets the contract the
     /// deploy target re-checks before any store write (#2970).
     /// </summary>
-    void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip,
+        bool includeExternalSymbols = true)
     {
         AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip,
-            symbolCacheDir: PublicSymbolCacheDirectory.ToString());
+            symbolCacheDir: PublicSymbolCacheDirectory.ToString(), includeExternalSymbols: includeExternalSymbols);
         LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
     }
 
@@ -420,8 +425,8 @@ partial class Build
         if (missing.Length > 0)
         {
             Serilog.Log.Warning(
-                $"No matching native debug symbols supplied locally, by the public Microsoft symbol server, " +
-                $"or by the supplier store for {missing.Length} bundled arm64 libraries: {string.Join(", ", missing)}");
+                "Bundled arm64 libraries without matching native debug symbols ({MissingCount}): {Libraries}",
+                missing.Length, string.Join(", ", missing));
         }
         var data = uncovered.Where(AndroidNativeSymbols.IsDataContainer).ToArray();
         if (data.Length > 0)
