@@ -59,7 +59,12 @@ export function ArchiveArea() {
 	const [loginRequired, setLoginRequired] = useState(false);
 	const [directory, setDirectory] = useState<Directory | null>(null);
 	const [error, setError] = useState("");
-	const [busy, setBusy] = useState(false);
+	// Overlapping operations (an upload plus a deferred delete) share this flag —
+	// a count keeps one completion from unlocking the top bar mid-upload.
+	const [opCount, setOpCount] = useState(0);
+	const busy = opCount > 0;
+	const beginOp = () => setOpCount((count) => count + 1);
+	const endOp = () => setOpCount((count) => Math.max(0, count - 1));
 	const [dragging, setDragging] = useState(false);
 	const dragDepth = useRef(0);
 	const [cursor, setCursor] = useState("");
@@ -73,6 +78,14 @@ export function ArchiveArea() {
 	const cancel = useRef(false);
 	const request = useRef<AbortController | null>(null);
 	const listingRequest = useRef(0);
+	// Current listing view — a deferred delete refreshes only when its folder
+	// is still the visible one, and with live cursor/history rather than the
+	// stale closure captured at schedule time.
+	const activeViewRef = useRef<{
+		dir: string;
+		cursor: string;
+		history: string[];
+	} | null>(null);
 	const load = useCallback(
 		async (directoryId: string, after: string, previous: string[] = []) => {
 			const generation = ++listingRequest.current;
@@ -86,6 +99,11 @@ export function ArchiveArea() {
 						: `/archive/${result.path.slice(1).split("/").filter(Boolean).map(encodeURIComponent).join("/")}`;
 				window.history.replaceState(null, "", path);
 				setActiveDirectory(result.id);
+				activeViewRef.current = {
+					dir: result.id,
+					cursor: after,
+					history: previous,
+				};
 				setCursor(after);
 				setHistory(previous);
 			}
@@ -263,31 +281,31 @@ export function ArchiveArea() {
 	}
 
 	async function showPage(after: string, previous: string[]) {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await load(activeDirectory, after, previous);
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function openDirectory(id: string) {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await load(id, "");
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function createFolder() {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await api({
@@ -300,13 +318,13 @@ export function ArchiveArea() {
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function upload(files: FileList | File[] | null) {
 		if (!files?.length || busy) return;
-		setBusy(true);
+		beginOp();
 		setError("");
 		cancel.current = false;
 		await uploadPrepared(
@@ -372,7 +390,7 @@ export function ArchiveArea() {
 			} catch (e) {
 				setError((e as Error).message);
 			} finally {
-				setBusy(false);
+				endOp();
 			}
 		}
 	}
@@ -416,7 +434,7 @@ export function ArchiveArea() {
 			setError("יש להמתין לסיום הפעולה הנוכחית לפני גרירה נוספת");
 			return;
 		}
-		setBusy(true);
+		beginOp();
 		setError("");
 		cancel.current = false;
 		let items: UploadItem[] = [];
@@ -437,7 +455,7 @@ export function ArchiveArea() {
 			} catch (loadError) {
 				setError((loadError as Error).message);
 			} finally {
-				setBusy(false);
+				endOp();
 			}
 			return;
 		}
@@ -453,7 +471,7 @@ export function ArchiveArea() {
 					setError((e as Error).message);
 				}
 			}
-			setBusy(false);
+			endOp();
 		}
 		const problems = [
 			...(skipped.length
@@ -467,16 +485,23 @@ export function ArchiveArea() {
 			setError((current) => [current, ...problems].filter(Boolean).join(". "));
 	}
 
-	async function remove(id: string) {
-		setBusy(true);
+	async function remove(id: string, scheduledDirId?: string) {
+		beginOp();
 		setError("");
 		try {
 			await api({ action: "remove", id });
-			await refresh();
+			// A deferred delete can resolve after the admin moved to another
+			// folder — refreshing then would rewrite the visible listing and URL.
+			const view = activeViewRef.current;
+			if (
+				view &&
+				(scheduledDirId === undefined || scheduledDirId === view.dir)
+			)
+				await load(view.dir, view.cursor, view.history);
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
@@ -694,7 +719,8 @@ export function ArchiveArea() {
 																scheduleUndo({
 																	key: `archive-${file.id}`,
 																	message: `הקובץ ${file.filename} יימחק`,
-																	commit: () => void remove(file.id),
+																	commit: () =>
+																		void remove(file.id, directory.id),
 																});
 															else void remove(file.id);
 														}}

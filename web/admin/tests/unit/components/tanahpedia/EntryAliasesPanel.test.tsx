@@ -367,10 +367,11 @@ describe("EntryAliasesPanel", () => {
 		renderPanel();
 
 		fireEvent.click(await screen.findByRole("button", { name: "הסר מהערך" }));
+		// The click schedules — it must not delete synchronously.
+		expect(mocks.removeEntryFromAlias).not.toHaveBeenCalled();
 
 		const toast = await screen.findByRole("status");
-		expect(toast).toHaveTextContent("הערך יוסר מהשם המשותף «משה»");
-		expect(mocks.removeEntryFromAlias).not.toHaveBeenCalled();
+		expect(toast).toHaveTextContent('הערך יוסר מהשם המשותף "משה"');
 		await waitFor(() =>
 			expect(mocks.removeEntryFromAlias).toHaveBeenCalledWith({
 				data: { name: "משה", entryId: "e-a" },
@@ -401,7 +402,7 @@ describe("EntryAliasesPanel", () => {
 		fireEvent.click(await screen.findByRole("button", { name: "הסר מהערך" }));
 
 		const toast = await screen.findByRole("status");
-		expect(toast).toHaveTextContent("השם «משה» יימחק לגמרי");
+		expect(toast).toHaveTextContent('השם "משה" יימחק לגמרי');
 		expect(await screen.findByText(/«משה» נמחק לגמרי/)).toBeInTheDocument();
 	});
 
@@ -533,7 +534,7 @@ describe("EntryAliasesPanel", () => {
 		fireEvent.click(screen.getByRole("button", { name: "מחק את השם לחלוטין" }));
 
 		const toast = await screen.findByRole("status");
-		expect(toast).toHaveTextContent("השם «משה» יימחק מ-2 ערכים");
+		expect(toast).toHaveTextContent('השם "משה" יימחק מ-2 ערכים');
 		await waitFor(() =>
 			expect(mocks.deleteAliasName).toHaveBeenCalledWith({
 				data: { name: "משה" },
@@ -542,6 +543,44 @@ describe("EntryAliasesPanel", () => {
 		expect(
 			await screen.findByText(/«משה» נמחק לגמרי \(2 יעדים\)/),
 		).toBeInTheDocument();
+	});
+
+	it("keeps a different open editor when a queued name delete resolves", async () => {
+		mocks.getEntryAliases.mockResolvedValue([
+			sharedAlias,
+			{ ...singleAlias, name: "אהרן" },
+		]);
+		let releaseDelete!: (result: {
+			name: string;
+			removedTargets: number;
+		}) => void;
+		mocks.deleteAliasName.mockReturnValue(
+			new Promise((resolve) => {
+				releaseDelete = resolve;
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(
+			(await screen.findAllByRole("button", { name: "ערוך יעדים" }))[0],
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחק את השם לחלוטין" }));
+		await waitFor(() => expect(mocks.deleteAliasName).toHaveBeenCalled());
+
+		// While the delete mutation is in flight, the admin opens אהרן's editor.
+		fireEvent.click(
+			(await screen.findAllByRole("button", { name: "ערוך יעדים" }))[1],
+		);
+		expect(screen.getByText(/עריכת השם «אהרן»/)).toBeInTheDocument();
+
+		// Its resolution must not discard that unrelated draft.
+		await act(async () => {
+			releaseDelete({ name: "משה", removedTargets: 2 });
+		});
+		expect(
+			await screen.findByText(/«משה» נמחק לגמרי \(2 יעדים\)/),
+		).toBeInTheDocument();
+		expect(screen.getByText(/עריכת השם «אהרן»/)).toBeInTheDocument();
 	});
 
 	it("keeps the name when the full deletion is undone", async () => {

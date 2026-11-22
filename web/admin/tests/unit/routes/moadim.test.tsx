@@ -194,10 +194,11 @@ describe("Moed delete", () => {
 		listMoadim.mockReturnValue([MOED]);
 		render(<Page />);
 		fireEvent.click(screen.getByRole("button", { name: "מחק" }));
+		// The click schedules — it must not delete synchronously.
+		expect(deleteMoed).not.toHaveBeenCalled();
 
 		const toast = await screen.findByRole("status");
 		expect(toast).toHaveTextContent('המועד "פסח" יימחק');
-		expect(deleteMoed).not.toHaveBeenCalled();
 
 		await waitFor(() =>
 			expect(deleteMoed).toHaveBeenCalledWith({ data: 7 }),

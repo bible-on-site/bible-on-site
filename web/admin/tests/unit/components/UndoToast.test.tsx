@@ -105,4 +105,36 @@ describe("UndoToastProvider", () => {
 		});
 		expect(commit).not.toHaveBeenCalled();
 	});
+
+	it("moves focus to the undo button and restores it on ביטול", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		renderToast(commit, 1000);
+		const trigger = screen.getByRole("button", { name: "trigger" });
+		trigger.focus();
+		fireEvent.click(trigger);
+
+		const undo = screen.getByRole("button", { name: "ביטול" });
+		expect(undo).toHaveFocus();
+
+		fireEvent.click(undo);
+		expect(trigger).toHaveFocus();
+	});
+
+	it("restores focus to the trigger after the toast expires", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		renderToast(commit, 1000);
+		const trigger = screen.getByRole("button", { name: "trigger" });
+		trigger.focus();
+		fireEvent.click(trigger);
+		expect(
+			screen.getByRole("button", { name: "ביטול" }),
+		).toHaveFocus();
+
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(trigger).toHaveFocus();
+	});
 });

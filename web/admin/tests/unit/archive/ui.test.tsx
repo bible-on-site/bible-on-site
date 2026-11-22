@@ -735,6 +735,75 @@ it("refreshes the directory and removes ready files once the undo toast expires"
 		),
 	);
 });
+it("keeps shared logout busy while deferred deletes overlap", async () => {
+	const { archiveBusy } = await import("~/lib/archive-busy");
+	directory.files = [
+		{ id: "f1", filename: "a.bin", size: 1, status: "ready" },
+		{ id: "f2", filename: "b.bin", size: 1, status: "ready" },
+	];
+	const releaseRemoves: Array<() => void> = [];
+	(fetch as Mock).mockImplementation(async (_url, options) => {
+		if (!options?.method) return reply(directory) as Response;
+		const command = JSON.parse(options.body as string);
+		if (command.action === "remove")
+			return new Promise<Response>((resolve) => {
+				releaseRemoves.push(() =>
+					resolve(reply({ ok: true }) as Response),
+				);
+			});
+		return reply({ ok: true }) as Response;
+	});
+	render(<WrappedArea />);
+	const [first, second] = await screen.findAllByRole("button", {
+		name: "מחיקה",
+	});
+	fireEvent.click(first);
+	fireEvent.click(second);
+	await waitFor(() => {
+		expect(releaseRemoves).toHaveLength(2);
+		expect(archiveBusy()).toBe(true);
+	});
+	await act(async () => releaseRemoves[0]());
+	// One delete finishing must not unlock while the other is still in flight.
+	expect(archiveBusy()).toBe(true);
+	await act(async () => releaseRemoves[1]());
+	await waitFor(() => expect(archiveBusy()).toBe(false));
+});
+it("does not rewrite the listing when a deferred delete resolves in another folder", async () => {
+	directory.files = [
+		{ id: "f1", filename: "a.bin", size: 1, status: "ready" },
+		{
+			id: "sub",
+			filename: "חומרים",
+			size: 0,
+			status: "ready",
+			kind: "folder",
+		},
+	];
+	render(<WrappedArea />);
+	fireEvent.click(await screen.findByRole("button", { name: "מחיקה" }));
+	await screen.findByRole("status");
+	const subReads = () =>
+		(fetch as Mock).mock.calls.filter(
+			([, options]) =>
+				(options?.headers as Record<string, string>)?.[
+					"X-Archive-Directory"
+				] === "sub",
+		);
+
+	// The admin opens the nested folder before the delete commits.
+	directory = { ...directory, id: "sub", files: [] };
+	fireEvent.click(
+		screen.getByRole("button", { name: "פתיחת תיקייה חומרים" }),
+	);
+	await waitFor(() => expect(subReads()).toHaveLength(1));
+
+	// The pending delete commits — the new folder's listing must not be
+	// refetched into the scheduled folder's stale view or URL.
+	await waitFor(() => expect(commandsSent("remove")).toHaveLength(1));
+	await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+	expect(subReads()).toHaveLength(1);
+});
 it("shows pending reservations and allows cancellation without an undo window", async () => {
 	directory.files = [
 		{ id: "pending", filename: "unfinished", size: 8, status: "uploading" },

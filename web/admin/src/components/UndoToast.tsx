@@ -53,15 +53,33 @@ export function UndoToastProvider({
 	const nextIdRef = useRef(0);
 	const timersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 	const keysRef = useRef(new Map<string, number>());
+	const undoRefs = useRef(new Map<number, HTMLButtonElement>());
+	const previousFocusRef = useRef<HTMLElement | null>(null);
 
 	const release = useCallback((id: number) => {
 		const timer = timersRef.current.get(id);
 		if (timer !== undefined) clearTimeout(timer);
 		timersRef.current.delete(id);
+		undoRefs.current.delete(id);
 		for (const [key, value] of keysRef.current)
 			if (value === id) keysRef.current.delete(key);
 		setToasts((prev) => prev.filter((toast) => toast.id !== id));
 	}, []);
+
+	// Keyboard users must reach the undo window: each new toast takes focus,
+	// and focus returns to the pre-toast element once all actions resolve.
+	useEffect(() => {
+		const last = toasts.at(-1);
+		if (last) {
+			previousFocusRef.current ??=
+				document.activeElement as HTMLElement | null;
+			undoRefs.current.get(last.id)?.focus();
+			return;
+		}
+		const restore = previousFocusRef.current;
+		previousFocusRef.current = null;
+		restore?.focus();
+	}, [toasts]);
 
 	const schedule = useCallback<ScheduleUndoAction>(
 		({ message, commit, key }) => {
@@ -108,6 +126,10 @@ export function UndoToastProvider({
 						<span className="flex-1">{toast.message}</span>
 						<button
 							type="button"
+							ref={(el) => {
+								if (el) undoRefs.current.set(toast.id, el);
+								else undoRefs.current.delete(toast.id);
+							}}
 							onClick={() => release(toast.id)}
 							className="shrink-0 font-medium text-blue-300 hover:text-blue-200"
 						>

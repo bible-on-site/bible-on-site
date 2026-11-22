@@ -58,4 +58,16 @@ describe("ConfirmDialog", () => {
 		expect(outside).toHaveFocus();
 		outside.remove();
 	});
+
+	it("keeps focus where the user put it when parents rerender callbacks", () => {
+		const props = renderDialog({ confirmLabel: "מחק" });
+		const cancel = screen.getByRole("button", { name: "ביטול" });
+		cancel.focus();
+		expect(cancel).toHaveFocus();
+
+		// Autosave-driven parent rerenders recreate onCancel — focus must not
+		// jump back to the destructive button.
+		props.rerender(<ConfirmDialog {...props} onCancel={vi.fn()} />);
+		expect(cancel).toHaveFocus();
+	});
 });

@@ -25,20 +25,26 @@ export function ConfirmDialog({
 	onCancel,
 }: ConfirmDialogProps) {
 	const confirmRef = useRef<HTMLButtonElement>(null);
+	// Callers pass fresh closures each render — the open/focus effect must not
+	// restart on their identity changes or focus would jump back to confirm.
+	const onCancelRef = useRef(onCancel);
+	useEffect(() => {
+		onCancelRef.current = onCancel;
+	});
 
 	useEffect(() => {
 		if (!open) return;
 		const previousFocus = document.activeElement as HTMLElement | null;
 		confirmRef.current?.focus();
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") onCancel();
+			if (event.key === "Escape") onCancelRef.current();
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.removeEventListener("keydown", onKeyDown);
 			previousFocus?.focus();
 		};
-	}, [open, onCancel]);
+	}, [open]);
 
 	if (!open) return null;
 

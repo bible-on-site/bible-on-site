@@ -169,7 +169,11 @@ export function EntryAliasesPanel({
 		mutationFn: (name: string) => deleteAliasName({ data: { name } }),
 		onSuccess: (result) => {
 			void invalidate();
-			setEditor(null);
+			// The deferred delete can resolve while another name is open in the
+			// editor — closing it unconditionally would discard that draft.
+			setEditor((current) =>
+				current?.editingName === result.name ? null : current,
+			);
 			setActionError(null);
 			flagFreshness(result.websiteFresh);
 			setNotice(
@@ -227,10 +231,10 @@ export function EntryAliasesPanel({
 	const confirmRemove = (alias: EntryAliasView) => {
 		const shared = alias.targets.length > 1;
 		scheduleUndo({
-			key: `alias-remove-${alias.name}`,
+			key: `alias-remove-${entryId}-${alias.name}`,
 			message: shared
-				? `הערך יוסר מהשם המשותף «${alias.name}»`
-				: `השם «${alias.name}» יימחק לגמרי`,
+				? `הערך יוסר מהשם המשותף "${alias.name}"`
+				: `השם "${alias.name}" יימחק לגמרי`,
 			commit: () => removeMutation.mutate({ name: alias.name, entryId }),
 		});
 	};
@@ -318,8 +322,8 @@ export function EntryAliasesPanel({
 					}
 					onDeleteName={(name) =>
 						scheduleUndo({
-							key: `alias-delete-${name}`,
-							message: `השם «${name}» יימחק מ-${editor.targets.length} ערכים`,
+							key: `alias-delete-${entryId}-${name}`,
+							message: `השם "${name}" יימחק מ-${editor.targets.length} ערכים`,
 							commit: () => deleteMutation.mutate(name),
 						})
 					}

@@ -456,10 +456,11 @@ describe("DedicationsPage", () => {
 		const invalidate = vi.spyOn(client, "invalidateQueries");
 		const remove = await screen.findByRole("button", { name: "מחק" });
 		fireEvent.click(remove);
+		// The click schedules — it must not delete synchronously.
+		expect(server.deleteDedication).not.toHaveBeenCalled();
 
 		const toast = await screen.findByRole("status");
 		expect(toast).toHaveTextContent('ההקדשה "שרה" תימחק');
-		expect(server.deleteDedication).not.toHaveBeenCalled();
 
 		await waitFor(() =>
 			expect(server.deleteDedication).toHaveBeenCalledWith({ data: 7 }),
