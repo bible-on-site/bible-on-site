@@ -16,6 +16,9 @@ public partial class PerekPage
     private Pasuk? _focusedPasuk;
     private CancellationTokenSource? _recitationRequest;
     private CancellationTokenSource? _headerPress;
+    // One download→play request for a Play tap on a not-yet-installed sefer
+    // (#3704) — repeated taps join it; perek changes and Back cancel it.
+    private readonly ReaderRecitationDownload _recitationDownload = new();
     private bool _recitationBusy;
     private bool _playWhenOpened;
     // Playback identity, chapter-vs-preview distinction and the perek-scoped
@@ -118,6 +121,9 @@ public partial class PerekPage
         // Invalidates any MediaOpened handler still awaiting its seek.
         _recitationGeneration++;
         _recitationRequest?.Cancel();
+        // A deliberate stop (Back, perek change, קריינות off, pack removal)
+        // drops any pending download→play so no stale auto-play fires (#3704).
+        _recitationDownload.Cancel();
         _playWhenOpened = false;
         _recitationCursor.Stop();
         _pendingSeekMs = null;
@@ -566,8 +572,6 @@ public partial class PerekPage
         {
             _recitationCursor.MarkResume(perek.PerekId, resume);
         }
-        var continuous = start == null && ranges == null;
-
         if (_recitationCursor.PlayingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused or MediaElementState.Buffering)
         {
             if (existing.CurrentState == MediaElementState.Playing)
@@ -581,6 +585,15 @@ public partial class PerekPage
 
             return;
         }
+        // A published-but-not-installed recording downloads its sefer pack in
+        // place, then replays this same request once the audio lands (#3704).
+        if (!RecitationService.Instance.HasAudio(perek.PerekId))
+        {
+            await DownloadRecitationThenPlayAsync(perek,
+                () => PlayRecitationAsync(key, start, end, ranges, resumeFromMs));
+            return;
+        }
+        var continuous = start == null && ranges == null;
         // Keep the claim across the deliberate gap — stopping the old clip,
         // decoding and opening the new one run through silent player states
         // on the way back to Playing (#2642).
@@ -639,6 +652,65 @@ public partial class PerekPage
         finally
         {
             if (_recitationRequest == request) { _recitationRequest = null; _recitationBusy = false; UpdateSelectionBar(); }
+        }
+    }
+
+    /// <summary>
+    /// #3704: a deliberate Play on a published-but-not-installed recording
+    /// starts (or joins) the sefer's pack download through the same
+    /// <see cref="RecitationService.DownloadAsync"/> route Preferences uses,
+    /// shows the button's busy state at once, and replays the stored request
+    /// exactly once when the audio lands. A perek change, Back navigation or
+    /// קריינות-off cancels the pending auto-play (see <see cref="StopRecitation"/>);
+    /// failure reports in place and the next tap retries.
+    /// </summary>
+    private async Task DownloadRecitationThenPlayAsync(Perek perek, Func<Task> play)
+    {
+        var perekId = perek.PerekId;
+        if (RecitationService.Instance.GetTrack(perekId) == null)
+        {
+            return;
+        }
+
+        // The request is pending once RunAsync's synchronous prefix ran — paint
+        // the spinner on the button immediately, before the download's first await.
+        var run = _recitationDownload.RunAsync(perekId,
+            cancellation => RecitationService.Instance.DownloadAsync([perekId], null, cancellation),
+            async () =>
+            {
+                // Auto-play only while the requesting perek is still displayed
+                // and recitation is still enabled — the cancel already ran for
+                // a swipe, Back or the קריינות toggle; this re-check guards the
+                // race where the download outlived a stale request.
+                if (_viewModel.Perek?.PerekId == perekId && RecitationAvailable)
+                {
+                    await play();
+                }
+            });
+        _viewModel.IsRecitationDownloading = _recitationDownload.IsPending;
+        UpdateSelectionBar();
+        try
+        {
+            await run;
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigation, Back or the קריינות toggle cancelled the request.
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: download failure shows a retriable alert in place
+        catch (Exception ex) //NOSONAR — download failure shows a retriable alert in place.
+        {
+            #pragma warning restore S2221
+            System.Diagnostics.Debug.WriteLine($"Recitation sefer download: {ex}");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הורדת הקראה",
+                "לא ניתן להוריד את ההקלטה. בדקו את החיבור ונסו שוב.", "אישור");
+        }
+        finally
+        {
+            // Mirror the live state: a tap that merely joined a pending request,
+            // or one a newer request superseded, must not clear its spinner.
+            _viewModel.IsRecitationDownloading = _recitationDownload.IsPending;
+            UpdateSelectionBar();
         }
     }
 

@@ -982,21 +982,26 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SelectionBar.SetRecitationVisible(RecitationAvailable);
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
+        var downloading = _recitationDownload.IsPending;
         // An active playback can always be paused — even for a perek whose word
-        // timings are still pending (chapter playback needs no alignment).
-        var recitationEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
-            track != null && (_recitationCursor.PlayingKey != null ||
+        // timings are still pending (chapter playback needs no alignment). A
+        // published recording without installed audio stays tappable (#3704):
+        // the tap downloads the sefer's pack in place and then plays.
+        var recitationEnabled = !downloading && !_recitationBusy && perek != null && track != null &&
+            (_recitationCursor.PlayingKey != null ||
                 (track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready")));
+        var hasAudio = perek != null && RecitationService.Instance.HasAudio(perek.PerekId);
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // chapter at the bookmark), like the website's preview state.
-        var recitationVisual =
+        var recitationVisual = downloading ? ReaderSelectionBar.RecitationVisual.Downloading :
             RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
                 : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused or CommunityToolkit.Maui.Core.MediaElementState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
-        var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
-            !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
+        var hint = _recitationBusy ? "טוען את הקלטת הפרק..." :
+            downloading ? "מוריד את הקלטות הספר..." : track == null ? "אין הקלטה לפרק זה" :
+            !hasAudio ? (recitationEnabled ? "הורדת הקלטות הספר והשמעה" : "ההקלטה אינה תואמת לטקסט המותקן") :
             !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים אינה זמינה" :
             recitationEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);

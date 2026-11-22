@@ -44,6 +44,8 @@ public class ExtensionPacksViewTests : IAsyncDisposable
         .GetMethod("OnDownloadBookClicked", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly MethodInfo RemoveHandler = typeof(ExtensionPacksView)
         .GetMethod("OnRemoveBookClicked", BindingFlags.NonPublic | BindingFlags.Instance)!;
+    private static readonly MethodInfo CancelHandler = typeof(ExtensionPacksView)
+        .GetMethod("OnCancelBookDownloadClicked", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     private ExtensionPacksView CreateView()
     {
@@ -173,5 +175,22 @@ public class ExtensionPacksViewTests : IAsyncDisposable
         RemoveHandler.Invoke(view, [new Label(), EventArgs.Empty]);
 
         _viewModel.Packs.Status.Should().Be(initial);
+    }
+
+    [Fact]
+    public async Task CancelBookDownload_Click_WithoutActiveDownload_DoesNothing()
+    {
+        await SeedCatalogAsync();
+        var view = CreateView();
+        var initial = _viewModel.Packs.Status;
+
+        // #3705: the in-progress row's cancel routes to the shared cancel
+        // command; with no download running it is a harmless no-op.
+        CancelHandler.Invoke(view, [new Button { CommandParameter = Book() }, EventArgs.Empty]);
+        CancelHandler.Invoke(view, [new Button(), EventArgs.Empty]);
+        CancelHandler.Invoke(view, [new Label(), EventArgs.Empty]);
+
+        _viewModel.Packs.Status.Should().Be(initial);
+        _viewModel.Packs.IsIdle.Should().BeTrue();
     }
 }
