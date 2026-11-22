@@ -19,6 +19,7 @@ import {
 	articleChange,
 	authorChange,
 	dedicationChange,
+	type EntityChange,
 	getWebsiteRevalidationStatus,
 	mergeCoveringSpans,
 	moedChange,
@@ -27,6 +28,7 @@ import {
 	pediaInvalidation,
 	revalidateWebsite,
 } from "~/server/website-revalidate";
+import { ENTITY_CHANGE_EXAMPLES } from "../../../../shared/revalidate/examples";
 
 const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
 /** One tick past the 300ms debounce window. */
@@ -506,5 +508,35 @@ describe("typed-change builders", () => {
 describe("public path helpers", () => {
 	it("builds the pedia entry path", () => {
 		expect(pediaEntryPath("משה")).toBe("/pedia/משה");
+	});
+});
+
+describe("shared contract examples", () => {
+	function example<K extends EntityChange["kind"]>(
+		kind: K,
+	): Extract<EntityChange, { kind: K }> {
+		const change = ENTITY_CHANGE_EXAMPLES.find((c) => c.kind === kind);
+		if (!change || change.kind !== kind) {
+			throw new Error(`ENTITY_CHANGE_EXAMPLES missing kind ${kind}`);
+		}
+		return change as Extract<EntityChange, { kind: K }>;
+	}
+
+	it("every builder emits exactly the wire shape its example pins", () => {
+		expect(articleChange(example("article"))).toEqual({
+			changes: [example("article")],
+		});
+		expect(authorChange(example("author"))).toEqual({
+			changes: [example("author")],
+		});
+		expect(moedChange(example("moed"))).toEqual({
+			changes: [example("moed")],
+		});
+		expect(dedicationChange(example("dedication"))).toEqual({
+			changes: [example("dedication")],
+		});
+		expect(pediaEntryChange(example("pedia-entry"))).toEqual({
+			changes: [example("pedia-entry")],
+		});
 	});
 });

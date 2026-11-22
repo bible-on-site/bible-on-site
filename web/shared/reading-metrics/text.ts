@@ -14,8 +14,11 @@
  * Block-level elements whose close tag ends a readable block — the unit
  * stored as `*_metric_block` rows for word-weighted progress mapping.
  * Inline formatting tags (b/i/span/a/sup/…) are not boundaries.
+ *
+ * Exported so the website's DOM-side progress mapper splits rendered text
+ * at exactly the boundaries this scanner splits stored HTML at (#3710).
  */
-const BLOCK_TAGS = new Set([
+export const READABLE_BLOCK_TAGS = [
 	"address",
 	"article",
 	"aside",
@@ -55,7 +58,9 @@ const BLOCK_TAGS = new Set([
 	"thead",
 	"tr",
 	"ul",
-]);
+];
+
+const BLOCK_TAGS = new Set(READABLE_BLOCK_TAGS);
 
 /** Void tags that break text on their own (no close tag needed). */
 const VOID_BREAK_TAGS = new Set(["br", "hr"]);

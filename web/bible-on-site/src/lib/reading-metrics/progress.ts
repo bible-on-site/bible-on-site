@@ -17,6 +17,8 @@
  * position, not a completion record.
  */
 
+import { READABLE_BLOCK_TAGS } from "../../../../shared/reading-metrics/text";
+
 /** Line-box geometry of one rendered text fragment, in content-axis px. */
 export interface UnitLineBox {
 	top: number;
@@ -98,8 +100,7 @@ export function wordsPassedAt(
 			const depth = (anchor - line.top) / Math.max(line.height, 1);
 			inside += Math.min(Math.max(depth, 0), 1);
 		}
-		passed =
-			unit.wordsBefore + (inside / unit.lines.length) * unit.wordCount;
+		passed = unit.wordsBefore + (inside / unit.lines.length) * unit.wordCount;
 		break;
 	}
 	return passed;
@@ -147,57 +148,8 @@ export function positionUnits(
 	});
 }
 
-/**
- * Block-level element names whose *end* closes a readable block — the same
- * set `htmlToReadableSegments` (`web/shared/reading-metrics/text.ts`) scans
- * for on the server, restated here because the website package cannot
- * cross its bundler root. `br` and `hr` are void breaks (hr is already
- * block-level).
- */
-const BLOCK_TAGS = [
-	"address",
-	"article",
-	"aside",
-	"blockquote",
-	"dd",
-	"details",
-	"dialog",
-	"div",
-	"dl",
-	"dt",
-	"fieldset",
-	"figcaption",
-	"figure",
-	"footer",
-	"form",
-	"h1",
-	"h2",
-	"h3",
-	"h4",
-	"h5",
-	"h6",
-	"header",
-	"hr",
-	"li",
-	"main",
-	"nav",
-	"ol",
-	"p",
-	"pre",
-	"section",
-	"summary",
-	"table",
-	"tbody",
-	"td",
-	"tfoot",
-	"th",
-	"thead",
-	"tr",
-	"ul",
-];
-
 /** Selector matching every segment boundary inside a rendered HTML body. */
-const BLOCK_SELECTOR = `${BLOCK_TAGS.join(",")},br`;
+const BLOCK_SELECTOR = `${READABLE_BLOCK_TAGS.join(",")},br`;
 
 /** A segment counts only when it carries at least one letter or digit. */
 const WORD_CHAR = /[\p{L}\p{N}]/u;
