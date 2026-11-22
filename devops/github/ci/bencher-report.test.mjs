@@ -17,13 +17,14 @@ const checkFixture = () => ({
 	name: `Bencher Report (${project})`, status: "in_progress", conclusion: null,
 	external_id: `bencher:${projectUuid}::t`,
 });
-function setup({ before = [], after = [checkFixture()], report = fixture(), result, fetchError, updateError } = {}) {
+function setup({ listings, before = [], after = [checkFixture()], report = fixture(), result, fetchError, updateError } = {}) {
 	const updates = [];
 	let reads = 0;
+	const lists = listings ?? [before, after];
 	return {
 		updates,
 		io: {
-			listChecks: () => reads++ === 0 ? before : after,
+			listChecks: () => lists[Math.min(reads++, lists.length - 1)],
 			run: () => result ?? { status: 0, stdout: `other output\nView report: ${url}\n` },
 			fetchReport: () => { if (fetchError) throw fetchError; return report; },
 			updateCheck: (id, body) => { updates.push({ id, body }); if (updateError) throw updateError; return { id, ...body }; },
@@ -54,6 +55,38 @@ test("accepts an already completed matching check without rewriting it", async (
 	const check = { ...checkFixture(), status: "completed", conclusion: "success", external_id: `bencher:${projectUuid}:${uuid}:t` };
 	const { io, updates } = setup({ after: [check] });
 	assert.equal((await runBencherReport(context, io)).repaired, false);
+	assert.deepEqual(updates, []);
+});
+
+test("reconciles a matching completed check the first post-invocation listing missed (#3739)", async () => {
+	const check = { ...checkFixture(), status: "completed", conclusion: "success", external_id: `bencher:${projectUuid}:${uuid}:t` };
+	const { io, updates } = setup({ listings: [[], [], [check]] });
+	assert.deepEqual(await runBencherReport(context, io), { id: 42, conclusion: "success", repaired: false });
+	assert.deepEqual(updates, []);
+});
+
+test("still finalizes a pending check that only appears on the second listing", async () => {
+	const { io, updates } = setup({ listings: [[], [], [checkFixture()]] });
+	assert.equal((await runBencherReport(context, io)).repaired, true);
+	assert.equal(updates[0].body.external_id, `bencher:${projectUuid}:${uuid}:t`);
+});
+
+test("stays fail-closed when the second listing is still empty or ambiguous", async () => {
+	for (const listings of [
+		[[], [], []],
+		[[], [], [checkFixture(), { ...checkFixture(), id: 43 }]],
+	]) {
+		const { io, updates } = setup({ listings });
+		await assert.rejects(runBencherReport(context, io), /Expected one new Bencher check/);
+		assert.deepEqual(updates, []);
+	}
+});
+
+test("rejects a second-listing completed check bound to a different report", async () => {
+	const check = { ...checkFixture(), status: "completed", conclusion: "success",
+		external_id: `bencher:${projectUuid}:02b2def8-f842-880c-9cbb-1cbb0bfc768f:t` };
+	const { io, updates } = setup({ listings: [[], [], [check]] });
+	await assert.rejects(runBencherReport(context, io), /disagrees with its report/);
 	assert.deepEqual(updates, []);
 });
 
