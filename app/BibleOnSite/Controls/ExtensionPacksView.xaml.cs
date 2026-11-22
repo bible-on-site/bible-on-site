@@ -25,4 +25,13 @@ public partial class ExtensionPacksView : ContentView
             await ((ExtensionPacksViewModel)BindingContext).Packs.RemoveBookAsync(book);
         }
     }
+
+    /// <summary>The in-progress row's cancel stops the running download (#3705).</summary>
+    private void OnCancelBookDownloadClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button { CommandParameter: RecitationBookChoice })
+        {
+            ((ExtensionPacksViewModel)BindingContext).Packs.CancelDownloadCommand.Execute(null);
+        }
+    }
 }
