@@ -6,12 +6,13 @@ export interface PerekOption {
 	perekId: number;
 	seferName: string;
 	label: string;
-	/**
-	 * Normalized "sefer label" haystack the query matches against; stores
-	 * both "sefer label" and "sefer פרק label" so typing the text shown in
-	 * the option row ("שמואל פרק ב א") matches too.
-	 */
+	/** Normalized "sefer label" haystack the query matches against. */
 	text: string;
+	/**
+	 * Normalized "sefer פרק label" haystack matching the displayed row, so
+	 * typing the label as shown ("שמואל פרק ב א") matches too.
+	 */
+	displayText: string;
 }
 
 /** Options rendered for an empty query and the cap for any query. */
@@ -32,7 +33,8 @@ export function buildPerekOptions(perakim: Perek[]): PerekOption[] {
 			perekId: perek.perek_id,
 			seferName,
 			label,
-			text: normalize(`${seferName} ${label} ${seferName} פרק ${label}`),
+			text: normalize(`${seferName} ${label}`),
+			displayText: normalize(`${seferName} פרק ${label}`),
 		});
 	}
 	return options;
@@ -53,7 +55,8 @@ export function filterPerekOptions(
 		? options.filter((option) =>
 				/^\d+$/.test(normalized)
 					? option.perekId === Number(normalized)
-					: option.text.includes(normalized),
+					: option.text.includes(normalized) ||
+							option.displayText.includes(normalized),
 			)
 		: options;
 	return matches.slice(0, limit);

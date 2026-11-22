@@ -35,7 +35,8 @@ describe("buildPerekOptions", () => {
 			perekId: 300,
 			seferName: "מלכים",
 			label: "ב א",
-			text: "מלכים ב א מלכים פרק ב א",
+			text: "מלכים ב א",
+			displayText: "מלכים פרק ב א",
 		});
 	});
 
@@ -89,6 +90,11 @@ describe("filterPerekOptions", () => {
 		).toEqual([2]);
 	});
 
+	it("does not match a query that straddles the two label forms", () => {
+		expect(filterPerekOptions(options, "ב בראשית")).toEqual([]);
+		expect(filterPerekOptions(options, "א מלכים")).toEqual([]);
+	});
+
 	it("matches digit queries against the canonical perek number", () => {
 		expect(filterPerekOptions(options, "300")).toEqual([options[2]]);
 		expect(filterPerekOptions(options, "30")).toEqual([]);
@@ -100,6 +106,7 @@ describe("filterPerekOptions", () => {
 			seferName: "ספר",
 			label: "א",
 			text: "ספר א",
+			displayText: "ספר פרק א",
 		}));
 		expect(filterPerekOptions(many, "ספר")).toHaveLength(PEREK_OPTION_LIMIT);
 		expect(filterPerekOptions(many, "ספר", 5)).toHaveLength(5);

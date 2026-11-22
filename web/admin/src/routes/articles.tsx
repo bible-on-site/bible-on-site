@@ -48,6 +48,14 @@ function ArticlesNavPage() {
 	const options = useMemo(() => buildPerekOptions(perakim ?? []), [perakim]);
 	const matches = filterPerekOptions(options, navQuery);
 	const activeOption = matches[Math.min(activeIndex, matches.length - 1)];
+	const activeOptionId = activeOption?.perekId;
+	// Keep the arrow-key selection inside the scrollable results list.
+	useEffect(() => {
+		if (activeOptionId == null) return;
+		document
+			.getElementById(`perek-option-${activeOptionId}`)
+			?.scrollIntoView?.({ block: "nearest" });
+	}, [activeOptionId]);
 
 	const jumpTo = (perekId: number) => {
 		window.location.href = `/articles/perek/${perekId}`;
