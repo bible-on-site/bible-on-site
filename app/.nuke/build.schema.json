@@ -242,6 +242,10 @@
           "type": "string",
           "description": "Path to the Hebrew store release-notes text file for this version"
         },
+        "SkipExternalAndroidSymbols": {
+          "type": "boolean",
+          "description": "Use only the built app bundle and local sidecars for PackageAndroidSymbols"
+        },
         "Solution": {
           "type": "string",
           "description": "Path to a solution file that is automatically loaded. Default is bible-on-site.slnx"

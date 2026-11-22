@@ -21,7 +21,7 @@ internal static class AndroidNativeSymbols
 
     public static void Create(string sharedLibraries, string bundlePath, string outputPath,
         Func<string, byte[]?>? findPublicSymbols = null, string? symbolCacheDir = null,
-        Func<string, byte[]?>? findVendorSymbols = null)
+        Func<string, byte[]?>? findVendorSymbols = null, bool includeExternalSymbols = true)
     {
         if (File.Exists(outputPath))
         {
@@ -60,7 +60,7 @@ internal static class AndroidNativeSymbols
         // may carry their own symbol table or publish matching debug ELFs through
         // Microsoft's public, content-addressed SSQP symbol store, or through the
         // supplier store ANDROID_VENDOR_SYMBOLS_BASE_URL points at (#3440).
-        AddAvailableSymbols(bundle, symbols, findPublicSymbols, symbolCacheDir, findVendorSymbols);
+        AddAvailableSymbols(bundle, symbols, findPublicSymbols, symbolCacheDir, findVendorSymbols, includeExternalSymbols);
 
         // Validate everything before creating an output; never include the
         // assembly-store blob, its manifest, or a stripped library as symbols.
@@ -74,7 +74,8 @@ internal static class AndroidNativeSymbols
     }
 
     private static void AddAvailableSymbols(ZipArchive bundle, List<(string Name, byte[] Data)> symbols,
-        Func<string, byte[]?>? findPublicSymbols, string? symbolCacheDir, Func<string, byte[]?>? findVendorSymbols)
+        Func<string, byte[]?>? findPublicSymbols, string? symbolCacheDir, Func<string, byte[]?>? findVendorSymbols,
+        bool includeExternalSymbols)
     {
         var fetch = findPublicSymbols ?? (id => DownloadPublicSymbols(id, SymbolClient).GetAwaiter().GetResult());
         var lookup = (Func<string, byte[]?>)(id => FetchPublicSymbols(id, symbolCacheDir, fetch));
@@ -113,7 +114,7 @@ internal static class AndroidNativeSymbols
             {
                 debug = shipped;
             }
-            else if (SupportedPublicBuildId(buildId))
+            else if (includeExternalSymbols && SupportedPublicBuildId(buildId))
             {
                 debug = lookup(buildId) ?? vendorLookup?.Invoke(buildId);
             }
@@ -243,7 +244,7 @@ internal static class AndroidNativeSymbols
     private static async Task<byte[]?> DownloadSymbols(Uri uri, string buildId, HttpClient client)
     {
         using var deadline = new CancellationTokenSource(ColdDownloadDeadline);
-        using var response = await GetSymbolResponse(uri, client, deadline.Token);
+        using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -271,28 +272,6 @@ internal static class AndroidNativeSymbols
             throw new InvalidDataException("Downloaded native symbols do not match the requested ELF build ID");
         }
         return symbols;
-    }
-
-    private static async Task<HttpResponseMessage> GetSymbolResponse(Uri uri, HttpClient client, CancellationToken cancellationToken)
-    {
-        const int maximumRetries = 2;
-        var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        for (var retry = 1; retry <= maximumRetries && response.StatusCode is (
-                 HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests or HttpStatusCode.InternalServerError or
-                 HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout); retry++)
-        {
-            var retryAfter = response.Headers.RetryAfter;
-            var delay = retryAfter?.Delta ?? (retryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromSeconds(retry);
-            if (delay >= ColdDownloadDeadline)
-            {
-                break;
-            }
-
-            response.Dispose();
-            await Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.Zero, cancellationToken);
-            response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        }
-        return response;
     }
 
     /// <summary>

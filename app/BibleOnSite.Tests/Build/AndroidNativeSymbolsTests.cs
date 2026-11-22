@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Sockets;
 using Xunit;
 
@@ -345,6 +344,22 @@ public class AndroidNativeSymbolsTests : IDisposable
     }
 
     [Fact]
+    public void Offline_packaging_validates_local_symbols_without_consulting_symbol_stores()
+    {
+        var buildId = Convert.FromHexString("0123456789ABCDEF");
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libmonodroid.so", Elf(id: 5)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: buildId)));
+        Func<string, byte[]?> lookup = _ => throw new InvalidOperationException("Unexpected symbol store lookup");
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, findPublicSymbols: lookup,
+            findVendorSymbols: lookup, includeExternalSymbols: false);
+
+        Assert.Equal(["arm64-v8a/libcoreclr.so"], AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
     public void Includes_public_and_embedded_symbols_but_keeps_unavailable_files_and_data_explicit()
     {
         var coreId = Enumerable.Repeat((byte)2, 20).ToArray();
@@ -439,70 +454,28 @@ public class AndroidNativeSymbolsTests : IDisposable
         Assert.Equal(expected, await AndroidNativeSymbols.DownloadPublicSymbols(Convert.ToHexString(id), client));
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.NotFound, 0, 1)]
-    [InlineData(HttpStatusCode.Forbidden, 0, 1)]
-    [InlineData(HttpStatusCode.InternalServerError, 0, 3)]
-    [InlineData(HttpStatusCode.RequestTimeout, 0, 3)]
-    [InlineData(HttpStatusCode.TooManyRequests, 0, 3)]
-    [InlineData(HttpStatusCode.BadGateway, 0, 3)]
-    [InlineData(HttpStatusCode.ServiceUnavailable, 0, 3)]
-    [InlineData(HttpStatusCode.GatewayTimeout, 0, 3)]
-    [InlineData(HttpStatusCode.ServiceUnavailable, 120, 1)]
-    public async Task Reports_missing_public_files_without_treating_a_service_outage_as_unavailability(
-        HttpStatusCode status, int retryAfterSeconds, int expectedRequests)
+    [Fact]
+    public async Task Reports_missing_public_files_without_treating_a_service_outage_as_unavailability()
     {
-        var requests = 0;
-        using var client = new HttpClient(new SymbolHandler(_ =>
+        foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.InternalServerError, HttpStatusCode.Forbidden })
         {
-            requests++;
-            var response = new HttpResponseMessage(status);
-            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfterSeconds));
-            return response;
-        }));
-
-        var download = AndroidNativeSymbols.DownloadPublicSymbols("0123456789ABCDEF", client);
-
-        if (status == HttpStatusCode.NotFound)
-        {
-            Assert.Null(await download);
-        }
-        else
-        {
-            var error = await Assert.ThrowsAsync<HttpRequestException>(() => download);
-            Assert.Equal(status, error.StatusCode);
-        }
-        Assert.Equal(expectedRequests, requests);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Retries_a_temporary_service_outage_and_returns_validated_symbols(bool useVendorStore)
-    {
-        const string buildId = "0123456789ABCDEF";
-        var expected = Elf(buildId: Convert.FromHexString(buildId));
-        var requests = 0;
-        using var client = new HttpClient(new SymbolHandler(_ =>
-        {
-            if (++requests == 1)
+            var calls = 0;
+            using var client = new HttpClient(new SymbolHandler(_ =>
             {
-                var unavailable = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
-                if (useVendorStore)
-                {
-                    unavailable.Headers.RetryAfter = new RetryConditionHeaderValue(DateTimeOffset.UnixEpoch);
-                }
-                return unavailable;
+                calls++;
+                return new HttpResponseMessage(status);
+            }));
+            var download = AndroidNativeSymbols.DownloadPublicSymbols("0123456789ABCDEF", client);
+            if (status == HttpStatusCode.NotFound)
+            {
+                Assert.Null(await download);
             }
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(expected) };
-        }));
-
-        var symbols = useVendorStore
-            ? await AndroidNativeSymbols.DownloadVendorSymbols(buildId, "https://supplier.invalid/", client)
-            : await AndroidNativeSymbols.DownloadPublicSymbols(buildId, client);
-
-        Assert.Equal(expected, symbols);
-        Assert.Equal(2, requests);
+            else
+            {
+                await Assert.ThrowsAsync<HttpRequestException>(() => download);
+            }
+            Assert.Equal(1, calls);
+        }
     }
 
     [Theory]
@@ -566,12 +539,7 @@ public class AndroidNativeSymbolsTests : IDisposable
     {
         foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.InternalServerError, HttpStatusCode.Forbidden })
         {
-            using var client = new HttpClient(new SymbolHandler(_ =>
-            {
-                var response = new HttpResponseMessage(status);
-                response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.Zero);
-                return response;
-            }));
+            using var client = new HttpClient(new SymbolHandler(_ => new HttpResponseMessage(status)));
             var download = AndroidNativeSymbols.DownloadVendorSymbols(
                 "0123456789ABCDEF", "https://supplier.invalid/", client);
             if (status == HttpStatusCode.NotFound)
