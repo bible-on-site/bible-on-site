@@ -523,6 +523,39 @@ describe("tracked SES engagement events", () => {
 		);
 		expect(Number(row?.open_count)).toBe(2);
 	});
+	it("distinguishes same-instant events by their raw notification", async () => {
+		const subscriber = await seedSubscriber("same-ms@example.invalid");
+		const { recipientId, token } = await seedDelivered({
+			date: bulletinDate,
+			subscriberId: subscriber,
+		});
+		const open = event(
+			"open",
+			recipientId,
+			token,
+			"same-ms@example.invalid",
+		);
+		await delivery.applySesEvent(
+			open,
+			'{"open":{"ipAddress":"10.0.0.1"}}',
+		);
+		// Provider details the parser drops still separate two real events
+		// sharing every parsed field down to the millisecond; a
+		// byte-identical copy deduplicates.
+		await delivery.applySesEvent(
+			{ ...open },
+			'{"open":{"ipAddress":"10.0.0.2"}}',
+		);
+		await delivery.applySesEvent(
+			{ ...open },
+			'{"open":{"ipAddress":"10.0.0.1"}}',
+		);
+		const row = await db.queryOne<{ open_count: number }>(
+			"SELECT open_count FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+			[recipientId],
+		);
+		expect(Number(row?.open_count)).toBe(2);
+	});
 	it("keeps the newest activity timestamp across out-of-order events", async () => {
 		const subscriber = await seedSubscriber("b@example.invalid");
 		const { recipientId, token } = await seedDelivered({

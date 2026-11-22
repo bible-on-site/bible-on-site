@@ -1692,6 +1692,21 @@ describe("tracked engagement events", () => {
 		expect(row.open_count).toBe(2);
 		expect(state.notifications.size).toBe(2);
 	});
+	it("distinguishes same-instant opens by their raw notification", async () => {
+		const row = seed("test", "delivered");
+		const open = delivery("open");
+		const first = '{"open":{"ipAddress":"10.0.0.1","userAgent":"one"}}';
+		const second = '{"open":{"ipAddress":"10.0.0.2","userAgent":"two"}}';
+		await applySesEvent(open, first);
+		await applySesEvent({ ...open }, second);
+		// Provider details the parser drops still separate two real events
+		// that share every parsed field, down to the millisecond.
+		expect(row.open_count).toBe(2);
+		// A byte-identical copy of either notification still deduplicates.
+		await applySesEvent({ ...open }, first);
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
+	});
 	it("stamps the earliest proven delivery instant, never the edition date", async () => {
 		const row = seed("real", "accepted");
 		await applySesEvent(delivery("delivery"));
@@ -1925,6 +1940,36 @@ describe("summary and queue loop", () => {
 		expect(mocks.parse).toHaveBeenCalledWith(payload, config);
 		expect(row.status).toBe("delivered");
 		expect(mocks.sqs.mock.calls[1][0].kind).toBe("delete");
+	});
+	it("counts same-instant events under distinct notification bodies", async () => {
+		const row = seed("test", "delivered");
+		const c = new AbortController();
+		// Identical parsed fields down to the millisecond; only the raw
+		// notification differs, as when two opens land from distinct agents.
+		const bodies = [
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.1"}}',
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.2"}}',
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.1"}}',
+		];
+		let next = 0;
+		mocks.parse.mockReturnValue(delivery("open"));
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind !== "receive") return {};
+			if (next >= bodies.length) {
+				c.abort();
+				return {};
+			}
+			return {
+				Messages: [
+					{ Body: bodies[next], ReceiptHandle: `receipt-${next++}` },
+				],
+			};
+		});
+		await startEmailWorker(c.signal);
+		// The byte-identical third copy deduplicates; the two distinct
+		// notifications each count.
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
 	});
 	it("acknowledges the exact SES SNS validation control message without dispatching work", async () => {
 		const c = new AbortController();

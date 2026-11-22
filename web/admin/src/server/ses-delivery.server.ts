@@ -723,18 +723,21 @@ export async function processEmailRecipient(id: number): Promise<void> {
 }
 
 /**
- * Stable identity of one SES notification, derived from the event content
- * rather than from any single queue delivery. SQS may redeliver one message
- * and SNS may publish the same event twice; both copies carry identical
- * content, so this key deduplicates either path. Distinct opens or clicks at
- * different instants keep distinct keys; two indistinguishable records of the
- * same instant are one event for counting purposes.
+ * Stable identity of one SES notification. The raw notification body is the
+ * truest identity when the caller has it: SQS may redeliver one message and
+ * SNS may publish the same event twice, and every copy carries identical
+ * bytes, while provider details the parser deliberately drops — the opening
+ * address or agent, for example — still keep distinct same-instant events
+ * distinct. The parsed-field fallback covers direct callers without the raw
+ * notification; two indistinguishable records of the same instant remain
+ * one event for counting purposes there.
  */
-function notificationKey(event: SesEvent): string {
+function notificationKey(event: SesEvent, notification?: string): string {
 	const raw =
-		event.type === "subscription"
+		notification ??
+		(event.type === "subscription"
 			? `subscription|${event.email}|${event.timestamp}|${event.unsubscribeAll}|${JSON.stringify(event.topics)}`
-			: `${event.type}|${event.messageId}|${event.attemptId}|${event.timestamp}|${event.link ?? ""}`;
+			: `${event.type}|${event.messageId}|${event.attemptId}|${event.timestamp}|${event.link ?? ""}`);
 	// Hashed so a long click URL cannot push distinguishing content past the
 	// column's length and collide two different events into one key.
 	return `evt:${createHash("sha256").update(raw).digest("hex")}`;
@@ -794,13 +797,16 @@ async function lockSubscribers(
 	);
 }
 
-export async function applySesEvent(event: SesEvent): Promise<void> {
+export async function applySesEvent(
+	event: SesEvent,
+	notification?: string,
+): Promise<void> {
 	if (event.type === "subscription") {
 		await transaction(async (connection) => {
 			if (
 				await consumeNotification(
 					connection,
-					notificationKey(event),
+					notificationKey(event, notification),
 					null,
 					event.type,
 				)
@@ -842,7 +848,7 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 		if (
 			await consumeNotification(
 				connection,
-				notificationKey(event),
+				notificationKey(event, notification),
 				id,
 				event.type,
 			)
@@ -1183,7 +1189,7 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
-							await applySesEvent(event);
+							await applySesEvent(event, message.Body);
 							handled = true;
 						}
 					}

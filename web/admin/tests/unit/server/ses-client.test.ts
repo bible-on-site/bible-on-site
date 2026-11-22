@@ -426,6 +426,19 @@ describe("SES managed-subscription transport", () => {
 		await new SesClient(config).unsubscribeTopic(request.to, "real");
 		expect(calls("update")).toHaveLength(2);
 	});
+	it.each([429, 500])(
+		"treats the settle read as best-effort once the write lands (HTTP %s)",
+		async (status) => {
+			mocks.send
+				.mockResolvedValueOnce(contact())
+				.mockResolvedValueOnce({}) // UpdateContact
+				.mockRejectedValueOnce(sdkError(status, "TooManyRequestsException"));
+			await new SesClient(config).unsubscribeTopic(request.to, "real");
+			// The write applied the opt-out; a throttled or failed verification
+			// must not report a false failed mirror.
+			expect(calls("update")).toHaveLength(1);
+		},
+	);
 	it("fails uncertain rather than looping forever when the opt-out never settles", async () => {
 		mocks.send.mockImplementation(async (command: { kind: string }) =>
 			command.kind === "get" ? contact() : {},

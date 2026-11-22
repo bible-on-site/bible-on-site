@@ -494,6 +494,12 @@ export class SesClient {
 	 * topic's opt-out, which the bounded retry re-asserts. A change landing
 	 * inside the provider call itself remains a SES last-writer window no
 	 * client can close.
+	 *
+	 * The re-read is best-effort: a successful UpdateContact already applied
+	 * the opt-out, and SES paces contact operations to about one request per
+	 * second, so a throttled or otherwise failed verification must not
+	 * report a false failed mirror — the pending-mirror retry reconciles a
+	 * genuinely lost write.
 	 */
 	async unsubscribeTopic(
 		email: string,
@@ -530,7 +536,7 @@ export class SesClient {
 			} catch (error) {
 				throw requestError(error, true, "update-contact");
 			}
-			const settled = await this.getContact(normalized);
+			const settled = await this.getContact(normalized).catch(() => null);
 			if (
 				!settled ||
 				settled.unsubscribeAll ||
