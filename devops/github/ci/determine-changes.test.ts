@@ -10,23 +10,23 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, type TestContext, test } from "node:test";
+import { type TestContext, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+	MODULES,
+	type ModuleKey,
 	applyReleaseRecovery,
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
 	isSchemaOnlyDataChange,
 	listChangedFiles,
-	MODULES,
-	type ModuleKey,
 	main,
 } from "./determine-changes.ts";
 import {
 	DOCSTRING_PYTHON,
-	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
+	isPublishDocstringOnlyChange,
 } from "./publish-docstring.mts";
 
 const changed = (files: string[], ...keys: ModuleKey[]) =>
@@ -302,22 +302,19 @@ describe("detectChanges", () => {
 		"devops/github/ci/ubuntu-apt-mirrors.mjs",
 		"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
 	]) {
-		test(
-			`${path} selects the package mirror consumers without a release`,
-			() => {
-				const consumers = new Set(["website", "app", "admin"]);
-				for (const [module, flags] of Object.entries(detectChanges([path]))) {
-					assert.deepEqual(
-						flags,
-						{
-							module_changed: false,
-							ci_changed: consumers.has(module),
-						},
-						module,
-					);
-				}
-			},
-		);
+		test(`${path} selects the package mirror consumers without a release`, () => {
+			const consumers = new Set(["website", "app", "admin"]);
+			for (const [module, flags] of Object.entries(detectChanges([path]))) {
+				assert.deepEqual(
+					flags,
+					{
+						module_changed: false,
+						ci_changed: consumers.has(module),
+					},
+					module,
+				);
+			}
+		});
 	}
 
 	test("mobile matrix workflow changes require app checks without a release", () => {
@@ -431,6 +428,108 @@ describe("detectChanges", () => {
 				file,
 			);
 			assert.equal(changes.website.ci_changed, false, file);
+		}
+	});
+
+	test("shared runtime contract edits release their importer apps", () => {
+		// #3710: web/shared sources are compiled into the release artifacts —
+		// a contract-only fix must package website+admin, not just run checks.
+		for (const file of [
+			"web/shared/revalidate/index.ts",
+			"web/shared/bulletin-join/index.ts",
+			"web/shared/tanahpedia/index.ts",
+			// Directory-level entry: every runtime file under reading-metrics counts.
+			"web/shared/reading-metrics/text.ts",
+			"web/shared/reading-metrics/policy.ts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "admin"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: true, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			// The API does not import these contracts; the shared CI umbrella
+			// still runs its checks.
+			assert.deepEqual(
+				changes.api,
+				{ module_changed: false, ci_changed: true },
+				`${file} -> api`,
+			);
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: false },
+				`${file} -> app`,
+			);
+		}
+		// The article-relationship DTOs bind admin and the Rust API only.
+		const pediaDto = detectChanges([
+			"web/shared/article-relationships/index.ts",
+		]);
+		for (const key of ["admin", "api"] as const) {
+			assert.deepEqual(
+				pediaDto[key],
+				{ module_changed: true, ci_changed: true },
+				`article-relationships -> ${key}`,
+			);
+		}
+		assert.deepEqual(
+			pediaDto.website,
+			{ module_changed: false, ci_changed: true },
+			"article-relationships -> website",
+		);
+	});
+
+	test("shared test-only fixtures run checks without a release", () => {
+		// Revalidation examples are fixtures imported by both test suites;
+		// tests-util serves the Playwright harnesses. Neither ships.
+		for (const file of [
+			"web/shared/revalidate/examples.ts",
+			"web/shared/tests-util/e2e-impact.ts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "admin", "api"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: false },
+				`${file} -> app`,
+			);
+		}
+	});
+
+	test("release-notes extra_module_paths mirror extraModulePaths", () => {
+		// shared-release.yml feeds `extra_module_paths` to release-notes.mjs;
+		// a released commit touching only an extra path must land in the notes,
+		// so the ci.yml literals must mirror extraModulePaths exactly.
+		const ciYml = readFileSync(
+			join(dirname(fileURLToPath(import.meta.url)), "../../../.github/workflows/ci.yml"),
+			"utf8",
+		);
+		const released = new Map<string, string[]>();
+		for (const block of ciYml
+			.split("uses: ./.github/workflows/shared-release.yml")
+			.slice(1)) {
+			const name = block.match(/module_name:\s*(\w+)/)?.[1];
+			assert.ok(name, "shared-release job without module_name");
+			const extras = block.match(/extra_module_paths:\s*'([^']*)'/)?.[1];
+			released.set(name, extras ? JSON.parse(extras) : []);
+		}
+		for (const [module, rule] of Object.entries(MODULES)) {
+			// perushim_pipeline and data ship through release_data, which
+			// produces no shared-release notes and takes no extras input.
+			if (module === "perushim_pipeline" || module === "data") continue;
+			assert.deepEqual(
+				[...(released.get(module) ?? [])].sort(),
+				[...(rule.extraModulePaths ?? [])].sort(),
+				`release notes extras for ${module}`,
+			);
 		}
 	});
 
@@ -1689,11 +1788,7 @@ describe("main", () => {
 			"README.md",
 		]) {
 			test(`push of ${path} is not docs_only`, () => {
-				const { output } = run(
-					"push",
-					({ base }) => ({ before: base }),
-					path,
-				);
+				const { output } = run("push", ({ base }) => ({ before: base }), path);
 				assert.match(output, /^docs_only=false$/m);
 			});
 		}

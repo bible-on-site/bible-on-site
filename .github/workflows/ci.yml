@@ -4251,7 +4251,7 @@ jobs:
       module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
+      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
@@ -4270,6 +4270,8 @@ jobs:
     with:
       module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      # Keep in sync with api extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["web/shared/article-relationships"]'
       module_version: ${{ needs.package_api.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_api_arm64.outputs.docker_artifact_name }}", "path": "web/api/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
@@ -4337,6 +4339,8 @@ jobs:
     with:
       module_name: admin
       module_directory: web/admin
+      # Keep in sync with admin extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships"]'
       module_version: ${{ needs.package_admin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws

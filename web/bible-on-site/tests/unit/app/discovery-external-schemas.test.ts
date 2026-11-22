@@ -19,15 +19,15 @@ jest.mock("@/lib/seo/jsonld", () => ({
 			: `https://canonical.example${path.startsWith("/") ? path : `/${path}`}`,
 }));
 
-import Ajv2020 from "ajv/dist/2020";
-import addFormats from "ajv-formats";
-import yaml from "js-yaml";
 import { GET as skillGET } from "@/app/.well-known/agent-skills/[name]/SKILL.md/route";
 import { GET as indexGET } from "@/app/.well-known/agent-skills/index.json/route";
 import { GET as aiCatalogGET } from "@/app/.well-known/ai-catalog.json/route";
 import { GET as ardGET } from "@/app/.well-known/ard.json/route";
 import { GET as llmsGET } from "@/app/llms.txt/route";
 import { agentSkillsIndex, skillByName } from "@/lib/agent-skills";
+import addFormats from "ajv-formats";
+import Ajv2020 from "ajv/dist/2020";
+import yaml from "js-yaml";
 import agentSkillsSchema from "../../util/discovery/agent-skills-discovery-0.2.0.schema.json";
 import ardSchema from "../../util/discovery/ard-entry-0.91.schema.json";
 
@@ -176,8 +176,14 @@ describe("/llms.txt - llmstxt.org document shape", () => {
 	it("uses well-formed markdown link syntax for the resource lists it publishes", async () => {
 		const body = await llmsGET().text();
 		// Every published discovery URL the llms spec expects agents to reach
-		// must appear as a parseable markdown link or inline code path.
-		for (const resource of [
+		// must appear inside a valid Markdown link target or an inline-code
+		// span — a raw substring check could be satisfied by text inside a
+		// malformed link (an unbalanced "[x](/path" yields no "](" target).
+		const linkTargets = new Set(
+			[...body.matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g)].map((m) => m[1]),
+		);
+		const codeSpans = [...body.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+		const unrepresented = [
 			"/.well-known/api-catalog",
 			"/.well-known/ard.json",
 			"/.well-known/ai-catalog.json",
@@ -186,9 +192,17 @@ describe("/llms.txt - llmstxt.org document shape", () => {
 			"/sitemap.xml",
 			"/robots.txt",
 			"/api/search",
-		]) {
-			expect(body).toContain(resource);
-		}
+		].filter(
+			(resource) =>
+				!linkTargets.has(resource) &&
+				!codeSpans.some(
+					(span) =>
+						span === resource ||
+						span.startsWith(`${resource}?`) ||
+						span.startsWith(`${resource}/`),
+				),
+		);
+		expect(unrepresented).toEqual([]);
 		// No broken markdown links: every "[" starting a link text has a
 		// matching "](" pair somewhere — cheap balance check against drift.
 		const linkText = body.match(/\[[^\]]+\]\([^)]+\)/g) ?? [];

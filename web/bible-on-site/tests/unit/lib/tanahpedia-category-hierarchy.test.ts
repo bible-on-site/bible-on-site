@@ -3,7 +3,10 @@ import {
 	CATEGORY_HIERARCHY,
 	labelForCategoryKey,
 } from "../../../src/lib/tanahpedia/category-hierarchy";
-import { pediaPathFromLegacy } from "../../../src/lib/tanahpedia/category-slug";
+import {
+	categoryHref,
+	pediaPathFromLegacy,
+} from "../../../src/lib/tanahpedia/category-slug";
 import type { CategoryKey } from "../../../src/lib/tanahpedia/types";
 
 describe("tanahpedia/category-hierarchy", () => {
@@ -33,13 +36,16 @@ describe("tanahpedia/category-hierarchy", () => {
 				.replace(/^\/tanahpedia\/?/, "")
 				.split("?");
 			const params = new URLSearchParams(query);
+			// Exact canonical target, not merely "not the landing page": a
+			// dropped role/kind/purity filter would land PROPHET on the
+			// generic people listing instead of /pedia/נביאים.
 			expect(
 				pediaPathFromLegacy(segment || null, {
 					role: params.get("role") ?? undefined,
 					kind: params.get("kind") ?? undefined,
 					purity: params.get("purity") ?? undefined,
 				}),
-			).not.toBe("/pedia");
+			).toBe(categoryHref(key));
 		}
 	});
 });
