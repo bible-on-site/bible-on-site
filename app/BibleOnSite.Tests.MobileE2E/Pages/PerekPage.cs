@@ -131,15 +131,22 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         WaitForHidden(automationId, TimeSpan.FromSeconds(30));
 
     /// <inheritdoc cref="WaitForHidden(string)"/>
-    public void WaitForHidden(string automationId, TimeSpan timeout)
+    public void WaitForHidden(string automationId, TimeSpan timeout) =>
+        WaitForHidden([platform.AutomationId(automationId)], timeout);
+
+    /// <summary>
+    /// One deadline shared by every locator: each poll cycle checks all of
+    /// them, so a marker that never appears costs a single lookup per cycle
+    /// and one still-visible marker holds the whole window.
+    /// </summary>
+    private void WaitForHidden(IReadOnlyList<By> locators, TimeSpan timeout)
     {
-        var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                var visible = FindVisible(locator).Any();
+                var visible = locators.Any(locator => FindVisible(locator).Any());
                 if (!visible)
                 {
                     return;
@@ -155,7 +162,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             }
             Thread.Sleep(200);
         }
-        throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
+        throw new WebDriverTimeoutException($"Element matching {string.Join(", ", locators)} stayed visible for {timeout.TotalSeconds} seconds.");
     }
 
     /// <summary>
@@ -174,24 +181,23 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         TapToDismiss(toggleAutomationId, TimeSpan.FromSeconds(5), contentAutomationIds);
 
     /// <inheritdoc cref="TapToDismiss(string, string[])"/>
-    /// <param name="hiddenTimeout">Per-attempt window for each content marker
-    /// to disappear — short on purpose: a tap that reached the toggle hides
-    /// the surface inside its own ~250ms animation, so seconds of
+    /// <param name="hiddenTimeout">Per-attempt window for every content marker
+    /// to disappear — a single deadline shared across the markers, not a
+    /// fresh window each. Short on purpose: a tap that reached the toggle
+    /// hides the surface inside its own ~250ms animation, so seconds of
     /// still-visible content already prove the gesture missed and bound the
     /// retry.</param>
     public void TapToDismiss(string toggleAutomationId, TimeSpan hiddenTimeout, params string[] contentAutomationIds)
     {
         // WaitForHidden only times out after a full window of still-visible
         // polls, so a retap cannot reopen a surface that already closed.
+        var locators = contentAutomationIds.Select(platform.AutomationId).ToArray();
         for (var attempt = 1; attempt <= 3; attempt++)
         {
             Tap(toggleAutomationId);
             try
             {
-                foreach (var marker in contentAutomationIds)
-                {
-                    WaitForHidden(marker, hiddenTimeout);
-                }
+                WaitForHidden(locators, hiddenTimeout);
                 return;
             }
             catch (WebDriverTimeoutException exception)
