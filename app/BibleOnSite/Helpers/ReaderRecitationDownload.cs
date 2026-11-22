@@ -49,7 +49,7 @@ public sealed class ReaderRecitationDownload
         }
 
         Cancel();
-        var source = new CancellationTokenSource();
+        using var source = new CancellationTokenSource();
         _pending = (perekId, source);
         try
         {
@@ -69,7 +69,6 @@ public sealed class ReaderRecitationDownload
             {
                 _pending = null;
             }
-            source.Dispose();
         }
     }
 }
