@@ -288,6 +288,13 @@ describe("Article chapter navigation", () => {
 				fireEvent.keyDown(combobox(), { key: "Enter" }),
 			),
 		).toBe("unchanged");
+		// A real query afterwards still selects and opens the first match.
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
 	});
 
 	it("caps the empty-query list and shows the running count", () => {

@@ -113,7 +113,7 @@ function ArticlesNavPage() {
 								e.preventDefault();
 								const next =
 									e.key === "ArrowDown"
-										? Math.min(activeIndex + 1, matches.length - 1)
+										? Math.max(0, Math.min(activeIndex + 1, matches.length - 1))
 										: Math.max(activeIndex - 1, 0);
 								setActiveIndex(next);
 								// Keep the selection inside the scrollable list; runs
