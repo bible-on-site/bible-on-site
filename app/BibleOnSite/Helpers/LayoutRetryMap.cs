@@ -18,7 +18,5 @@ internal sealed class LayoutRetryMap<TElement> where TElement : class
 	/// <summary>Returns the element's retry delegate and forgets it, so the
 	/// caller can unsubscribe exactly the handler that was attached.</summary>
 	public EventHandler<object>? Remove(TElement element) =>
-		_handlers.TryGetValue(element, out var handler) && _handlers.Remove(element)
-			? handler
-			: null;
+		_handlers.Remove(element, out var handler) ? handler : null;
 }
