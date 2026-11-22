@@ -94,6 +94,36 @@ describe("BulletinEmailEngagement", () => {
 			await screen.findByText(/מדידת פתיחות וקליקים טרם הופעלה/),
 		).toBeDefined();
 	});
+	it("shows a dash instead of a rate when nobody was delivered", async () => {
+		mocks.read.mockResolvedValue(
+			panel({
+				editions: [
+					{
+						jobId: "job-0",
+						date: "2026-10-28",
+						tracked: true,
+						delivered: 0,
+						opened: 0,
+						clicked: 0,
+					},
+				],
+			}),
+		);
+		mount();
+		expect(await screen.findAllByText("0 (-)")).toHaveLength(2);
+	});
+	it("surfaces a failed engagement read", async () => {
+		mocks.read.mockRejectedValue(new Error("קריאה נכשלה"));
+		mount();
+		expect(await screen.findByRole("alert")).toHaveTextContent("קריאה נכשלה");
+	});
+	it("shows the empty-editions note when nothing was sent yet", async () => {
+		mocks.read.mockResolvedValue(panel({ editions: [] }));
+		mount();
+		expect(
+			await screen.findByText(/אין עדיין משלוחי מנויים/),
+		).toBeDefined();
+	});
 	it("shows an empty review list when nobody qualifies", async () => {
 		mocks.read.mockResolvedValue(panel({ inactive: [] }));
 		mount();
@@ -140,6 +170,29 @@ describe("BulletinEmailEngagement", () => {
 		);
 		expect(await screen.findByRole("alert")).toHaveTextContent("נרשמה פעילות");
 		expect(mocks.confirm).toHaveBeenCalledTimes(1);
+	});
+	it("labels in-flight removals and mirror retries while pending", async () => {
+		let resolveConfirm: (() => void) | undefined;
+		mocks.read.mockResolvedValue(
+			panel({ pendingMirror: [{ id: 9, email: "mirror@example.com" }] }),
+		);
+		mocks.confirm.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveConfirm = resolve;
+				}),
+		);
+		mount();
+		fireEvent.click(
+			await screen.findByRole("button", { name: "הסרה מהדיוור" }),
+		);
+		fireEvent.click(
+			await screen.findByRole("button", { name: "אישור הסרה מהדיוור" }),
+		);
+		expect(await screen.findByText("מסיר...")).toBeDefined();
+		expect(screen.getByText("מסנכרן...")).toBeDefined();
+		resolveConfirm?.();
+		await waitFor(() => expect(screen.queryByText("מסיר...")).toBeNull());
 	});
 	it("keeps a failed SES mirror reachable with an explicit retry", async () => {
 		mocks.read.mockResolvedValue(

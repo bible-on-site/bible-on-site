@@ -179,6 +179,29 @@ describe("inactivity unsubscribe confirmation", () => {
 			mocks.txExecute.mock.invocationCallOrder[pendingIndex],
 		).toBeLessThan(mocks.unsubscribeTopic.mock.invocationCallOrder[0]);
 	});
+	it("refuses a subscriber that no longer exists", async () => {
+		mocks.txQueryOne.mockResolvedValueOnce(null);
+		await expect(confirmInactivityUnsubscribe(7, "admin-1234")).rejects.toThrow(
+			"אינו פעיל",
+		);
+		expect(mocks.txExecute).not.toHaveBeenCalled();
+		expect(mocks.unsubscribeTopic).not.toHaveBeenCalled();
+	});
+	it("fails cleanly when the guarded update matches nothing", async () => {
+		mocks.txQueryOne
+			.mockResolvedValueOnce({
+				id: 7,
+				email: "silent@example.com",
+				consent_status: "confirmed",
+				admin_action: null,
+			})
+			.mockResolvedValueOnce({ id: 7, email: "silent@example.com" });
+		mocks.txExecute.mockResolvedValue({ affectedRows: 0 });
+		await expect(confirmInactivityUnsubscribe(7, "admin-1234")).rejects.toThrow(
+			"אינו פעיל",
+		);
+		expect(mocks.unsubscribeTopic).not.toHaveBeenCalled();
+	});
 	it("rejects a subscriber whose eligibility vanished after listing", async () => {
 		mocks.txQueryOne
 			.mockResolvedValueOnce({

@@ -1764,6 +1764,135 @@ describe("tracked engagement events", () => {
 		await enqueueBulletinEmail(date, key, expected);
 		expect(state.jobs[0].tracked).toBe(0);
 	});
+	it("propagates an unrelated job-insert failure instead of falling back", async () => {
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes(", tracked) VALUES"))
+				throw Object.assign(new Error("read-only replica"), {
+					code: "ER_OPTION_PREVENTS_STATEMENT",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(enqueueBulletinEmail(date, key, expected)).rejects.toThrow(
+			"read-only replica",
+		);
+		expect(state.jobs).toHaveLength(0);
+	});
+	it("counts zero engagement when the summary counters come back null", async () => {
+		seed("test", "delivered");
+		const inner = mocks.queryOne.getMockImplementation();
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				return { opened: null, clicked: null };
+			return inner?.(sql, p) ?? (read(sql, p)[0] ?? null);
+		});
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: false,
+			opened: 0,
+			clicked: 0,
+		});
+	});
+	it("propagates a non-schema failure from the engagement summary", async () => {
+		seed("test", "delivered");
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				throw new Error("deadlock");
+			return read(sql, p)[0] ?? null;
+		});
+		await expect(readLatestEmailJob(date, "test")).rejects.toThrow("deadlock");
+	});
+	it("applies an event without dedupe while the notification ledger is missing", async () => {
+		const row = seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (
+				compact(String(sql)).startsWith(
+					"INSERT INTO tanah_daily_bulletin_email_notification",
+				)
+			)
+				throw Object.assign(new Error("no such table"), {
+					code: "ER_NO_SUCH_TABLE",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("delivery"));
+		expect(row.status).toBe("delivered");
+		expect(state.notifications.size).toBe(0);
+	});
+	it("propagates an unrelated notification-ledger failure", async () => {
+		seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (
+				compact(String(sql)).startsWith(
+					"INSERT INTO tanah_daily_bulletin_email_notification",
+				)
+			)
+				throw Object.assign(new Error("deadlock"), {
+					code: "ER_LOCK_DEADLOCK",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("delivery"))).rejects.toThrow(
+			"deadlock",
+		);
+	});
+	it("never counts a click without a destination as content engagement", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("click"));
+		expect(row.clicked_at).toBeNull();
+		expect(row.click_count).toBe(0);
+	});
+	it("skips engagement while the counter columns are missing", async () => {
+		const row = seed("test", "delivered");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("open_count"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("open"));
+		expect(row.open_count).toBe(0);
+		expect(row.status).toBe("delivered");
+	});
+	it("propagates an unrelated engagement-write failure", async () => {
+		seed("test", "delivered");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("open_count"))
+				throw new Error("deadlock");
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("open"))).rejects.toThrow("deadlock");
+	});
+	it("applies the delivery while the evidence column is missing", async () => {
+		const row = seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("delivered_at = LEAST"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("delivery"));
+		expect(row.status).toBe("delivered");
+		expect(row.delivered_at).toBeNull();
+	});
+	it("propagates an unrelated delivery-evidence failure", async () => {
+		seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("delivered_at = LEAST"))
+				throw new Error("deadlock");
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("delivery"))).rejects.toThrow(
+			"deadlock",
+		);
+	});
 });
 
 describe("summary and queue loop", () => {
