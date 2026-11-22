@@ -1230,3 +1230,53 @@ test("playback follows the spoken word inside its own scrollable pane", async ()
 		block: "nearest",
 	});
 });
+
+test("playback follows the spoken word when the page scrolls the document", async () => {
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+			<div data-testid="root" style={{ overflowY: "auto" }}>
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	const scrollIntoView = jest.fn();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	const root = screen.getByTestId("root");
+	Object.defineProperty(root, "scrollHeight", {
+		value: 5000,
+		configurable: true,
+	});
+	Object.defineProperty(root, "clientHeight", {
+		value: 768,
+		configurable: true,
+	});
+	// Document-level scrolling (globals.css sets html/body overflow-x
+	// hidden, so the root's overflow-y computes to "auto"): the ancestor's
+	// bounds span the whole document, not the viewport.
+	jest.spyOn(root, "getBoundingClientRect").mockReturnValue({
+		top: -1200,
+		bottom: 3800,
+		left: 0,
+		right: 400,
+		width: 400,
+		height: 5000,
+		x: 0,
+		y: -1200,
+		toJSON: () => ({}),
+	} as DOMRect);
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	jest.spyOn(word, "getBoundingClientRect").mockReturnValue(belowFoldRect);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	frame(1250);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(scrollIntoView).toHaveBeenCalledWith({
+		behavior: "instant",
+		block: "nearest",
+	});
+});

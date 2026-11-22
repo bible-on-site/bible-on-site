@@ -217,8 +217,15 @@ function visibleInPane(node: HTMLElement) {
 			(overflowY === "auto" || overflowY === "scroll") &&
 			parent.scrollHeight > parent.clientHeight
 		) {
+			// `html, body { overflow-x: hidden }` makes the root's computed
+			// overflow-y "auto" on document-scrolling pages, and the root's
+			// rect spans the whole document, so clamp the pane bounds to the
+			// viewport — otherwise a verse below the fold reads as visible.
 			const bounds = parent.getBoundingClientRect();
-			return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+			return (
+				rect.top >= Math.max(bounds.top, 0) &&
+				rect.bottom <= Math.min(bounds.bottom, window.innerHeight)
+			);
 		}
 		parent = parent.parentElement;
 	}
