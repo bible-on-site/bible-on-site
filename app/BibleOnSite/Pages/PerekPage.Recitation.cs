@@ -325,7 +325,7 @@ public partial class PerekPage
     /// Requires an aligned ("ready") track — without word timings there is no
     /// pasuk boundary to stop at.
     /// </summary>
-    private async Task PlayPasukRecitationAsync(Pasuk pasuk)
+    private async Task PlayPasukRecitationAsync(Pasuk pasuk, bool downloadIfMissing = false)
     {
         if (_viewModel.Perek is not { } perek)
         {
@@ -359,7 +359,7 @@ public partial class PerekPage
         // second tap of a double-tap opens the focused pasuk and keeps it.
         await PlayRecitationAsync($"pasuk:{perek.PerekId}:{pasuk.PasukNum}",
             ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)],
-            resumeFromMs: words[0].StartMs!.Value);
+            resumeFromMs: words[0].StartMs!.Value, downloadIfMissing: downloadIfMissing);
     }
 
     private async void OnPasukDoubleTapped(object? sender, TappedEventArgs e)
@@ -439,9 +439,12 @@ public partial class PerekPage
 
     private async void OnFocusedPlayClicked(object? sender, EventArgs e)
     {
+        // A deliberate tap on the focused view's enabled headphones — it opts
+        // into the pack download like the header Play, while the implicit
+        // preview on opening the pasuk stays local-only (#3704).
         if (_focusedPasuk is { } pasuk)
         {
-            await PlayPasukRecitationAsync(pasuk);
+            await PlayPasukRecitationAsync(pasuk, downloadIfMissing: true);
         }
     }
 

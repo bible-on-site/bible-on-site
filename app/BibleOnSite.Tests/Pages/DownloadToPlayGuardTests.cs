@@ -1,7 +1,8 @@
 namespace BibleOnSite.Tests.Pages;
 
 /// <summary>
-/// #3704: only a deliberate Play tap may start a sefer's pack download.
+/// #3704: only a deliberate Play tap may start a sefer's pack download —
+/// the header/selection bars and the focused view's own headphones button.
 /// Pasuk-focus opens, pasuk previews and word previews are implicit local
 /// playback — they must never fetch a pack unasked (Devin review on #3723).
 /// The opt-in travels as <c>downloadIfMissing</c> on PlayRecitationAsync,
@@ -27,25 +28,47 @@ public class DownloadToPlayGuardTests
     [Fact]
     public void DownloadOptIn_OnlyTheDeliberatePlayTapsSetIt()
     {
-        // chapter + selected-verses bar taps and the download→play replay in
-        // PerekPage.Recitation.cs; the header headphones tap in the code-behind.
-        Assert.Equal(3, CountOccurrences(RecitationSource, "downloadIfMissing: true"));
+        // chapter + selected-verses bar + focused-pasuk headphones taps and the
+        // download→play replay in PerekPage.Recitation.cs; the header
+        // headphones tap in the code-behind.
+        Assert.Equal(4, CountOccurrences(RecitationSource, "downloadIfMissing: true"));
         Assert.Equal(1, CountOccurrences(CodeBehindSource, "downloadIfMissing: true"));
     }
 
+    [Fact]
+    public void PasukPreviewHelper_DefaultsToLocalOnly()
+    {
+        // The shared pasuk helper carries the opt-in only so its callers can
+        // choose; it must default off so implicit previews never fetch a pack.
+        Assert.Contains(
+            "Task PlayPasukRecitationAsync(Pasuk pasuk, bool downloadIfMissing = false)",
+            RecitationSource);
+    }
+
     [Theory]
-    [InlineData("Task PlayPasukRecitationAsync")]
-    public void PasukPreviews_NeverOptIntoAPackDownload(string signature)
+    [InlineData("Task OpenFocusedPasukAsync")]   // implicit preview on double-tap
+    [InlineData("Task HandlePasukTapAsync")]     // single-tap pasuk preview
+    public void ImplicitPasukPreviews_NeverOptIntoAPackDownload(string signature)
     {
         var body = MethodBody(RecitationSource, signature);
-        Assert.DoesNotContain("downloadIfMissing", body);
+        Assert.DoesNotContain("downloadIfMissing: true", body);
+    }
+
+    [Fact]
+    public void FocusedHeadphonesTap_OptsIntoThePackDownload()
+    {
+        // The focused view's headphones button is enabled for aligned pesukim
+        // regardless of installation; its deliberate tap must download→play
+        // rather than sit dead (Devin review on #3723).
+        var body = MethodBody(RecitationSource, "OnFocusedPlayClicked(object?");
+        Assert.Contains("PlayPasukRecitationAsync(pasuk, downloadIfMissing: true)", body);
     }
 
     [Fact]
     public void FocusedPasukOpen_PlaysThroughTheLocalOnlyPath()
     {
         // The implicit preview on a double-tap goes through
-        // PlayPasukRecitationAsync, which the theory above keeps flag-free.
+        // PlayPasukRecitationAsync without the opt-in.
         var body = MethodBody(RecitationSource, "Task OpenFocusedPasukAsync");
         Assert.Contains("PlayPasukRecitationAsync", body);
         Assert.DoesNotContain("downloadIfMissing", body);
