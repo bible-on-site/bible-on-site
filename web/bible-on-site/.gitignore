@@ -68,3 +68,12 @@ tests/unit/components/err.txt
 # Generated, content-addressed reader books
 /src/data/db/sefer-books/
 /public/generated/sefarim/
+
+# Staged from web/shared/branding (scripts/stage-brand-assets.mjs, #3708)
+/public/fonts/
+/public/font-license.txt
+/public/images/logos/
+/public/apple-touch-icon.png
+/src/app/favicon.ico
+/src/lib/download/fonts/
+/src/lib/download/logo_header.jpg

@@ -45,3 +45,7 @@ playwright-report
 .playwright-results
 monocart-report/
 .vitest
+
+# Staged from web/shared/branding by vite.config.ts (#3708)
+/public/fonts/
+/public/favicon.ico

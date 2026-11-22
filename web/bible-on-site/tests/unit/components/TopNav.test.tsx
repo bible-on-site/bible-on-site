@@ -57,7 +57,7 @@ describe("TopNav", () => {
 		const vector = await sharp(
 			resolve(
 				__dirname,
-				"../../../public/images/logos/header-logo-reversed.svg",
+				"../../../../shared/branding/logos/header-logo-reversed.svg",
 			),
 		).metadata();
 		render(

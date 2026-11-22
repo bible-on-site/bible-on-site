@@ -9,39 +9,39 @@
   "fontSourceCommit": "f488d3eefe42ac7e7e6833d2df1bc8a0a6a158a2",
   "canonicalAssets": [
     {
-      "file": "web/bible-on-site/source-assets/logos/app-icon.svg",
+      "file": "web/shared/branding/logos/app-icon.svg",
       "sha256": "bb65150ea6f1d69bff6fbb0ac059327069424e2a763848b6690f89adeab779c5"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/compact.svg",
+      "file": "web/shared/branding/logos/compact.svg",
       "sha256": "5344adb5a059c3a0eb7f69f9717b2362215121e6b0c8daef64cf5bf8847c37e9"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/compact-reversed.svg",
+      "file": "web/shared/branding/logos/compact-reversed.svg",
       "sha256": "b21d04663e530974a94a71207e2c7b7de182f40d4dcc0a756a2d682886605ea9"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/favicon-16.svg",
+      "file": "web/shared/branding/logos/favicon-16.svg",
       "sha256": "9dca44429933441b705853f5f3f558e3c74ce45c84d8f74bf60a3ed2f997fe29"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/favicon-24.svg",
+      "file": "web/shared/branding/logos/favicon-24.svg",
       "sha256": "c446c642f5580eec7cec72e5d146d9e42a51b113cc1c0678a13eee12f57aef22"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/favicon-32.svg",
+      "file": "web/shared/branding/logos/favicon-32.svg",
       "sha256": "4c07f84e303f879e01af78f3b2933816cbbfee13c65fa06dc77ad966cdc2b4a5"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/favicon-48.svg",
+      "file": "web/shared/branding/logos/favicon-48.svg",
       "sha256": "00178c55c43023654a3a69390d080f45f5d71fe02eca2228db778bb51131721a"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/header-logo-reversed.svg",
+      "file": "web/shared/branding/logos/header-logo-reversed.svg",
       "sha256": "5905be00ef11996cc60a438090cccf25eb55f15fca1e3733fe4a2bac7dc7d0a9"
     },
     {
-      "file": "web/bible-on-site/source-assets/logos/header-logo.svg",
+      "file": "web/shared/branding/logos/header-logo.svg",
       "sha256": "67b87d809bd9241ed56829cb543b8245f8879918b0508ad5ee188ae7a3386d74"
     }
   ]

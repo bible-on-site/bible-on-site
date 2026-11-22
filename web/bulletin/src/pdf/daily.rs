@@ -8,7 +8,9 @@ use super::{
     to_hebrew_letter, typst_escape, typst_string,
 };
 
-const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header.jpg");
+// The canonical shared wordmark the website, native app and email header all
+// derive from (#3708).
+const LOGO: &[u8] = include_bytes!("../../../shared/branding/derived/logo_header.jpg");
 const ICONS: [(&str, &[u8]); 5] = [
     (
         "email",

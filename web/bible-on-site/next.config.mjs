@@ -4,9 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
 import { getBuildWorkerCount } from "./scripts/build-worker-budget.mjs";
+import { stageBrandAssets } from "./scripts/stage-brand-assets.mjs";
 
 const KB = 1024;
 const MB = KB * KB;
+
+// Shared branding (#3708) is the canonical source; public/ and the PDF inputs
+// under src/lib/download/ are staged copies restored at every config load.
+stageBrandAssets();
 
 const isProduction = process.env.NODE_ENV === "production";
 const localAssetEndpoint = [

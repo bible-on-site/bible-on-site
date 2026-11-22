@@ -36,6 +36,7 @@ on:
       - "web/bible-on-site/src/data/learning-schedule.ts"
       - "web/bible-on-site/src/lib/download/**"
       - "web/bible-on-site/src/util/hebdates-util.ts"
+      - "web/shared/branding/**"
   workflow_dispatch:
     inputs:
       extra_keys:

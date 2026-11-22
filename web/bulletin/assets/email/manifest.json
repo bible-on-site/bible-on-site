@@ -9,7 +9,7 @@
 	"assets": [
 		{
 			"id": "logo-header",
-			"sourcePath": "app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"sourcePath": "web/shared/branding/derived/logo_header.jpg",
 			"sourceSha256": "ab5ee264e1e018611224245f091d27f79a88c8156ba36965eddc6149bbf2fdbf",
 			"sha256": "ab5ee264e1e018611224245f091d27f79a88c8156ba36965eddc6149bbf2fdbf",
 			"file": "logo-header-ab5ee264e1e0.jpg",
@@ -19,7 +19,7 @@
 			"width": 1040,
 			"height": 313,
 			"bytes": 38283,
-			"attribution": "Al Heperek Yehuda 0.9.7 outlined wordmark, shared with the native application and PDF header."
+			"attribution": "Al Heperek Yehuda 0.9.7 outlined wordmark, shared with the native application, website and PDF header."
 		},
 		{
 			"id": "envelope",

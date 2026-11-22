@@ -506,6 +506,7 @@ describe("detectChanges", () => {
 		assert.deepEqual(JSON.parse(match[1]), [
 			"data/recitation/recitation.sqlite",
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
+			"web/shared/branding",
 		]);
 	});
 
@@ -528,6 +529,59 @@ describe("detectChanges", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/app/page.tsx"], "app"), [
 			{ module_changed: false, ci_changed: false },
 		]);
+	});
+
+	test("shared brand files release every consumer (#3708)", () => {
+		for (const path of [
+			"web/shared/branding/fonts/AlHeperekUI-Regular.ttf",
+			"web/shared/branding/fonts/AlHeperekUI-Bold.woff2",
+			"web/shared/branding/logos/header-logo.svg",
+			"web/shared/branding/derived/logo_header.jpg",
+			"web/shared/branding/derived/favicon.ico",
+		]) {
+			assert.deepEqual(
+				changed([path], "website", "admin", "app", "bulletin"),
+				[
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: false },
+					{ module_changed: true, ci_changed: false },
+				],
+				path,
+			);
+		}
+		// Unrelated shared files stay check-only for the web consumers.
+		assert.deepEqual(
+			changed(["web/shared/tests-util/e2e-impact.ts"], "website", "app", "bulletin"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+		// Directory boundaries: a sibling path must not release consumers —
+		// it still matches the generic web/shared check selector for website.
+		assert.deepEqual(
+			changed(["web/shared/branding-x/font.ttf"], "website", "app"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+	});
+
+	test("the pinned corpus releases the bulletin through the version stem (#3709)", () => {
+		for (const corpus of [
+			"web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			// A bumped dump keeps selecting the bulletin even though the exact
+			// release-notes pin still names the previous file.
+			"web/bible-on-site/src/data/db/sefaria-dump-5785-tishrei-1.tanah_view.json",
+		]) {
+			assert.deepEqual(changed([corpus], "website", "bulletin"), [
+				{ module_changed: true, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
+			]);
+		}
 	});
 
 	for (const path of [
@@ -1138,7 +1192,7 @@ test("bulletin infrastructure changes select data checks without releasing conte
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",
-		"app/BibleOnSite/Resources/Images/logo_header.jpg",
+		"web/shared/branding/derived/logo_header.jpg",
 		"web/bible-on-site/public/icons/envelope.svg",
 		"web/bible-on-site/public/icons/phone.svg",
 		"web/bible-on-site/public/icons/whatsapp.svg",
