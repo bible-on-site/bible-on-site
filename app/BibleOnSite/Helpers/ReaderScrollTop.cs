@@ -2,7 +2,7 @@ namespace BibleOnSite.Helpers;
 
 /// <summary>
 /// The reader's text-tab reselect: when scripture is already showing, tapping
-/// א ב ג animates the currently visible reading unit's vertical content back
+/// the text button animates the currently visible reading unit's vertical content back
 /// to its start — the first row beneath the unit header (#2624). The host
 /// carousel is virtualized, so the realized scroll surface is resolved by the
 /// current unit's identity rather than by carousel position or first match.

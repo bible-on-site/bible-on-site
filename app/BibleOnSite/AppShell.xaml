@@ -59,7 +59,15 @@
                          its handler wraps the row in a native Button so the menu is
                          reachable and activatable with keyboard/screen reader, with
                          hover/pressed/focus visuals; touch platforms keep the
-                         identical tap layout. -->
+                         identical tap layout. Groups mirror the website nav —
+                         לימוד, תוכן, שירות (#3703). -->
+                    <Label Text="לימוד"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           SemanticProperties.HeadingLevel="Level2"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                           Margin="16,12,16,0"/>
+
                     <!-- על הפרק -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_today_24_regular}"
                                             Title="על הפרק"
@@ -67,22 +75,6 @@
                                             AutomationId="FlyoutAlHaperek"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAlHaperekCurrent}"
                                             Activated="OnAlHaperekTapped"/>
-
-                    <!-- תנכפדיה -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
-                                            Title="תנכפדיה"
-                                            Subtitle="אנציקלופדיה לתנ&quot;ך"
-                                            AutomationId="FlyoutTanahpedia"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
-                                            Activated="OnTanahpediaTapped"/>
-
-                    <!-- לוח לימוד יומי -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
-                                            Title="לוח לימוד יומי"
-                                            Subtitle="הפרק היומי בלוח השנה"
-                                            AutomationId="FlyoutLearningCalendar"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
-                                            Activated="OnLearningCalendarTapped"/>
 
                     <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.split_horizontal_24_regular}"
@@ -109,6 +101,24 @@
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMoadimCurrent}"
                                             Activated="OnMoadimTapped"/>
 
+                    <!-- לוח לימוד יומי -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
+                                            Title="לוח לימוד יומי"
+                                            Subtitle="הפרק היומי בלוח השנה"
+                                            AutomationId="FlyoutLearningCalendar"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
+                                            Activated="OnLearningCalendarTapped"/>
+
+                    <BoxView HeightRequest="1"
+                             Margin="0,6,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
+                    <Label Text="תוכן"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           SemanticProperties.HeadingLevel="Level2"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                           Margin="16,8,16,0"/>
+
                     <!-- רבנים -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.edit_person_24_regular}"
                                             Title="רבנים"
@@ -117,6 +127,14 @@
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAuthorsCurrent}"
                                             Activated="OnAuthorsTapped"/>
 
+                    <!-- תנכפדיה -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
+                                            Title="תנכפדיה"
+                                            Subtitle="אנציקלופדיה לתנ&quot;ך"
+                                            AutomationId="FlyoutTanahpedia"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
+                                            Activated="OnTanahpediaTapped"/>
+
                     <!-- עלון יומי — join cards (#2806) -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.news_24_regular}"
                                             Title="עלון יומי"
@@ -124,6 +142,16 @@
                                             AutomationId="FlyoutDailyBulletin"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDailyBulletinCurrent}"
                                             Activated="OnDailyBulletinTapped"/>
+
+                    <BoxView HeightRequest="1"
+                             Margin="0,6,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
+                    <Label Text="שירות"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           SemanticProperties.HeadingLevel="Level2"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                           Margin="16,8,16,0"/>
 
                     <!-- תנאי שימוש -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.shield_question_24_regular}"
