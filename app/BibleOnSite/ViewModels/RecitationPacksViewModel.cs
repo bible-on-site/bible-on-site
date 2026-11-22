@@ -450,7 +450,9 @@ public partial class RecitationPacksViewModel : ObservableObject
         // download" hint: the attempt never reached a known pack.
         if (rowOutcome != null && IsInstalled)
         {
-            foreach (var book in scope)
+            // Rows whose pack already landed keep their installed status —
+            // "retry" on a completed row contradicts the הסרה action it shows.
+            foreach (var book in scope.Where(b => !b.IsFullyInstalled))
             {
                 book.Status = rowOutcome;
             }

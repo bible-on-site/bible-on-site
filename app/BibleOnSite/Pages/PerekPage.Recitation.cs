@@ -540,7 +540,7 @@ public partial class PerekPage
         // word or pasuk resumes there instead of restarting the perek (#2157).
         if (_chapterRecitationSelection || _recitationCursor.PlayingKey != null || numbers.Length == 0)
         {
-            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+            await PlayRecitationAsync($"chapter:{perek.PerekId}", downloadIfMissing: true);
             return;
         }
         if (track?.AlignmentStatus != "ready")
@@ -554,11 +554,13 @@ public partial class PerekPage
             return;
         }
 
-        await PlayRecitationAsync($"verses:{perek.PerekId}:{string.Join(',', numbers)}", ranges: ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList());
+        await PlayRecitationAsync($"verses:{perek.PerekId}:{string.Join(',', numbers)}", ranges: ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList(),
+            downloadIfMissing: true);
     }
 
     private async Task PlayRecitationAsync(string key, double? start = null, double? end = null,
-        IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null)
+        IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null,
+        bool downloadIfMissing = false)
     {
         if (!RecitationAvailable || _viewModel.Perek is not { } perek)
         {
@@ -586,11 +588,17 @@ public partial class PerekPage
             return;
         }
         // A published-but-not-installed recording downloads its sefer pack in
-        // place, then replays this same request once the audio lands (#3704).
+        // place, then replays this same request once the audio lands — but only
+        // a deliberate Play tap opts in (#3704): focus and word previews stay
+        // local so browsing a pasuk never starts a pack transfer unasked.
         if (!RecitationService.Instance.HasAudio(perek.PerekId))
         {
-            await DownloadRecitationThenPlayAsync(perek,
-                () => PlayRecitationAsync(key, start, end, ranges, resumeFromMs));
+            if (downloadIfMissing)
+            {
+                await DownloadRecitationThenPlayAsync(perek,
+                    () => PlayRecitationAsync(key, start, end, ranges, resumeFromMs,
+                        downloadIfMissing: true));
+            }
             return;
         }
         var continuous = start == null && ranges == null;
@@ -658,7 +666,7 @@ public partial class PerekPage
     /// <summary>
     /// #3704: a deliberate Play on a published-but-not-installed recording
     /// starts (or joins) the sefer's pack download through the same
-    /// <see cref="RecitationService.DownloadAsync"/> route Preferences uses,
+    /// <c>RecitationService.DownloadAsync</c> route Preferences uses,
     /// shows the button's busy state at once, and replays the stored request
     /// exactly once when the audio lands. A perek change, Back navigation or
     /// קריינות-off cancels the pending auto-play (see <see cref="StopRecitation"/>);

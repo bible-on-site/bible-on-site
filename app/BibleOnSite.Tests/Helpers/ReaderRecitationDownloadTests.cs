@@ -103,12 +103,16 @@ public class ReaderRecitationDownloadTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // A delegate that swallows cancellation instead of throwing still
-        // must not trigger the stored play — the token state decides.
+        // must not trigger the stored play — the token state decides. The
+        // release gate keeps the ordering deterministic: the download
+        // returns only after Cancel() already landed.
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = request.RunAsync(3,
-            async token => { started.TrySetResult(); await Task.Delay(20, CancellationToken.None); },
+            async _ => { started.TrySetResult(); await release.Task; },
             () => { plays++; return Task.CompletedTask; });
         await started.Task.WaitAsync(TestContext.Current.CancellationToken);
         request.Cancel();
+        release.TrySetResult();
 
         (await run).Should().BeFalse();
         plays.Should().Be(0);

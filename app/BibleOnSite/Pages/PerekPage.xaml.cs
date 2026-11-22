@@ -1147,7 +1147,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         if (_viewModel.Perek is { } perek)
         {
-            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+            await PlayRecitationAsync($"chapter:{perek.PerekId}", downloadIfMissing: true);
         }
     }
 

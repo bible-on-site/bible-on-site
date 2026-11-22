@@ -434,8 +434,10 @@ public class ExtensionPacksLayoutTests
         var bar = Descendants(surface).OfType<ProgressBar>().Single();
         bar.Progress.Should().BeApproximately(0.4, Tolerance,
             "the row reports the sefer's own fraction once the platform reports");
+        // The label uses the current culture's percent format — compare to the
+        // same formatting, not a hard-coded glyph order/spacing.
         Descendants(surface).OfType<Label>()
-            .Should().Contain(l => l.IsVisible && l.Text == "40%");
+            .Should().Contain(l => l.IsVisible && l.Text == 0.4.ToString("P0"));
     }
 
     [Fact]

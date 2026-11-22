@@ -288,6 +288,34 @@ public class RecitationPacksProgressTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CancelledDownloadAll_KeepsTheInstalledRowsStatus()
+    {
+        // Devin review on #3723: cancelling Download All mid-sequence must not
+        // stamp "retry" on a row whose pack already landed — it contradicts
+        // the הסרה action that completed row now shows.
+        PublishRecitation((1, 1, "one"u8.ToArray()), (2, 2, "two"u8.ToArray()));
+        await _recitation.InitializeAsync();
+        var first = AddRow("בראשית", 1);
+        var second = AddRow("שמות", 2);
+        _delivery.GateFetches(2);
+
+        var download = _viewModel.DownloadAllCommand.ExecuteAsync(null);
+        await WaitForAsync(() => _delivery.FetchLog.Count == 1, "the first pack fetch started");
+        _delivery.Gates[0].TrySetResult();
+        await WaitForAsync(() => _delivery.FetchLog.Count == 2, "the second pack fetch started");
+
+        _viewModel.CancelDownloadCommand.Execute(null);
+        await download;
+
+        _recitation.HasAudio(1).Should().BeTrue("the first pack landed before the cancel");
+        _recitation.HasAudio(2).Should().BeFalse();
+        first.Status.Should().Contain("מותקן").And.NotContain("נסות שוב",
+            "a completed row keeps its installed status, not a retriable cancel");
+        second.Status.Should().Be("ההורדה הופסקה - ניתן לנסות שוב.",
+            "the cancelled row carries the retriable status");
+    }
+
+    [Fact]
     public async Task FailedDownload_MarksTheTappedRow_AndRetryStillWorks()
     {
         PublishRecitation((1, 1, "audio"u8.ToArray()));
