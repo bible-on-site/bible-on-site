@@ -330,7 +330,7 @@ export function EntryHistoryPanel({
 				message="שחזור ישמור מחדש את הערך עם תוכן הגרסה הזו ויחליף את התוכן בעורך. להמשיך?"
 				confirmLabel="שחזר"
 				onConfirm={() => {
-					/* istanbul ignore next -- the dialog only opens while a version is staged */
+					/* istanbul ignore else -- the dialog only opens while a version is staged */
 					if (pendingRestore) restoreMutation.mutate(pendingRestore);
 					setPendingRestore(null);
 				}}

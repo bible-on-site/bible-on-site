@@ -322,7 +322,7 @@ export function EntryAliasesPanel({
 					}
 					onDeleteName={(name) =>
 						scheduleUndo({
-							key: `alias-delete-${entryId}-${name}`,
+							key: `alias-delete-${name}`,
 							message: `השם "${name}" יימחק מ-${editor.targets.length} ערכים`,
 							commit: () => deleteMutation.mutate(name),
 						})

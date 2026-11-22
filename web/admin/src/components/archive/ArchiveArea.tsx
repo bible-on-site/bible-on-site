@@ -485,19 +485,17 @@ export function ArchiveArea() {
 			setError((current) => [current, ...problems].filter(Boolean).join(". "));
 	}
 
-	async function remove(id: string, scheduledDirId?: string) {
+	async function remove(id: string) {
 		beginOp();
 		setError("");
 		try {
 			await api({ action: "remove", id });
 			// A deferred delete can resolve after the admin moved to another
-			// folder — refreshing then would rewrite the visible listing and URL.
+			// folder. Refresh the CURRENT view (live dir/cursor, never the
+			// stale schedule-time closure) — the listing and quota meter stay
+			// current without navigating anywhere.
 			const view = activeViewRef.current;
-			if (
-				view &&
-				(scheduledDirId === undefined || scheduledDirId === view.dir)
-			)
-				await load(view.dir, view.cursor, view.history);
+			if (view) await load(view.dir, view.cursor, view.history);
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
@@ -719,8 +717,7 @@ export function ArchiveArea() {
 																scheduleUndo({
 																	key: `archive-${file.id}`,
 																	message: `הקובץ ${file.filename} יימחק`,
-																	commit: () =>
-																		void remove(file.id, directory.id),
+																	commit: () => void remove(file.id),
 																});
 															else void remove(file.id);
 														}}

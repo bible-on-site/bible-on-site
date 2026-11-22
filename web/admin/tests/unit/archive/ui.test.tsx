@@ -783,26 +783,37 @@ it("does not rewrite the listing when a deferred delete resolves in another fold
 	render(<WrappedArea />);
 	fireEvent.click(await screen.findByRole("button", { name: "מחיקה" }));
 	await screen.findByRole("status");
-	const subReads = () =>
+	const dirReads = (id: string) =>
 		(fetch as Mock).mock.calls.filter(
 			([, options]) =>
 				(options?.headers as Record<string, string>)?.[
 					"X-Archive-Directory"
-				] === "sub",
+				] === id,
 		);
 
 	// The admin opens the nested folder before the delete commits.
-	directory = { ...directory, id: "sub", files: [] };
+	directory = {
+		...directory,
+		id: "sub",
+		path: "/authors/מחבר א/חומרים/",
+		files: [],
+	};
 	fireEvent.click(
 		screen.getByRole("button", { name: "פתיחת תיקייה חומרים" }),
 	);
-	await waitFor(() => expect(subReads()).toHaveLength(1));
+	await waitFor(() => expect(dirReads("sub")).toHaveLength(1));
+	expect(decodeURIComponent(window.location.pathname)).toBe(
+		"/archive/authors/מחבר א/חומרים",
+	);
 
-	// The pending delete commits — the new folder's listing must not be
-	// refetched into the scheduled folder's stale view or URL.
+	// The pending delete commits — it may refresh the CURRENT folder only:
+	// never reload the scheduled folder or roll the URL back to it.
 	await waitFor(() => expect(commandsSent("remove")).toHaveLength(1));
-	await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
-	expect(subReads()).toHaveLength(1);
+	await waitFor(() => expect(dirReads("sub")).toHaveLength(2));
+	expect(dirReads("home")).toHaveLength(0);
+	expect(decodeURIComponent(window.location.pathname)).toBe(
+		"/archive/authors/מחבר א/חומרים",
+	);
 });
 it("shows pending reservations and allows cancellation without an undo window", async () => {
 	directory.files = [

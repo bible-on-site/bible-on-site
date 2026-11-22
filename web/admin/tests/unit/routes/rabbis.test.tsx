@@ -59,11 +59,11 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { Route } from "~/routes/rabbis";
 
-function Page() {
+function Page({ durationMs = 30 }: { durationMs?: number }) {
 	const Component = Route.options.component;
 	if (!Component) throw new Error("Rabbis route component is missing");
 	return (
-		<UndoToastProvider durationMs={30}>
+		<UndoToastProvider durationMs={durationMs}>
 			<Component />
 		</UndoToastProvider>
 	);
@@ -118,7 +118,8 @@ describe("Rabbis list page", () => {
 	});
 
 	it("cancels the pending delete from the toast undo button", async () => {
-		render(<Page />);
+		// A long window keeps the toast alive until ביטול — no timer race.
+		render(<Page durationMs={5000} />);
 		fireEvent.click(await screen.findByRole("button", { name: "מחק" }));
 
 		const toast = await screen.findByRole("status");

@@ -55,13 +55,19 @@ export function UndoToastProvider({
 	const keysRef = useRef(new Map<string, number>());
 	const undoRefs = useRef(new Map<number, HTMLButtonElement>());
 	const previousFocusRef = useRef<HTMLElement | null>(null);
+	const pendingRestoreRef = useRef<HTMLElement | null>(null);
 
 	const release = useCallback((id: number) => {
 		clearTimeout(timersRef.current.get(id));
 		timersRef.current.delete(id);
+		const undoButton = undoRefs.current.get(id);
 		undoRefs.current.delete(id);
 		for (const [key, value] of keysRef.current)
 			if (value === id) keysRef.current.delete(key);
+		// Hand focus back only when the toast itself held it — an admin who
+		// moved on to another field must not be pulled back.
+		if (undoButton === document.activeElement)
+			pendingRestoreRef.current = previousFocusRef.current;
 		setToasts((prev) => prev.filter((toast) => toast.id !== id));
 	}, []);
 
@@ -75,7 +81,8 @@ export function UndoToastProvider({
 			undoRefs.current.get(last.id)?.focus();
 			return;
 		}
-		const restore = previousFocusRef.current;
+		const restore = pendingRestoreRef.current;
+		pendingRestoreRef.current = null;
 		previousFocusRef.current = null;
 		restore?.focus();
 	}, [toasts]);

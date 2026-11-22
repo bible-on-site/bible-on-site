@@ -148,4 +148,26 @@ describe("UndoToastProvider", () => {
 		});
 		expect(trigger).toHaveFocus();
 	});
+
+	it("leaves focus alone when the admin moved on before expiry", () => {
+		vi.useFakeTimers();
+		const commit = vi.fn();
+		renderToast(commit, 1000);
+		const trigger = screen.getByRole("button", { name: "trigger" });
+		trigger.focus();
+		fireEvent.click(trigger);
+		expect(
+			screen.getByRole("button", { name: "ביטול" }),
+		).toHaveFocus();
+
+		// The admin tabs into a form — expiry must not yank them back.
+		const field = document.createElement("input");
+		document.body.appendChild(field);
+		field.focus();
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(field).toHaveFocus();
+		field.remove();
+	});
 });
