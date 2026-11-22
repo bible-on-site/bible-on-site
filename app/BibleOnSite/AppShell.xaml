@@ -39,8 +39,10 @@
                          header height is applied as a scroll inset that races header
                          measurement and can leave the first rows permanently hidden
                          under the opaque header) — the logo is rendered in-content
-                         there instead; see AppShell.xaml.cs. -->
-                    <Grid HeightRequest="180"
+                         there instead; see AppShell.xaml.cs. The block is kept
+                         compact so the last menu rows stay above the fold on
+                         phone-height viewports. -->
+                    <Grid HeightRequest="100"
                           BackgroundColor="White"
                           Padding="0">
                         <Grid.IsVisible>
@@ -52,7 +54,7 @@
                                Aspect="AspectFit"
                                VerticalOptions="Center"
                                HorizontalOptions="Center"
-                               Margin="20"/>
+                               Margin="12"/>
                     </Grid>
 
                     <!-- Destination rows share FlyoutMenuRow (#2766): on Windows
