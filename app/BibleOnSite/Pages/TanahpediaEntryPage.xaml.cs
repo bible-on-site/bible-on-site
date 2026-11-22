@@ -128,11 +128,20 @@ public partial class TanahpediaEntryPage : ContentPage
         return base.OnBackButtonPressed();
     }
 
+    /// <summary>The route-supplied name applies once: a re-appearing page
+    /// (a page pushed above it popped) must not rewind an in-place hop back
+    /// to the original route parameter (#2640).</summary>
+    private string? _appliedRouteName;
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
 
-        _viewModel.UniqueName = UniqueName;
+        if (!string.Equals(_appliedRouteName, UniqueName, StringComparison.Ordinal))
+        {
+            _appliedRouteName = UniqueName;
+            _viewModel.UniqueName = UniqueName;
+        }
 
         if (!_viewModel.IsLoaded && !_viewModel.IsLoading)
         {
@@ -141,8 +150,8 @@ public partial class TanahpediaEntryPage : ContentPage
     }
 
     /// <summary>
-    /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
-    /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// Links inside the entry body: <c>/pedia/{slug}</c> hops the entry in
+    /// place over the view model's trail - no pushed page per tap (#2640);
     /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>

@@ -642,75 +642,163 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
-    public async Task OpenEntry_NavigatesToOtherEntry()
+    public async Task OpenEntry_SwitchesInPlaceWithoutNavigation()
     {
+        // In-body entry links ride the same in-place trail as the family-tree
+        // hop: a page push per tap accumulated pages, handlers and native
+        // views until repeated navigation crashed on iOS (#2640).
+        SetupPersonEntries("שמשון", "דלילה");
+
         var vm = Create();
         vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
 
         await vm.OpenEntryAsync("דלילה");
 
-        _navigator.Verify(n => n.GoToAsync(
-            It.Is<string>(r => r.StartsWith("tanahpediaEntry") && r.Contains("uniqueName="))), Times.Once);
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.UniqueName.Should().Be("דלילה");
+        vm.Title.Should().Be("דלילה");
+        vm.ShowEntry.Should().BeTrue();
+        vm.HasEntryHistory.Should().BeTrue("שמשון sits on the trail for Back");
     }
 
     [Fact]
-    public async Task OpenEntry_WhileNavigationInFlight_IsDeduped()
+    public async Task OpenEntry_WhileHopInFlight_LatestTapWins()
     {
-        // Rapid taps during the push transition must not stack a second entry
-        // page on the in-flight navigation (#2640). The relay command's
-        // ExecuteAsync does not dedupe in-flight calls - the view model gate
-        // absorbs the second selection instead of another GoToAsync.
-        var gate = new TaskCompletionSource<object?>();
-        var calls = 0;
-        _navigator.Setup(n => n.GoToAsync(It.IsAny<string>()))
-            .Returns(() => { Interlocked.Increment(ref calls); return gate.Task; });
+        // A second link tap while the first hop still loads supersedes it -
+        // the stale response is discarded, never stacked as another page
+        // (#2640).
+        var gate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
 
         var vm = Create();
-        var first = vm.OpenEntryCommand.ExecuteAsync("שמשון");
-        var second = vm.OpenEntryCommand.ExecuteAsync("דלילה");
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
 
-        calls.Should().Be(1, "a second tap during the in-flight push must not navigate again");
+        var stale = vm.OpenEntryAsync("דלילה");
+        await vm.OpenEntryAsync("מנוח");
 
-        gate.SetResult(null);
-        await Task.WhenAll(first, second);
-        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Once);
+        gate.SetResult(new TanahpediaEntryDetail { UniqueName = "דלילה", Title = "דלילה" });
+        await stale;
+
+        vm.UniqueName.Should().Be("מנוח");
+        vm.Title.Should().Be("מנוח");
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task OpenEntry_RepeatedCycles_NavigateEachTime()
+    public async Task OpenEntry_RepeatedCycles_StayOnOnePage()
     {
-        // Sequential open/back/open cycles stay live - an in-flight dedupe
-        // must not stick and swallow later taps (#2640).
+        // link → back → link cycles must not accumulate pushed pages: every
+        // hop rebinds this page and Back replays the trail (#2640).
+        SetupPersonEntries("שמשון", "דלילה", "מנוח");
+
         var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
 
         for (var i = 0; i < 3; i++)
         {
-            await vm.OpenEntryCommand.ExecuteAsync($"entry-{i}");
+            await vm.OpenEntryCommand.ExecuteAsync(i % 2 == 0 ? "דלילה" : "מנוח");
+            await vm.GoBackAsync();
         }
 
-        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(3));
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.HasEntryHistory.Should().BeFalse("the trail drained back to the source entry");
+        vm.Title.Should().Be("שמשון");
     }
 
     [Fact]
-    public async Task OpenEntry_FailedNavigation_IsAbsorbedAndAllowsRetry()
+    public async Task OpenEntry_FailedHop_ShowsErrorAndBackRestoresSource()
     {
-        // The command owns the failure boundary: a faulted Shell navigation
-        // must never escape into ICommand.Execute, which rethrows it on the
-        // main synchronization context - an unhandled fault there is a
-        // SIGABRT. A later tap navigates again - a faulted navigation is
-        // recoverable, not a dead end.
-        var fail = true;
-        _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns<string>(_ =>
-            fail ? Task.FromException(new InvalidOperationException("route failed")) : Task.CompletedTask);
+        // A hop whose load fails surfaces the exclusive error state in place -
+        // never an escaped fault - and Back replays the trail into the
+        // recoverable source entry (#2640).
+        SetupPersonEntries("שמשון");
+        _service.Setup(s => s.GetEntryDetailAsync("שגיאה", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("offline"));
 
         var vm = Create();
-        var act = () => vm.OpenEntryAsync("שמשון");
-        await act.Should().NotThrowAsync("a navigation fault reaching ICommand.Execute crashes the app");
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
 
-        fail = false;
-        await vm.OpenEntryCommand.ExecuteAsync("דלילה");
+        var act = () => vm.OpenEntryAsync("שגיאה");
+        await act.Should().NotThrowAsync("a hop fault reaching ICommand.Execute crashes the app");
 
-        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
+        vm.HasError.Should().BeTrue();
+        vm.ShowEntry.Should().BeFalse();
+        vm.HasEntryHistory.Should().BeTrue();
+
+        await vm.GoBackAsync();
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.UniqueName.Should().Be("שמשון");
+        vm.HasError.Should().BeFalse();
+        vm.ShowEntry.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OpenEntry_MissingFigure_NotFoundThenBackRestoresSource()
+    {
+        // The reported flow (#2640): יהושע בן נון's bare משה link owns no
+        // entry and no alias - the page shows the recoverable not-found
+        // state in place, and Back restores the source entry without any
+        // Shell navigation.
+        SetupPersonEntries("יהושע-בן-נון");
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var vm = Create();
+        vm.UniqueName = "יהושע-בן-נון";
+        await vm.LoadAsync();
+
+        await vm.OpenEntryAsync("משה");
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.IsNotFound.Should().BeTrue();
+        vm.UniqueName.Should().Be("משה");
+        vm.HasEntryHistory.Should().BeTrue();
+
+        await vm.GoBackAsync();
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.ShowEntry.Should().BeTrue();
+        vm.IsNotFound.Should().BeFalse();
+        vm.Title.Should().Be("יהושע-בן-נון");
+        vm.HasEntryHistory.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OpenEntry_AliasHop_LoadsCanonicalAndBackRestores()
+    {
+        // A bare-name link that resolves to a single synonym target loads
+        // the canonical entry in place (the website's permanent-redirect
+        // UX) - the requested name stays the trail's identity for Back.
+        SetupPersonEntries("שמשון");
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaSynonymTarget { UniqueName = "משה-רבנו", Title = "משה רבנו" }]);
+        _service.Setup(s => s.GetEntryDetailAsync("משה-רבנו", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail { UniqueName = "משה-רבנו", Title = "משה רבנו" });
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        await vm.OpenEntryAsync("משה");
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.Title.Should().Be("משה רבנו", "a plain-alias link loads its canonical entry");
+        vm.UniqueName.Should().Be("משה", "the requested name stays the trail-visible identity");
+        vm.IsNotFound.Should().BeFalse();
+        vm.IsDisambiguation.Should().BeFalse();
+
+        await vm.GoBackAsync();
+        vm.Title.Should().Be("שמשון");
     }
 
     [Theory]
@@ -719,12 +807,15 @@ public class TanahpediaEntryViewModelTests
     [InlineData("שמשון")]
     public async Task OpenEntry_IgnoresEmptyOrCurrentName(string? uniqueName)
     {
+        SetupPersonEntries("שמשון");
         var vm = Create();
         vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
 
         await vm.OpenEntryAsync(uniqueName);
 
-        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.HasEntryHistory.Should().BeFalse();
+        _service.Verify(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -1156,6 +1247,180 @@ public class TanahpediaEntryViewModelTests
         vm.Title.Should().Be("מנוח");
         vm.HasError.Should().BeFalse();
         vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OpenEntry_StaleFamilyLoad_DoesNotOverwriteLatestEntry()
+    {
+        // Deferred sections resolve after the body swap: a superseded hop's
+        // late family response must not land on the newer entry (#2640).
+        var familyGate = new TaskCompletionSource<TanahpediaPersonFamily?>();
+        _service.Setup(s => s.GetEntryDetailAsync("אליהו", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "אליהו",
+                Title = "אליהו",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityId = "person-b", EntityName = "אליהו" }],
+            });
+        _service.Setup(s => s.GetPersonFamilyAsync("person-b", It.IsAny<CancellationToken>()))
+            .Returns(familyGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenEntryAsync("אליהו");
+        await vm.OpenEntryAsync("מנוח");
+
+        familyGate.SetResult(new TanahpediaPersonFamily
+        {
+            FocalDisplayName = "אליהו",
+            Parents = [new TanahpediaFamilyParentEdge
+            {
+                Related = new TanahpediaFamilyPerson { DisplayName = "אחאב" },
+                ParentRole = "FATHER",
+            }],
+        });
+        await stale;
+
+        vm.UniqueName.Should().Be("מנוח");
+        vm.FamilyTree.Should().BeNull("אליהו's late family section must not land on מנוח");
+    }
+
+    [Fact]
+    public async Task OpenEntry_StaleMarkerLoad_DoesNotOverwriteLatestEntry()
+    {
+        var markersGate = new TaskCompletionSource<List<TanahpediaPlaceMarker>>();
+        _service.Setup(s => s.GetEntryDetailAsync("ירושלים", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                Id = "entry-y",
+                UniqueName = "ירושלים",
+                Title = "ירושלים",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PLACE", EntityName = "ירושלים" }],
+            });
+        _service.Setup(s => s.GetPlaceMarkersAsync("entry-y", It.IsAny<CancellationToken>()))
+            .Returns(markersGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenEntryAsync("ירושלים");
+        await vm.OpenEntryAsync("מנוח");
+
+        markersGate.SetResult([new TanahpediaPlaceMarker { PlaceId = "p1", PlaceName = "ירושלים" }]);
+        await stale;
+
+        vm.UniqueName.Should().Be("מנוח");
+        vm.HasMap.Should().BeFalse("ירושלים's late markers must not land on מנוח");
+    }
+
+    [Fact]
+    public async Task OpenEntry_StaleOccurrencesLoad_DoesNotOverwriteLatestEntry()
+    {
+        // The occurrences table maps through the local pasuk database; a
+        // superseded hop's late mapping must not land on the newer entry.
+        var (_, storage) = await PerekDataWithPerek250Async();
+        await using var __ = storage;
+        var perekData = new GatedPasukDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        await perekData.LoadAsync();
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "דלילה",
+                Title = "דלילה",
+                Occurrences = [new TanahpediaEntryOccurrence { PerekId = 250, PasukNumber = 3 }],
+            });
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create(perekData);
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenEntryAsync("דלילה");
+        await vm.OpenEntryAsync("מנוח");
+
+        perekData.Gate.SetResult();
+        await stale;
+
+        vm.UniqueName.Should().Be("מנוח");
+        vm.HasOccurrences.Should().BeFalse("דלילה's late occurrences must not land on מנוח");
+    }
+
+    [Fact]
+    public async Task OpenEntry_StaleLoadFailure_DoesNotErrorNewerEntry()
+    {
+        // A superseded hop's late transport failure must not flip the newer
+        // entry's state to error (#2640).
+        var gate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("אליהו", It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenEntryAsync("אליהו");
+        await vm.OpenEntryAsync("מנוח");
+
+        gate.SetException(new InvalidOperationException("offline"));
+        await stale;
+
+        vm.UniqueName.Should().Be("מנוח");
+        vm.Title.Should().Be("מנוח");
+        vm.HasError.Should().BeFalse();
+        vm.ShowEntry.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OpenEntry_DuringInitialLoad_CancelsAndSupersedes()
+    {
+        // A hop while the initial load is still in flight cancels its
+        // transport - the requested entry loads and the stale one is
+        // discarded (#2640).
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>(async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            });
+        SetupPersonEntries("דלילה");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        var initial = vm.LoadAsync();
+
+        await vm.OpenEntryAsync("דלילה");
+        await initial;
+
+        vm.UniqueName.Should().Be("דלילה");
+        vm.Title.Should().Be("דלילה");
+        vm.HasError.Should().BeFalse();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    /// <summary>Perek data whose pasuk query waits on a test-controlled
+    /// gate - lets a hop supersede while the occurrences mapping is in
+    /// flight (#2640).</summary>
+    private sealed class GatedPasukDataService(LocalDatabaseService db) : PerekDataService(db)
+    {
+        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task<Dictionary<int, List<Pasuk>>> LoadPasukimAsync(
+            IReadOnlyCollection<int> perekIds, IReadOnlyCollection<int>? pasukIds)
+        {
+            // Only a real read waits - an empty-occurrences entry must not
+            // block on the gate.
+            if (perekIds.Count > 0)
+            {
+                await Gate.Task;
+            }
+            return await base.LoadPasukimAsync(perekIds, pasukIds);
+        }
     }
 
     [Fact]
