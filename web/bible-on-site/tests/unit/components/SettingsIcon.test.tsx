@@ -6,7 +6,8 @@ import SettingsIcon from "@/app/929/[number]/components/SettingsIcon";
 describe("SettingsIcon", () => {
 	it("renders a decorative icon hidden from assistive technology", () => {
 		const { container } = render(<SettingsIcon />);
-		const svg = container.querySelector("svg");
+		// biome-ignore lint/style/noNonNullAssertion: the component renders a single svg
+		const svg = container.querySelector("svg")!;
 		expect(svg).toHaveAttribute("aria-hidden", "true");
 		expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
 	});
@@ -69,7 +70,8 @@ describe("SettingsIcon geometry", () => {
 
 	it("paints the gear outline centered on the viewBox midpoint", () => {
 		const { container } = render(<SettingsIcon />);
-		const d = container.querySelector("path")?.getAttribute("d") ?? "";
+		// biome-ignore lint/style/noNonNullAssertion: the icon renders a single outline path
+		const d = container.querySelector("path")!.getAttribute("d")!;
 		const points = pathPoints(d);
 		const xs = points.map((p) => p.x);
 		const ys = points.map((p) => p.y);
@@ -79,7 +81,8 @@ describe("SettingsIcon geometry", () => {
 
 	it("centers the hub circle on the viewBox midpoint", () => {
 		const { container } = render(<SettingsIcon />);
-		const circle = container.querySelector("circle");
+		// biome-ignore lint/style/noNonNullAssertion: the icon renders its hub circle
+		const circle = container.querySelector("circle")!;
 		expect(circle).toHaveAttribute("cx", "12");
 		expect(circle).toHaveAttribute("cy", "12");
 	});
