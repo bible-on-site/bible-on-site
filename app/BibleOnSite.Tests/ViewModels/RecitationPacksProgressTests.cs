@@ -204,8 +204,8 @@ public class RecitationPacksProgressTests : IAsyncDisposable
 
         var download = _viewModel.DownloadBookAsync(row);
 
-        // The service reports the aggregate fraction (0.9-weighted transfer);
-        // the row maps it back onto its own sefer (#3705).
+        // The service reports the 0.9-weighted aggregate fraction, and the
+        // row maps it back onto its own sefer (#3705).
         await WaitForAsync(() => row.DownloadProgress > 0,
             "the platform's report reaches the tapped row");
         row.DownloadProgress.Should().BeApproximately(0.45, 0.001);
