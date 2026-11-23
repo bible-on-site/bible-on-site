@@ -263,6 +263,28 @@ describe("useDailyArticleOverride", () => {
 			await act(async () => {});
 			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
 		});
+
+		it("drops a lookup still in flight when the last consumer unmounts", async () => {
+			let resolveFirst!: (article: ArticleSummary | null) => void;
+			mockGetDailyArticleOverride
+				.mockImplementationOnce(
+					() => new Promise((resolve) => (resolveFirst = resolve)),
+				)
+				.mockResolvedValue(null);
+
+			const first = renderHook(() => useDailyArticleOverride());
+			first.unmount(); // teardown with the mount lookup still pending
+
+			// Its late resolution must not repopulate the cleared store.
+			resolveFirst(assignedArticle);
+			await act(async () => {});
+
+			const second = renderHook(() => useDailyArticleOverride());
+			expect(second.result.current).toBeNull(); // never the stale result
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
+			second.unmount();
+		});
 	});
 });
 
