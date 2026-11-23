@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
-    <PackageReference Include="Microsoft.DotNet.XHarness.TestRunners.Xunit" Version="11.0.0-prerelease.26556.1" />
+    <PackageReference Include="Microsoft.DotNet.XHarness.TestRunners.Xunit" Version="11.0.0-prerelease.26569.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="11.0.0" />
     <!-- The headless runner is xUnit v2 — deliberately not the xunit.v3 + MTP
          stack the portable suites use (see docs/tests/app/device-tests-research.md §6). -->
