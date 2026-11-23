@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { EventEmitter } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createServer, get as getHttp } from "node:http";
 import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -238,7 +239,27 @@ test("returns every verified mirror in preference order", async () => {
 	]);
 });
 
-test("uses one-shot HTTPS requests and preserves the byte range across a bounded redirect", async (t) => {
+test("preserves the range across redirects and releases the partial response socket", { timeout: 10_000 }, async (t) => {
+	const socketClosed = Promise.withResolvers();
+	let downloadSignal;
+	const server = createServer((request, response) => {
+		response.once("close", () => {
+			socketClosed.resolve({
+				range: request.headers.range,
+				ended: response.writableEnded,
+				aborted: downloadSignal.aborted,
+			});
+		});
+		response.writeHead(206, { "Content-Length": 8192 });
+		response.write(Buffer.alloc(4096));
+	});
+	t.after(() => {
+		server.closeAllConnections();
+		server.close();
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const loopback = `http://127.0.0.1:${server.address().port}`;
 	const redirects = [];
 	const requests = t.mock.method(https, "get", (url, options, onResponse) => {
 		const address = new URL(url);
@@ -255,12 +276,15 @@ test("uses one-shot HTTPS requests and preserves the byte range across a bounded
 			address.pathname.includes("/pool/")
 		) {
 			redirects.push(options.headers.Range);
-			if (!address.pathname.startsWith("/redirected/")) {
-				reply = new Response(null, {
-					status: 302,
-					headers: { location: `/redirected${address.pathname}` },
-				});
+			if (address.pathname.startsWith("/redirected/")) {
+				// Exercise the real HTTP/1.1 IncomingMessage lifecycle over loopback.
+				downloadSignal = options.signal;
+				return getHttp(loopback, options, onResponse);
 			}
+			reply = new Response(null, {
+				status: 302,
+				headers: { location: `/redirected${address.pathname}` },
+			});
 		}
 		const response = reply.body
 			? Readable.fromWeb(reply.body)
@@ -272,6 +296,11 @@ test("uses one-shot HTTPS requests and preserves the byte range across a bounded
 	});
 	assert.deepEqual(await selectUbuntuArchives("noble"), [archive, azure, umich]);
 	assert.deepEqual(redirects, ["bytes=0-4095", "bytes=0-4095"]);
+	assert.deepEqual(await socketClosed.promise, {
+		range: "bytes=0-4095",
+		ended: false,
+		aborted: false,
+	});
 	assert(
 		requests.mock.calls.every(
 			({ arguments: [, options] }) => options.agent === false,
