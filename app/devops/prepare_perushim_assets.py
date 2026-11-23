@@ -12,6 +12,9 @@ CATALOG = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"
 NOTES = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 TANAH = "sefaria-dump-5784-sivan-4.tanah_view.sqlite"
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
+# Normalization version folded into every index fingerprint
+# (`v4:{content-id}:n{NORM}`); keep in step with search_text.rs NORM_VERSION.
+NORMALIZATION = "n2"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
     # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
@@ -68,15 +71,15 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
             fingerprints = dict(index.execute("SELECT name, fingerprint FROM search_metadata"))
         except sqlite3.Error as error:
             raise ValueError("Search index lacks search_metadata fingerprints") from error
-        expected_notes = f"v4:{notes_timestamp}:n1"
+        expected_notes = f"v4:{notes_timestamp}:{NORMALIZATION}"
         if fingerprints.get("notes") != expected_notes:
             raise ValueError("Search index was built for a different notes generation")
-        if not str(fingerprints.get("verses", "")).startswith("v4:") or not str(fingerprints["verses"]).endswith(":n1"):
+        if not str(fingerprints.get("verses", "")).startswith("v4:") or not str(fingerprints["verses"]).endswith(f":{NORMALIZATION}"):
             raise ValueError("Search index lacks a verses fingerprint")
         if tanah_view is not None:
             with closing(sqlite3.connect(tanah_view.resolve().as_uri() + "?mode=ro", uri=True)) as scripture:
                 generated_at = scripture.execute("SELECT value FROM _metadata WHERE key = 'generated_at'").fetchone()
-            if not generated_at or fingerprints["verses"] != f"v4:{generated_at[0]}:n1":
+            if not generated_at or fingerprints["verses"] != f"v4:{generated_at[0]}:{NORMALIZATION}":
                 raise ValueError("Search index was built for different bundled scripture; regenerate the indexed artifact")
         required = {"verses", "verses_documents", "verses_vocab", "notes", "notes_documents", "notes_vocab"}
         tables = {row[0] for row in index.execute("SELECT name FROM sqlite_master")}
