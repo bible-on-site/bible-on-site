@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UndoToastProvider, useUndoAction } from "~/components/UndoToast";
 
@@ -47,12 +47,14 @@ function Bare() {
 
 describe("UndoToastProvider", () => {
 	it("hydrates cleanly and mounts the live region under document.body", async () => {
-		const children = <span data-testid="child">child</span>;
-		const markup = renderToStaticMarkup(
+		const children = <span data-testid="child">ילד</span>;
+		const markup = renderToString(
 			<UndoToastProvider durationMs={1000}>{children}</UndoToastProvider>,
 		);
 		const host = document.createElement("div");
-		host.innerHTML = markup;
+		for (const node of new DOMParser().parseFromString(markup, "text/html").body
+			.childNodes)
+			host.appendChild(node);
 		document.body.appendChild(host);
 
 		const errors: string[] = [];
