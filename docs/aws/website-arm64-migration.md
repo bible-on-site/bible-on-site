@@ -122,10 +122,13 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 
 ## Rollback
 
-If an architecture handover fails, restore the verified immutable fallback
-with the captured task configuration through the same protected handover.
-Verify the public routes and steady ECS counts before releasing protection
-and the deployment lock. Follow the release-tag verification above before
-resuming ordinary CD. If the tag cannot be verified against a known-good
-image, reconcile the release state while the fallback remains pinned. Keep
-both native children and the OCI index available for normal releases.
+While holding the deployment queue lock, restore the verified immutable
+fallback and captured task configuration through the protected handover.
+Verify public routes and steady ECS counts. Reconcile `bible-on-site:latest`
+with the verified image, restore the release-tag task definition and
+EventBridge rollout owner, and clear task protection. Release the lock only
+after those steps because ordinary CD resumes when the lock exits.
+
+If the hold expires during rollback, retain the verified fallback and treat
+the interrupted rollback as an incident. Reconcile the actual task definition,
+registry tags, EventBridge rule, and queued releases before another handover.
