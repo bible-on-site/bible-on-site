@@ -33,9 +33,10 @@ export function parsePasukRefFromHref(
 	href: string,
 ): { perekId: number; pasuk: number; perush?: string } | null {
 	// `?pasuk=N` may sit anywhere among the query params — perush-search links
-	// append `&note=` and `&q=` after it — while `#pasuk-N` always ends the href.
+	// append `&note=` and `&q=` after it — so pasuk must be a whole `?`/`&`-delimited
+	// param ending in digits; `#pasuk-N` still always ends the href.
 	const anchor =
-		/^\/929\/(\d+)(?:\/([^?#]+))?(?:\?[^#]*?\bpasuk=(\d+)|#pasuk-(\d+)$)/.exec(
+		/^\/929\/(\d+)(?:\/([^?#]+))?(?:\?(?:[^#&]*?&)*?pasuk=(\d+)(?=[&#]|$)|#pasuk-(\d+)$)/.exec(
 			href,
 		);
 	if (!anchor) return null;

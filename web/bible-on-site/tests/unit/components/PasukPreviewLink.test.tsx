@@ -61,6 +61,14 @@ describe("parsePasukRefFromHref", () => {
 		expect(parsePasukRefFromHref("/929/1/some-article?q=x")).toBeNull();
 	});
 
+	it("returns null when pasuk is only a suffix of another param", () => {
+		expect(parsePasukRefFromHref("/929/1?other-pasuk=3")).toBeNull();
+	});
+
+	it("returns null when the pasuk value is not bare digits", () => {
+		expect(parsePasukRefFromHref("/929/1?pasuk=3abc")).toBeNull();
+	});
+
 	it("returns null for perek-only links", () => {
 		expect(parsePasukRefFromHref("/929/29")).toBeNull();
 	});
