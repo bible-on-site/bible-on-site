@@ -28,6 +28,8 @@ public partial class MoedPage
     private int _focusedClipEnd = int.MaxValue;
     private CancellationTokenSource? _headerPress;
     private Pasuk? _recitingPasuk;
+    /// <summary>The row last scrolled to — verse transitions only, so follow scrolls stay rare.</summary>
+    private MoedDisplayRow? _recitingRow;
     private RecitationWord? _recitingWord;
     /// <summary>The section the focused row came from — previews tag their clip with it.</summary>
     private int _focusedSectionId;
@@ -152,6 +154,15 @@ public partial class MoedPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
+        // Follow the spoken verse (#3728): when playback lands on a new row
+        // off-screen — play, resume, seek or a skipped silent range — bring it
+        // into view. Suppressed while the user is scrolling, and a no-op while
+        // the row is already visible.
+        if (nextRow != null && !ReferenceEquals(nextRow, _recitingRow) && !IsScrolling)
+        {
+            ReaderScrollTop.ScrollToItem(MoedRowsCollection, nextRow);
+        }
+        _recitingRow = nextRow;
         if (word != null)
         {
             if (nextRow?.Pasuk is { } recitingPasuk)

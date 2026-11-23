@@ -10,6 +10,24 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class ReaderScrollTop
 {
+    /// <summary>
+    /// Recitation follow scroll (#3728): brings the row carrying the spoken
+    /// verse into view with the least motion needed —
+    /// <see cref="ScrollToPosition.MakeVisible"/> is a no-op while the row is
+    /// already on screen. Returns false when the surface is not realized yet
+    /// (mid-swipe recycling, still loading) so the call stays a no-op instead
+    /// of scrolling a stale list.
+    /// </summary>
+    public static bool ScrollToItem(CollectionView? list, object? item)
+    {
+        if (list is null || item is null || !list.IsVisible || list.Handler is null || list.Height <= 0)
+        {
+            return false;
+        }
+        list.ScrollTo(item, position: ScrollToPosition.MakeVisible, animate: AnimateScroll());
+        return true;
+    }
+
     /// <summary>Scrolls an explicitly owned top-level list, independent of its binding context.</summary>
     public static bool ScrollListToStart(CollectionView list)
     {
