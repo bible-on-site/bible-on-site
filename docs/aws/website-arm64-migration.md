@@ -79,9 +79,10 @@ flag before that release is published; do not toggle modes halfway through it.
 5. Before releasing the queue lock, verify that `bible-on-site:latest` selects
    the qualified child for the resulting architecture. If the handover used a
    digest pin, deploy an equivalent task definition using that release tag
-   and verify the running task still uses the qualified digest. Then restore
-   the normal EventBridge rollout owner and clear any task protection and
-   temporary qualification resources. The rollout Lambda reuses the service's
+   and wait for ECS to reach steady state on the release-tag definition.
+   Verify its running digest and architecture, Cloud Map registration, and
+   public routes. Then restore the normal EventBridge rollout owner and
+   clear any task protection and temporary qualification resources. The rollout Lambda reuses the service's
    task definition, so a remaining pin prevents later releases from loading
    their new image.
 
@@ -122,12 +123,12 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 
 ## Rollback
 
-While holding the deployment queue lock, restore the verified immutable
-fallback and captured task configuration through the protected handover.
-Verify public routes and steady ECS counts. Reconcile `bible-on-site:latest`
-with the verified image, restore the release-tag task definition and
-EventBridge rollout owner, and clear task protection. Release the lock only
-after those steps because ordinary CD resumes when the lock exits.
+Repeat the [architecture handover](#architecture-handover) with the captured
+task configuration and verified immutable fallback. Keep the queue lock
+through both the fallback deployment and restoration of the release-tag
+definition. Step 5 covers the final ECS, digest, discovery, and public checks
+on the release-tag definition before restoring the rollout owner or clearing
+task protection. Ordinary CD resumes when the lock exits.
 
 If the hold expires during rollback, retain the verified fallback and treat
 the interrupted rollback as an incident. Reconcile the actual task definition,
