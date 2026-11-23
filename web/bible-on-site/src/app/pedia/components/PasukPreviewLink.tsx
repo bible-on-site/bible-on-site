@@ -112,25 +112,6 @@ export function PasukPreviewLink({
 	const anchorRef = useRef<HTMLAnchorElement>(null);
 	const tooltipRef = useRef<HTMLDivElement>(null);
 
-	const showPreview = useCallback(() => {
-		if (!pasukRef) return;
-		if (hideTimeoutRef.current) {
-			clearTimeout(hideTimeoutRef.current);
-			hideTimeoutRef.current = null;
-		}
-		setVisible(true);
-		fetchPasukPreview(
-			pasukRef.perekId,
-			pasukRef.pasuk,
-			pasukRef.perush,
-			pasukRef.note,
-		).then(setPreview);
-	}, [pasukRef]);
-
-	const hidePreview = useCallback(() => {
-		hideTimeoutRef.current = setTimeout(() => setVisible(false), 200);
-	}, []);
-
 	const keepPreview = useCallback(() => {
 		if (hideTimeoutRef.current) {
 			clearTimeout(hideTimeoutRef.current);
@@ -138,30 +119,52 @@ export function PasukPreviewLink({
 		}
 	}, []);
 
-	const closePreview = useCallback(() => {
-		if (hideTimeoutRef.current) {
-			clearTimeout(hideTimeoutRef.current);
-			hideTimeoutRef.current = null;
-		}
-		setVisible(false);
-	}, []);
+	const showPreview = useCallback(() => {
+		if (!pasukRef) return;
+		keepPreview();
+		setVisible(true);
+		fetchPasukPreview(
+			pasukRef.perekId,
+			pasukRef.pasuk,
+			pasukRef.perush,
+			pasukRef.note,
+		).then(setPreview);
+	}, [pasukRef, keepPreview]);
 
-	// Mirrors TanahpediaEntryPreview: a scroll or resize detaches the fixed
-	// tooltip from its anchor, so it dismisses instead of floating stale.
+	const closePreview = useCallback(() => {
+		keepPreview();
+		setVisible(false);
+	}, [keepPreview]);
+
+	const hidePreview = useCallback(() => {
+		keepPreview();
+		hideTimeoutRef.current = setTimeout(closePreview, 200);
+	}, [keepPreview, closePreview]);
+
+	useEffect(() => keepPreview, [keepPreview]);
+
 	useEffect(() => {
 		if (!visible) return;
-		document.addEventListener("scroll", closePreview, true);
+		function handleScroll(event: Event) {
+			// Scrolling the tooltip's own content leaves its anchor in place.
+			if (
+				event.target instanceof Node &&
+				tooltipRef.current?.contains(event.target)
+			) {
+				return;
+			}
+			closePreview();
+		}
+		document.addEventListener("scroll", handleScroll, true);
 		window.addEventListener("resize", closePreview);
 		return () => {
-			document.removeEventListener("scroll", closePreview, true);
+			document.removeEventListener("scroll", handleScroll, true);
 			window.removeEventListener("resize", closePreview);
 		};
 	}, [visible, closePreview]);
 
-	// Measure the mounted tooltip and clamp it inside the viewport (below the
-	// anchor first, above when the anchor sits near the top edge). When the
-	// preview is taller than the space on either side, cap it to the roomier
-	// side so it scrolls instead of covering its own link.
+	// Place the tooltip below the link when it fits, or above it when needed.
+	// Cap oversized previews to the roomier side so the link stays clickable.
 	useLayoutEffect(() => {
 		if (!visible || !preview) return;
 		const anchor = anchorRef.current;

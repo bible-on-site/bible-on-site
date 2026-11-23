@@ -392,7 +392,20 @@ describe("PasukPreviewLink", () => {
 		jest.useRealTimers();
 	});
 
-	it("caps an oversized tooltip to the roomier side so it never covers its link", async () => {
+	it("clears a pending hide timer when the link unmounts", () => {
+		jest.useFakeTimers();
+		const { unmount } = render(
+			<PasukPreviewLink href="/929/46#pasuk-1">בראשית מו א</PasukPreviewLink>,
+		);
+		const timerCount = jest.getTimerCount();
+		fireEvent.mouseLeave(screen.getByRole("link"));
+		expect(jest.getTimerCount()).toBe(timerCount + 1);
+		unmount();
+		expect(jest.getTimerCount()).toBe(timerCount);
+		jest.useRealTimers();
+	});
+
+	it("keeps an oversized tooltip open when its own content scrolls", async () => {
 		const innerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
 		Object.defineProperty(window, "innerHeight", {
 			value: 300,
@@ -433,6 +446,9 @@ describe("PasukPreviewLink", () => {
 				top: "126px",
 			}),
 		);
+		const tooltip = screen.getByRole("tooltip");
+		fireEvent.scroll(tooltip);
+		expect(tooltip).toBeVisible();
 		heightSpy.mockRestore();
 		if (innerHeight) {
 			Object.defineProperty(window, "innerHeight", innerHeight);
