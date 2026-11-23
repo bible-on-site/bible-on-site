@@ -24,10 +24,19 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
         // Drive the switch above the viewport before the seek begins: the
         // page's scroll surface is taller than the window, so a burst of
         // steps lands past the target and prunes it from the source tree.
-        for (var step = 0; step < 4; step++)
+        // Assert the overshoot actually happened — if the switch never left
+        // the viewport, the seek never reverses and proves nothing.
+        var id = "DivineNameMaskingSwitch";
+        var overshot = false;
+        var lastSurface = Driver!.PageSource;
+        for (var step = 0; step < 8 && !overshot; step++)
         {
             Platform.ScrollPageDown(Driver!);
+            var surface = Driver!.PageSource;
+            overshot = surface != lastSurface && !surface.Contains(id);
+            lastSurface = surface;
         }
-        Assert.NotNull(Page.ScrollToVisible("DivineNameMaskingSwitch"));
+        Assert.True(overshot, $"the display preferences never scrolled {id} off the viewport");
+        Assert.NotNull(Page.ScrollToVisible(id));
     });
 }
