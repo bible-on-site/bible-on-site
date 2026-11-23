@@ -1252,12 +1252,45 @@ test("bulletin infrastructure changes select data checks without releasing conte
 
 describe("isDataDeployChange", () => {
 	test("data-deploy tooling changes signal delivery intent", () => {
+		for (const file of [
+			"index.mts",
+			"deploy-payload.mts",
+			"lambda-invocation.mts",
+			"sql-files.json",
+			"validate_lambda_parser.py",
+		])
+			assert.equal(
+				isDataDeployChange([`devops/deploy/data-deploy/${file}`]),
+				true,
+				file,
+			);
+	});
+
+	test("manual migrations and their validation run data checks without requesting delivery", () => {
+		const migration =
+			"devops/deploy/data-deploy/manual/mysql-97-article-fingerprint.sql";
+		const tests = [
+			"deploy-payload.test.mts",
+			"lambda_mysql_package_test.py",
+			"mysql_fingerprint_regression.py",
+			"mysql_import_regression.py",
+			"test_lambda_credentials.py",
+			"test_lambda_parser.py",
+		].map((file) => `devops/deploy/data-deploy/${file}`);
+		for (const file of [migration, ...tests]) {
+			assert.deepEqual(detectChanges([file]).data, {
+				module_changed: false,
+				ci_changed: true,
+			});
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+		assert.equal(isDataDeployChange([migration, ...tests]), false);
 		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/index.mts"]),
-			true,
-		);
-		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]),
+			isDataDeployChange([
+				migration,
+				...tests,
+				"devops/deploy/data-deploy/sql-files.json",
+			]),
 			true,
 		);
 	});

@@ -60,6 +60,11 @@ MySQL must accept connections from Docker's host gateway. Set `DB_URL` to choose
 another existing database. Populate local application content with `sync-from-prod`
 as described below.
 
+Run `bun run backend -- --compose-mysql` to start the Compose MySQL service
+before the API. The API connects over TLS using the service name `mysql` inside
+the Compose network. Host tools use the loopback port regardless of which port
+the API uses inside that network.
+
 If Docker Desktop cannot start, `bun run backend -- --native` runs the same API
 with Cargo and the installed MySQL service. Leave that terminal running; Ctrl+C
 stops the API process tree. No database population or Docker reset occurs during
@@ -80,13 +85,8 @@ docker compose -f devops/docker-compose.yml --profile mysql up -d --wait mysql
 ```
 
 If an existing MySQL server uses port 3306, set `LOCAL_MYSQL_PORT` before
-starting the service and set `DB_URL` to use the same port. To connect a
-containerized API directly to the Compose database, run:
-
-```bash
-LOCAL_BACKEND_DB_URL='mysql://root:test_123@mysql:3306/tanah-dev?ssl-mode=DISABLED' \
-  docker compose -f devops/docker-compose.yml --profile backend up -d --wait api
-```
+starting the service or running the Compose launcher. Set `DB_URL` to use the
+same port for host-side tools.
 
 The development MySQL database is named **tanah-dev**. Bootstrap it (structure + sefarim/perushim; demo «הרב לדוגמא» articles are **not** loaded by default):
 

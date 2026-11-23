@@ -231,6 +231,14 @@ test("releases and version bumps stay tied to module changes on master", () => {
 	assert.ok(String(pending.if).includes("docs_only != 'true'"));
 });
 
+test("data deploy CI runs when the Lambda package pin changes by itself", () => {
+	const workflow = load("ci-data-deploy.yml");
+	const requirements = "docs/aws/cloudformation/data-deploy/requirements.txt";
+	for (const event of ["pull_request", "push"]) {
+		assert.ok(workflow.on[event].paths.includes(requirements), event);
+	}
+});
+
 test("auxiliary workflows gate merge-group work through the shared router", () => {
 	for (const [file, downstream] of [
 		["ci-data-deploy.yml", ["test"]],

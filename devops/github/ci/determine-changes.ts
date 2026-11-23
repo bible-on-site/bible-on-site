@@ -248,7 +248,7 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		ciOnlyPattern: DATA_CI_ONLY_PATTERN,
-		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// Data deployment tooling and manual migrations require checks.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
 		ciPaths: [
@@ -305,7 +305,15 @@ const isAt = (file: string, path: string) =>
 // CI plumbing (ci.yml, composite actions, this detector), which must never
 // enter Release Data: the perushim producer correctly skips those runs, so no
 // current-run SQL artifact exists to bind (#2730).
-const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+const DATA_DEPLOY_PATH = "devops/deploy/data-deploy";
+// Manual migrations and their test harnesses take the validation route.
+const MANUAL_DATA_MIGRATION_PATH = `${DATA_DEPLOY_PATH}/manual`;
+const DATA_DEPLOY_TEST_PATTERN =
+	/(?:^|\/)test_[^/]+\.py$|_test\.py$|\.test\.mts$/;
+const DATA_DEPLOY_REGRESSION_SCRIPTS = new Set([
+	`${DATA_DEPLOY_PATH}/mysql_fingerprint_regression.py`,
+	`${DATA_DEPLOY_PATH}/mysql_import_regression.py`,
+]);
 
 // Root docs/ counts as documentation only for inert prose, media and data
 // formats. Source, script, manifest and config extensions never qualify —
@@ -319,8 +327,12 @@ const DOCUMENTATION_PATH =
 
 /** Release intent for data delivery tooling, separate from generic CI checks. */
 export function isDataDeployChange(changedFiles: string[]): boolean {
-	return changedFiles.some((file) =>
-		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	return changedFiles.some(
+		(file) =>
+			isAt(file, DATA_DEPLOY_PATH) &&
+			!isAt(file, MANUAL_DATA_MIGRATION_PATH) &&
+			!DATA_DEPLOY_TEST_PATTERN.test(file) &&
+			!DATA_DEPLOY_REGRESSION_SCRIPTS.has(file),
 	);
 }
 
