@@ -100,7 +100,7 @@ describe("SeferComposite (wide screen)", () => {
 		window.history.replaceState(null, "", "/929/5");
 	});
 
-	it("keeps a verse citation visible despite a saved book preference", () => {
+	it("keeps a pasuk citation visible despite a saved sefer preference", () => {
 		localStorage.setItem("perekViewMode", "book");
 		window.history.replaceState(null, "", "/929/5#pasuk-3");
 		render(
@@ -110,10 +110,11 @@ describe("SeferComposite (wide screen)", () => {
 		expect(new URLSearchParams(window.location.search).has("book")).toBe(
 			false,
 		);
+		expect(window.location.hash).toBe("#pasuk-3");
 		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 
-	it("keeps a ranged verse citation visible despite a saved book preference", () => {
+	it("keeps a ranged pasuk citation visible despite a saved sefer preference", () => {
 		localStorage.setItem("perekViewMode", "book");
 		window.history.replaceState(null, "", "/929/5#pasuk-5-3");
 		render(
@@ -123,6 +124,7 @@ describe("SeferComposite (wide screen)", () => {
 		expect(new URLSearchParams(window.location.search).has("book")).toBe(
 			false,
 		);
+		expect(window.location.hash).toBe("#pasuk-5-3");
 		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 

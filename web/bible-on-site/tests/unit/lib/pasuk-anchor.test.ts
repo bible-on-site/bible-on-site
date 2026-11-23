@@ -1,12 +1,12 @@
 import { isPasukCitationHash } from "@/lib/pasuk-anchor";
 
 describe("isPasukCitationHash", () => {
-	it("matches flat perek verse anchors", () => {
+	it("matches flat perek pasuk anchors", () => {
 		expect(isPasukCitationHash("#pasuk-3")).toBe(true);
 		expect(isPasukCitationHash("#pasuk-176")).toBe(true);
 	});
 
-	it("matches ranged unit verse anchors (RangedPerushView links)", () => {
+	it("matches ranged unit pasuk anchors (RangedPerushView links)", () => {
 		expect(isPasukCitationHash("#pasuk-1-5")).toBe(true);
 		expect(isPasukCitationHash("#pasuk-25-12")).toBe(true);
 	});
