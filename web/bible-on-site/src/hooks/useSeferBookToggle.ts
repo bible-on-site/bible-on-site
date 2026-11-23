@@ -104,12 +104,6 @@ export function useSeferBookToggle(
 		}
 	}, [isWideEnough, pathname, router, searchParams]);
 
-	useEffect(() => {
-		if (toggled) {
-			prefsRef.current.setStored("book");
-		}
-	}, [toggled]);
-
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;

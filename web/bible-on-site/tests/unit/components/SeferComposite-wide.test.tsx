@@ -167,6 +167,17 @@ describe("SeferComposite (wide screen)", () => {
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
+	it("does not persist book view from a shared ?book link", async () => {
+		mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
+		await act(async () => {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+		});
+		expect(await screen.findByTestId("sefer")).toBeTruthy();
+		expect(localStorage.getItem("perekViewMode")).toBeNull();
+	});
+
 	it("keeps a rapidly reopened book visible after the previous close delay", async () => {
 		jest.useFakeTimers();
 		try {

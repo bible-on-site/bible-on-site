@@ -136,13 +136,6 @@ const ClientWrapper = (props: {
 		}
 	}, [isWideEnough, pathname, searchParams]);
 
-	// URL is source of truth: persist when user lands with ?book
-	useEffect(() => {
-		if (toggled) {
-			setStoredPerekViewMode("book");
-		}
-	}, [toggled]);
-
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;
