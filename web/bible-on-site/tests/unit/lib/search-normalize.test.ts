@@ -197,6 +197,8 @@ describe("htmlToPlainText", () => {
 		["א<div></div>ב", "א ב"],
 		// A comment emits nothing; markup inside it never reaches the scanner.
 		["א<!-- <style> -->ב", "אב"],
+		// A commented-out opener must not pair with a real close tag.
+		["א<!-- <style> -->ב<style>x</style>ג", "אבג"],
 	])("splits %s into normalized words %s", (html, expected) => {
 		expect(htmlToPlainText(html)).toBe(expected);
 	});

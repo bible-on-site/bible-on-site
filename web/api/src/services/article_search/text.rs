@@ -59,8 +59,12 @@ pub fn strip_html(html: &str) -> String {
             '<' => {
                 // A comment emits nothing — HtmlAgilityPack keeps it as an
                 // inert comment node. Drop the whole `<!-- … -->` block so
-                // its tail doesn't survive as literal text.
-                if chars.clone().take(3).collect::<String>() == "!--" {
+                // its tail doesn't survive as literal text. Not inside a
+                // skipped script/style body, where `-->` could be absent and
+                // the swallow would hide the closing tag.
+                if skipping.is_none()
+                    && chars.clone().take(3).collect::<String>() == "!--"
+                {
                     for _ in 0..3 {
                         chars.next();
                     }
@@ -477,6 +481,8 @@ mod tests {
             ("א<div></div>ב", "א ב"),
             // A comment emits nothing; markup inside it never reaches the scanner.
             ("א<!-- <style> -->ב", "אב"),
+            // A commented-out opener must not pair with a real close tag.
+            ("א<!-- <style> -->ב<style>x</style>ג", "אבג"),
         ] {
             assert_eq!(strip_html(html), expected, "for {html}");
         }

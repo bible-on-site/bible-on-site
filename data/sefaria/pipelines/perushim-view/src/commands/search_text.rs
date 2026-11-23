@@ -25,8 +25,11 @@ pub fn plain_text(text: &str) -> String {
 
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    // Remove <script…>…</script> and <style…>…</style> blocks entirely.
-    while let Some((start, end)) = find_script_or_style(rest) {
+    // Remove `<!--…-->` comments and <script…>…</script>/<style…>…</style>
+    // blocks entirely. Comments compete with script/style in document order:
+    // a `<style>` opener inside a comment must not pair with a real closing
+    // tag and erase the text between them.
+    while let Some((start, end)) = find_comment_or_script(rest) {
         out.push_str(&rest[..start]);
         rest = &rest[end..];
     }
@@ -47,22 +50,6 @@ pub fn plain_text(text: &str) -> String {
                 result.push('<');
                 continue;
             }
-        }
-        // A comment emits nothing — HtmlAgilityPack keeps it as an inert
-        // comment node. Drop the whole `<!-- … -->` block so its tail
-        // doesn't survive as literal text.
-        if chars.clone().take(3).collect::<String>() == "!--" {
-            for _ in 0..3 {
-                chars.next();
-            }
-            let mut tail = String::new();
-            for u in chars.by_ref() {
-                if u == '>' && tail.ends_with("--") {
-                    break;
-                }
-                tail.push(u);
-            }
-            continue;
         }
         // Consume until '>'. Capture the tag name only while it runs, and keep
         // every consumed char so an unterminated tag can be re-emitted as text.
@@ -164,6 +151,24 @@ pub fn normalize(text: &str) -> String {
         }
     }
     out.trim_end().to_string()
+}
+
+/// Locates the earliest `<!--` comment or `<script>`/`<style>` open tag and
+/// returns the range to drop: a comment through its `-->` (or EOF), a
+/// script/style block through its matching close (or its own open tag).
+fn find_comment_or_script(text: &str) -> Option<(usize, usize)> {
+    let comment = text.find("<!--").map(|start| {
+        let end = text[start + 4..]
+            .find("-->")
+            .map(|p| start + 4 + p + 3)
+            .unwrap_or(text.len());
+        (start, end)
+    });
+    let script = find_script_or_style(text);
+    match (comment, script) {
+        (Some(c), Some(s)) => Some(if c.0 <= s.0 { c } else { s }),
+        (only, None) | (None, only) => only,
+    }
 }
 
 /// Locates the earliest `<script>`/`<style>` open tag and the index just past
@@ -356,6 +361,8 @@ mod tests {
             ("א<div></div>ב", "א ב"),
             // A comment emits nothing; markup inside it never reaches the scanner.
             ("א<!-- <style> -->ב", "אב"),
+            // A commented-out opener must not pair with a real close tag.
+            ("א<!-- <style> -->ב<style>x</style>ג", "אבג"),
         ] {
             assert_eq!(plain_text(html), expected, "for {html}");
         }
