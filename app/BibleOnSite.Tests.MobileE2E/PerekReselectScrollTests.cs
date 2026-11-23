@@ -11,8 +11,8 @@ using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
-// #2624: while scripture is already active, tapping the bottom bar's א ב ג
-// text tab animates the currently visible reading unit's vertical content
+// #2624: while scripture is already active, tapping the bottom bar's text
+// tab animates the currently visible reading unit's vertical content
 // back to its start — same perek, same reader, no horizontal jump. The
 // resolved surface must be the realized one of the unit on screen, both in
 // the regular pasuk list and in תיקון קוראים.
@@ -87,7 +87,7 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         // accessibility description ("tsy:{dips}") — an exact position signal
         // instead of pixel equality, which a fading scrollbar can defeat.
         WaitForTikkun(() => TikkunReturnedToStart(topFrame),
-            "reselecting א ב ג must return the תיקון קוראים flow to its start");
+            "reselecting the text tab must return the תיקון קוראים flow to its start");
         Assert.Equal("בראשית א", Page.Source);
     });
 
