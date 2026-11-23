@@ -499,11 +499,12 @@ export class SesClient {
 	 * verification proves neither that the write settled nor that a racing
 	 * update superseded it, so it loops back to a fresh read rather than
 	 * reporting either outcome. SES paces contact operations to about one
-	 * request per second, so a throttled settle read is routine and simply
-	 * gets another convergence round; a mirror that never verifies reports
-	 * `uncertain` and stays on the pending-mirror retry list, which can
-	 * reconcile a write another preference update superseded before the
-	 * verification landed.
+	 * request per second, so a throttled read is routine — a failed read of
+	 * either kind spends an attempt instead of aborting the loop, keeping
+	 * consecutive throttles from stopping verification early. A mirror that
+	 * never verifies reports `uncertain` and stays on the pending-mirror
+	 * retry list, which can reconcile a write another preference update
+	 * superseded before the verification landed.
 	 */
 	async unsubscribeTopic(
 		email: string,
@@ -512,7 +513,15 @@ export class SesClient {
 		const topic = audienceName(audience);
 		const normalized = emailAddress(email);
 		for (let attempt = 0; attempt < 3; attempt++) {
-			const contact = await this.getContact(normalized);
+			let contact: SesContact | null;
+			try {
+				contact = await this.getContact(normalized);
+			} catch {
+				// A failed read cannot pick the next write; spend the attempt on
+				// the next convergence round instead of aborting the mirror on a
+				// consecutive throttle.
+				continue;
+			}
 			if (
 				!contact ||
 				contact.unsubscribeAll ||

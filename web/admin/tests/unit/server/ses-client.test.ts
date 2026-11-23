@@ -446,6 +446,24 @@ describe("SES managed-subscription transport", () => {
 			expect(calls("update")).toHaveLength(1);
 		},
 	);
+	it("keeps verifying through consecutive throttled reads", async () => {
+		mocks.send
+			.mockResolvedValueOnce(contact()) // read
+			.mockResolvedValueOnce({}) // UpdateContact
+			// The settle read and the next fresh read are throttled back to
+			// back; neither failure aborts the convergence loop.
+			.mockRejectedValueOnce(sdkError(429, "TooManyRequestsException"))
+			.mockRejectedValueOnce(sdkError(429, "TooManyRequestsException"))
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			});
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		expect(calls("update")).toHaveLength(1);
+	});
 	it("re-asserts a topic opt-out a racing update dropped while verification failed", async () => {
 		mocks.send
 			.mockResolvedValueOnce(contact()) // read
@@ -476,6 +494,13 @@ describe("SES managed-subscription transport", () => {
 			new SesClient(config).unsubscribeTopic(request.to, "real"),
 		).rejects.toMatchObject({ outcome: "uncertain" });
 		expect(calls("update")).toHaveLength(3);
+	});
+	it("reports uncertain when no read ever lands", async () => {
+		mocks.send.mockRejectedValue(sdkError(429, "TooManyRequestsException"));
+		await expect(
+			new SesClient(config).unsubscribeTopic(request.to, "real"),
+		).rejects.toMatchObject({ outcome: "uncertain" });
+		expect(calls("update")).toHaveLength(0);
 	});
 	it("fails uncertain rather than looping forever when the opt-out never settles", async () => {
 		mocks.send.mockImplementation(async (command: { kind: string }) =>
