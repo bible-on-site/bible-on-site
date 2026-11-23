@@ -131,7 +131,7 @@ export default async function AuthorPage({
 	});
 
 	return (
-		<div className={styles.authorPage}>
+		<main className={styles.authorPage}>
 			<JsonLd
 				data={buildAuthorGraph({
 					author,
@@ -183,6 +183,6 @@ export default async function AuthorPage({
 			{articles.length === 0 && (
 				<div className={styles.emptyState}>אין מאמרים עדיין</div>
 			)}
-		</div>
+		</main>
 	);
 }

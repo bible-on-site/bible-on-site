@@ -37,7 +37,7 @@ export default function RabbisBlessingPage() {
 	const posterUrl = assetsUrl("blessing/blessing-poster.webp");
 
 	return (
-		<div className={styles.rabbisBlessingPage}>
+		<main className={styles.rabbisBlessingPage}>
 			<h1 className={styles.pageTitle}>רבנים מברכים</h1>
 			<p className={styles.pageSubtitle}>ברכות רבנים לתנ"ך על הפרק</p>
 
@@ -85,6 +85,6 @@ export default function RabbisBlessingPage() {
 					חזרה לעמוד הראשי
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

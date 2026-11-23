@@ -20,7 +20,7 @@ export default function SeferDirect(props: {
 	perekIds?: number[];
 }) {
 	return (
-		<div
+		<main
 			style={{
 				position: "fixed",
 				top: 0,
@@ -37,6 +37,6 @@ export default function SeferDirect(props: {
 				perushim={props.perushim}
 				perekIds={props.perekIds}
 			/>
-		</div>
+		</main>
 	);
 }

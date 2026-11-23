@@ -68,7 +68,7 @@ export default async function MoadimLanding() {
 	const wheel = buildMoedWheel(moadim);
 
 	return (
-		<div className={styles.container}>
+		<main className={styles.container}>
 			<div className={styles.heroRow}>
 				<div className={styles.heroText}>
 					<h1 className={styles.heading}>מועדים על הפרק</h1>
@@ -262,6 +262,6 @@ export default async function MoadimLanding() {
 					</ol>
 				</nav>
 			)}
-		</div>
+		</main>
 	);
 }
