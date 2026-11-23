@@ -39,20 +39,9 @@ immutable release version or a downgrade of `latest`.
 
 The admin ECR repository uses `IMMUTABLE_WITH_EXCLUSION` with exactly `latest`
 mutable. The publisher requires this policy before publishing a dual-platform
-index. The [ECR reference template](cloudformation/ecr-repositories.yaml)
-documents the required mutability.
-
-The scoped repair for that prerequisite is `bun run deploy:admin-ecr-policy`
-from `devops/` (`--verify` is read-only; `--rollback` restores the recorded
-`MUTABLE` baseline). Every path first proves the caller through STS with the
-same credentials the ECR client uses — a supplied `AWS_ACCOUNT_ID` is only a
-hint — and refuses to run outside account `250598594267` / region
-`il-central-1`; every ECR call also names that account as `registryId` and the
-returned repository identity is validated. It only writes
-`PutImageTagMutability` on `bible-on-site-admin`, only after the live policy
-matches the recorded baseline or already converged target, and re-verifies
-the result through the publisher's own `assertAPIRepositoryPolicy` guard. Any
-other observed live state refuses the transition.
+index. The policy tool's `--verify` mode reads the live settings and checks the
+caller account, region, registry, repository, and tag exclusion policy.
+[Policy verifier](../../devops/deploy/ecr-deploy/admin-repository-policy.mts)
 
 ## Rollback and qualification
 

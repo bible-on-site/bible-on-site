@@ -55,7 +55,10 @@ VPC configuration, subnets, and security groups.
 - **Security Groups**: nginx (public) and ECS (VPC-only)
 
 ### 2. `ecr-repositories.yaml`
-Reference for the existing ECR repositories.
+Reference layout for the ECR repositories. For current tag mutability,
+rollout ownership, and rollback retention, see the
+[AWS architecture guide](../architecture/aws-architecture.md#release-and-monitoring)
+and the [admin ECR policy](../admin-arm64-migration.md#ecr-policy).
 
 ### 3. `ecs-services.yaml`
 Reference for the ECS cluster, task definitions, services, and Cloud Map.
@@ -115,19 +118,9 @@ API handover. [Deployed Lambda details](./ecr-ecs-auto-deploy/README.md) ·
 [API rollout ownership](../api-arm64-cutover.md#one-api-deployment-owner)
 
 ### 8. `cloudwatch.yaml`
-CloudWatch Log Groups and Application Auto Scaling.
-
-**Log Groups:**
-- `/ecs/bible-on-site-website` - ECS Website container logs (180 days retention)
-
-**Auto Scaling (Target Tracking):**
-- Min: 1, Max: 3 tasks
-- Target CPU: 70%
-- Scale-out cooldown: 300s, Scale-in cooldown: 600s
-
-**Log Stream Pattern:** `ecs/<container-name>/<task-id>`
-
-**Flow:** ECS Tasks → CloudWatch Logs | CloudWatch Alarms → Auto Scaling → ECS
+Reference for a website log group and CPU target tracking. The
+[AWS architecture guide](../architecture/aws-architecture.md#release-and-monitoring)
+describes live log retention and scaling targets.
 
 ### 9. `route53.yaml`
 Route53 hosted zones and DNS records.
@@ -252,18 +245,9 @@ production inventory and request and deployment paths.
 
 ## Importing Existing Resources
 
-If resources already exist, you can import them into CloudFormation:
-
-```bash
-# Example: Import existing ECR repository
-aws cloudformation create-change-set \
-  --stack-name bible-on-site-ecr \
-  --change-set-name import-ecr \
-  --change-set-type IMPORT \
-  --resources-to-import "[{\"ResourceType\":\"AWS::ECR::Repository\",\"LogicalResourceId\":\"WebsiteRepository\",\"ResourceIdentifier\":{\"RepositoryName\":\"bible-on-site\"}}]" \
-  --template-body file://ecr-repositories.yaml \
-  --region il-central-1
-```
+Importing a live resource requires an approved import plan based on its
+current configuration and CloudFormation ownership. Prepare and validate a
+dedicated import template for that plan.
 
 ## Deployment Cheat Sheet
 
