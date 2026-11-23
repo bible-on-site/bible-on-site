@@ -30,6 +30,8 @@ public class SearchTextTests
         [InlineData("א<br> ב", "א  ב")]
         [InlineData("א <br> <br>ב", "א  ב")]
         [InlineData("א<div></div>ב", "א ב")]
+        // A comment emits nothing; markup inside it never reaches the scanner.
+        [InlineData("א<!-- <style> -->ב", "אב")]
         public void breaks_words_on_every_block_tag_like_the_other_ports(string html, string expected)
         {
             SearchText.PlainText(html).Should().Be(expected);

@@ -195,6 +195,8 @@ describe("htmlToPlainText", () => {
 		["א<br> ב", "א  ב"],
 		["א <br> <br>ב", "א  ב"],
 		["א<div></div>ב", "א ב"],
+		// A comment emits nothing; markup inside it never reaches the scanner.
+		["א<!-- <style> -->ב", "אב"],
 	])("splits %s into normalized words %s", (html, expected) => {
 		expect(htmlToPlainText(html)).toBe(expected);
 	});

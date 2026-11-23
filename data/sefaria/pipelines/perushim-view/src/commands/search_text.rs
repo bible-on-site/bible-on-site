@@ -48,6 +48,22 @@ pub fn plain_text(text: &str) -> String {
                 continue;
             }
         }
+        // A comment emits nothing — HtmlAgilityPack keeps it as an inert
+        // comment node. Drop the whole `<!-- … -->` block so its tail
+        // doesn't survive as literal text.
+        if chars.clone().take(3).collect::<String>() == "!--" {
+            for _ in 0..3 {
+                chars.next();
+            }
+            let mut tail = String::new();
+            for u in chars.by_ref() {
+                if u == '>' && tail.ends_with("--") {
+                    break;
+                }
+                tail.push(u);
+            }
+            continue;
+        }
         // Consume until '>'. Capture the tag name only while it runs, and keep
         // every consumed char so an unterminated tag can be re-emitted as text.
         let mut consumed = String::new();
@@ -338,6 +354,8 @@ mod tests {
             ("א<br> ב", "א  ב"),
             ("א <br> <br>ב", "א  ב"),
             ("א<div></div>ב", "א ב"),
+            // A comment emits nothing; markup inside it never reaches the scanner.
+            ("א<!-- <style> -->ב", "אב"),
         ] {
             assert_eq!(plain_text(html), expected, "for {html}");
         }

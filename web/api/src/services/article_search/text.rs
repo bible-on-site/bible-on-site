@@ -57,6 +57,22 @@ pub fn strip_html(html: &str) -> String {
         }
         match c {
             '<' => {
+                // A comment emits nothing — HtmlAgilityPack keeps it as an
+                // inert comment node. Drop the whole `<!-- … -->` block so
+                // its tail doesn't survive as literal text.
+                if chars.clone().take(3).collect::<String>() == "!--" {
+                    for _ in 0..3 {
+                        chars.next();
+                    }
+                    let mut tail = String::new();
+                    for u in chars.by_ref() {
+                        if u == '>' && tail.ends_with("--") {
+                            break;
+                        }
+                        tail.push(u);
+                    }
+                    continue;
+                }
                 let mut tag = String::new();
                 let mut closed = false;
                 for inner in chars.by_ref() {
@@ -459,6 +475,8 @@ mod tests {
             ("א<br> ב", "א  ב"),
             ("א <br> <br>ב", "א  ב"),
             ("א<div></div>ב", "א ב"),
+            // A comment emits nothing; markup inside it never reaches the scanner.
+            ("א<!-- <style> -->ב", "אב"),
         ] {
             assert_eq!(strip_html(html), expected, "for {html}");
         }
