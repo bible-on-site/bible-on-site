@@ -173,6 +173,8 @@ const BLOCK_TAGS = new Set([
 	"hr",
 ]);
 const SCRIPT_STYLE = /^<(script|style)\b[^>]*>?/i;
+const SCRIPT_CLOSE = /<\/script\s*>/i;
+const STYLE_CLOSE = /<\/style\s*>/i;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
 function decodeEntities(text: string): string {
@@ -224,9 +226,9 @@ export function htmlToPlainText(html: string): string {
 		// A script/style block drops through its close tag (or end of input).
 		const skip = SCRIPT_STYLE.exec(rest);
 		if (skip) {
-			const close = new RegExp(`</${skip[1]}\\s*>`, "i").exec(
-				rest.slice(skip[0].length),
-			);
+			const close = (
+				skip[1].toLowerCase() === "script" ? SCRIPT_CLOSE : STYLE_CLOSE
+			).exec(rest.slice(skip[0].length));
 			i =
 				close === null
 					? html.length
