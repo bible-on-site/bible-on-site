@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UndoToastProvider, useUndoAction } from "~/components/UndoToast";
 
@@ -44,6 +46,35 @@ function Bare() {
 }
 
 describe("UndoToastProvider", () => {
+	it("hydrates cleanly and mounts the live region under document.body", async () => {
+		const children = <span data-testid="child">child</span>;
+		const markup = renderToStaticMarkup(
+			<UndoToastProvider durationMs={1000}>{children}</UndoToastProvider>,
+		);
+		const host = document.createElement("div");
+		host.innerHTML = markup;
+		document.body.appendChild(host);
+
+		const errors: string[] = [];
+		let root: { unmount: () => void } | undefined;
+		await act(async () => {
+			root = hydrateRoot(
+				host,
+				<UndoToastProvider durationMs={1000}>{children}</UndoToastProvider>,
+				{ onRecoverableError: (error) => errors.push(String(error)) },
+			);
+		});
+
+		expect(errors).toEqual([]);
+		// The toast region is a client-only portal: it mounts directly under
+		// document.body after hydration, outside the hydrated subtree.
+		const liveRegion = document.body.querySelector("[aria-live='polite']");
+		expect(liveRegion).not.toBeNull();
+		expect(liveRegion?.parentElement).toBe(document.body);
+		await act(async () => root?.unmount());
+		host.remove();
+	});
+
 	it("throws when useUndoAction runs outside the provider", () => {
 		expect(() => render(<Bare />)).toThrow(
 			"useUndoAction must be used inside <UndoToastProvider>",
