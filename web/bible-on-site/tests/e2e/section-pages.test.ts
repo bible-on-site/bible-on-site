@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { SITE_ORIGIN } from "../../src/lib/seo/jsonld";
 import { expect, test } from "../util/playwright/test-fixture";
 
@@ -81,27 +82,46 @@ test.describe("Section pages", () => {
 	// flatten to an instant jump under prefers-reduced-motion. The frame
 	// sampler proves it — toBeInViewport alone passes after either an
 	// instant jump or a finished glide.
-	test("landing scroll glides smoothly by default", async ({ page }) => {
-		await page.addInitScript(() => {
+	const installScrollSampler = (page: Page) =>
+		page.addInitScript(() => {
 			const steps: number[] = [];
 			const t0 = performance.now();
 			const tick = () => {
 				const y = Math.round(window.scrollY);
 				if (steps.at(-1) !== y) steps.push(y);
-				if (performance.now() - t0 < 4000)
+				if (performance.now() - t0 < 15000)
 					requestAnimationFrame(tick);
 			};
 			requestAnimationFrame(tick);
 			(window as unknown as { __scrollSteps: number[] }).__scrollSteps =
 				steps;
 		});
-		await page.goto("/contact");
-		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "smooth");
-		await expect(page.locator("#contact")).toBeInViewport();
-		const steps = await page.evaluate(
+
+	// Read the trace only once the sampler has recorded the scroll's final
+	// position — polling toBeInViewport alone can beat the last frame.
+	const settledSteps = async (page: Page) => {
+		await expect
+			.poll(async () => {
+				const { y, steps } = await page.evaluate(() => ({
+					y: Math.round(window.scrollY),
+					steps: (window as unknown as { __scrollSteps: number[] })
+						.__scrollSteps,
+				}));
+				return y > 0 && steps.at(-1) === y;
+			})
+			.toBe(true);
+		return page.evaluate(
 			() =>
 				(window as unknown as { __scrollSteps: number[] }).__scrollSteps,
 		);
+	};
+
+	test("landing scroll glides smoothly by default", async ({ page }) => {
+		await installScrollSampler(page);
+		await page.goto("/contact");
+		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "smooth");
+		await expect(page.locator("#contact")).toBeInViewport();
+		const steps = await settledSteps(page);
 		// A smooth glide walks through many intermediate positions.
 		expect(steps.length).toBeGreaterThan(10);
 	});
@@ -109,29 +129,14 @@ test.describe("Section pages", () => {
 	test("landing scroll jumps instantly under reduced motion", async ({
 		page,
 	}) => {
-		await page.addInitScript(() => {
-			const steps: number[] = [];
-			const t0 = performance.now();
-			const tick = () => {
-				const y = Math.round(window.scrollY);
-				if (steps.at(-1) !== y) steps.push(y);
-				if (performance.now() - t0 < 4000)
-					requestAnimationFrame(tick);
-			};
-			requestAnimationFrame(tick);
-			(window as unknown as { __scrollSteps: number[] }).__scrollSteps =
-				steps;
-		});
+		await installScrollSampler(page);
 		await page.emulateMedia({ reducedMotion: "reduce" });
 		await page.goto("/contact");
 		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
 		await expect(page.locator("#contact")).toBeInViewport();
-		const steps = await page.evaluate(
-			() =>
-				(window as unknown as { __scrollSteps: number[] }).__scrollSteps,
-		);
-		// One jump: top, then the target.
-		expect(steps.length).toBeLessThanOrEqual(3);
+		const steps = await settledSteps(page);
+		// One jump: top, then the target — nothing in between.
+		expect(steps.length).toBeLessThanOrEqual(2);
 		expect(steps.at(-1)).toBeGreaterThan(0);
 	});
 });
