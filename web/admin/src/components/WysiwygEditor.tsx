@@ -241,6 +241,14 @@ export function WysiwygEditor({
 				flushSourceToEditor();
 			}
 			if (next === "source" && editor) {
+				/* The editor's current HTML already carries the pending debounced
+				   edits — seed the draft with it and cancel the visual timer so
+				   it cannot later flush a stale snapshot over newer HTML edits. */
+				if (saveTimeoutRef.current) {
+					clearTimeout(saveTimeoutRef.current);
+					saveTimeoutRef.current = null;
+				}
+				pendingEditorRef.current = null;
 				setSourceDraft(editor.getHTML());
 			}
 			if (next === "preview" && editor) {

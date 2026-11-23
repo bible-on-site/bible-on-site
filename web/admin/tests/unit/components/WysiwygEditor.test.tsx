@@ -372,6 +372,42 @@ describe("WysiwygEditor", () => {
 		expect(onChange).toHaveBeenCalledWith("<p>Source edit</p>");
 	});
 
+	it("cancels the pending visual timer when switching to source mode", async () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={20}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Visual edit</p>");
+
+		fireEvent.click(screen.getByRole("button", { name: "מקור HTML" }));
+		const source = screen.getByRole("textbox");
+		expect(source).toHaveValue("<p>Visual edit</p>");
+		fireEvent.change(source, { target: { value: "<p>HTML edit</p>" } });
+
+		// Past the debounce: the cancelled visual timer must not flush a stale
+		// snapshot over the newer HTML edits.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(onChange).not.toHaveBeenCalled();
+		expect(source).toHaveValue("<p>HTML edit</p>");
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledWith("<p>HTML edit</p>");
+	});
+
 	it("syncs changed content props back into TipTap", () => {
 		const onChange = vi.fn();
 		const { rerender } = renderEditor(onChange);
