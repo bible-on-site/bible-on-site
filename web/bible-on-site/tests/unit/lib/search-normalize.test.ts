@@ -116,7 +116,8 @@ describe("htmlToPlainText", () => {
 		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).not.toContain(
 			"<script",
 		);
-		expect(htmlToPlainText("א<<b>b>ב")).not.toContain("<");
+		// A `<` that cannot open a tag stays literal, like HtmlAgilityPack.
+		expect(htmlToPlainText("א<<b>b>ב")).toBe("א<b>ב");
 	});
 
 	it("stops scanning a large plain remainder for tags once all openers are removed", () => {

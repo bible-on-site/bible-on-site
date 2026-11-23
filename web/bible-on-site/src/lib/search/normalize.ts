@@ -142,29 +142,37 @@ const HTML_ENTITIES: Record<string, string> = {
 
 /**
  * Block-level tag boundaries: every open or close tag of one of these names is
- * a word break, and a maximal run of adjacent ones collapses into a single
- * break. Shared with the app (`app/BibleOnSite/Helpers/SearchText.cs`), the
- * shipped index builder
+ * a word break, and adjacent ones collapse into a single break. Shared with
+ * the app (`app/BibleOnSite/Helpers/SearchText.cs`), the shipped index builder
  * (`data/sefaria/pipelines/perushim-view/src/commands/search_text.rs`) and the
  * article-search service (`web/api/src/services/article_search/text.rs`) — all
  * four must emit the same plain text for the same HTML.
  */
-const BLOCK_TAG_NAMES =
-	"(?:br|p|div|li|tr|td|th|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)";
-const BLOCK_TAGS = new RegExp(
-	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
-	"gi",
-);
-// Comments and script/style blocks drop in document order, like the
-// pipeline's find_comment_or_script: whichever starts first wins, so
-// markup inside a comment (e.g. `<!-- <style> -->`) is never a real
-// element, and a `<!--` inside a script body stays inert content. An
-// unterminated comment or script/style block swallows to end of input
-// the way an HTML parser treats it — no `<!--` or `<script` fragment
-// survives in the output.
-const COMMENTS_AND_SCRIPT_STYLE =
-	/<!--[\s\S]*?(?:-->|$)|<(script|style)\b[^>]*(?:>|$)[\s\S]*?(?:<\/\1\s*>|$)/gi;
-const ALL_TAGS = /<[^>]+>/g;
+const BLOCK_TAGS = new Set([
+	"br",
+	"p",
+	"div",
+	"li",
+	"tr",
+	"td",
+	"th",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"ul",
+	"ol",
+	"table",
+	"blockquote",
+	"section",
+	"article",
+	"header",
+	"footer",
+	"hr",
+]);
+const SCRIPT_STYLE = /^<(script|style)\b[^>]*>?/i;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
 function decodeEntities(text: string): string {
@@ -185,29 +193,66 @@ function decodeEntities(text: string): string {
  * Convert stored HTML content to plain searchable text: script/style removed,
  * block-level tags become spaces (word boundaries), entities decoded.
  * Input without markup passes through entity-decoding only.
+ *
+ * A single character walk like the Rust ports: whichever of `<!--`, a
+ * script/style body or a `<…>` tag comes first wins, so markup inside a
+ * comment (e.g. `<!-- <style> -->`) is never a real element and a `<!--`
+ * inside a skipped body stays inert. An unterminated comment or script/style
+ * block swallows to end of input like an HTML parser treats it; a `<` that
+ * cannot open markup stays literal text, so no `<!--` or `<script` fragment
+ * ever survives the pass.
  */
 export function htmlToPlainText(html: string): string {
 	if (!html.includes("<")) {
 		return decodeEntities(html);
 	}
-	// Iterate to a fixed point: a single pass can re-form tags from nested
-	// fragments (e.g. "<scr<script>ipt>" first reduces to "<script>").
-	let text = html;
-	let previous = "";
-	while (text !== previous && text.includes("<")) {
-		previous = text;
-		text = text.replace(COMMENTS_AND_SCRIPT_STYLE, "");
-		// Each regex pass rescans the whole string; skip it once no '<' remains.
-		if (text.includes("<")) {
-			// A boundary emits one space only when the preceding char isn't
-			// already a space — the same dedup the other three ports apply.
-			text = text.replace(BLOCK_TAGS, (_match, offset) =>
-				offset > 0 && text[offset - 1] === " " ? "" : " ",
+	let out = "";
+	let i = 0;
+	while (i < html.length) {
+		const rest = html.slice(i);
+		if (rest[0] !== "<") {
+			out += rest[0];
+			i += 1;
+			continue;
+		}
+		// A comment emits nothing — HtmlAgilityPack keeps it as an inert node.
+		if (rest.startsWith("<!--")) {
+			const end = html.indexOf("-->", i + 4);
+			i = end === -1 ? html.length : end + 3;
+			continue;
+		}
+		// A script/style block drops through its close tag (or end of input).
+		const skip = SCRIPT_STYLE.exec(rest);
+		if (skip) {
+			const close = new RegExp(`</${skip[1]}\\s*>`, "i").exec(
+				rest.slice(skip[0].length),
 			);
+			i =
+				close === null
+					? html.length
+					: i + skip[0].length + close.index + close[0].length;
+			continue;
 		}
-		if (text.includes("<")) {
-			text = text.replace(ALL_TAGS, "");
+		// `<` opens a tag only before a letter, '/', '!' or '?' — anything
+		// else (including end of input) stays literal text.
+		if (!/^<[a-zA-Z/!?]/.test(rest)) {
+			out += "<";
+			i += 1;
+			continue;
 		}
+		const end = html.indexOf(">", i + 1);
+		if (end === -1) {
+			// An unterminated `<tag` at end of input stays literal text.
+			out += rest;
+			break;
+		}
+		const name = /^<\/?([a-zA-Z0-9]+)/.exec(rest)?.[1]?.toLowerCase() ?? "";
+		// A boundary emits one space only when the output doesn't already end
+		// in one — the same dedup the other three ports apply.
+		if (BLOCK_TAGS.has(name) && !out.endsWith(" ")) {
+			out += " ";
+		}
+		i = end + 1;
 	}
-	return decodeEntities(text).trim();
+	return decodeEntities(out).trim();
 }
