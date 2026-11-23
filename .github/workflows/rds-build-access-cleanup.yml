@@ -48,6 +48,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
+      - name: Reject an incomplete dispatch target
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_id == '') != (inputs.run_attempt == '')
+        run: |
+          echo "::error::run_id and run_attempt must be supplied together"
+          exit 1
       - name: Require a completed repository CI attempt
         if: github.event_name == 'workflow_dispatch' && inputs.run_id != ''
         run: node devops/github/ci/rds-build-access.mjs check-run
@@ -61,8 +68,9 @@ jobs:
         env:
           RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: node devops/github/ci/rds-build-access.mjs cleanup-run
+      # The sweep always runs so a targeted dispatch that superseded a pending
+      # sweep still covers every other completed attempt's leases.
       - name: Remove access owned by every completed CI attempt
-        if: github.event_name == 'workflow_run' || inputs.run_id == ''
         env:
           RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: node devops/github/ci/rds-build-access.mjs cleanup-all
