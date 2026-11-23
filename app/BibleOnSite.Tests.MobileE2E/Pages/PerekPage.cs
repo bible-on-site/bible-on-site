@@ -65,10 +65,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// mounted with a real frame — which is all callers that read its label
     /// or geometry from the tree need (#3737).
     /// </summary>
-    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId)
+    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId) =>
+        WaitForAttached(automationId, TimeSpan.FromSeconds(45));
+
+    /// <inheritdoc cref="WaitForAttached(string)"/>
+    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId, TimeSpan timeout)
     {
         var locator = platform.AutomationId(automationId);
-        var timeout = TimeSpan.FromSeconds(45);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
@@ -133,6 +136,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// <inheritdoc cref="WaitForHidden(string)"/>
     public void WaitForHidden(string automationId, TimeSpan timeout) =>
         WaitForHidden([platform.AutomationId(automationId)], timeout);
+
+    /// <inheritdoc cref="WaitForHidden(IReadOnlyList{By}, TimeSpan)"/>
+    public void WaitForHidden(TimeSpan timeout, params string[] automationIds) =>
+        WaitForHidden(automationIds.Select(platform.AutomationId).ToArray(), timeout);
 
     /// <summary>
     /// One deadline shared by every locator: each poll cycle checks all of
@@ -306,6 +313,20 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }, timeout);
         return observed;
     }
+
+    /// <summary>
+    /// Waits until an element matching the automation id exists in the
+    /// accessibility tree, wherever it sits relative to the viewport. An
+    /// element taller than the viewport can never satisfy a center-in-viewport
+    /// wait even when its top edge is on screen, and displayed-only lookups
+    /// report it not visible for the same reason (#3735).
+    /// </summary>
+    public void WaitForPresent(string automationId) =>
+        WaitForAttached(automationId);
+
+    /// <inheritdoc cref="WaitForPresent(string)"/>
+    public void WaitForPresent(string automationId, TimeSpan timeout) =>
+        WaitForAttached(automationId, timeout);
 
     /// <summary>
     /// Scrolls the page's own scroll surface down until the element's center is

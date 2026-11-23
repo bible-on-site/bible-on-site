@@ -1,0 +1,80 @@
+.popover {
+	position: fixed;
+	z-index: 10001;
+	/* Never wider than the viewport minus the positioning margin. */
+	max-width: min(320px, calc(100vw - 16px));
+	padding: 12px 16px;
+	background: #fff;
+	border: 1px solid #d1d5db;
+	border-radius: var(--radius-md);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+	pointer-events: auto;
+	direction: rtl;
+	text-align: start;
+}
+
+.popoverTitle {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--accent-900);
+	margin-bottom: 6px;
+	line-height: 1.4;
+	border-bottom: 1px solid #e5e7eb;
+	padding-bottom: 4px;
+}
+
+.popoverSnippet {
+	font-size: 13px;
+	color: #4b5563;
+	line-height: 1.5;
+	display: -webkit-box;
+	-webkit-line-clamp: 5;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.popoverSnippet h2,
+.popoverSnippet h3,
+.popoverSnippet h4 {
+	font-weight: 600;
+	color: #374151;
+	margin: 6px 0 1px;
+	line-height: 1.4;
+}
+
+.popoverSnippet h2 {
+	font-size: 13.5px;
+	font-weight: 700;
+	color: var(--accent-900);
+}
+
+.popoverSnippet h3 {
+	font-size: 12px;
+}
+
+.popoverSnippet h4 {
+	font-size: 11.5px;
+	font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+	.popover {
+		background: #1a1f2e;
+		border-color: #3b4256;
+	}
+
+	.popoverTitle {
+		color: var(--accent-200);
+		border-bottom-color: #3b4256;
+	}
+
+	.popoverSnippet {
+		color: #b8c2d9;
+	}
+
+	.popoverSnippet h2,
+	.popoverSnippet h3,
+	.popoverSnippet h4 {
+		color: var(--accent-200);
+	}
+}

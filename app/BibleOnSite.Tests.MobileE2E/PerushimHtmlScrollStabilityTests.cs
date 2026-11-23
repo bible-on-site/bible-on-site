@@ -39,12 +39,14 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Only sections near the viewport are exposed (AccessibleTextSectionsTests
         // proves the split keeps every paragraph); the 2,200-line document must
-        // not put its ~147 sections into every WDA snapshot. Attachment, not
-        // visibility, is the gate: a section taller than the collection's
-        // visible slice keeps its frame mostly below the fold — and the
-        // closing perushim sheet can cover it — so visible == 1 starves while
-        // every label the asserts below read is already mounted (#3737).
-        Page.WaitForAttached("CommentaryTextSection");
+        // not put its ~147 sections into every WDA snapshot. A section is one
+        // accessible element for its whole laid-out height, so the first block's
+        // center can sit a few points below the viewport — invisible to every
+        // center-in-viewport wait while its top edge is already on screen, and
+        // the still-closing perushim sheet can cover it — so visible == 1
+        // starves while every label the asserts below read is already mounted
+        // in the tree (#3735, #3737).
+        Page.WaitForPresent("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
@@ -131,16 +133,30 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stale (#3421). Frames identify distinct rows so a re-render after
         // a tap never re-taps a row that was already checked.
         var tapped = new List<(System.Drawing.Point Location, System.Drawing.Size Size)>();
+        // The open sheet leaves its rows' accessibility frames reaching into
+        // the floating bottom chrome. WDA still reports such a row hittable,
+        // but the synthesized viewport-coordinate touch lands on whatever is
+        // topmost there — the chevron — and toggles the sheet instead of the
+        // row (#3735). The chevron's top edge bounds the ambiguous band.
+        var chromeTop = Page.RenderedElements("PerushimChevronButton")
+            .Select(element => element.Frame.Location.Y)
+            .DefaultIfEmpty(int.MaxValue)
+            .Min();
         for (var attempt = 0; tapped.Count < 5 && attempt < 15; attempt++)
         {
-            var next = Page.RenderedElements("PerushCheckBox")
-                .FirstOrDefault(checkbox => !tapped.Contains(checkbox.Frame));
-            if (next.Element == null)
-            {
-                break;
-            }
             try
             {
+                // The "0" switch value skips a row recycled back checked, and
+                // CanTap drops rows the snapshot itself marks unhittable.
+                var next = Page.RenderedElements("PerushCheckBox")
+                    .FirstOrDefault(checkbox => checkbox.Text == "0"
+                        && !tapped.Contains(checkbox.Frame)
+                        && checkbox.Frame.Location.Y + checkbox.Frame.Size.Height / 2 < chromeTop
+                        && Platform.CanTap(checkbox.Element));
+                if (next.Element == null)
+                {
+                    break;
+                }
                 Platform.Tap(Driver!, next.Element);
                 tapped.Add(next.Frame);
             }
@@ -151,12 +167,30 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         }
         Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
-        // A close tap that lands mid-relayout — or a double-delivered touch —
-        // leaves the sheet presented over the commentary cells (#3737). An
-        // open sheet always renders one of the markers — checkboxes or the
-        // empty state — so verifying both left the tree proves the panel
-        // really closed instead of trusting the tap.
-        Page.TapToDismiss("PerushimChevronButton", "PerushCheckBox", "PerushimEmptyState");
+        // A row tap that landed inside the bottom chrome may already have
+        // toggled the sheet closed — a second blind tap would reopen it and
+        // the reader scroll below would pan the open sheet instead of the
+        // page (#3735). An open sheet always renders one of the markers —
+        // the content viewport, the checkbox rows or the empty state — so
+        // tap only while a marker still reports the panel open, and prove
+        // every marker left the accessibility tree instead of trusting the
+        // gesture (#3737).
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            try
+            {
+                Page.WaitForHidden(TimeSpan.FromSeconds(5),
+                    "PerushimContentViewport", "PerushCheckBox", "PerushimEmptyState");
+                break;
+            }
+            catch (OpenQA.Selenium.WebDriverTimeoutException exception)
+                when (attempt < 3 && !DeviceSessionDeath.Matches(exception))
+            {
+                // The chevron is static bottom chrome — cap each tap's own
+                // wait instead of spending the default 45-second budget.
+                Page.Tap("PerushimChevronButton", _ => true, TimeSpan.FromSeconds(10));
+            }
+        }
         return tapped.Count;
     }
 }
