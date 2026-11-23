@@ -185,7 +185,7 @@ export function TopBar({ archive = false }: { archive?: boolean }) {
 						<span className="admin-header-logo" aria-hidden="true">
 							<BookOpen size={22} />
 						</span>
-						<span className="admin-header-title font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+						<span className="admin-header-title font-bold text-blue-700">
 							ניהול תנ"ך על הפרק
 						</span>
 					</Link>

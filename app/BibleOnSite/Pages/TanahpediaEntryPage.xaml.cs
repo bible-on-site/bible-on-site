@@ -194,7 +194,17 @@ public partial class TanahpediaEntryPage : ContentPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia occurrence navigation failed: {ex}");
-            await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
+            try
+            {
+                await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: a failed alert inside a dying transition is log-only
+            catch (Exception alertError) //NOSONAR — a failed alert inside a dying transition is log-only.
+            {
+                #pragma warning restore S2221
+                // The alert itself must never rethrow into the async-void handler.
+                Console.Error.WriteLine($"Tanahpedia occurrence navigation alert failed: {alertError}");
+            }
         }
     }
 
@@ -218,7 +228,17 @@ public partial class TanahpediaEntryPage : ContentPage
             {
                 #pragma warning restore S2221
                 Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
-                await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+                try
+                {
+                    await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+                }
+                #pragma warning disable S2221 // Deliberate failure boundary: a failed alert inside a dying transition is log-only
+                catch (Exception alertError) //NOSONAR — a failed alert inside a dying transition is log-only.
+                {
+                    #pragma warning restore S2221
+                    // The alert itself must never rethrow into the async-void handler.
+                    Console.Error.WriteLine($"Tanahpedia back navigation alert failed: {alertError}");
+                }
             }
         });
     }

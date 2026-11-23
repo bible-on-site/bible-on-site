@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import { previewDedicationLine } from "~/lib/dedication-line";
 import { useDebouncedValue } from "~/lib/use-debounced-value";
 import {
@@ -109,6 +110,7 @@ function DedicationsPage() {
 		mutationFn: (id: number) => deleteDedication({ data: id }),
 		onSuccess: invalidate,
 	});
+	const scheduleUndo = useUndoAction();
 	const error =
 		createMutation.error ?? updateMutation.error ?? deleteMutation.error;
 
@@ -199,7 +201,20 @@ function DedicationsPage() {
 									<td className="px-4 py-2 font-medium">
 										{previewDedicationLine(d.subject, d.purposes)}
 									</td>
-									<td className="px-4 py-2">{d.purposes.join(", ")}</td>
+									<td className="px-4 py-2">
+										<div className="flex flex-wrap gap-1">
+											{d.purposes
+												.filter((purpose) => purpose.trim())
+												.map((purpose) => (
+													<span
+														key={purpose}
+														className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-800 text-xs font-medium"
+													>
+														{purpose}
+													</span>
+												))}
+										</div>
+									</td>
 									<td className="px-4 py-2">
 										{d.targets.map((t, i) => (
 											// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
@@ -211,7 +226,11 @@ function DedicationsPage() {
 									</td>
 									<td className="px-4 py-2">
 										{d.expiresAt ?? "מתמשך"}
-										{d.expired ? " (פג)" : ""}
+										{d.expired && (
+											<span className="mr-1 px-2 py-0.5 rounded-full border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+												פג
+											</span>
+										)}
 									</td>
 									<td className="px-4 py-2 whitespace-nowrap">
 										<button
@@ -219,17 +238,20 @@ function DedicationsPage() {
 											onClick={() => openEdit(d)}
 											disabled={typesLoading}
 											title={typesLoading ? "טוען מטרות..." : undefined}
-											className="text-blue-600 hover:underline ml-3 disabled:opacity-50 disabled:no-underline"
+											className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md ml-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											ערוך
 										</button>
 										<button
 											type="button"
-											onClick={() => {
-												if (window.confirm(`למחוק את ההקדשה "${d.subject}"?`))
-													deleteMutation.mutate(d.id);
-											}}
-											className="text-red-600 hover:underline"
+											onClick={() =>
+												scheduleUndo({
+													key: `dedication-${d.id}`,
+													message: `ההקדשה "${d.subject}" תימחק`,
+													commit: () => deleteMutation.mutate(d.id),
+												})
+											}
+											className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 -my-1 rounded-md transition-colors"
 										>
 											מחק
 										</button>
@@ -385,7 +407,7 @@ function DedicationForm({
 								],
 							})
 						}
-						className="text-blue-600 hover:underline text-sm"
+						className="text-blue-700 hover:text-blue-800 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-1 px-2 py-1 rounded-md text-sm transition-colors"
 					>
 						+ הוסף יעד
 					</button>
@@ -521,7 +543,7 @@ function DedicationForm({
 							onClick={() =>
 								update({ targets: form.targets.filter((_, i) => i !== index) })
 							}
-							className="text-red-600 hover:underline text-xs"
+							className="text-red-700 hover:text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 focus-visible:outline-offset-1 px-2 py-1 rounded-md text-xs transition-colors"
 						>
 							הסר
 						</button>

@@ -204,7 +204,10 @@
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
                                 <!-- קריינות: plays the whole perek; shown when the global
-                                     קריינות preference is on and this perek has audio -->
+                                     קריינות preference is on and this perek has a published
+                                     recitation. Without installed audio the tap downloads
+                                     the sefer's pack in place (#3704) — the spinner takes
+                                     the button's slot until the recording plays. -->
                                 <Button x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
                                         Text="{x:Static fonts:FluentUI.headphones_24_regular}"
@@ -220,8 +223,17 @@
                                         Margin="8,0"
                                         SemanticProperties.Description="השמעת קריאת הפרק"
                                         ToolTipProperties.Text="השמעת קריאת הפרק"
-                                        IsVisible="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                        IsVisible="{Binding BindingContext.HeaderPlayVisible, Source={x:Reference PerekPageRoot}}"
                                         Clicked="OnHeaderPlayClicked"/>
+                                <ActivityIndicator AutomationId="HeaderPlaySpinner"
+                                        WidthRequest="20"
+                                        HeightRequest="20"
+                                        HorizontalOptions="Start"
+                                        VerticalOptions="Center"
+                                        Margin="8,0"
+                                        SemanticProperties.Description="מוריד את הקלטות הספר"
+                                        IsRunning="{Binding BindingContext.IsRecitationDownloading, Source={x:Reference PerekPageRoot}}"
+                                        IsVisible="{Binding BindingContext.IsRecitationDownloading, Source={x:Reference PerekPageRoot}}"/>
                             </Grid>
 
                             <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->

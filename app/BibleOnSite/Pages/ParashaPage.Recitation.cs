@@ -28,6 +28,8 @@ public partial class ParashaPage
     private int _focusedPerekId;
     private CancellationTokenSource? _headerPress;
     private Pasuk? _recitingPasuk;
+    /// <summary>The row last scrolled to — verse transitions only, so follow scrolls stay rare.</summary>
+    private ParashaDisplayItem? _recitingRow;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private ReaderRecitationEngine? _recitation;
@@ -103,16 +105,42 @@ public partial class ParashaPage
 
     private void StopRecitation() => Recitation.StopPlayback();
 
-    /// <summary>The canonical pasuk a highlighted word belongs to, found by its perek.</summary>
-    private Pasuk? FindRecitingPasuk(int perekId, int pasukNum) =>
-        _viewModel.Unit?.Rows.FirstOrDefault(
-            row => row.PerekId == perekId && row.PasukNum == pasukNum && row.Pasuk != null)?.Pasuk;
+    /// <summary>
+    /// The display row a highlighted word belongs to, found by its perek.
+    /// Haftarah variants can repeat a perek+pasuk the Torah section already
+    /// lists; playback walks the unit top to bottom, so the first match at or
+    /// after the previously playing row is the variant actually being read.
+    /// </summary>
+    private ParashaDisplayItem? FindRecitingRow(int perekId, int pasukNum)
+    {
+        var rows = _viewModel.Unit?.Rows;
+        if (rows == null)
+        {
+            return null;
+        }
+        var start = _recitingRow == null ? 0 : rows.IndexOf(_recitingRow);
+        if (start < 0)
+        {
+            start = 0;
+        }
+        for (var i = start; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            if (row.PerekId == perekId && row.PasukNum == pasukNum && row.Pasuk != null)
+            {
+                return row;
+            }
+        }
+        return rows.FirstOrDefault(
+            row => row.PerekId == perekId && row.PasukNum == pasukNum && row.Pasuk != null);
+    }
 
     /// <summary>Maps the engine's highlighted word onto the displayed pasuk and the focused overlay's spans.</summary>
     private void ApplyRecitingWord(RecitationWord? word)
     {
         var timelinePerekId = Recitation.TimelinePerekId;
-        var nextPasuk = word == null ? null : FindRecitingPasuk(timelinePerekId, word.Pasuk);
+        var nextRow = word == null ? null : FindRecitingRow(timelinePerekId, word.Pasuk);
+        var nextPasuk = nextRow?.Pasuk;
         if (_recitingPasuk != null && _recitingPasuk != nextPasuk)
         {
             _recitingPasuk.RecitingSegment = null;
@@ -127,6 +155,15 @@ public partial class ParashaPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
+        // Follow the spoken verse (#3728): when playback lands on a new row
+        // off-screen — play, resume, seek or a perek boundary — bring it into
+        // view. Suppressed while the user is scrolling, and a no-op while the
+        // row is already visible.
+        if (nextRow != null && !ReferenceEquals(nextRow, _recitingRow) && !IsScrolling)
+        {
+            ReaderScrollTop.ScrollToItem(FindReaderPasukList(), nextRow);
+        }
+        _recitingRow = nextRow;
         if (_recitingPasuk != null)
         {
             _recitingPasuk.RecitingSegment = word!.Segment;

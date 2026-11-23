@@ -91,7 +91,8 @@ public class ExtensionPacksLayoutTests
     }
 
     private static RecitationBookChoice Book(int available, int installed,
-        bool canDownload = true, bool downloading = false) =>
+        bool canDownload = true, bool downloading = false,
+        double downloadProgress = 0, bool showCancel = false) =>
         new()
         {
             Name = "בראשית",
@@ -100,6 +101,8 @@ public class ExtensionPacksLayoutTests
             AvailableCount = available,
             InstalledCount = installed,
             IsDownloading = downloading,
+            DownloadProgress = downloadProgress,
+            ShowCancel = showCancel,
         };
 
     /// <summary>MAUI thickness shorthand: uniform / horizontal,vertical / l,t,r,b.</summary>
@@ -168,15 +171,49 @@ public class ExtensionPacksLayoutTests
         return row;
     }
 
+    /// <summary>Resolves a literal or one-way {Binding Path} attribute value off the row's view model.</summary>
+    private static string? BoundText(XElement source, RecitationBookChoice book)
+    {
+        var value = source.Attribute("Text")?.Value;
+        if (value is null || !value.StartsWith("{Binding ", StringComparison.Ordinal))
+        {
+            return value;
+        }
+        var path = value.Trim('{', '}').Replace("Binding ", "");
+        return typeof(RecitationBookChoice).GetProperty(path)!.GetValue(book)?.ToString();
+    }
+
+    /// <summary>Resolves the ProgressBar's bound fraction off the row's view model.</summary>
+    private static double BoundProgress(XElement source, RecitationBookChoice book)
+    {
+        var value = source.Attribute("Progress")?.Value;
+        if (value is null || !value.StartsWith("{Binding ", StringComparison.Ordinal))
+        {
+            return 0;
+        }
+        var path = value.Trim('{', '}').Replace("Binding ", "");
+        return (double)(typeof(RecitationBookChoice).GetProperty(path)!.GetValue(book) ?? 0d);
+    }
+
     private static View BuildChild(XElement source, RecitationBookChoice book) => source.Name.LocalName switch
     {
         "VerticalStackLayout" => BuildStack(source, book),
         "FlexLayout" => BuildStrip(source, book),
-        "Label" => Leaf(source, book, new Label { Text = source.Attribute("Text")?.Value }),
+        "Grid" => BuildGrid(source, book),
+        "Label" => Leaf(source, book, new Label { Text = BoundText(source, book) }),
         "Button" => Leaf(source, book, new Button
         {
-            Text = source.Attribute("Text")?.Value,
+            Text = BoundText(source, book),
             AutomationId = source.Attribute("AutomationId")?.Value,
+        }),
+        "ActivityIndicator" => Leaf(source, book, new ActivityIndicator
+        {
+            AutomationId = source.Attribute("AutomationId")?.Value,
+        }),
+        "ProgressBar" => Leaf(source, book, new ProgressBar
+        {
+            AutomationId = source.Attribute("AutomationId")?.Value,
+            Progress = BoundProgress(source, book),
         }),
         _ => throw new InvalidOperationException($"unexpected row child {source.Name}")
     };
@@ -194,6 +231,29 @@ public class ExtensionPacksLayoutTests
             stack.Children.Add(BuildChild(child, book));
         }
         return stack;
+    }
+
+    /// <summary>The on-row progress container: real Grid children, real layout manager.</summary>
+    private static Grid BuildGrid(XElement source, RecitationBookChoice book)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = (ColumnDefinitionCollection)new ColumnDefinitionCollectionTypeConverter()
+                .ConvertFromInvariantString(source.Attribute("ColumnDefinitions")?.Value ?? "*")!,
+            IsVisible = BoundVisibility(source, book),
+            FlowDirection = FlowDirection.RightToLeft,
+        };
+        StubHandler(grid);
+        foreach (var child in source.Elements())
+        {
+            var view = BuildChild(child, book);
+            if (int.TryParse(child.Attribute("Grid.Column")?.Value, out var column))
+            {
+                Grid.SetColumn(view, column);
+            }
+            grid.Children.Add(view);
+        }
+        return grid;
     }
 
     /// <summary>Instantiates the action strip exactly as authored - including its own HorizontalOptions.</summary>
@@ -335,17 +395,59 @@ public class ExtensionPacksLayoutTests
     }
 
     [Fact]
-    public void Downloading_Label_UsesTheSameSlotInset()
+    public void Downloading_SpinnerAndCancel_UseTheSameSlotInset()
     {
-        var downloadingRow = ArrangeRow(Book(available: 3, installed: 0, downloading: true));
-        var progress = Descendants(downloadingRow).OfType<Label>()
-            .Single(l => l.Text == "מוריד…" && l.IsVisible);
+        // #3705: the in-place feedback keeps the end-anchored slot the
+        // download button occupied — cancel (the last visible item) takes the
+        // edge position הורדה returns to, the spinner sits beside it.
+        var downloadingRow = ArrangeRow(Book(available: 3, installed: 0,
+            downloading: true, showCancel: true));
+        var spinner = Descendants(downloadingRow).OfType<ActivityIndicator>()
+            .Single(a => a.IsVisible);
+        var cancel = Action(downloadingRow, "CancelBookDownloadButton")
+            ?? throw new InvalidOperationException("the single-sefer cancel must sit on the row");
         var downloadRow = ArrangeRow(Book(available: 3, installed: 0));
         var download = Action(downloadRow, "DownloadBookButton")!;
 
-        EndInset(progress, Strip(downloadingRow), RowWidth).Should()
+        EndInset(cancel, Strip(downloadingRow), RowWidth).Should()
             .BeApproximately(EndInset(download, Strip(downloadRow), RowWidth), Tolerance,
-                "the in-place מוריד… progress label aligns with the action slot it replaces");
+                "the cancel action holds the end-anchored slot הורדה returns to");
+        EndInset(spinner, Strip(downloadingRow), RowWidth).Should()
+            .BeGreaterThan(EndInset(cancel, Strip(downloadingRow), RowWidth),
+                "the spinner rides beside the slot, not at its edge");
+        EndInset(spinner, Strip(downloadingRow), RowWidth).Should()
+            .BeLessThan(RowWidth / 2, "the spinner stays inside the anchored strip");
+    }
+
+    [Fact]
+    public void Downloading_ProgressBar_ShowsOnlyOnceProgressIsReported()
+    {
+        var started = ArrangeRow(Book(available: 3, installed: 0, downloading: true));
+        Descendants(started).OfType<Grid>()
+            .Where(g => g.IsVisible).Should().BeEmpty(
+                "before the first report the row shows only the spinner (#3705)");
+        Descendants(started).OfType<ActivityIndicator>().Should().ContainSingle(a => a.IsVisible);
+
+        var transferring = ArrangeRow(Book(available: 3, installed: 0,
+            downloading: true, downloadProgress: 0.4));
+        var surface = Descendants(transferring).OfType<Grid>().Single(g => g.IsVisible);
+        var bar = Descendants(surface).OfType<ProgressBar>().Single();
+        bar.Progress.Should().BeApproximately(0.4, Tolerance,
+            "the row reports the sefer's own fraction once the platform reports");
+        // The label uses the current culture's percent format — compare to the
+        // same formatting, not a hard-coded glyph order/spacing.
+        Descendants(surface).OfType<Label>()
+            .Should().Contain(l => l.IsVisible && l.Text == 0.4.ToString("P0"));
+    }
+
+    [Fact]
+    public void IdleRow_RendersNoProgressSurface()
+    {
+        var row = ArrangeRow(Book(available: 3, installed: 0));
+
+        Descendants(row).OfType<ActivityIndicator>().Where(a => a.IsVisible).Should().BeEmpty();
+        Descendants(row).OfType<Grid>().Where(g => g.IsVisible).Should().BeEmpty();
+        Action(row, "CancelBookDownloadButton").Should().BeNull();
     }
 
     [Fact]

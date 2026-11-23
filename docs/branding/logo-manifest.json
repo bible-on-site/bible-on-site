@@ -1,48 +1,48 @@
 {
   "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
-  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.5",
-  "fontVersion": "0.9.5",
-  "fontSha256": "1a9a795aaf0fdae648fde962d94f00a8a50ad894e56db3531efda80f67d44390",
+  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.7",
+  "fontVersion": "0.9.7",
+  "fontSha256": "78fa218dd395f7e36b1160c13a4a7ae07671bec56ef8116cde9a6ce9767f1f5c",
   "weight": 700,
   "feature": "ss03",
   "generatedBy": "tools/yehuda_logos.py",
-  "fontSourceCommit": "d0de4ffbefb325ea0b649eba037f5447dfdeed6d",
+  "fontSourceCommit": "f488d3eefe42ac7e7e6833d2df1bc8a0a6a158a2",
   "canonicalAssets": [
     {
       "file": "web/bible-on-site/source-assets/logos/app-icon.svg",
-      "sha256": "a99820a26d8191e34ad25d6ff24b0c6a5b5c504616abcb69ec779159417f3f00"
+      "sha256": "bb65150ea6f1d69bff6fbb0ac059327069424e2a763848b6690f89adeab779c5"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/compact.svg",
-      "sha256": "c88b130b6ac93aaad05f6da9b2562efdae985aaea6bc2d7d4d22febdb6f4a9f2"
+      "sha256": "5344adb5a059c3a0eb7f69f9717b2362215121e6b0c8daef64cf5bf8847c37e9"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/compact-reversed.svg",
-      "sha256": "ed9c7fb5af785418b3ccfc91216b1d61e9191c5e0e062b7b0eb1166007ad9a21"
+      "sha256": "b21d04663e530974a94a71207e2c7b7de182f40d4dcc0a756a2d682886605ea9"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/favicon-16.svg",
-      "sha256": "9f254e2ffa3c248102aa9802344e906d893e0f696cf7a2d946bca17f22aebbf3"
+      "sha256": "9dca44429933441b705853f5f3f558e3c74ce45c84d8f74bf60a3ed2f997fe29"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/favicon-24.svg",
-      "sha256": "49067dcd5beb95ca18d7083e82602816ae8f3ced18b4017548d23fd8fcc961c0"
+      "sha256": "c446c642f5580eec7cec72e5d146d9e42a51b113cc1c0678a13eee12f57aef22"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/favicon-32.svg",
-      "sha256": "cf1532d947d9e87442098b7b9b04ee1e4f8cd1cb8d8aeda4a39df2b688a56747"
+      "sha256": "4c07f84e303f879e01af78f3b2933816cbbfee13c65fa06dc77ad966cdc2b4a5"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/favicon-48.svg",
-      "sha256": "28c3e3773dcff830bca2f03811a6605a46ba54665c353d6666b5a8a712a2991e"
+      "sha256": "00178c55c43023654a3a69390d080f45f5d71fe02eca2228db778bb51131721a"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/header-logo-reversed.svg",
-      "sha256": "f98670bb32fc995a4e4182b646052f786a921fb028bc19c1910c384e9c43e4a7"
+      "sha256": "5905be00ef11996cc60a438090cccf25eb55f15fca1e3733fe4a2bac7dc7d0a9"
     },
     {
       "file": "web/bible-on-site/source-assets/logos/header-logo.svg",
-      "sha256": "e60f9ea80e3c8d0549e8cca442294e5e7132933dbda7cc17b464671d27142c74"
+      "sha256": "67b87d809bd9241ed56829cb543b8245f8879918b0508ad5ee188ae7a3386d74"
     }
   ]
 }
