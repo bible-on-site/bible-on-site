@@ -155,7 +155,9 @@ const BLOCK_TAGS = new RegExp(
 	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
 	"gi",
 );
-const SCRIPT_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
+// An unterminated script/style block swallows to end of input like an HTML
+// parser treats it — never leaving a `<script` fragment in the output.
+const SCRIPT_STYLE = /<(script|style)\b[^>]*(?:>|$)[\s\S]*?(?:<\/\1\s*>|$)/gi;
 const ALL_TAGS = /<[^>]+>/g;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
