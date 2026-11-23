@@ -138,7 +138,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
         Page.Tap(Platform.FlyoutButton);
-        Page.Tap("FlyoutPreferences");
+        Platform.Tap(driver, Page.ScrollFlyoutTo("FlyoutPreferences"));
         Page.WaitFor("SettingsDisplayRow");
         Page.Tap("SettingsDisplayRow");
         Page.WaitFor("FontFactorSlider");
@@ -374,6 +374,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         var source = Page.Source;
         Page.Tap(Platform.FlyoutButton);
+        Page.WaitFor("FlyoutAlHaperek", element => element.Enabled);
+        SaveDiagnostics("GroupedFlyoutTop", "passed");
+        Page.ScrollFlyoutTo("FlyoutPreferences");
+        SaveDiagnostics("GroupedFlyoutBottom", "passed");
         Page.Tap("FlyoutPreferences");
         Page.WaitFor("SettingsDisplayRow", element => element.Enabled);
         Page.WaitFor("SettingsPerekRow", element => element.Enabled);

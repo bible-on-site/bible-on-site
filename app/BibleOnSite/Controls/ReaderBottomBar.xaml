@@ -54,19 +54,18 @@
             </VisualStateManager.VisualStateGroups>
         </Button>
 
-        <!-- Text Button at 28% - vertical א ב ג -->
+        <!-- Text Button at 28% -->
         <Button x:Name="TextButton"
                 AutomationId="TextButton"
-                Text="א&#x0a;ב&#x0a;ג"
+                Text="{x:Static fonts:FluentUI.text_description_rtl_24_regular}"
+                FontFamily="FluentIcons"
                 FontAutoScalingEnabled="False"
                 SemanticProperties.Description="הצגת הטקסט"
                 ToolTipProperties.Text="הצגת הטקסט"
-                FontSize="10"
-                FontAttributes="Bold"
+                FontSize="20"
                 WidthRequest="44"
                 HeightRequest="44"
                 Padding="0"
-                LineBreakMode="WordWrap"
                 BackgroundColor="Transparent"
                 TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                 Clicked="OnTextButtonClicked"
