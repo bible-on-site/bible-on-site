@@ -5,7 +5,7 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { releasePayload } from "../release/release-provenance.mjs";
-import { detectChanges } from "./determine-changes.ts";
+import { MODULES, detectChanges } from "./determine-changes.ts";
 
 const commitPattern = /^[a-f0-9]{40}$/;
 const manifestPath = "web/api/Cargo.toml";
@@ -218,9 +218,15 @@ const runGit = (args) =>
 
 function apiTree(ref, git) {
 	const entries = new Map();
-	for (const entry of git(["ls-tree", "-r", "-z", ref, "--", "web/api"]).split(
-		"\0",
-	)) {
+	// The shared contracts compiled into the API (#3710) release with it, so
+	// the recovery comparison must list them too — a registry-only change
+	// missed by a blocked release would otherwise stay unpublished forever.
+	const pathspecs = [
+		MODULES.api.directory,
+		...(MODULES.api.extraModulePaths ?? []),
+	];
+	for (const entry of git(["ls-tree", "-r", "-z", ref, "--", ...pathspecs])
+		.split("\0")) {
 		if (!entry) continue;
 		const match = /^(\d{6}) (blob|commit) ([a-f0-9]{40})\t([\s\S]+)$/.exec(
 			entry,
