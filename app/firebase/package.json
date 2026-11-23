@@ -11,5 +11,5 @@
 	"devDependencies": {
 		"firebase-tools": "15.37.0"
 	},
-	"packageManager": "bun@1.4.4"
+	"packageManager": "bun@1.4.5"
 }
