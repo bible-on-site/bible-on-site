@@ -51,6 +51,10 @@ export function UndoToastProvider({
 	durationMs?: number;
 }) {
 	const [toasts, setToasts] = useState<PendingToast[]>([]);
+	// The toast region is a client-only portal: gating on mounted keeps the
+	// hydration tree identical to the SSR output, then mounts it after.
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
 	const nextIdRef = useRef(0);
 	const timersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 	const keysRef = useRef(new Map<string, number>());
@@ -124,8 +128,7 @@ export function UndoToastProvider({
 				inert sweep cannot disable the undo button while its commit timer
 				ticks — a shortcut modal could otherwise eat the whole undo window.
 			*/}
-			{/* SSR pass has no document; the toast region is client-only UI. */}
-			{typeof document !== "undefined" &&
+			{mounted &&
 				createPortal(
 					<div
 						aria-live="polite"
