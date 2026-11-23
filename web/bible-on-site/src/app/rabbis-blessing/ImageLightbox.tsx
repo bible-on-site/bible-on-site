@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useModalDialogFocus } from "@/hooks/useModalDialogFocus";
 import styles from "./page.module.css";
 
 interface ImageLightboxProps {
@@ -14,6 +15,8 @@ interface ImageLightboxProps {
 
 export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 	const [open, setOpen] = useState(false);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useModalDialogFocus(open, dialogRef);
 
 	const close = useCallback(() => setOpen(false), []);
 
@@ -51,14 +54,22 @@ export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 			{open &&
 				createPortal(
 					<div
+						ref={dialogRef}
 						className={styles.modalBackdrop}
 						onClick={close}
 						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") close();
+							// Enter/Space close only when the backdrop itself is the
+							// target — keys raised on the dialog's controls belong to them.
+							if (
+								e.target === e.currentTarget &&
+								(e.key === "Enter" || e.key === " ")
+							)
+								close();
 						}}
 						role="dialog"
 						aria-modal="true"
 						aria-label={alt}
+						tabIndex={-1}
 					>
 						<div
 							className={styles.modalContent}
@@ -71,6 +82,7 @@ export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 								className={styles.modalClose}
 								onClick={close}
 								aria-label="סגור"
+								data-modal-action="close"
 							>
 								✕
 							</button>

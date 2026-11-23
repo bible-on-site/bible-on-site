@@ -110,6 +110,72 @@ describe("JournalismGallery", () => {
 			expect(dialog).toBeInTheDocument();
 		});
 
+		it("moves focus into the dialog on open and restores it to the opener on close", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const opener = screen.getAllByRole("button")[0];
+			opener.focus();
+
+			fireEvent.click(opener);
+			const dialog = screen.getByRole("dialog");
+
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+			// The page behind the dialog cannot be tabbed into.
+			for (const sibling of document.body.children) {
+				if (sibling === dialog) continue;
+				expect(sibling).toHaveAttribute("inert");
+			}
+
+			fireEvent.keyDown(document, { key: "Escape" });
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+			for (const sibling of document.body.children) {
+				expect(sibling).not.toHaveAttribute("inert");
+			}
+		});
+
+		it("leaves siblings that were already inert untouched", () => {
+			const preInert = document.createElement("div");
+			preInert.setAttribute("inert", "");
+			document.body.appendChild(preInert);
+			try {
+				render(<JournalismGallery items={ITEMS} />);
+				openModal();
+				expect(preInert).toHaveAttribute("inert");
+
+				fireEvent.keyDown(document, { key: "Escape" });
+				expect(preInert).toHaveAttribute("inert");
+			} finally {
+				preInert.remove();
+			}
+		});
+
+		it("wraps Tab within the dialog", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			openModal();
+			const closeButton = screen.getByRole("button", { name: "סגור" });
+			const last = screen.getByRole("button", { name: "הקודם" });
+
+			last.focus();
+			fireEvent.keyDown(last, { key: "Tab" });
+			expect(closeButton).toHaveFocus();
+
+			closeButton.focus();
+			fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+			expect(last).toHaveFocus();
+		});
+
+		it("keeps Enter and Space on the nav buttons from closing the dialog", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			openModal();
+			const next = screen.getByRole("button", { name: "הבא" });
+			next.focus();
+
+			fireEvent.keyDown(next, { key: " " });
+
+			expect(screen.getByRole("dialog")).toBeInTheDocument();
+		});
+
 		it("navigates forward with the next button and wraps around", () => {
 			render(<JournalismGallery items={ITEMS} />);
 			const dialog = openModal();
@@ -234,6 +300,30 @@ describe("ImageLightbox", () => {
 			fireEvent.click(screen.getByRole("document"));
 
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
+		});
+
+		it("moves focus into the dialog on open and restores it to the opener on close", () => {
+			renderLightbox();
+			const opener = screen.getByRole("button");
+			opener.focus();
+
+			fireEvent.click(opener);
+			const dialog = screen.getByRole("dialog");
+
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+			// The page behind the dialog cannot be tabbed into.
+			for (const sibling of document.body.children) {
+				if (sibling === dialog) continue;
+				expect(sibling).toHaveAttribute("inert");
+			}
+
+			fireEvent.click(screen.getByRole("button", { name: "סגור" }));
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+			for (const sibling of document.body.children) {
+				expect(sibling).not.toHaveAttribute("inert");
+			}
 		});
 	});
 });
