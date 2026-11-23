@@ -40,6 +40,40 @@ public class ReaderScrollTopTests
         ReaderScrollTop.ScrollListToStart(list).Should().BeFalse();
     }
 
+    [Fact]
+    public void ScrollToItem_ScrollsTheListToTheItem()
+    {
+        var item = new object();
+        var list = Realize(new CollectionView
+        {
+            ItemsSource = new List<object> { new(), item }
+        });
+        ScrollToRequestEventArgs? request = null;
+        list.ScrollToRequested += (_, e) => request = e;
+
+        ReaderScrollTop.ScrollToItem(list, item).Should().BeTrue();
+
+        request.Should().NotBeNull();
+        request!.Item.Should().Be(item);
+        request.ScrollToPosition.Should().Be(ScrollToPosition.MakeVisible,
+            "the spoken row only needs to come into view (#3728)");
+    }
+
+    [Fact]
+    public void ScrollToItem_NullOrUnrealizedSurface_IsAHarmlessNoOp()
+    {
+        ReaderScrollTop.ScrollToItem(null, new object()).Should().BeFalse();
+
+        var list = new CollectionView { ItemsSource = new[] { "first" } };
+        ReaderScrollTop.ScrollToItem(list, "first").Should().BeFalse();
+
+        Realize(list);
+        ReaderScrollTop.ScrollToItem(list, null).Should().BeFalse();
+
+        list.IsVisible = false;
+        ReaderScrollTop.ScrollToItem(list, "first").Should().BeFalse();
+    }
+
     private static readonly object CurrentUnit = new();
     private static readonly object NeighborUnit = new();
 
