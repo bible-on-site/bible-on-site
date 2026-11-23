@@ -148,10 +148,19 @@ function EntryEditPage() {
 	const queuedJobRef = useRef<SaveJob | null>(null);
 	const flushRef = useRef<() => void>(() => {});
 	const editorRef = useRef<WysiwygEditorHandle>(null);
-	// Latest content the editor delivered — flushed into saves and drafts so a
-	// pending debounced edit is never committed stale.
-	const contentRef = useRef("");
-	contentRef.current = formData.content;
+	// Latest editor state — flushed into saves and drafts so a pending
+	// debounced edit (and the attribution reset it triggers) is never
+	// committed stale. Resynced from state on every render.
+	const latestRef = useRef({
+		content: "",
+		source: REVISION_SOURCE_ADMIN,
+		notes: null as string | null,
+	});
+	latestRef.current = {
+		content: formData.content,
+		source: saveSource,
+		notes: pendingNotes,
+	};
 	// Once a create succeeds, later queued saves on the /new route must update
 	// the created entry — the route param still reads "new" until navigation.
 	// Reset on param change: the component isn't remounted when moving between
@@ -221,9 +230,9 @@ function EntryEditPage() {
 			sessionId: sessionIdRef.current,
 			baseRevisionId: baseRevisionIdRef.current,
 			savedAt: new Date().toISOString(),
-			form: { ...formData, content: contentRef.current },
-			source: saveSource,
-			notes: pendingNotes,
+			form: { ...formData, content: latestRef.current.content },
+			source: latestRef.current.source,
+			notes: latestRef.current.notes,
 		});
 		setDraftWriteFailed(!ok);
 		if (ok) {
@@ -545,8 +554,14 @@ function EntryEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
-		// Synchronous: a save may run before the next render.
-		contentRef.current = content;
+		// Synchronous: a save may run before the next render. The manual edit
+		// resets AI attribution alongside the content.
+		latestRef.current = {
+			...latestRef.current,
+			content,
+			source: REVISION_SOURCE_ADMIN,
+			notes: null,
+		};
 		setFormData((prev) => ({ ...prev, content }));
 		editCounterRef.current += 1;
 		setHasChanges(true);
@@ -813,9 +828,9 @@ function EntryEditPage() {
 								setSaveError(null);
 								editorRef.current?.flush();
 								requestSave({
-									form: { ...formData, content: contentRef.current },
-									source: saveSource,
-									notes: pendingNotes,
+									form: { ...formData, content: latestRef.current.content },
+									source: latestRef.current.source,
+									notes: latestRef.current.notes,
 									editCount: editCounterRef.current,
 									keepOldNameAsAlias: keepOldAsAlias,
 								});
@@ -1077,10 +1092,11 @@ function EntryEditPage() {
 						type="button"
 						onClick={() => {
 							setSaveError(null);
+							editorRef.current?.flush();
 							requestSave({
-								form: formData,
-								source: saveSource,
-								notes: pendingNotes,
+								form: { ...formData, content: latestRef.current.content },
+								source: latestRef.current.source,
+								notes: latestRef.current.notes,
 								editCount: editCounterRef.current,
 								keepOldNameAsAlias: keepOldAsAlias,
 							});
