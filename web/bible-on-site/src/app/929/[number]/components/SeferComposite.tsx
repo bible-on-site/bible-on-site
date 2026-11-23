@@ -12,6 +12,7 @@ import { SeferLoadingIndicator } from "@/app/components/reading/SeferLoadingIndi
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
+import { isPasukCitationHash } from "@/lib/pasuk-anchor";
 import {
 	getStoredPerekViewMode,
 	pathnameWithBookQuery,
@@ -124,7 +125,7 @@ const ClientWrapper = (props: {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
 		// A verse citation takes the reader to its visible anchor in the text view.
-		if (/^#pasuk-[1-9]\d*$/.test(window.location.hash)) return;
+		if (isPasukCitationHash(window.location.hash)) return;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
 			const next = pathnameWithBookQuery(

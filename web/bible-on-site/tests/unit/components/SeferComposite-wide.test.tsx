@@ -107,6 +107,22 @@ describe("SeferComposite (wide screen)", () => {
 			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
 		);
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(new URLSearchParams(window.location.search).has("book")).toBe(
+			false,
+		);
+		expect(screen.queryByTestId("sefer")).toBeNull();
+	});
+
+	it("keeps a ranged verse citation visible despite a saved book preference", () => {
+		localStorage.setItem("perekViewMode", "book");
+		window.history.replaceState(null, "", "/929/5#pasuk-5-3");
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(new URLSearchParams(window.location.search).has("book")).toBe(
+			false,
+		);
 		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 
