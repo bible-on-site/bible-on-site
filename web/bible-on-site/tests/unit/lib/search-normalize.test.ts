@@ -199,6 +199,10 @@ describe("htmlToPlainText", () => {
 		["א<!-- <style> -->ב", "אב"],
 		// A commented-out opener must not pair with a real close tag.
 		["א<!-- <style> -->ב<style>x</style>ג", "אבג"],
+		// Comment markers inside a skipped script/style body are inert —
+		// the closing tag still ends the block.
+		["א<script><!--</script>ב", "אב"],
+		["א<style>x<!-- -->y</style>ב", "אב"],
 	])("splits %s into normalized words %s", (html, expected) => {
 		expect(htmlToPlainText(html)).toBe(expected);
 	});

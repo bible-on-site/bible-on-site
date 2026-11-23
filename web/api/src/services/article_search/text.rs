@@ -57,13 +57,42 @@ pub fn strip_html(html: &str) -> String {
         }
         match c {
             '<' => {
+                // Inside a skipped script/style body only the matching
+                // `</name>` matters — `<` starting anything else (a comment
+                // marker, a stray tag) is inert content, as HtmlAgilityPack
+                // parses it. A naive tag-parse would swallow the closing tag
+                // into a bogus `<…>` and drop the rest of the document.
+                if let Some(open) = skipping.clone() {
+                    let close = format!("/{open}");
+                    let probe: String = chars
+                        .clone()
+                        .take(close.len() + 1)
+                        .collect::<String>()
+                        .to_lowercase();
+                    if probe.starts_with(&close)
+                        && probe[close.len()..]
+                            .chars()
+                            .next()
+                            .is_none_or(|u| u.is_whitespace() || u == '/' || u == '>')
+                    {
+                        for _ in 0..close.len() {
+                            chars.next();
+                        }
+                        for u in chars.by_ref() {
+                            if u == '>' {
+                                break;
+                            }
+                        }
+                        skipping = None;
+                    }
+                    continue;
+                }
                 // A comment emits nothing — HtmlAgilityPack keeps it as an
                 // inert comment node. Drop the whole `<!-- … -->` block so
-                // its tail doesn't survive as literal text. Not inside a
-                // skipped script/style body, where `-->` could be absent and
-                // the swallow would hide the closing tag.
-                if skipping.is_none()
-                    && chars.clone().take(3).collect::<String>() == "!--"
+                // its tail doesn't survive as literal text. Never inside a
+                // skipped script/style body (handled above), where `-->`
+                // could be absent and the swallow would hide the closing tag.
+                if chars.clone().take(3).collect::<String>() == "!--"
                 {
                     for _ in 0..3 {
                         chars.next();
@@ -483,6 +512,10 @@ mod tests {
             ("א<!-- <style> -->ב", "אב"),
             // A commented-out opener must not pair with a real close tag.
             ("א<!-- <style> -->ב<style>x</style>ג", "אבג"),
+            // Comment markers inside a skipped script/style body are inert —
+            // the closing tag still ends the block.
+            ("א<script><!--</script>ב", "אב"),
+            ("א<style>x<!-- -->y</style>ב", "אב"),
         ] {
             assert_eq!(strip_html(html), expected, "for {html}");
         }

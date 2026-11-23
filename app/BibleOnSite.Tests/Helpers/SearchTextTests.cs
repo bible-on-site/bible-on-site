@@ -34,6 +34,10 @@ public class SearchTextTests
         [InlineData("א<!-- <style> -->ב", "אב")]
         // A commented-out opener must not pair with a real close tag.
         [InlineData("א<!-- <style> -->ב<style>x</style>ג", "אבג")]
+        // Comment markers inside a skipped script/style body are inert —
+        // the closing tag still ends the block.
+        [InlineData("א<script><!--</script>ב", "אב")]
+        [InlineData("א<style>x<!-- -->y</style>ב", "אב")]
         public void breaks_words_on_every_block_tag_like_the_other_ports(string html, string expected)
         {
             SearchText.PlainText(html).Should().Be(expected);
