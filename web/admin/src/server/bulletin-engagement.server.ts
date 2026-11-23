@@ -48,8 +48,9 @@ const DELIVERY_EVIDENCE = "COALESCE(r.delivered_at, r.event_at)";
  * rule: no delivered-but-untracked edition inside the trailing year (an
  * outage there cannot prove inactivity) and no recorded open or click during
  * that year (a tracked content click counts as activity even without opens).
- * Untracked deliveries and unresolved attempts with no known time are
- * conservatively treated as inside the review window.
+ * An outage can affect engagements on older editions. Its recorded end
+ * time also counts as a gap in the trailing year. Untracked deliveries and
+ * unresolved attempts with unknown times are treated as inside the window.
  */
 const INACTIVITY_FILTER = `
 	AND NOT EXISTS (
@@ -58,7 +59,8 @@ const INACTIVITY_FILTER = `
 		WHERE ux.subscriber_id = s.id AND uj.audience = 'real' AND (
 			(ux.status = 'delivered' AND uj.tracked = 0 AND (
 				COALESCE(ux.delivered_at, ux.event_at) IS NULL
-				OR COALESCE(ux.delivered_at, ux.event_at) >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
+				OR COALESCE(ux.delivered_at, ux.event_at) >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)
+				OR uj.tracking_gap_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
 			OR (ux.status IN ('sending', 'accepted', 'uncertain') AND (
 				ux.started_at IS NULL OR ux.started_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))))
 	AND NOT EXISTS (
@@ -73,11 +75,13 @@ const INACTIVITY_FILTER = `
  * history (earliest proven delivery a full year back), at least one actual
  * tracked delivery inside the trailing year, and no recorded activity
  * during it — measured from delivery, not from signup or cohort membership.
+ * A verified rejoin after an admin removal starts a new period of delivery.
  */
 const INACTIVITY_TABLES = `
 	FROM tanah_daily_bulletin_subscriber s
 	JOIN tanah_daily_bulletin_email_recipient r
 		ON r.subscriber_id = s.id AND r.status = 'delivered'
+		AND (s.admin_action_at IS NULL OR ${DELIVERY_EVIDENCE} >= s.last_event_at)
 	JOIN tanah_daily_bulletin_email_job j
 		ON j.id = r.job_id AND j.audience = 'real' AND j.tracked = 1`;
 

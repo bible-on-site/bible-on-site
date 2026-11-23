@@ -137,7 +137,9 @@ Keep native unsubscribe and received-message validation separate from an SES del
 
 The admin inactivity action records an audited opt-out for the production audience in MySQL. The send worker checks that record before submitting a message, and the original-cohort rollout honors it. SES continues to manage recipient-initiated unsubscribes. The admin action avoids SES contact-wide preference writes because they can overwrite a concurrent recipient preference or affect another topic.
 
-During a known engagement collection outage, turn off `BULLETIN_SES_TRACKING_ENABLED` to pause inactivity removals. Before re-enabling it, mark affected jobs as untracked (`tracked = 0`), including older editions whose open or click events could have been lost during the outage. Keep the delivery and activity records. An untracked delivery in the trailing year disqualifies the recipient from inactivity review.
+A reader removed for inactivity can restore delivery from the native SES preference page linked in a previously received bulletin. If the daily topic is still enabled, save it as disabled first, then explicitly enable it and save again. The worker restores local consent on the verified opt-in transition. The public signup form leaves opt-outs in place because it does not verify mailbox ownership. A bounce or complaint continues to suppress delivery.
+
+During a known engagement collection outage, turn off `BULLETIN_SES_TRACKING_ENABLED` to pause inactivity removals. Before re-enabling it, set `tracked = 0` on each affected job and set `tracking_gap_at` to the outage end in UTC. Keep the later timestamp when a job already has a recorded gap. Include older editions whose open or click events could have been lost during the outage. If the affected jobs are unknown, include every edition sent before the end of the outage that could still receive opens or clicks. Keep the delivery and activity records. The review excludes recipients with an untracked delivery or a collection gap in the trailing year.
 
 ## Rollback and retirement
 

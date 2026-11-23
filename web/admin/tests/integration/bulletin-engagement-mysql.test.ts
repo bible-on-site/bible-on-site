@@ -406,6 +406,16 @@ describe("engagement schema upgrade", () => {
 			[schema],
 		);
 		expect(tables).toHaveLength(1);
+		const tracking = await db.query<{ COLUMN_NAME: string }>(
+			`SELECT COLUMN_NAME FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_email_job'
+			 AND COLUMN_NAME IN ('tracked','tracking_gap_at')`,
+			[schema],
+		);
+		expect(tracking.map((c) => c.COLUMN_NAME).sort()).toEqual([
+			"tracked",
+			"tracking_gap_at",
+		]);
 		const audit = await db.query<{ COLUMN_NAME: string }>(
 			`SELECT COLUMN_NAME FROM information_schema.COLUMNS
 			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_subscriber'
@@ -850,6 +860,78 @@ describe("one-year inactivity review", () => {
 		await expect(
 			engagement.confirmInactivityUnsubscribe(subscriber, "admin-1"),
 		).rejects.toThrow();
+	});
+
+	it("excludes a recent collection outage even on an older edition", async () => {
+		const subscriberId = await seedHistory("older-outage@example.invalid", [
+			{ monthsAgo: 13 },
+			{ monthsAgo: 2 },
+		]);
+		const { jobId, recipientId } = await seedDelivered({
+			date: "2023-01-01",
+			subscriberId,
+			tracked: 0,
+		});
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_recipient SET delivered_at = UTC_TIMESTAMP(3) - INTERVAL 18 MONTH WHERE id = ?",
+			[recipientId],
+		);
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 1 MONTH WHERE id = ?",
+			[jobId],
+		);
+		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
+		await expect(
+			engagement.confirmInactivityUnsubscribe(subscriberId, "admin-1"),
+		).rejects.toThrow();
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 13 MONTH WHERE id = ?",
+			[jobId],
+		);
+		expect(
+			(await engagement.readEmailEngagementPanel())?.inactive.map(
+				(row) => row.id,
+			),
+		).toEqual([subscriberId]);
+	});
+
+	it("restores an inactivity-removed subscription after a verified SES opt-in", async () => {
+		const email = "rejoin@example.invalid";
+		const subscriberId = await seedHistory(email, [
+			{ monthsAgo: 13 },
+			{ monthsAgo: 2 },
+		]);
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_subscriber SET consented_at = UTC_TIMESTAMP(3) - INTERVAL 13 MONTH WHERE id = ?",
+			[subscriberId],
+		);
+		await engagement.confirmInactivityUnsubscribe(subscriberId, "admin-1");
+		const consent = () =>
+			db.queryOne<{ consent_status: string; admin_action: string }>(
+				"SELECT consent_status, admin_action FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+				[subscriberId],
+			);
+		const eventTime = Date.now() + 1000;
+		await delivery.applySesEvent({
+			type: "subscription",
+			email,
+			timestamp: new Date(eventTime).toISOString(),
+			unsubscribeAll: false,
+			topics: { real: "OPT_OUT" },
+		});
+		expect((await consent())?.consent_status).toBe("unsubscribed");
+		await delivery.applySesEvent({
+			type: "subscription",
+			email,
+			timestamp: new Date(eventTime + 1).toISOString(),
+			unsubscribeAll: false,
+			topics: { real: "OPT_IN" },
+		});
+		expect(await consent()).toEqual({
+			consent_status: "confirmed",
+			admin_action: "inactivity-unsubscribe",
+		});
+		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
 	});
 
 	it("leaves subscribers with an unresolved recent attempt out of the review", async () => {

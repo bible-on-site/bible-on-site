@@ -7,6 +7,8 @@
 --     activity and the per-edition event count for that recipient
 --   job tracked - whether SES engagement collection was enabled at enqueue,
 --     so untracked history stays distinguishable from a measured zero
+--   job tracking_gap_at - latest instant of a known collection outage
+--     that affected this edition regardless of when it was sent
 --   subscriber admin_action/admin_actor/admin_action_at - the recorded admin
 --     inactivity-review unsubscribe
 --   recipient delivered_at - the earliest timestamp that first proved
@@ -68,6 +70,17 @@ SET @engagementSql = (
     FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_email_job'
         AND COLUMN_NAME = 'tracked'
+);
+PREPARE engagementUpgrade FROM @engagementSql;
+EXECUTE engagementUpgrade;
+DEALLOCATE PREPARE engagementUpgrade;
+
+SET @engagementSql = (
+    SELECT IF(COUNT(*) > 0, 'SELECT 1',
+        'ALTER TABLE tanah_daily_bulletin_email_job ADD COLUMN tracking_gap_at DATETIME(3) NULL')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_email_job'
+        AND COLUMN_NAME = 'tracking_gap_at'
 );
 PREPARE engagementUpgrade FROM @engagementSql;
 EXECUTE engagementUpgrade;
