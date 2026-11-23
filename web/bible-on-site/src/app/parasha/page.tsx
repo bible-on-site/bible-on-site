@@ -44,7 +44,7 @@ export default function ParashaLanding() {
 	const occasions = getParashaOccasions();
 
 	return (
-		<div className={styles.container}>
+		<main className={styles.container}>
 			<h1 className={styles.heading}>{PARASHA_DIVISION.menuLabel}</h1>
 			<p className={styles.intro}>
 				קריאת פרשיות השבוע של התורה - כל פרשה עם קריאת התורה שלה וההפטרה שלה
@@ -132,6 +132,6 @@ export default function ParashaLanding() {
 					מקור הטבלה: {PARASHA_SOURCE_ATTRIBUTION}
 				</p>
 			</section>
-		</div>
+		</main>
 	);
 }

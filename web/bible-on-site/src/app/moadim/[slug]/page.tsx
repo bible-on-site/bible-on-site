@@ -161,7 +161,7 @@ export default async function MoedPage({
 	const firstPerekId = perekIds[0] ?? 1;
 
 	return (
-		<div className={styles.container}>
+		<main className={styles.container}>
 			<MoedBreadcrumb moed={moed} siblings={siblings} />
 			<header className={styles.header}>
 				<h1 className={styles.heading}>{moed.name}</h1>
@@ -221,6 +221,6 @@ export default async function MoedPage({
 				emptyMessage="אין מאמרים למועד זה"
 				scrollStorageKey={`moed-${moed.id}-articles`}
 			/>
-		</div>
+		</main>
 	);
 }

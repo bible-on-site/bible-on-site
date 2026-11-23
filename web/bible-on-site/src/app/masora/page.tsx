@@ -36,7 +36,7 @@ export default function MasoraLanding() {
 	);
 
 	return (
-		<div className={styles.container}>
+		<main className={styles.container}>
 			<h1 className={styles.heading}>{MASORA_DIVISION.menuLabel}</h1>
 			<p className={styles.intro}>
 				קריאת התנ&quot;ך לפי חלוקת המסורה — הפרשיות הפתוחות והסתומות המסורתיות
@@ -72,6 +72,6 @@ export default function MasoraLanding() {
 					</ul>
 				</section>
 			))}
-		</div>
+		</main>
 	);
 }
