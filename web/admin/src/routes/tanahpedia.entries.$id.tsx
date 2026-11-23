@@ -16,7 +16,10 @@ import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { MainAddressSection } from "~/components/tanahpedia/MainAddressSection";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	WysiwygEditor,
+	type WysiwygEditorHandle,
+} from "~/components/WysiwygEditor";
 import {
 	type ClassifiedSaveError,
 	classifySaveError,
@@ -144,6 +147,11 @@ function EntryEditPage() {
 	const inFlightRef = useRef(false);
 	const queuedJobRef = useRef<SaveJob | null>(null);
 	const flushRef = useRef<() => void>(() => {});
+	const editorRef = useRef<WysiwygEditorHandle>(null);
+	// Latest content the editor delivered — flushed into saves and drafts so a
+	// pending debounced edit is never committed stale.
+	const contentRef = useRef("");
+	contentRef.current = formData.content;
 	// Once a create succeeds, later queued saves on the /new route must update
 	// the created entry — the route param still reads "new" until navigation.
 	// Reset on param change: the component isn't remounted when moving between
@@ -213,7 +221,7 @@ function EntryEditPage() {
 			sessionId: sessionIdRef.current,
 			baseRevisionId: baseRevisionIdRef.current,
 			savedAt: new Date().toISOString(),
-			form: formData,
+			form: { ...formData, content: contentRef.current },
 			source: saveSource,
 			notes: pendingNotes,
 		});
@@ -537,6 +545,8 @@ function EntryEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
+		// Synchronous: a save may run before the next render.
+		contentRef.current = content;
 		setFormData((prev) => ({ ...prev, content }));
 		editCounterRef.current += 1;
 		setHasChanges(true);
@@ -801,8 +811,9 @@ function EntryEditPage() {
 							type="button"
 							onClick={() => {
 								setSaveError(null);
+								editorRef.current?.flush();
 								requestSave({
-									form: formData,
+									form: { ...formData, content: contentRef.current },
 									source: saveSource,
 									notes: pendingNotes,
 									editCount: editCounterRef.current,
@@ -1030,6 +1041,7 @@ function EntryEditPage() {
 								תוכן הערך
 							</label>
 							<WysiwygEditor
+								ref={editorRef}
 								content={formData.content}
 								onChange={handleContentChange}
 								placeholder="הכנס את תוכן הערך..."
