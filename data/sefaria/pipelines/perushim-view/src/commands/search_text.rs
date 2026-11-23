@@ -8,7 +8,10 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Version folded into every search fingerprint (`v4:{content-id}:n{NORM_VERSION}`).
 /// The app's `SearchText.NormalizationVersion` must equal this value.
-pub const NORM_VERSION: u32 = 1;
+/// 2: every block-level tag — open or close — is a word break, and the shared
+/// tag set grew to cover td/th/h4-h6/ul/ol/table/blockquote/section/article/
+/// header/footer/hr (previously only br/p/div/li/tr/h1-h3 closed blocks broke).
+pub const NORM_VERSION: u32 = 2;
 
 /// Strips markup the same way `SearchText.PlainText` does: script/style blocks
 /// vanish, structural tags turn into a word break, and the rest is removed.
@@ -49,7 +52,6 @@ pub fn plain_text(text: &str) -> String {
         // every consumed char so an unterminated tag can be re-emitted as text.
         let mut consumed = String::new();
         let mut tag = String::new();
-        let mut closing = false;
         let mut first = true;
         let mut in_name = true;
         let mut terminated = false;
@@ -62,7 +64,6 @@ pub fn plain_text(text: &str) -> String {
             if first {
                 first = false;
                 if t == '/' {
-                    closing = true;
                     continue;
                 }
             }
@@ -80,15 +81,42 @@ pub fn plain_text(text: &str) -> String {
             result.push_str(&consumed);
             break;
         }
-        const BREAK: [&str; 8] = ["br", "p", "div", "li", "tr", "h1", "h2", "h3"];
-        if BREAK.contains(&tag.as_str()) && (closing || tag == "br") {
-            // A close tag (or <br>) emits the break the element stood for.
+        // Block-level tags — the same set the app (`SearchText.cs`), the website
+        // (`lib/search/normalize.ts`) and the article-search service
+        // (`web/api/src/services/article_search/text.rs`) break words on. Open
+        // and close tags break alike so `<div>…` and `…</td><td>…` split the
+        // same way every port parses them.
+        const BREAK: [&str; 22] = [
+            "br",
+            "p",
+            "div",
+            "li",
+            "tr",
+            "td",
+            "th",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "ul",
+            "ol",
+            "table",
+            "blockquote",
+            "section",
+            "article",
+            "header",
+            "footer",
+            "hr",
+        ];
+        if BREAK.contains(&tag.as_str()) {
+            // A block tag (open or close) emits the break the element stands for.
             result.push(' ');
         }
-        // All other tags drop entirely — opening block tags too (their break
-        // arrives with the close tag, matching InnerText closely enough).
+        // All other tags drop entirely.
     }
-    deentitized(&result)
+    deentitized(&result).trim().to_string()
 }
 
 /// `SearchText.Normalize`: NFD, drop combining marks + quote chars, lowercase
@@ -281,5 +309,28 @@ mod tests {
         assert_eq!(normalize("  a  b  "), "a b");
         assert_eq!(normalize("word's end"), "words end");
         assert_eq!(normalize("a-ב c"), "a ב c");
+    }
+
+    // The same cases are asserted in search-normalize.test.ts (website),
+    // SearchTextTests.cs (app) and article_search/text.rs (api): every open or
+    // close block-level tag is a word break in all four ports.
+    #[test]
+    fn block_tags_break_words_like_the_other_ports() {
+        for (html, expected) in [
+            ("<td>foo</td><td>bar</td>", "foo bar"),
+            ("<th>א</th><td>ב</td>", "א ב"),
+            ("<h4>א</h4>ב", "א ב"),
+            ("<ul><li>א</li><li>ב</li></ul>", "א ב"),
+            ("<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"),
+            ("<blockquote>א</blockquote><section>ב</section>", "א ב"),
+            ("<header>א</header><article>ב</article>", "א ב"),
+            ("<footer>א</footer>ב", "א ב"),
+            ("א<hr>ב", "א ב"),
+            ("<div>א", "א"),
+            ("<p>א</p><p>ב</p>", "א ב"),
+            ("א<br>ב", "א ב"),
+        ] {
+            assert_eq!(normalize(&plain_text(html)), expected, "for {html}");
+        }
     }
 }

@@ -14,7 +14,14 @@ public static class SearchText
     /// pipeline (data/sefaria/pipelines/perushim-view search_text.rs NORM_VERSION) and
     /// the app regenerate matching indexes.
     /// </summary>
-    internal const int NormalizationVersion = 1;
+    internal const int NormalizationVersion = 2;
+
+    // Block-level elements shared with the website (`web/bible-on-site/src/lib/search/normalize.ts`),
+    // the delivered index builder (`data/sefaria/pipelines/perushim-view/src/commands/search_text.rs`)
+    // and the article-search service (`web/api/src/services/article_search/text.rs`): every block tag —
+    // open or close — is a word break, so all ports emit the same plain text for the same HTML.
+    private const string BlockTagsXPath =
+        "//br|//p|//div|//li|//tr|//td|//th|//h1|//h2|//h3|//h4|//h5|//h6|//ul|//ol|//table|//blockquote|//section|//article|//header|//footer|//hr";
 
     public static string PlainText(string text)
     {
@@ -28,11 +35,21 @@ public static class SearchText
         {
             node.Remove();
         }
-        foreach (var node in (document.DocumentNode.SelectNodes("//br|//p|//div|//li|//tr|//h1|//h2|//h3") ?? Enumerable.Empty<HtmlNode>()).ToArray())
+        foreach (var node in (document.DocumentNode.SelectNodes(BlockTagsXPath) ?? Enumerable.Empty<HtmlNode>()).ToArray())
         {
-            node.ParentNode!.InsertAfter(document.CreateTextNode(" "), node);
+            var parent = node.ParentNode!;
+            // One space per boundary: adjacent block elements (and text already
+            // spaced around the element) share the same break.
+            if (node.PreviousSibling is not HtmlTextNode previous || !previous.Text.EndsWith(' '))
+            {
+                parent.InsertBefore(document.CreateTextNode(" "), node);
+            }
+            if (node.NextSibling is not HtmlTextNode next || !next.Text.StartsWith(' '))
+            {
+                parent.InsertAfter(document.CreateTextNode(" "), node);
+            }
         }
-        return HtmlEntity.DeEntitize(document.DocumentNode.InnerText);
+        return HtmlEntity.DeEntitize(document.DocumentNode.InnerText).Trim();
     }
 
     public static string Normalize(string text)

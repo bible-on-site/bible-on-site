@@ -282,7 +282,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(notes_fp, "v4:4242:n1");
+        assert_eq!(notes_fp, "v4:4242:n2");
         let verses_fp: String = index
             .query_row(
                 "SELECT fingerprint FROM search_metadata WHERE name='verses'",
@@ -290,7 +290,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(verses_fp, "v4:2026-01-03 22:08:48 UTC:n1");
+        assert_eq!(verses_fp, "v4:2026-01-03 22:08:48 UTC:n2");
 
         // Notes FTS finds the nikud-stripped token.
         let hits: i64 = index
@@ -346,6 +346,48 @@ mod tests {
             .unwrap();
         assert!(vocab > 0);
 
+        index.close().unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_splits_words_at_block_tag_boundaries() {
+        let dir = temp_dir("idx_block_tags");
+        let notes = dir.join("notes.sqlite");
+        // Authored table markup: td/th are block boundaries like the other ports
+        // — previously the cells merged into one unsearchable token.
+        v2_notes_db(
+            &notes,
+            Some(note_blob::SCHEMA_VERSION),
+            Some("4242"),
+            &[(
+                1,
+                vec![Note {
+                    perush_id: 7,
+                    perek_id: 1,
+                    pasuk: 1,
+                    note_idx: 0,
+                    note_content: "<table><tr><th>ערב</th><td>בקר</td></tr></table>".into(),
+                }],
+            )],
+            &[],
+        );
+        let tanah = tanah_fixture(&dir);
+        let out = dir.join("idx.sqlite");
+
+        build_search_index(&notes, &tanah, &out).unwrap();
+
+        let index = Connection::open(&out).unwrap();
+        for term in ["ערב", "בקר"] {
+            let hits: i64 = index
+                .query_row(
+                    "SELECT COUNT(*) FROM notes WHERE notes MATCH ?1",
+                    [format!("\"{term}\"")],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(hits, 1, "notes index must find the token '{term}'");
+        }
         index.close().unwrap();
         fs::remove_dir_all(&dir).ok();
     }

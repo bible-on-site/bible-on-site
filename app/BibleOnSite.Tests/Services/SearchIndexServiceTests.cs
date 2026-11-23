@@ -650,7 +650,7 @@ public class SearchIndexServiceTests
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
         await delivered.CloseAsync();
         File.Copy(Path.Join(pack.Root, PerushimNotesService.SearchIndexDbName),
             Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
@@ -682,11 +682,11 @@ public class SearchIndexServiceTests
         var source = await perakim.GetSearchConnectionAsync();
         await source.CloseAsync();
         var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
-        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n1";
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"),
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),
             $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')",
             "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
             "INSERT INTO verses_documents VALUES (1,'מוכן מראש',1,1,0,1)",
@@ -711,7 +711,7 @@ public class SearchIndexServiceTests
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
         await delivered.CloseAsync();
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
@@ -1442,7 +1442,7 @@ public class SearchIndexServiceTests
         var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var packLookup = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var delivery = new Mock<IPadDeliveryService>();
@@ -1474,7 +1474,7 @@ public class SearchIndexServiceTests
         var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
@@ -1533,7 +1533,7 @@ public class SearchIndexServiceTests
         var downloading = notes.TryDownloadNotesAsync();
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
 
@@ -1561,7 +1561,7 @@ public class SearchIndexServiceTests
         // The staged index can outlive its rejected pack (rejection races, partial cleanup).
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
 

@@ -12,10 +12,33 @@ use unicode_normalization::char::is_combining_mark;
 const SKIP_CONTENT_TAGS: [&str; 2] = ["script", "style"];
 
 /// Tags that separate phrases — rendered as a space so adjacent words in
-/// different blocks do not merge into a single token.
-const BLOCK_TAGS: [&str; 17] = [
-    "br", "p", "div", "li", "tr", "td", "th", "table", "ul", "ol", "h1", "h2", "h3", "h4", "h5",
-    "h6", "hr",
+/// different blocks do not merge into a single token. Shared with the app's
+/// `SearchText.cs`, the website's `lib/search/normalize.ts` and the shipped
+/// index builder (`data/sefaria/pipelines/perushim-view/.../search_text.rs`);
+/// every open or close tag of one of these names is a word break.
+const BLOCK_TAGS: [&str; 22] = [
+    "br",
+    "p",
+    "div",
+    "li",
+    "tr",
+    "td",
+    "th",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "table",
+    "blockquote",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "hr",
 ];
 
 /// Strips HTML markup, dropping script/style bodies and decoding the entities
@@ -408,6 +431,29 @@ mod tests {
     fn strip_html_truncated_tag_is_safe() {
         assert_eq!(strip_html("abc <p"), "abc");
         assert_eq!(strip_html("<img src=\"x\">tail"), "tail");
+    }
+
+    // The same cases are asserted in search-normalize.test.ts (website),
+    // SearchTextTests.cs (app) and the index builder's search_text.rs: every
+    // open or close block-level tag is a word break in all four ports.
+    #[test]
+    fn block_tags_break_words_like_the_other_ports() {
+        for (html, expected) in [
+            ("<td>foo</td><td>bar</td>", "foo bar"),
+            ("<th>א</th><td>ב</td>", "א ב"),
+            ("<h4>א</h4>ב", "א ב"),
+            ("<ul><li>א</li><li>ב</li></ul>", "א ב"),
+            ("<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"),
+            ("<blockquote>א</blockquote><section>ב</section>", "א ב"),
+            ("<header>א</header><article>ב</article>", "א ב"),
+            ("<footer>א</footer>ב", "א ב"),
+            ("א<hr>ב", "א ב"),
+            ("<div>א", "א"),
+            ("<p>א</p><p>ב</p>", "א ב"),
+            ("א<br>ב", "א ב"),
+        ] {
+            assert_eq!(normalize(&strip_html(html)), expected, "for {html}");
+        }
     }
 
     #[test]

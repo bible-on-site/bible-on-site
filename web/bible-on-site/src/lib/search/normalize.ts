@@ -140,8 +140,21 @@ const HTML_ENTITIES: Record<string, string> = {
 	hellip: "...",
 };
 
-const BLOCK_TAGS =
-	/<(br|p|div|li|tr|td|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)\b[^>]*>/gi;
+/**
+ * Block-level tag boundaries: every open or close tag of one of these names is
+ * a word break, and a maximal run of adjacent ones collapses into a single
+ * break. Shared with the app (`app/BibleOnSite/Helpers/SearchText.cs`), the
+ * shipped index builder
+ * (`data/sefaria/pipelines/perushim-view/src/commands/search_text.rs`) and the
+ * article-search service (`web/api/src/services/article_search/text.rs`) — all
+ * four must emit the same plain text for the same HTML.
+ */
+const BLOCK_TAG_NAMES =
+	"(?:br|p|div|li|tr|td|th|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)";
+const BLOCK_TAGS = new RegExp(
+	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:\\s*<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
+	"gi",
+);
 const SCRIPT_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const ALL_TAGS = /<[^>]+>/g;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
@@ -175,10 +188,14 @@ export function htmlToPlainText(html: string): string {
 	let previous = "";
 	while (text !== previous && text.includes("<")) {
 		previous = text;
-		text = text
-			.replace(SCRIPT_STYLE, " ")
-			.replace(BLOCK_TAGS, " ")
-			.replace(ALL_TAGS, "");
+		text = text.replace(SCRIPT_STYLE, " ");
+		// Each regex pass rescans the whole string; skip it once no '<' remains.
+		if (text.includes("<")) {
+			text = text.replace(BLOCK_TAGS, " ");
+		}
+		if (text.includes("<")) {
+			text = text.replace(ALL_TAGS, "");
+		}
 	}
 	return decodeEntities(text).trim();
 }

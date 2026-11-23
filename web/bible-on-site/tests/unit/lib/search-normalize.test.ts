@@ -108,7 +108,7 @@ describe("htmlToPlainText", () => {
 	it("removes script and style contents entirely", () => {
 		expect(
 			htmlToPlainText("<p>טקסט</p><script>alert(1)</script><p>עוד</p>"),
-		).toBe("טקסט  עוד");
+		).toBe("טקסט עוד");
 	});
 
 	it("strips tags nested inside other tag fragments until stable", () => {
@@ -161,5 +161,26 @@ describe("htmlToPlainText", () => {
 
 	it("leaves unknown entities untouched", () => {
 		expect(htmlToPlainText("&notanentity;")).toBe("&notanentity;");
+	});
+
+	// The same cases are asserted in SearchTextTests.cs (app),
+	// search_text.rs (the delivered index builder) and
+	// article_search/text.rs (api): every open or close block-level tag is a
+	// word break in all four ports.
+	it.each([
+		["<td>foo</td><td>bar</td>", "foo bar"],
+		["<th>א</th><td>ב</td>", "א ב"],
+		["<h4>א</h4>ב", "א ב"],
+		["<ul><li>א</li><li>ב</li></ul>", "א ב"],
+		["<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"],
+		["<blockquote>א</blockquote><section>ב</section>", "א ב"],
+		["<header>א</header><article>ב</article>", "א ב"],
+		["<footer>א</footer>ב", "א ב"],
+		["א<hr>ב", "א ב"],
+		["<div>א", "א"],
+		["<p>א</p><p>ב</p>", "א ב"],
+		["א<br>ב", "א ב"],
+	])("splits %s into normalized words %s", (html, expected) => {
+		expect(normalizeSearchText(htmlToPlainText(html))).toBe(expected);
 	});
 });
