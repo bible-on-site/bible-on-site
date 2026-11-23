@@ -1,7 +1,13 @@
+import { websiteSubcategoryPath } from "../../../../admin/src/lib/tanahpedia/category-hierarchy";
 import {
 	CATEGORY_HIERARCHY,
 	labelForCategoryKey,
 } from "../../../src/lib/tanahpedia/category-hierarchy";
+import {
+	categoryHref,
+	pediaPathFromLegacy,
+} from "../../../src/lib/tanahpedia/category-slug";
+import type { CategoryKey } from "../../../src/lib/tanahpedia/types";
 
 describe("tanahpedia/category-hierarchy", () => {
 	it("labelForCategoryKey resolves from labels map", () => {
@@ -14,5 +20,32 @@ describe("tanahpedia/category-hierarchy", () => {
 		expect(person?.children).toContain("PROPHET");
 		const animal = CATEGORY_HIERARCHY.find((c) => c.type === "ANIMAL");
 		expect(animal?.children?.length).toBeGreaterThan(3);
+	});
+
+	it("every admin outbound subcategory link resolves to a canonical /pedia path", () => {
+		// Cross-consumer regression (#3710): the admin builds public-site
+		// links with the shared category keys; each must resolve through the
+		// website's legacy-path mapping instead of falling back to /pedia.
+		const keys = CATEGORY_HIERARCHY.flatMap((item) => [
+			item.type,
+			...(item.children ?? []),
+		]);
+		for (const key of keys as CategoryKey[]) {
+			const adminPath = websiteSubcategoryPath(key);
+			const [segment, query = ""] = adminPath
+				.replace(/^\/tanahpedia\/?/, "")
+				.split("?");
+			const params = new URLSearchParams(query);
+			// Exact canonical target, not merely "not the landing page": a
+			// dropped role/kind/purity filter would land PROPHET on the
+			// generic people listing instead of /pedia/נביאים.
+			expect(
+				pediaPathFromLegacy(segment || null, {
+					role: params.get("role") ?? undefined,
+					kind: params.get("kind") ?? undefined,
+					purity: params.get("purity") ?? undefined,
+				}),
+			).toBe(categoryHref(key));
+		}
 	});
 });

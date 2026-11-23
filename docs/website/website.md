@@ -350,7 +350,7 @@ Local verification against the real compiled server:
 
 ```bash
 bun run build                      # produces .next/standalone via postbuild
-cd .next/standalone
+cd .next/standalone/bible-on-site  # traced app nests under the package dir (#3710)
 # --import the helper by absolute file URL, so it resolves from this cwd
 NODE_OPTIONS="--import <absolute-file-url-to scripts/test-support/block-event-loop.mjs>" \
 BLOCK_EVENT_LOOP_AFTER_MS=8000 BLOCK_EVENT_LOOP_MS=3000 \

@@ -1,4 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
+import {
+	type ArticleCoveringSpan,
+	type EntityChange,
+	MAX_CHANGES_PER_REQUEST,
+} from "../../../shared/revalidate/index";
+
+export type { ArticleCoveringSpan, EntityChange };
 
 /**
  * Post-commit invalidation of the public website's content caches.
@@ -10,8 +17,8 @@ import { createServerFn } from "@tanstack/react-start";
  * its change after the transaction commits; inside the transaction the
  * website could re-render with pre-commit data and re-cache it stale.
  *
- * Two payload shapes (keep `EntityChange` in sync with
- * web/bible-on-site/src/lib/revalidate/contract.ts):
+ * Two payload shapes (`EntityChange` is defined once in
+ * `web/shared/revalidate/` for both apps):
  *
  * - `changes` — the admin-only entity-change events, posted as a JSON body.
  *   The website owns the dependency index and resolves each change to the
@@ -41,77 +48,6 @@ import { createServerFn } from "@tanstack/react-start";
  * access logs on the plaintext cluster hop.
  */
 
-/** A pasuk-granular span of article covering-source rows (#2189). */
-export interface ArticleCoveringSpan {
-	perekId: number;
-	pasukFrom: number;
-	pasukTo: number;
-}
-
-/** Mirrors website `EntityChange` — the dependency contract the site owns. */
-export type EntityChange =
-	| {
-			kind: "article";
-			id: number;
-			/** Old ∪ new primary perek ids. */
-			perekIds: number[];
-			/** Old ∪ new tanah_article.author_id. */
-			authorIds?: number[];
-			/** Covering spans destroyed by the change (replaced/removed side). */
-			coveringSpans?: ArticleCoveringSpan[];
-	  }
-	| {
-			kind: "author";
-			id: number;
-			name: string;
-			oldName?: string;
-	  }
-	| {
-			kind: "pedia-entry";
-			uniqueName: string;
-			oldUniqueName?: string;
-			entityTypes?: string[];
-			synonymNames?: string[];
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "pedia-entity";
-			entityId: string;
-			entityType?: string;
-			entryUniqueNames?: string[];
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "pedia-entries";
-			uniqueNames: string[];
-			entityTypes?: string[];
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "moed";
-			/** tanah_moed.id — survives edits/deletes. */
-			id: number;
-			/** Current canonical slug (the deleted slug on deletes). */
-			slug: string;
-			/** The pre-rename slug — expires the old detail route. */
-			oldSlug?: string;
-	  }
-	| {
-			kind: "dedication";
-			/** tanah_dedication.id — survives edits/deletes. */
-			id: number;
-			/** Old ∪ new assignments (#2731); the website maps them to scoped tags/paths. */
-			perekRanges?: { low: number; high: number }[];
-			seferIds?: number[];
-			helekIds?: number[];
-			parashaIds?: number[];
-			articleIds?: number[];
-			/** Canonical tanahpedia_entry ids of entry-scoped assignments. */
-			entryIds?: string[];
-			/** True when the dedication carries the whole-masora scope. */
-			masora?: boolean;
-	  };
-
 export interface RevalidateRequest {
 	/** Typed entity changes — posted as the `{changes}` JSON body. */
 	changes?: EntityChange[];
@@ -131,8 +67,6 @@ export interface RevalidateRequest {
 const TIMEOUT_MS = 5000;
 /** Burst window: requests enqueued together flush as one website call set. */
 const DEBOUNCE_MS = 300;
-/** Keep in sync with MAX_CHANGES_PER_REQUEST on the website contract. */
-const MAX_CHANGES_PER_REQUEST = 64;
 
 /**
  * `skipped` = the documented no-op (endpoint not configured), distinct from

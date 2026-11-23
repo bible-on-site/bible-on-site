@@ -1,118 +1,28 @@
 /**
- * The typed entity-change contract between the admin server and the
- * website's `/api/revalidate` endpoint.
+ * The website side of the typed entity-change contract between the admin
+ * server and the `/api/revalidate` endpoint: the fail-closed input
+ * validation. The shared wire definitions (`EntityChange`,
+ * `ArticleCoveringSpan`, `MAX_CHANGES_PER_REQUEST`) live in
+ * `web/shared/revalidate/` — the admin sender and this receiver deploy
+ * independently, so they must stay a single source.
  *
  * The admin identifies *what* changed (entities, their old and new
  * relationships); the website owns *which* rendered output depends on it
  * (see `./dependencies.ts`). Admin never names website routes or cache
  * tags — the route/tag mapping cannot drift out of sync with the pages.
- *
- * Every optional field named `old*` carries the pre-commit relationship
- * for rename/move/delete: after the commit the old edge may no longer be
- * queryable, so it must arrive inside the event itself. Fields that are
- * sets (e.g. `perekIds`, `entryUniqueNames`) hold the union of the old
- * and new relationship — the caller merges across a burst before
- * enqueueing, and the resolver treats them as "any of these".
  */
-export const MAX_CHANGES_PER_REQUEST = 64;
+import {
+	type ArticleCoveringSpan,
+	type EntityChange,
+	MAX_CHANGES_PER_REQUEST,
+} from "../../../../shared/revalidate/index";
+
+export type { ArticleCoveringSpan, EntityChange };
+export { MAX_CHANGES_PER_REQUEST };
+
 const MAX_STRING = 256;
 const MAX_LIST = 512;
 const MAX_PEREK_ID = 929;
-
-/** A pasuk-granular scripture span of verified article coverage (#2189). */
-export interface ArticleCoveringSpan {
-	perekId: number;
-	pasukFrom: number;
-	pasukTo: number;
-}
-
-export type EntityChange =
-	| {
-			kind: "article";
-			/** tanah_article.id — survives moves/deletes. */
-			id: number;
-			/** Old ∪ new primary perek ids the article belongs to. */
-			perekIds: number[];
-			/** Old ∪ new tanah_article.author_id — author page deps. */
-			authorIds?: number[];
-			/**
-			 * The destroyed side of covering-source coverage: spans that no
-			 * longer exist after the commit (replaced/deleted rows, or the
-			 * whole set when verification flipped off). The resolver unions
-			 * them with the article's live covering rows, so create/update
-			 * payloads may omit the surviving side entirely.
-			 */
-			coveringSpans?: ArticleCoveringSpan[];
-	  }
-	| {
-			kind: "author";
-			/** tanah_author.id — resolves the author's articles. */
-			id: number;
-			/** Current name (the post-commit slug source). */
-			name: string;
-			/** Pre-commit name when it changed (rename). */
-			oldName?: string;
-	  }
-	| {
-			kind: "pedia-entry";
-			/** tanahpedia_entry.unique_name after the change. */
-			uniqueName: string;
-			/** Pre-commit unique_name on rename/delete. */
-			oldUniqueName?: string;
-			/** Old ∪ new entity types — for category-page deps on delete. */
-			entityTypes?: string[];
-			/** Old ∪ new synonym names — alias/disambiguation pages. */
-			synonymNames?: string[];
-			/** Perakim whose curated refs link the entry (pre-resolved on delete). */
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "pedia-entity";
-			/** tanahpedia_entity.id — person/place/saying/… rows share it. */
-			entityId: string;
-			/** Entity type when known — category-page dep on delete. */
-			entityType?: string;
-			/** Pre-resolved linked entry unique_names (deletes/unlinks). */
-			entryUniqueNames?: string[];
-			/** Pre-resolved perakim sourcing the entity (deletes/unlinks). */
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "pedia-entries";
-			/** Entry unique_names the caller resolved before commit. */
-			uniqueNames: string[];
-			entityTypes?: string[];
-			refPerekIds?: number[];
-	  }
-	| {
-			kind: "moed";
-			/** tanah_moed.id — survives edits/deletes. */
-			id: number;
-			/** Current canonical slug (the deleted slug on deletes). */
-			slug: string;
-			/** The pre-rename slug — expires the stale detail route/tag. */
-			oldSlug?: string;
-	  }
-	| {
-			kind: "dedication";
-			/** tanah_dedication.id — survives edits/deletes. */
-			id: number;
-			/**
-			 * Old ∪ new assignments of the dedication (#2731). The admin
-			 * resolves them post-commit from the link tables (pre-commit on
-			 * delete), and the website maps them to the scoped cache tags
-			 * and pages that render them.
-			 */
-			perekRanges?: { low: number; high: number }[];
-			seferIds?: number[];
-			helekIds?: number[];
-			parashaIds?: number[];
-			articleIds?: number[];
-			/** Canonical tanahpedia_entry ids of entry-scoped assignments. */
-			entryIds?: string[];
-			/** True when the dedication carries the whole-masora scope. */
-			masora?: boolean;
-	  };
 
 /** Thrown when a change payload fails validation — maps to HTTP 400. */
 export class ChangeValidationError extends Error {
@@ -172,9 +82,7 @@ function stringList(value: unknown, at: string): string[] {
 	if (!Array.isArray(value) || value.length > MAX_LIST) {
 		fail(`${at}: expected an array of up to ${MAX_LIST} strings`);
 	}
-	return (value as unknown[]).map((item, i) =>
-		reqString(item, `${at}[${i}]`),
-	);
+	return (value as unknown[]).map((item, i) => reqString(item, `${at}[${i}]`));
 }
 
 function optStringList(value: unknown, at: string): string[] | undefined {
@@ -263,18 +171,9 @@ function parseChange(value: unknown, at: string): EntityChange {
 			return {
 				kind: "pedia-entry",
 				uniqueName: reqString(rec.uniqueName, `${at}.uniqueName`),
-				oldUniqueName: optString(
-					rec.oldUniqueName,
-					`${at}.oldUniqueName`,
-				),
-				entityTypes: optStringList(
-					rec.entityTypes,
-					`${at}.entityTypes`,
-				),
-				synonymNames: optStringList(
-					rec.synonymNames,
-					`${at}.synonymNames`,
-				),
+				oldUniqueName: optString(rec.oldUniqueName, `${at}.oldUniqueName`),
+				entityTypes: optStringList(rec.entityTypes, `${at}.entityTypes`),
+				synonymNames: optStringList(rec.synonymNames, `${at}.synonymNames`),
 				refPerekIds: optIntList(rec.refPerekIds, `${at}.refPerekIds`),
 			};
 		case "pedia-entity":
@@ -292,10 +191,7 @@ function parseChange(value: unknown, at: string): EntityChange {
 			return {
 				kind: "pedia-entries",
 				uniqueNames: stringList(rec.uniqueNames, `${at}.uniqueNames`),
-				entityTypes: optStringList(
-					rec.entityTypes,
-					`${at}.entityTypes`,
-				),
+				entityTypes: optStringList(rec.entityTypes, `${at}.entityTypes`),
 				refPerekIds: optIntList(rec.refPerekIds, `${at}.refPerekIds`),
 			};
 		case "moed":

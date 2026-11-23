@@ -1,10 +1,10 @@
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 /**
  * `/llms.txt` - the agent-facing guide to the public corpus (#3257).
  * Static, plain Markdown; the project policy is spelled out so agents
  * do not have to infer it from robots alone.
  */
 import { NextResponse } from "next/server";
-import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 
 export const dynamic = "force-static";
 
@@ -69,7 +69,7 @@ crawling.
 - [תנכפדיה](/pedia) - /pedia/{entry-or-category}: the Tanahpedia
   entity encyclopedia (people, places, animals, categories, aliases
   and disambiguation).
-- /api/search?q={query}&type={csv filter}&limit={1-50} -
+- \`/api/search?q={query}&type={csv filter}&limit={1-50}\` -
   public anonymous JSON search over the corpus (types:
   perek,pasuk,perush,author,article,tanahpedia).
 
@@ -98,7 +98,7 @@ bounded canonical pages at a reasonable pace.
 - [/robots.txt](/robots.txt) - crawl policy + Content Signals.
 - [/.well-known/ard.json](/.well-known/ard.json) - ARD v0.91 agent
   capability manifest (also served at the predecessor path
-  /.well-known/ai-catalog.json).
+  [/.well-known/ai-catalog.json](/.well-known/ai-catalog.json)).
 - [/.well-known/agent-skills/index.json](/.well-known/agent-skills/index.json)
   - Agent Skills index (v0.2.0): SKILL.md files that teach correct
   traversal, search and citation of this corpus.
