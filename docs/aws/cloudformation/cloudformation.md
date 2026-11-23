@@ -1,8 +1,10 @@
 # AWS CloudFormation Templates
 
 This directory includes templates for deployed stacks, reference templates for
-manually managed resources, and rollout proposals. Check the linked runbook
-and live resource ownership before applying a template.
+manually managed resources, and rollout proposals. Use each deployed stack's
+runbook and check live resource ownership before applying an update.
+Reference templates document existing resources or proposed designs and
+must not be deployed as-is.
 
 ## Architecture Overview
 
@@ -53,19 +55,10 @@ VPC configuration, subnets, and security groups.
 - **Security Groups**: nginx (public) and ECS (VPC-only)
 
 ### 2. `ecr-repositories.yaml`
-ECR repositories for container images.
-
-**Deploy:**
-```bash
-aws cloudformation deploy \
-  --template-file ecr-repositories.yaml \
-  --stack-name bible-on-site-ecr \
-  --region il-central-1 \
-  --profile AdministratorAccess-<AWS_ACCOUNT_ID>
-```
+Reference for the existing ECR repositories.
 
 ### 3. `ecs-services.yaml`
-ECS cluster, task definitions, services, and Cloud Map service discovery.
+Reference for the ECS cluster, task definitions, services, and Cloud Map.
 
 **Components:**
 - ECS Cluster: `bible-on-site-cluster` (Fargate)
@@ -90,16 +83,6 @@ aws ssm put-parameter --name bible-on-site-revalidate-secret \
   --region il-central-1
 ```
 
-**Deploy:**
-```bash
-aws cloudformation deploy \
-  --template-file ecs-services.yaml \
-  --stack-name bible-on-site-ecs \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region il-central-1 \
-  --profile AdministratorAccess-<AWS_ACCOUNT_ID>
-```
-
 ### 4. `ec2-nginx.yaml`
 EC2 instance running nginx as reverse proxy.
 
@@ -116,17 +99,7 @@ issue #2561.
 > **Note**: Key pair and SSL certificates must be set up manually.
 
 ### 5. `github-oidc.yaml`
-GitHub Actions OIDC provider and IAM role for CI/CD deployments.
-
-**Deploy:**
-```bash
-aws cloudformation deploy \
-  --template-file github-oidc.yaml \
-  --stack-name bible-on-site-github-oidc \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region il-central-1 \
-  --profile AdministratorAccess-<AWS_ACCOUNT_ID>
-```
+Reference for the GitHub Actions OIDC provider and deployment role.
 
 ### 6. `iam-identity-center.yaml`
 IAM Identity Center (SSO) configuration including permission sets.
@@ -175,7 +148,7 @@ Route53 hosted zones and DNS records.
 Nested stack that deploys all components together (for reference).
 
 ### 11. `rds-mysql.yaml`
-RDS MySQL instance for the tanah database.
+Reference for the RDS MySQL instance serving the tanah database.
 
 **Components:**
 - DB Subnet Group: `tanah-db-subnet-group` (spans 3 AZs)
@@ -188,16 +161,6 @@ RDS MySQL instance for the tanah database.
 - 7-day backup retention
 - Public addressing for authorized GitHub Actions access with security-group restricted ingress
 - Password stored in SSM Parameter Store (SecureString)
-
-**Deploy:**
-```bash
-aws cloudformation deploy \
-  --template-file rds-mysql.yaml \
-  --stack-name bible-on-site-rds \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region il-central-1 \
-  --profile AdministratorAccess-<AWS_ACCOUNT_ID>
-```
 
 **Retrieve Connection Info:**
 ```bash

@@ -3,7 +3,7 @@
 Bible On Site runs in AWS Israel (`il-central-1`). The website, mobile API,
 and admin console share an EC2 nginx router and an ECS Fargate cluster.
 
-![Production request and asset paths. Browsers and apps reach the website, API, and admin through nginx. Cloud Map supplies private task addresses. The services use RDS, the website invokes the bulletin Lambda, and admin serves the private S3 archive. CI builds can fetch public S3 assets through CloudFront.](./architecture.svg)
+![Production request and asset paths. Browsers and apps reach the website, API, and admin through nginx. Cloud Map supplies private task addresses. The services use RDS, the website and admin invoke the bulletin Lambda, and admin serves the private S3 archive. CI builds can fetch public S3 assets through CloudFront.](./architecture.svg)
 
 [Editable diagrams.net source](./architecture.drawio)
 
@@ -74,8 +74,9 @@ switch, which is unset.
 ## Release and monitoring
 
 GitHub Actions assumes AWS deployment roles using OIDC and publishes versioned
-images and `latest` to ECR. The three release repositories use immutable
-version tags and allow `latest` to move.
+images and `latest` to ECR. Each `latest` points to an OCI image index for
+amd64 and ARM64. Version tags are immutable. The website and admin lifecycle
+policies protect their newest tagged x86 rollback images.
 
 | Service | ECR repository | ECS rollout owner |
 | --- | --- | --- |

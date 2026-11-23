@@ -5,7 +5,7 @@ records the x86 baseline and the original migration safeguards.
 See the [AWS architecture guide](architecture/aws-architecture.md) for the
 running service configuration.
 
-## Baseline and intended scope
+## Original x86 baseline and production health check
 
 Read-only inspection at 2026-11-01 13:01 UTC verified account 250598594267,
 region il-central-1, cluster `bible-on-site-cluster`, service
@@ -19,21 +19,11 @@ That is the dated architecture-migration baseline. The subsequent
 rollout must use the current live CPU/memory and preserve it; do not restore
 the historical 256-unit setting during an architecture-only change.
 
-Migrate the website processor architecture to ARM64. Preserve capacity,
-roles and secret mappings, networking and discovery, public/crawled URLs,
-database content, application behavior, cache policy, the existing readiness
-limits and the 120-second container stop timeout. API, admin and RDS are outside
-this migration. Reference CloudFormation files document the target only; do not
-deploy these untested templates.
-
-The live revision 16 overrides the Dockerfile health check with only
-`/api/health/ready` (curl maximum 5 seconds). The reviewed migration also aligns
-that command with the already-tested Dockerfile/reference check: readiness,
-recitation catalog, and chapter 2, each with curl maximum 3 seconds. The three
-requests fit within the existing 10-second health timeout. Interval 30 seconds,
-start period 120 seconds and five retries remain unchanged. This warms the
-actual critical route bundles before the new task is eligible for public
-traffic. Verify the aligned command first on the pinned x86 fallback, then ARM.
+Revision 16 checked only `/api/health/ready`, with a five-second curl limit.
+The production ARM64 task definition checks `/api/health/ready`,
+`/api/recitation`, and `/api/recitation/2`, each with a three-second curl
+limit within the existing 10-second health timeout. These checks warm the
+critical routes before the task is eligible for public traffic.
 
 ## Native build and release contract
 
@@ -64,7 +54,7 @@ filesystem layer. A dispatch cannot supply a different platform pair.
 Verified native images receive immutable `v<version>-amd64` and
 `v<version>-arm64` tags. `WEBSITE_MULTIARCH_RELEASES` defaults to `false`, retaining
 the amd64 canonical/latest behavior while both native children are staged.
-With the reviewed flag set to `true`, canonical `v<version>` and `latest` contain
+Production sets the flag to `true`. The canonical `v<version>` and `latest` contain
 the complete verified Linux amd64/arm64 index. Existing x86 tasks select the x86
 child. Once `latest` is an index, both the legacy publisher and flag-off dual
 publisher refuse to replace it with an x86-only image.
@@ -75,17 +65,9 @@ live policy before any child upload or canonical/latest write. No new IAM
 permission is proposed. Record the previous policy for rollback; apply a live
 policy change only within the specific approved scope.
 
-The current lifecycle rule selects any images beyond the newest 15, so a digest
-pin alone does not retain a fallback. Add a higher-priority rule selecting
-`rollback-website-arm64-x86-` tags and retaining its newest one image. Apply an
-immutable tag in that namespace to the verified native x86 fallback before the
-ARM cutover. The lower-priority existing 15-image rule cannot expire that newest
-protected image. This can retain one additional image and its layers; it adds
-no running task. Preview both rules and verify the exact fallback stays present.
-The [November 1 preview evidence](website-arm64-retention-preview.json) records
-AWS accepting the actual proposed policy and a shadow experiment preserving an
-older image despite an aggressive lower-priority cleanup rule. Neither preview
-changed the live policy or deleted an image.
+The live lifecycle policy protects the newest image tagged with the
+`rollback-website-arm64-x86-` prefix, ahead of the general 15-image policy.
+Verify that the exact fallback remains available before changing architecture.
 
 Do not convert an already-published canonical version between single-image and
 index modes. Its immutable collision guard requires a fresh ordinary release
@@ -93,6 +75,9 @@ version. If the first migration release is to use an index, enable the reviewed
 flag before that release is published; do not toggle modes halfway through it.
 
 ## Approval and qualification sequence
+
+This sequence records the checks for the original x86-to-ARM64 cutover. Start
+any future architecture change from the current service and registry state.
 
 1. Complete current-head CI, six coverage gates, quality annotations, bot/issue
    comments, submitted reviews and every review thread. Bind approval to the
@@ -119,7 +104,7 @@ flag before that release is published; do not toggle modes halfway through it.
    event rule if the reviewed manual handover needs sole ownership. Preserve
    an old healthy task until replacement readiness and discovery are verified.
 6. Clone the actual full task definition, changing only architecture, image and
-   the reviewed critical-route health command above.
+   the reviewed critical-route health command described above.
    Verify a qualified ARM native pin, then ordinary ARM `latest` resolving to
    that same child. Verify healthy counts, exact runtime architecture/digest,
    completed ECS deployment history, Cloud Map and public traffic. Restore the
