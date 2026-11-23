@@ -74,6 +74,8 @@ interface WysiwygEditorProps {
 export interface WysiwygEditorHandle {
 	/** Delivers any debounce-pending editor content to onChange now. */
 	flush: () => void;
+	/** Drops every pending edit and re-anchors on html, without onChange. */
+	reset: (html: string) => void;
 }
 
 export function WysiwygEditor({
@@ -143,12 +145,6 @@ export function WysiwygEditor({
 		flushEditorHtml(ed);
 	}, [flushEditorHtml, mode, onChange, sourceDraft]);
 
-	useImperativeHandle(
-		ref,
-		() => ({ flush: flushPendingChanges }),
-		[flushPendingChanges],
-	);
-
 	/* Declared before useEditor: unmount cleanups run in declaration order, so
 	   this flush still sees the editor before Tiptap destroys it — navigating
 	   away inside the debounce window no longer drops the last edit. Kept
@@ -183,6 +179,29 @@ export function WysiwygEditor({
 			},
 		},
 		[extensions, shortcutReloadKey],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			flush: flushPendingChanges,
+			reset: (html: string) => {
+				/* Covers a revert that leaves the content prop unchanged
+				   (e.g. title-only): pending visual edits would otherwise
+				   stay visible and never be delivered or dropped. */
+				if (editor) editor.commands.setContent(toEditorFootnoteHtml(html));
+				pendingEditorRef.current = null;
+				if (saveTimeoutRef.current) {
+					clearTimeout(saveTimeoutRef.current);
+					saveTimeoutRef.current = null;
+				}
+				const stored = toStoredFootnoteHtml(html);
+				lastSavedContent.current = stored;
+				setPreviewHtml(stored);
+				setSourceDraft(stored);
+			},
+		}),
+		[editor, flushPendingChanges],
 	);
 
 	const syncLinkPanelFromEditor = useCallback(() => {

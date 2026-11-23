@@ -669,6 +669,10 @@ function EntryEditPage() {
 	// Explicit revert: drop every uncommitted edit AND its local draft, then
 	// re-anchor on whatever the server holds.
 	const applyRevert = () => {
+		// Drop pending editor state (debounce timer, source-mode draft) that
+		// formData alone cannot reset — synchronously, so a save in the same
+		// click can never commit the discarded text.
+		editorRef.current?.reset(isNew ? "" : (entry?.content ?? ""));
 		editCounterRef.current += 1;
 		cleanCounterRef.current = editCounterRef.current;
 		setHasChanges(false);
