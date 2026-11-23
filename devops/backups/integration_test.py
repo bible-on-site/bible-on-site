@@ -147,7 +147,13 @@ def docker(*args, capture=True):
 FIXTURE = r"""
 CREATE DATABASE tanah CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE tanah;
-CREATE TABLE entries(id INT PRIMARY KEY AUTO_INCREMENT, title TEXT, payload BLOB, optional_text VARCHAR(40) NULL, title_hash BINARY(16) GENERATED ALWAYS AS (__TITLE_HASH__) STORED) ENGINE=InnoDB;
+CREATE TABLE entries (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    title TEXT,
+    payload BLOB,
+    optional_text VARCHAR(40) NULL,
+    title_hash BINARY(16) GENERATED ALWAYS AS (__TITLE_HASH__) STORED
+) ENGINE=InnoDB;
 CREATE TABLE audit(id INT PRIMARY KEY AUTO_INCREMENT, entry_id INT, CONSTRAINT fk_entry FOREIGN KEY(entry_id) REFERENCES entries(id)) ENGINE=InnoDB;
 INSERT INTO entries(title,payload,optional_text) VALUES ('תנ"ך - בדיקת גיבוי',X'0001FF0A',NULL);
 CREATE VIEW entry_titles AS SELECT id,title FROM entries;

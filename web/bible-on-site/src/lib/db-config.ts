@@ -2,7 +2,7 @@ import { verifiedRdsTls } from "../../../shared/mysql/rds-ca.ts";
 
 export function databaseTls(host: string, mode?: string | null) {
 	if (
-		/\.rds\.amazonaws\.com$/i.test(host) ||
+		host.toLowerCase().endsWith(".rds.amazonaws.com") ||
 		mode === "REQUIRED" ||
 		mode === "VERIFY_CA" ||
 		mode === "VERIFY_IDENTITY"
