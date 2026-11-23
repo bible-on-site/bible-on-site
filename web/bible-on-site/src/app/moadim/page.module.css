@@ -165,11 +165,6 @@
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 	gap: 8px;
-	counter-reset: moed;
-}
-
-.indexItem {
-	counter-increment: moed;
 }
 
 .indexLink {
@@ -184,14 +179,6 @@
 	text-decoration: none;
 	color: var(--pasuk-num-color, #1c2c5d);
 	background: hsl(var(--moed-h, 218) var(--moed-s, 55%) 97%);
-}
-
-.indexLink::before {
-	content: counter(moed);
-	font-size: 0.75rem;
-	font-weight: 700;
-	color: hsl(var(--moed-h, 218) var(--moed-s, 45%) 50%);
-	min-width: 1.2em;
 }
 
 .indexLink:hover,
@@ -288,10 +275,6 @@
 			var(--moed-h, 218) var(--moed-s, 50%) 55%
 		);
 		background: hsl(var(--moed-h, 218) var(--moed-s, 26%) 15%);
-	}
-
-	.indexLink::before {
-		color: hsl(var(--moed-h, 218) var(--moed-s, 50%) 65%);
 	}
 
 	.indexLink:hover,
