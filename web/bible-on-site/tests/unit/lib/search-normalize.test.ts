@@ -112,9 +112,10 @@ describe("htmlToPlainText", () => {
 	});
 
 	it("strips tags nested inside other tag fragments until stable", () => {
-		// Single-pass removal would leave a re-formed "<script>" behind.
-		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).not.toContain(
-			"<script",
+		// The nested opener is consumed as a plain tag, so no "<script>"
+		// survives and the text between the tags stays, like the Rust ports.
+		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).toBe(
+			"ipt>alert(1)",
 		);
 		// A `<` that cannot open a tag stays literal, like HtmlAgilityPack.
 		expect(htmlToPlainText("א<<b>b>ב")).toBe("א<b>ב");
