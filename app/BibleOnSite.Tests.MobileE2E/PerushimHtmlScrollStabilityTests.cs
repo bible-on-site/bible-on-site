@@ -167,26 +167,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         }
         Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
-        // A row tap that landed inside the bottom chrome may already have
-        // toggled the sheet closed — a second blind tap would reopen it and
-        // the reader scroll below would pan the open sheet instead of the
-        // page (#3735). Tap only while the sheet still reports open, then
-        // confirm it left the accessibility tree before returning.
-        for (var attempt = 0; attempt < 4; attempt++)
-        {
-            try
-            {
-                Page.WaitForHidden("PerushimContentViewport", TimeSpan.FromSeconds(5));
-                break;
-            }
-            catch (OpenQA.Selenium.WebDriverTimeoutException exception)
-                when (attempt < 3 && !DeviceSessionDeath.Matches(exception))
-            {
-                // The chevron is static bottom chrome — cap each tap's own
-                // wait instead of spending the default 45-second budget.
-                Page.Tap("PerushimChevronButton", _ => true, TimeSpan.FromSeconds(10));
-            }
-        }
+        Page.DismissPerushimSheet();
         return tapped.Count;
     }
 }
