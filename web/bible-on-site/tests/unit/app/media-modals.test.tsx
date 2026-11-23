@@ -165,15 +165,33 @@ describe("JournalismGallery", () => {
 			expect(last).toHaveFocus();
 		});
 
-		it("keeps Enter and Space on the nav buttons from closing the dialog", () => {
+		it("wraps Tab and Shift+Tab when focus sits on the dialog container", () => {
 			render(<JournalismGallery items={ITEMS} />);
-			openModal();
+			const dialog = openModal();
+			// Clicking the image lands focus on the container (tabIndex -1).
+			dialog.focus();
+
+			fireEvent.keyDown(dialog, { key: "Tab" });
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+
+			dialog.focus();
+			fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+			expect(screen.getByRole("button", { name: "הקודם" })).toHaveFocus();
+		});
+
+		it("keeps Enter and Space on the nav buttons inside the dialog", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const dialog = openModal();
 			const next = screen.getByRole("button", { name: "הבא" });
 			next.focus();
 
 			fireEvent.keyDown(next, { key: " " });
+			fireEvent.keyDown(next, { key: "Enter" });
+			expect(dialog).toBeInTheDocument();
 
-			expect(screen.getByRole("dialog")).toBeInTheDocument();
+			// The button's own activation still navigates.
+			fireEvent.click(next);
+			expect(dialog).toHaveAttribute("aria-label", "כתבה שנייה");
 		});
 
 		it("navigates forward with the next button and wraps around", () => {

@@ -31,17 +31,27 @@ export function useModalDialogFocus(
 			if (event.key !== "Tab") return;
 			const focusables = [
 				...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-			];
+			].filter(
+				/* istanbul ignore next -- checkVisibility is absent in jsdom */
+				(el) => el.checkVisibility?.() ?? true,
+			);
 			/* istanbul ignore if -- every modal renders its close control */
 			if (focusables.length === 0) return;
 			const first = focusables[0];
 			const last = focusables[focusables.length - 1];
-			if (event.shiftKey && document.activeElement === first) {
+			// Focus on the dialog container itself (clicking the image lands
+			// there) or anywhere else off the stop list counts as an edge:
+			// wrap instead of letting the browser tab out of the dialog.
+			const offList = !(
+				document.activeElement instanceof HTMLElement &&
+				focusables.includes(document.activeElement)
+			);
+			if (event.shiftKey && (offList || document.activeElement === first)) {
 				event.preventDefault();
 				last.focus();
 			} else if (
 				!event.shiftKey &&
-				document.activeElement === last
+				(offList || document.activeElement === last)
 			) {
 				event.preventDefault();
 				first.focus();
