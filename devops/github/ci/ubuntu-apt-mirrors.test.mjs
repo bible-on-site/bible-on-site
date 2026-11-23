@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -233,6 +236,47 @@ test("returns every verified mirror in preference order", async () => {
 		"/ubuntu/dists/noble/main/binary-amd64/Packages.gz",
 		"/ubuntu/pool/main/e/example/example_1.0_amd64.deb",
 	]);
+});
+
+test("uses one-shot HTTPS requests and preserves the byte range across a bounded redirect", async (t) => {
+	const redirects = [];
+	const requests = t.mock.method(https, "get", (url, options, onResponse) => {
+		const address = new URL(url);
+		let reply = healthyArchive(address.href);
+		if (address.href === `${kernel}dists/noble/InRelease`) {
+			reply = new Response(null, {
+				status: 302,
+				headers: { location: address.href },
+			});
+		} else if (address.href === `${security}dists/noble/InRelease`) {
+			reply = new Response(null, { status: 503 });
+		} else if (
+			address.host === new URL(archive).host &&
+			address.pathname.includes("/pool/")
+		) {
+			redirects.push(options.headers.Range);
+			if (!address.pathname.startsWith("/redirected/")) {
+				reply = new Response(null, {
+					status: 302,
+					headers: { location: `/redirected${address.pathname}` },
+				});
+			}
+		}
+		const response = reply.body
+			? Readable.fromWeb(reply.body)
+			: Readable.from([]);
+		response.statusCode = reply.status;
+		response.headers = Object.fromEntries(reply.headers);
+		queueMicrotask(() => onResponse(response));
+		return new EventEmitter();
+	});
+	assert.deepEqual(await selectUbuntuArchives("noble"), [archive, azure, umich]);
+	assert.deepEqual(redirects, ["bytes=0-4095", "bytes=0-4095"]);
+	assert(
+		requests.mock.calls.every(
+			({ arguments: [, options] }) => options.agent === false,
+		),
+	);
 });
 
 test("rejects a mirror whose signed metadata works while package downloads fail", async () => {

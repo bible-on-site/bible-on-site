@@ -82,7 +82,7 @@
 			"automerge": true
 		},
 		{
-			"description": "AWS SDK and production Bun build updates require explicit merge approval. A grouped update inherits this restriction.",
+			"description": "Keep AWS SDK and production Bun build updates out of Renovate auto-merge. A grouped update inherits this restriction.",
 			"matchPackageNames": [
 				"@aws-sdk/*",
 				"aws-config",
