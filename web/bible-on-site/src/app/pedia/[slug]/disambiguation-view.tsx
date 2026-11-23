@@ -19,7 +19,7 @@ export function disambiguationMetadata(name: string): Metadata {
 
 export function DisambiguationView({ name, targets }: DisambiguationViewProps) {
 	return (
-		<div className={styles.tanahpediaPage}>
+		<main className={styles.tanahpediaPage}>
 			<h1 className={styles.pageTitle}>{name}</h1>
 			<p className={styles.pageSubtitle}>
 				השם «{name}» מוביל ליותר מערך אחד. בחר את הערך המבוקש:
@@ -46,6 +46,6 @@ export function DisambiguationView({ name, targets }: DisambiguationViewProps) {
 					חזרה לתנכפדיה
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

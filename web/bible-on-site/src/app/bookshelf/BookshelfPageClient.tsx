@@ -32,9 +32,9 @@ export function BookshelfPageClient({
 	);
 
 	return (
-		<div className={styles.page}>
+		<main className={styles.page}>
 			<h1 className={styles.srOnly}>ספרי התנ&quot;ך</h1>
 			<Bookshelf onSeferClick={handleSeferClick} dedications={dedications} />
-		</div>
+		</main>
 	);
 }

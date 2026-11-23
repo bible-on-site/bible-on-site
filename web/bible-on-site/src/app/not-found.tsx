@@ -13,7 +13,7 @@ export const metadata: Metadata = NOT_FOUND_METADATA;
 export default function NotFound() {
 	return (
 		<PageShell header="solid">
-			<div className={styles.notFoundPage}>
+			<main className={styles.notFoundPage}>
 				<p className={styles.errorCode}>404</p>
 				<h1 className={styles.pasuk}>הֲתָעִיף עֵינֶיךָ בּוֹ וְאֵינֶנּוּ</h1>
 				<p className={styles.source}>(משלי כג ה)</p>
@@ -23,7 +23,7 @@ export default function NotFound() {
 						חזרה לעמוד הראשי
 					</Link>
 				</div>
-			</div>
+			</main>
 		</PageShell>
 	);
 }

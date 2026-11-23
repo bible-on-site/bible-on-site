@@ -401,7 +401,10 @@ export default async function ArticlePage({
 				<Suspense fallback={null}>
 					<ScrollToArticleMatch />
 				</Suspense>
-				<section id="article-view" className={styles.expandedArticle}>
+				<main
+					id="article-view"
+					className={`${styles.expandedArticle} seo-content`}
+				>
 					<ReadingProgress
 						units={articleProgressUnits}
 						scope={`.${styles.expandedArticle}`}
@@ -452,7 +455,7 @@ export default async function ArticlePage({
 							shareTitle={`${article.name} - ${article.authorName}`}
 						/>
 					</div>
-				</section>
+				</main>
 				<Suspense>
 					<SeferComposite
 						perekObj={perekObj}
@@ -528,7 +531,10 @@ export default async function ArticlePage({
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />
 			</Suspense>
-			<section id="perush-view" className={styles.expandedPerush}>
+			<main
+				id="perush-view"
+				className={`${styles.expandedPerush} seo-content`}
+			>
 				<ReadingProgress
 					units={perushProgressUnits}
 					scope={`.${styles.expandedPerush}`}
@@ -588,7 +594,7 @@ export default async function ArticlePage({
 						חזרה לפרק →
 					</Link>
 				</div>
-			</section>
+			</main>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}

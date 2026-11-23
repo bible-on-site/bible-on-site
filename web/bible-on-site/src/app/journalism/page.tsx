@@ -35,7 +35,7 @@ export default function JournalismPage() {
 	}));
 
 	return (
-		<div className={styles.journalismPage}>
+		<main className={styles.journalismPage}>
 			<h1 className={styles.pageTitle}>על הפרק בתקשורת</h1>
 			<p className={styles.pageSubtitle}>סיקור תקשורתי של תנ"ך על הפרק</p>
 
@@ -46,6 +46,6 @@ export default function JournalismPage() {
 					חזרה לעמוד הראשי
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

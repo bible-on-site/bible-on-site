@@ -199,7 +199,7 @@ export default async function ParashaUnitPage({
 					dedicationsByUnit={dedicationsByUnit}
 				/>
 			</Suspense>
-			<div className={`${perekStyles.perekContainer} seo-content`}>
+			<main className={`${perekStyles.perekContainer} seo-content`}>
 				<UnitBreadcrumb unit={unit} />
 				<h1 className={perekStyles.perekHeading}>
 					פרשת {unit.heading}
@@ -302,7 +302,7 @@ export default async function ParashaUnitPage({
 					title="מאמרים על ההפטרה"
 					emptyMessage="אין מאמרים להפטרה זו"
 				/>
-			</div>
+			</main>
 		</>
 	);
 }

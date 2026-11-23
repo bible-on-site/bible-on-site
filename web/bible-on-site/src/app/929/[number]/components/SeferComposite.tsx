@@ -186,10 +186,19 @@ const ClientWrapper = (props: {
 	// the SEO DOM from the rendering pipeline, eliminating the layout
 	// recalculation cost that was causing flip animation lag.
 	useEffect(() => {
-		if (currentlyToggled && isWideEnough === true) {
+		const bookOpen = currentlyToggled && isWideEnough === true;
+		if (bookOpen) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
+		}
+		// html[data-book-view] already display:nones .seo-content; mirror the
+		// same state in the hidden attribute so the document never holds two
+		// un-hidden <main> elements (HTML allows one without `hidden`).
+		for (const el of document.querySelectorAll<HTMLElement>(
+			"main.seo-content",
+		)) {
+			el.hidden = bookOpen;
 		}
 		return () => {
 			delete document.documentElement.dataset.bookView;
@@ -210,7 +219,8 @@ const ClientWrapper = (props: {
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
-			<div
+			<main
+				hidden={display === "none"}
 				style={{ display }}
 				className={`${styles.seferOverlay} ${
 					currentlyToggled ? styles.visible : styles.hidden
@@ -236,7 +246,7 @@ const ClientWrapper = (props: {
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />
 				) : null}
-			</div>
+			</main>
 		</>
 	);
 };
