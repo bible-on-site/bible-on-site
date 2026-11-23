@@ -151,10 +151,16 @@ export function WysiwygEditor({
 
 	/* Declared before useEditor: unmount cleanups run in declaration order, so
 	   this flush still sees the editor before Tiptap destroys it — navigating
-	   away inside the debounce window no longer drops the last edit. */
+	   away inside the debounce window no longer drops the last edit. Kept
+	   dependency-free via a ref: sourceDraft changes recreate
+	   flushPendingChanges on every source-mode keystroke, and a deps array
+	   would re-run this cleanup mid-life, flushing stale drafts back into
+	   the form on each keystroke. */
+	const flushRef = useRef(flushPendingChanges);
+	flushRef.current = flushPendingChanges;
 	useEffect(() => {
-		return () => flushPendingChanges();
-	}, [flushPendingChanges]);
+		return () => flushRef.current();
+	}, []);
 
 	const editor = useEditor(
 		{
