@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+	type ComponentPropsWithoutRef,
 	type JSX,
 	type ReactNode,
 	useCallback,
@@ -79,11 +80,15 @@ export function PasukPreviewLink({
 	href,
 	className,
 	children,
+	...rest
 }: {
 	href: string;
 	className?: string;
-	children: ReactNode;
-}): JSX.Element {
+	children?: ReactNode;
+} & Omit<
+	ComponentPropsWithoutRef<"a">,
+	"href" | "className" | "children"
+>): JSX.Element {
 	const pasukRef = parsePasukRefFromHref(href);
 	const masking = useSyncExternalStore(
 		subscribeDivineNameMasking,
@@ -162,6 +167,7 @@ export function PasukPreviewLink({
 	return (
 		<>
 			<Link
+				{...rest}
 				href={href}
 				className={className}
 				onMouseEnter={showPreview}
