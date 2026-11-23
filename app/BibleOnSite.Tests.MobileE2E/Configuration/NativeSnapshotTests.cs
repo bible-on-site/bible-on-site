@@ -426,6 +426,29 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void DismissPerushimSheetRetriesAnInitialStaleObservationAfterSettling()
+    {
+        var firstObservation = true;
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = _ =>
+            {
+                if (firstObservation)
+                {
+                    firstObservation = false;
+                    Thread.Sleep(400);
+                    throw new StaleElementReferenceException("The sheet changed during the lookup.");
+                }
+                return Array.Empty<object>();
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet();
+        Assert.Equal(4, executor.Lookups);
+        Assert.DoesNotContain("actions", executor.Commands);
+    }
+
+    [Fact]
     public void DismissPerushimSheetRetapsAfterTheFirstTapMisses()
     {
         SnapshotExecutor? executor = null;

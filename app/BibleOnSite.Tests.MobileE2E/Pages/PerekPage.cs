@@ -174,14 +174,18 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var deadline = DateTime.UtcNow.AddSeconds(45);
         // A row tap may have hit the chevron. Allow the 250ms closing
         // animation to finish before deciding that the sheet needs a tap.
-        if (WaitForDetached(markers, RemainingTime(TimeSpan.FromMilliseconds(350))))
+        // Transient lookup failures can use the rest of the observation window.
+        var initialTimeout = RemainingTime(hiddenTimeout);
+        var settleTime = TimeSpan.FromMilliseconds(Math.Min(350, initialTimeout.TotalMilliseconds));
+        if (WaitForDetached(markers, initialTimeout, settleTime))
         {
             return;
         }
         for (var taps = 0; taps < 3 && DateTime.UtcNow < deadline; taps++)
         {
             Tap("PerushimChevronButton", _ => true, RemainingTime(TimeSpan.FromSeconds(10)));
-            if (WaitForDetached(markers, RemainingTime(hiddenTimeout)))
+            var timeout = RemainingTime(hiddenTimeout);
+            if (WaitForDetached(markers, timeout, timeout))
             {
                 return;
             }
@@ -195,13 +199,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
     }
 
-    private bool WaitForDetached(IReadOnlyList<By> locators, TimeSpan timeout)
+    private bool WaitForDetached(IReadOnlyList<By> locators, TimeSpan timeout, TimeSpan settleTime)
     {
         if (timeout <= TimeSpan.Zero)
         {
             return false;
         }
-        var deadline = DateTime.UtcNow.Add(timeout);
+        var start = DateTime.UtcNow;
+        var deadline = start.Add(timeout);
+        var settledAt = start.Add(settleTime);
         Exception? observationError = null;
         while (true)
         {
@@ -210,6 +216,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 if (!locators.Any(IsPresent))
                 {
                     return true;
+                }
+                if (DateTime.UtcNow >= settledAt)
+                {
+                    return false;
                 }
                 observationError = null;
             }
