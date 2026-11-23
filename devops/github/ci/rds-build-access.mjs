@@ -557,9 +557,14 @@ export async function cleanupCompletedBuilds(
 			);
 			removed.push(...(await revokeOwnedLeases(aws, leases)));
 		} catch (error) {
-			// A still-active or unverifiable attempt keeps its access; its own
-			// completion event sweeps it later.
-			skipped.push(`${run}/${attempt}: ${error.message}`);
+			// A still-active or incomplete attempt keeps its access; its own
+			// completion event sweeps it later. Any other failure (AWS, rule
+			// ownership, revoke confirmation) fails the run like cleanup-run.
+			if (
+				/completed CI attempt|active, incomplete/.test(error.message)
+			)
+				skipped.push(`${run}/${attempt}: ${error.message}`);
+			else throw error;
 		}
 	}
 	return { removed, skipped, orphaned };

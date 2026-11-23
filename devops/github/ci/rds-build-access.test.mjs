@@ -1014,6 +1014,11 @@ test("privileged completion cleanup checks trusted default-branch code before AW
 	);
 	assert.doesNotMatch(workflow, /queue: max/);
 	assert.match(workflow, /rds-build-access\.mjs cleanup-all/);
+	// A lone run_id or run_attempt is rejected instead of guessed at.
+	assert.match(
+		workflow,
+		/\(inputs\.run_id == ''\) != \(inputs\.run_attempt == ''\)/,
+	);
 });
 
 async function sweepFixture(t, builds = {}) {
@@ -1189,16 +1194,33 @@ test("sweep reports rules it cannot attribute to a build", async (t) => {
 	assert.ok(rules.includes(foreign));
 });
 
-test("sweep skips an ambiguous build without blocking the others", async (t) => {
+test("sweep fails closed on an ambiguous build's ownership", async (t) => {
 	const { env, rules, deps } = await sweepFixture(t, {
 		"1234/2": { ruleCount: 3 },
 		"9999/1": {},
 	});
-	const result = await cleanupCompletedBuilds(env, deps);
-	// Three leases for one attempt exceed the website build bound.
-	assert.match(result.skipped[0], /^1234\/2: Ambiguous/);
-	assert.deepStrictEqual(result.removed, ["sgr-00000000000000003"]);
-	assert.strictEqual(rules.length, 3);
+	// Three leases for one attempt exceed the website build bound; unlike a
+	// still-active attempt this is a verification failure, so the run fails
+	// instead of silently retrying forever.
+	await assert.rejects(
+		cleanupCompletedBuilds(env, deps),
+		/Ambiguous website build access ownership/,
+	);
+	assert.strictEqual(rules.length, 4);
+});
+
+test("sweep fails the run on a revoke error, like cleanup-run", async (t) => {
+	const { env, rules, deps } = await sweepFixture(t, { "1234/2": {} });
+	const aws = async (args) => {
+		if (args[1] === "revoke-security-group-ingress")
+			return { Return: false };
+		return deps.aws(args);
+	};
+	await assert.rejects(
+		cleanupCompletedBuilds(env, { ...deps, aws }),
+		/AWS did not confirm build access removal/,
+	);
+	assert.strictEqual(rules.length, 1);
 });
 
 test("sweep paginates the tagged rule inventory", async (t) => {
