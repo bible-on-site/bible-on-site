@@ -389,6 +389,14 @@ test.describe("Sefer left-page panel", () => {
 
 		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
 		await expect(card).toBeVisible();
+		// Returning to the grid drops the selection — a stale further= would
+		// reopen the article on the next reload or book-view entry.
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === "/929/2" &&
+				url.searchParams.has("book") &&
+				!url.searchParams.has("further"),
+		);
 	});
 
 	test("deep-linked perush view selects only that perush without touching defaults", async ({
