@@ -129,6 +129,8 @@ describe("useDailyArticleOverride", () => {
 		});
 		afterEach(() => {
 			jest.useRealTimers();
+			// Drop the mocked property so later tests get the jsdom default.
+			delete (document as { visibilityState?: string }).visibilityState;
 		});
 
 		it("does not refetch when the tab is hidden", async () => {
