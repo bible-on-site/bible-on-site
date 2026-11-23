@@ -1,3 +1,8 @@
+import {
+	CATEGORY_LABELS,
+	ENTITY_TYPE_LABELS,
+	ENTITY_TYPES,
+} from "../../../../shared/tanahpedia/index";
 import { query } from "../api-client";
 import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
@@ -19,36 +24,8 @@ import type {
 	ThreeDModel,
 } from "./types";
 
-export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
-	PERSON: "אישים",
-	PLACE: "מקומות",
-	EVENT: "אירועים",
-	WAR: "מלחמות",
-	ANIMAL: "בעלי חיים",
-	OBJECT: "חפצים",
-	TEMPLE_TOOL: "כלי מקדש",
-	PLANT: "צמחים",
-	ASTRONOMICAL_OBJECT: "גרמי שמיים",
-	SAYING: "אמרות",
-	SEFER: "ספרים",
-	TANAH_SEFER: 'ספרי תנ"ך',
-	PROPHECY: "נבואות",
-	NATION: "עמים",
-};
-
-export const CATEGORY_LABELS: Record<CategoryKey, string> = {
-	...ENTITY_TYPE_LABELS,
-	PROPHET: "נביאים",
-	KING: "מלכים",
-	BEHEMA: "בהמות",
-	CHAYA: "חיות",
-	OF: "עופות",
-	SHERETZ: "שרצים",
-	TAHOR: "טהורים",
-	TAMEH: "טמאים",
-};
-
-export const ENTITY_TYPES = Object.keys(ENTITY_TYPE_LABELS) as EntityType[];
+// The shared taxonomy (#3710); re-exported so existing consumers keep working.
+export { CATEGORY_LABELS, ENTITY_TYPE_LABELS, ENTITY_TYPES };
 
 export async function getEntries(limit = 50, offset = 0): Promise<EntryStub[]> {
 	return query<EntryStub>(

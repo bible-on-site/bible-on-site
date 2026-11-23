@@ -14,13 +14,18 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 import {
-	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
+	isPublishDocstringOnlyChange,
 } from "./publish-docstring.mts";
 
 interface ModuleRule {
 	directory: string;
-	/** Files outside `directory` whose change also changes the module. */
+	/**
+	 * Files — or directory prefixes — outside `directory` whose change also
+	 * changes the module. Entries match like `directory` (exact path or
+	 * path prefix); every existing entry is a single file, so prefix
+	 * semantics only take effect for the shared contract trees below.
+	 */
 	extraModulePaths?: string[];
 	/** Files or directories whose change requires the module's checks. */
 	ciPaths: string[];
@@ -67,6 +72,23 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
+/**
+ * Runtime contract sources under `web/shared/` compiled into each release
+ * app (#3710). A change to them must package and release the importers —
+ * CI-only coverage is not enough, or a fix that touches only a shared
+ * contract would deploy nothing. Test-only fixtures
+ * (`revalidate/examples.ts`, `tests-util/`) are deliberately absent so
+ * fixture edits stay CI-only.
+ */
+const WEBSITE_ADMIN_SHARED_CONTRACTS = [
+	"web/shared/bulletin-join/index.ts",
+	"web/shared/revalidate/index.ts",
+	"web/shared/tanahpedia/index.ts",
+	"web/shared/reading-metrics",
+];
+// The article-relationship DTOs bind the admin UI and the Rust API.
+const ADMIN_API_SHARED_CONTRACTS = ["web/shared/article-relationships"];
+
 const UBUNTU_MIRROR_CI_PATHS = [
 	"devops/github/ci/ubuntu-apt-mirrors.mjs",
 	"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
@@ -84,6 +106,7 @@ export const MODULES = {
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
+			...WEBSITE_ADMIN_SHARED_CONTRACTS,
 		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
@@ -126,6 +149,7 @@ export const MODULES = {
 	},
 	api: {
 		directory: "web/api",
+		extraModulePaths: ADMIN_API_SHARED_CONTRACTS,
 		ciPaths: [
 			...NATIVE_IMAGE_CI_PATHS,
 			"devops/github/ci/pending-api-release.mjs",
@@ -172,10 +196,15 @@ export const MODULES = {
 		// test-only change must not ship a store release or bump the version.
 		// BibleOnSite.DeviceTests is the in-process XHarness test app (#3349) —
 		// same test-only status as the BibleOnSite.Tests.* suites.
-		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
+		ciOnlyPattern:
+			/^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
 	},
 	admin: {
 		directory: "web/admin",
+		extraModulePaths: [
+			...WEBSITE_ADMIN_SHARED_CONTRACTS,
+			...ADMIN_API_SHARED_CONTRACTS,
+		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
 			"devops/github/release/recovery-request.mjs",
@@ -361,7 +390,7 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 					(file) =>
 						(isAt(file, rule.directory) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
-						(rule.extraModulePaths ?? []).includes(file),
+						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>

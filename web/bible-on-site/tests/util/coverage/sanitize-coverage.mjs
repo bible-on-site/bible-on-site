@@ -73,11 +73,16 @@ export function sanitizeCoverage(coverage, srcDir, universe) {
 	const canonicalRecords = new Map();
 	for (const file of Object.keys(coverage)) {
 		const entry = coverage[file];
-		if (!entry || !hasValidStructure(entry) || !isTracked(entry, SRC_DIR)) {
+		if (!entry || !hasValidStructure(entry)) {
 			delete coverage[file];
 			continue;
 		}
-		const canonical = canonUniverse.get(path.resolve(entry.path));
+		const entryPath = resolveEntryPath(entry.path, SRC_DIR);
+		if (!isTracked(entryPath, SRC_DIR)) {
+			delete coverage[file];
+			continue;
+		}
+		const canonical = canonUniverse.get(entryPath);
 		if (!canonical) {
 			delete coverage[file];
 			continue;
@@ -142,18 +147,35 @@ function hasValidStructure(entry) {
 	return entry && typeof entry.path === "string";
 }
 
-function isTracked(entry, srcDir) {
-	if (!entry || typeof entry.path !== "string") {
+/**
+ * Resolve a coverage record's `path` to the file it names. The swc plugin
+ * writes the path it was handed by the bundler: package-relative (`src/…`)
+ * while turbopack.root was the package, tracing-root-relative
+ * (`bible-on-site/src/…`) since #3710 widened it to `web/`, or absolute.
+ * Re-anchor the root-relative spelling onto the package root before the
+ * src-universe check — the naive resolve would produce
+ * `web/bible-on-site/bible-on-site/src/…` and drop every e2e record.
+ */
+function resolveEntryPath(rawPath, srcDir) {
+	const direct = path.resolve(rawPath);
+	if (direct.startsWith(srcDir)) return direct;
+	const packageRoot = path.dirname(srcDir);
+	const tracingRoot = path.dirname(packageRoot);
+	const nested = path.resolve(tracingRoot, rawPath);
+	if (nested.startsWith(srcDir)) return nested;
+	return direct;
+}
+
+function isTracked(entryPath, srcDir) {
+	if (!entryPath.startsWith(srcDir)) {
 		return false;
 	}
-	const entryPath = path.resolve(entry.path);
-	const isPartOfSrc = entryPath.startsWith(srcDir);
 	const projectRoot = path.dirname(srcDir);
 	const relativePath = path
 		.relative(projectRoot, entryPath)
 		.replace(/\\/g, "/");
 
-	return isPartOfSrc && !isCovIgnored(relativePath);
+	return !isCovIgnored(relativePath);
 }
 
 /**

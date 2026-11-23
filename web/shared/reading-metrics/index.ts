@@ -10,19 +10,20 @@ export {
 	countTextWords,
 	normalizeForCount,
 } from "./count";
-export {
-	decodeEntities,
-	htmlToPlainText,
-	htmlToReadableSegments,
-	stripScriptsAndStyles,
-} from "./text";
+export type { CorpusPasuk, CorpusSegment } from "./perek";
+export { pasukCountedText } from "./perek";
 export {
 	estimateReadingSeconds,
 	READING_METRICS_CALC_VERSION,
 	READING_WORDS_PER_MINUTE,
 } from "./policy";
-export { pasukCountedText } from "./perek";
-export type { CorpusPasuk, CorpusSegment } from "./perek";
+export {
+	decodeEntities,
+	htmlToPlainText,
+	htmlToReadableSegments,
+	READABLE_BLOCK_TAGS,
+	stripScriptsAndStyles,
+} from "./text";
 
 export interface BlockCounts {
 	/** Total readable words — the `word_count` persisted on the metric row. */

@@ -9,8 +9,9 @@
  *
  * --standalone populates the database like e2e when cargo-make is available
  * (population is skipped where the Rust toolchain was never installed,
- * matching the pre-launcher behavior), then serves the built
- * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
+ * matching the pre-launcher behavior), then serves the built standalone
+ * server.js (resolved via scripts/standalone-app-dir.mjs, which handles
+ * the nested layout #3710 produces) instead of `next dev`. The perf suite uses it
  * so a standalone `test:perf` run in a fresh worktree still gets its
  * per-checkout database populated (issue #2881 review).
  *
@@ -29,10 +30,11 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { standaloneAppDir } from "./scripts/standalone-app-dir.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -395,12 +397,15 @@ async function main() {
 	//
 	// --standalone serves the production build instead: the perf suite measures
 	// the artifact CI ships, and its webServer.env already carries PORT and
-	// HOSTNAME for `.next/standalone/server.js`.
+	// HOSTNAME for the traced server.js.
 	let serverArgs: string[];
 	let serverDescription: string;
 	if (STANDALONE) {
-		serverArgs = [path.resolve(__dirname, ".next/standalone/server.js")];
-		serverDescription = "node .next/standalone/server.js";
+		// The traced app nests under standalone/<package-dir>/ since
+		// turbopack.root widened to web/ for the shared contracts (#3710).
+		const serverJs = path.join(standaloneAppDir(__dirname), "server.js");
+		serverArgs = [serverJs];
+		serverDescription = `node ${path.relative(__dirname, serverJs)}`;
 	} else {
 		// The Playwright config passes the suite's port as WEB_PORT so parallel
 		// local sessions never share :3001 (issue #2881); manual runs keep :3001.

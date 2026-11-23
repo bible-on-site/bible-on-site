@@ -1,7 +1,12 @@
 // Import the pure contract directly — never the barrel: `service.ts`
 // pulls `api-client`/mysql2 and `server-only`, while this module ships
 // inside client bundles via the ranged perush views (#2607).
-import type { ReadingMetric, ReadingProgressUnit } from "../reading-metrics/types";
+
+import { estimateReadingSeconds } from "../../../../shared/reading-metrics/policy";
+import type {
+	ReadingMetric,
+	ReadingProgressUnit,
+} from "../reading-metrics/types";
 import type { RangedPerushNote } from "./service";
 import type { PerushNote } from "./types";
 
@@ -25,19 +30,6 @@ export interface RangedPerushMetrics {
 	 * cross-perek view).
 	 */
 	units: ReadingProgressUnit[];
-}
-
-/**
- * `estimatedSeconds` baseline — restates `estimateReadingSeconds` from
- * `web/shared/reading-metrics/policy.ts` (the website package does not
- * cross its bundler root, so the small policy is mirrored here like
- * `lib/reading-metrics/format.ts` does for the display side).
- */
-const READING_WORDS_PER_MINUTE = 220;
-
-function estimateReadingSeconds(wordCount: number): number {
-	if (wordCount <= 0) return 0;
-	return Math.ceil((wordCount * 60) / READING_WORDS_PER_MINUTE);
 }
 
 /**
