@@ -138,7 +138,7 @@ function TanahpediaIndexPage() {
 			</div>
 
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+				<div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
 						<Search size={18} aria-hidden="true" />
 						<span>חיפוש ערכים</span>

@@ -6,6 +6,7 @@ import {
 	useMatch,
 } from "@tanstack/react-router";
 import { Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import { useUndoAction } from "~/components/UndoToast";
 import { type Author, deleteAuthor, getAuthors } from "~/server/authors";
 
 export const Route = createFileRoute("/rabbis")({
@@ -43,10 +44,14 @@ function RabbisListPage() {
 		},
 	});
 
+	const scheduleUndo = useUndoAction();
+
 	const handleDelete = (author: Author) => {
-		if (window.confirm(`האם אתה בטוח שברצונך למחוק את "${author.name}"?`)) {
-			deleteMutation.mutate(author.id);
-		}
+		scheduleUndo({
+			key: `author-${author.id}`,
+			message: `הרב "${author.name}" יימחק`,
+			commit: () => deleteMutation.mutate(author.id),
+		});
 	};
 
 	if (isLoading) {
@@ -112,7 +117,7 @@ function RabbisListPage() {
 										className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-100"
 									/>
 								) : (
-									<div className="w-16 h-16 rounded-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500 ring-2 ring-gray-100">
+									<div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 ring-2 ring-gray-100">
 										<UserRound size={28} aria-hidden="true" />
 									</div>
 								)}

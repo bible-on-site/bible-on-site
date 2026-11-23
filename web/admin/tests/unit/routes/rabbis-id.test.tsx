@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
@@ -102,5 +108,31 @@ describe("RabbiEditPage", () => {
 				.getByRole("button", { name: "שומר..." })
 				.querySelector(".animate-spin"),
 		).toBeInTheDocument();
+	});
+
+	it("deletes the rabbi only after the confirm dialog approves", async () => {
+		server.deleteAuthor.mockResolvedValue({});
+		renderPage();
+		fireEvent.click(await screen.findByRole("button", { name: "מחק רב" }));
+
+		fireEvent.click(
+			within(await screen.findByRole("dialog")).getByRole("button", {
+				name: "ביטול",
+			}),
+		);
+		expect(server.deleteAuthor).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole("button", { name: "מחק רב" }));
+		fireEvent.click(
+			within(await screen.findByRole("dialog")).getByRole("button", {
+				name: "מחק",
+			}),
+		);
+		await waitFor(() =>
+			expect(server.deleteAuthor).toHaveBeenCalledWith({ data: 7 }),
+		);
+		await waitFor(() =>
+			expect(server.navigate).toHaveBeenCalledWith({ to: "/rabbis" }),
+		);
 	});
 });

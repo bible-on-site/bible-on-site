@@ -77,10 +77,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// accessibility tree entirely on iOS, but a closing animation or a stale
     /// snapshot can keep a copy around briefly.
     /// </summary>
-    public void WaitForHidden(string automationId)
+    public void WaitForHidden(string automationId) =>
+        WaitForHidden(automationId, TimeSpan.FromSeconds(30));
+
+    /// <inheritdoc cref="WaitForHidden(string)"/>
+    public void WaitForHidden(string automationId, TimeSpan timeout)
     {
         var locator = platform.AutomationId(automationId);
-        var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
@@ -202,6 +205,46 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             return true;
         }, timeout);
         return observed;
+    }
+
+    /// <summary>
+    /// Waits until an element matching the automation id exists in the
+    /// accessibility tree, wherever it sits relative to the viewport. An
+    /// element taller than the viewport can never satisfy a center-in-viewport
+    /// wait even when its top edge is on screen, and displayed-only lookups
+    /// report it not visible for the same reason (#3735).
+    /// </summary>
+    public void WaitForPresent(string automationId) =>
+        WaitForPresent(automationId, TimeSpan.FromSeconds(45));
+
+    /// <inheritdoc cref="WaitForPresent(string)"/>
+    public void WaitForPresent(string automationId, TimeSpan timeout)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var found = driver is IosSnapshotDriver snapshots
+                    ? snapshots.FindSnapshots(locator).Count != 0
+                    : driver.FindElements(locator).Count != 0;
+                if (found)
+                {
+                    return;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // A snapshot can reference a node the page just recycled.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout can retry within this deadline.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"No element matching {locator} appeared in the accessibility tree within {timeout.TotalSeconds} seconds.");
     }
 
     /// <summary>

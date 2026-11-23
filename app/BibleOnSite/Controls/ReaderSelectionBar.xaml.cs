@@ -34,7 +34,13 @@ public partial class ReaderSelectionBar : Grid
         Pause,
         /// <summary>Playback exists but was not issued from the bar — tapping resumes.</summary>
         Resume,
+        /// <summary>The requested sefer's recitation pack is downloading (#3704) —
+        /// the spinner takes the button's slot.</summary>
+        Downloading,
     }
+
+    private bool _recitationVisible;
+    private bool _recitationDownloading;
 
     public ReaderSelectionBar()
     {
@@ -55,15 +61,24 @@ public partial class ReaderSelectionBar : Grid
         CopyButton.IsVisible = visible;
     }
 
-    /// <summary>Shows or hides the recitation button.</summary>
-    public void SetRecitationVisible(bool visible) => RecitationButton.IsVisible = visible;
+    /// <summary>Shows or hides the recitation button (or its download spinner).</summary>
+    public void SetRecitationVisible(bool visible)
+    {
+        _recitationVisible = visible;
+        RecitationButton.IsVisible = visible && !_recitationDownloading;
+        RecitationSpinner.IsVisible = RecitationSpinner.IsRunning = visible && _recitationDownloading;
+    }
 
     /// <summary>
     /// Applies the recitation button's enabled/opacity/glyph/hint — the glyph
-    /// must match what the button does (only bar-issued playback pauses).
+    /// must match what the button does (only bar-issued playback pauses), and
+    /// a pending sefer download swaps in the spinner (#3704).
     /// </summary>
     public void SetRecitationState(bool enabled, RecitationVisual visual, string hint)
     {
+        _recitationDownloading = visual == RecitationVisual.Downloading;
+        RecitationSpinner.IsVisible = RecitationSpinner.IsRunning = _recitationVisible && _recitationDownloading;
+        RecitationButton.IsVisible = _recitationVisible && !_recitationDownloading;
         RecitationButton.IsEnabled = enabled;
         RecitationButton.Opacity = enabled ? 1 : 0.4;
         RecitationButton.Text = visual switch
