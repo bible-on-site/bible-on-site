@@ -4,7 +4,13 @@
  * slug pages, and the panel selection Sefer relies on.
  */
 
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	render,
+	renderHook,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import type { ArticleSummary } from "../../../src/lib/articles";
 
 jest.mock("../../../src/app/929/[number]/components/ArticlesSection", () => ({
@@ -178,6 +184,84 @@ describe("useDailyArticleOverride", () => {
 			await act(async () => {});
 			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
 			unmount();
+		});
+	});
+
+	describe("when several components consume the hook", () => {
+		const setVisibility = (state: "visible" | "hidden") => {
+			Object.defineProperty(document, "visibilityState", {
+				configurable: true,
+				value: state,
+			});
+		};
+
+		beforeEach(() => {
+			jest.useFakeTimers();
+			mockGetPerekIdByDate.mockReturnValue(55);
+			mockConstructHDate.mockReturnValue({ getUniformMonth: () => 11, day: 9 });
+			mockGetDailyArticleOverride.mockResolvedValue(assignedArticle);
+			setVisibility("visible");
+		});
+		afterEach(() => {
+			jest.useRealTimers();
+			delete (document as { visibilityState?: string }).visibilityState;
+		});
+
+		it("runs a single mount lookup for two mounted consumers", async () => {
+			// DailyArticlesSection plus the kept-mounted Sefer share one store.
+			const first = renderHook(() => useDailyArticleOverride());
+			const second = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+			expect(second.result.current).toEqual(first.result.current);
+			expect(first.result.current).toEqual({
+				perekId: 55,
+				articles: [assignedArticle],
+			});
+			first.unmount();
+			second.unmount();
+		});
+
+		it("runs one interval tick and one reactivate fetch for two consumers", async () => {
+			const first = renderHook(() => useDailyArticleOverride());
+			const second = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+
+			act(() => jest.advanceTimersByTime(60_000));
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
+
+			// Past the one-second coalesce window; both reactivate events fire.
+			act(() => jest.advanceTimersByTime(2_000));
+			act(() => {
+				document.dispatchEvent(new Event("visibilitychange"));
+				window.dispatchEvent(new Event("focus"));
+			});
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(3);
+			first.unmount();
+			second.unmount();
+		});
+
+		it("stops polling once the last consumer unmounts", async () => {
+			const first = renderHook(() => useDailyArticleOverride());
+			const second = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+
+			// One consumer leaving keeps polling alive for the other.
+			second.unmount();
+			act(() => jest.advanceTimersByTime(60_000));
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
+
+			// Last consumer leaving stops the interval entirely.
+			first.unmount();
+			act(() => jest.advanceTimersByTime(120_000));
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
 		});
 	});
 });
