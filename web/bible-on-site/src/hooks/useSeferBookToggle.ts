@@ -145,10 +145,19 @@ export function useSeferBookToggle(
 	}, [toggled, handleToggle, everToggled]);
 
 	useEffect(() => {
-		if (currentlyToggled && isWideEnough === true) {
+		const bookOpen = currentlyToggled && isWideEnough === true;
+		if (bookOpen) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
+		}
+		// html[data-book-view] already display:nones .seo-content; mirror the
+		// same state in the hidden attribute so the document never holds two
+		// un-hidden <main> elements (HTML allows one without `hidden`).
+		for (const el of document.querySelectorAll<HTMLElement>(
+			"main.seo-content",
+		)) {
+			el.hidden = bookOpen;
 		}
 		return () => {
 			delete document.documentElement.dataset.bookView;

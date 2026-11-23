@@ -50,12 +50,14 @@ test.describe("main landmark contract", () => {
 			const response = await page.goto(f.url, {
 				waitUntil: "domcontentloaded",
 			});
+			// biome-ignore lint/style/noNonNullAssertion: page.goto resolves a Response for document navigations
+			const status = response!.status();
 			// The not-found boundary itself emits one <main>, so a fixture URL
 			// that silently 404s would pass the count check — pin the status.
 			if (f.name.startsWith("not-found")) {
-				expect(response?.status()).toBe(404);
+				expect(status).toBe(404);
 			} else {
-				expect(response?.status()).toBeLessThan(400);
+				expect(status).toBeLessThan(400);
 			}
 			// Hydrated render — what assistive tech actually enumerates.
 			await page.waitForLoadState("load");
@@ -71,8 +73,15 @@ test.describe("main landmark contract", () => {
 		const response = await page.goto("/929/1?book", {
 			waitUntil: "domcontentloaded",
 		});
-		expect(response?.status()).toBeLessThan(400);
+		// biome-ignore lint/style/noNonNullAssertion: page.goto resolves a Response for document navigations
+		expect(response!.status()).toBeLessThan(400);
 		await page.waitForLoadState("load");
+		// The overlay must actually supply the landmark — if the book never
+		// opened, the flat reader's main would still satisfy the count.
+		await expect(page.locator("main.seo-content")).toBeHidden();
+		await expect(
+			page.locator("main:not(.seo-content)"),
+		).toBeVisible();
 		await expect(page.getByRole("main")).toHaveCount(1);
 	});
 });
