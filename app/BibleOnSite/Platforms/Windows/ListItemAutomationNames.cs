@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using BibleOnSite.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -120,27 +119,20 @@ internal static class ListItemAutomationNames
 	// WinUI's LayoutUpdated event always supplies a null sender, so the
 	// retry handler must capture the element it watches. Kept per element
 	// so a found name or a recycle can unsubscribe that exact delegate.
-	private static readonly ConditionalWeakTable<FrameworkElement, LayoutRetry> LayoutRetries = new();
-
-	private sealed class LayoutRetry
-	{
-		public EventHandler<object>? Handler;
-	}
+	private static readonly LayoutRetryMap<FrameworkElement> LayoutRetries = new();
 
 	private static void StartLayoutRetry(FrameworkElement element)
 	{
-		var retry = LayoutRetries.GetOrCreateValue(element);
-		retry.Handler ??= (_, _) => ApplyName(element);
-		element.LayoutUpdated -= retry.Handler;
-		element.LayoutUpdated += retry.Handler;
+		var handler = LayoutRetries.HandlerFor(element, ApplyName);
+		element.LayoutUpdated -= handler;
+		element.LayoutUpdated += handler;
 	}
 
 	private static void StopLayoutRetry(FrameworkElement element)
 	{
-		if (LayoutRetries.TryGetValue(element, out var retry) && retry.Handler is { } handler)
+		if (LayoutRetries.Remove(element) is { } handler)
 		{
 			element.LayoutUpdated -= handler;
-			retry.Handler = null;
 		}
 	}
 
