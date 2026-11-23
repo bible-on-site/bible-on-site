@@ -1,22 +1,9 @@
-# Transcription validation - 2026-11-11
+# Transcription performance and recognition limits
 
-The short-run validation established rendering and pipeline functionality. The
-owner selected a representative 24-minute lecture in Opus and WebM for the full-length
-quality check. Both strict decodes contain 23,393,792 samples (1462.112 seconds),
-with no decoded timing offset; they have small acoustic differences.
-The [pull request](https://github.com/bible-on-site/bible-on-site/pull/3311)
-records the representative-run results and review limits. The supplied lecture
-text, audio, video, private paths and full exports remain local.
-
-The browser check compared the 36.8849-second Esther 10 recording in a minimal
-local media harness with the unmodified `preview.html` produced by the ordinary
-CLI using the full pinned Hebrew model and default CUDA FP32 settings. The
-recording's SHA-256 is
-`05b1c171298dca95d3f7a69d8c82fd0f815f53c4f6194c04854e20505a73894a`.
-
-The export remains marked for editorial review. The HTML is recognized speech,
-with only the documented typography and paragraph formatting applied. The raw
-transcript and model timestamps remain in JSON.
+A representative 24-minute lecture in Opus and WebM established the hardware
+and recognition limits below. Both strict decodes contain 23,393,792 samples
+(1462.112 seconds), with no decoded timing offset and small acoustic differences.
+The original validation record is in [pull request #3311](https://github.com/bible-on-site/bible-on-site/pull/3311).
 
 ## Hardware and runtime
 

@@ -34,7 +34,8 @@ The additive migration creates settings, subscribers, jobs and per-recipient his
 
 The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector. Fresh installations default to test; real delivery requires configuring and explicitly confirming the intended group. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
 
-The [validation notes](screenshots/README.md) describe desktop and mobile checks for the new controls. Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
+The public join carousel and native-app counterpart follow channel validation
+and must expose only public join links. [Issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)
 
 ## Public joining (#2939, #2940, #2941)
 
