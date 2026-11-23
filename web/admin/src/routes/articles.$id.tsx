@@ -257,18 +257,16 @@ function ArticleEditPage() {
 		setHasChanges(true);
 	}, []);
 
+	/* FIFO queue on the tail promise: saves run strictly one at a time, so
+	   several queued writes can't overtake or interleave. */
 	const saveLatest = (data: ArticleFormData) => {
-		const inFlight = inFlightSaveRef.current;
-		const run = () => {
-			inFlightSaveRef.current = saveMutation
-				.mutateAsync(data)
-				.then(
-					() => true,
-					() => false,
-				);
-		};
-		if (inFlight) inFlight.then(run);
-		else run();
+		const tail = inFlightSaveRef.current ?? Promise.resolve();
+		inFlightSaveRef.current = tail.then(() =>
+			saveMutation.mutateAsync(data).then(
+				() => true,
+				() => false,
+			),
+		);
 	};
 	const saveLatestRef = useRef(saveLatest);
 	saveLatestRef.current = saveLatest;
