@@ -169,9 +169,10 @@ describe("JournalismGallery", () => {
 			);
 			expect(last).toHaveFocus();
 
-			// Mid-list Tab is left to the browser.
+			// Mid-list Tab is left to the browser: not prevented, not moved.
 			next.focus();
 			expect(fireEvent.keyDown(next, { key: "Tab" })).toBe(true);
+			expect(next).toHaveFocus();
 		});
 
 		it("wraps Tab and Shift+Tab when focus sits on the dialog container", () => {
