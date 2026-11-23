@@ -173,6 +173,17 @@ public partial class PerekPage
             previous.TextColor = Pasuk.QriTextColor;
         }
 
+        // Follow the spoken verse (#3728): when playback lands on a new pasuk
+        // off-screen — play, resume or seek — bring it into view. Suppressed
+        // while the user is scrolling, and a no-op while it is already
+        // visible.
+        if (nextPasuk != null && !ReferenceEquals(nextPasuk, _recitingPasuk) && !IsScrolling)
+        {
+            var list = FindReaderPasukList();
+            var item = list?.ItemsSource?.OfType<PasukDisplayItem>()
+                .FirstOrDefault(row => ReferenceEquals(row.Pasuk, nextPasuk));
+            ReaderScrollTop.ScrollToItem(list, item);
+        }
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
         if (_recitingPasuk != null)

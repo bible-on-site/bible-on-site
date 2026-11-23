@@ -1063,3 +1063,126 @@ test("unmounting with a failing manifest fetch stays quiet", async () => {
 		for (const release of pending) release();
 	});
 });
+
+const belowFoldRect = {
+	top: 2000,
+	bottom: 2016,
+	left: 0,
+	right: 40,
+	width: 40,
+	height: 16,
+	x: 0,
+	y: 2000,
+	toJSON: () => ({}),
+} as DOMRect;
+
+test("the first audible verse scrolls into view when a middle range has no audio", async () => {
+	const perek3Pesukim = [
+		{ segments: [{ type: "qri", value: "אַרְבַּע" }] },
+	] as Pasuk[];
+	const perek3Manifest = manifestFor(3, [
+		{ pasuk: 1, segment: 1, text: "אַרְבַּע", startMs: 0, endMs: 150 },
+	]);
+	(global.fetch as jest.Mock).mockImplementation(async (url: string) => {
+		if (url === "/api/recitation/1")
+			return { ok: true, json: async () => perek1Manifest };
+		if (url === "/api/recitation/2")
+			return { ok: true, json: async () => perek2Manifest };
+		if (url === "/api/recitation/3")
+			return { ok: true, json: async () => perek3Manifest };
+		return { ok: false, status: 404 };
+	});
+	render(
+		<RangeRecitationPlayer
+			ranges={[range(1, 1, 1, 1), range(2, 1, 2, 1), range(3, 1, 3, 1)]}
+			perakim={[
+				{ perekId: 1, pesukim: perek1Pesukim, hasRecording: true },
+				{ perekId: 2, pesukim: perek2Pesukim, hasRecording: false },
+				{ perekId: 3, pesukim: perek3Pesukim, hasRecording: true },
+			]}
+		>
+			<RangeRecitationControls />
+			<RecitationWordControl
+				perek={3}
+				pasuk={1}
+				segment={1}
+				occurrence={0}
+			>
+				אַרְבַּע
+			</RecitationWordControl>
+		</RangeRecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת הקריאה" });
+	const scrollIntoView = jest.fn();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	const word = screen.getByRole("button", { name: "השמעת המילה אַרְבַּע" });
+	jest.spyOn(word, "getBoundingClientRect").mockReturnValue(belowFoldRect);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
+	// Perek 1's piece ends; the silent perek 2 range is skipped and
+	// playback lands on perek 3 — the pane must follow it there.
+	act(() => clipEnded());
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(2));
+	expect(playRanges).toHaveBeenLastCalledWith(
+		[{ startMs: 0, endMs: 150, pasuk: 1 }],
+		expect.any(Number),
+		expect.any(Function),
+	);
+	stepFrame();
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(scrollIntoView).toHaveBeenCalledWith({
+		behavior: "instant",
+		block: "nearest",
+	});
+});
+
+test("a repeated passage scrolls to the copy that is actually playing", async () => {
+	await openListening(
+		[range(1, 1, 1, 1), range(2, 1, 2, 1), range(1, 1, 1, 1)],
+		<>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={0}>
+				אֶחָד
+			</RecitationWordControl>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={1}>
+				אֶחָד
+			</RecitationWordControl>
+		</>,
+	);
+	const copies = screen.getAllByRole("button", {
+		name: "השמעת המילה אֶחָד",
+	});
+	copies[0].scrollIntoView = jest.fn();
+	copies[1].scrollIntoView = jest.fn();
+	// The first copy stays visible; the second sits below the fold.
+	jest.spyOn(copies[0], "getBoundingClientRect").mockReturnValue({
+		top: 40,
+		bottom: 56,
+		left: 0,
+		right: 40,
+		width: 40,
+		height: 16,
+		x: 0,
+		y: 40,
+		toJSON: () => ({}),
+	} as DOMRect);
+	jest.spyOn(copies[1], "getBoundingClientRect").mockReturnValue(
+		belowFoldRect,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
+	stepFrame();
+	expect(copies[0]).toHaveAttribute("aria-pressed", "true");
+	expect(copies[0].scrollIntoView).not.toHaveBeenCalled();
+	act(() => clipEnded());
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(2));
+	act(() => clipEnded());
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(3));
+	stepFrame();
+	expect(copies[0]).toHaveAttribute("aria-pressed", "false");
+	expect(copies[1]).toHaveAttribute("aria-pressed", "true");
+	expect(copies[1].scrollIntoView).toHaveBeenCalledWith({
+		behavior: "instant",
+		block: "nearest",
+	});
+});
