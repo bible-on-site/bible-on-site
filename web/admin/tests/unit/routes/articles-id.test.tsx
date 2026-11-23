@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -311,6 +312,43 @@ describe("ArticleEditPage", () => {
 		// The deferred unmount save fires on a 0ms timeout after teardown.
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(server.updateArticle).not.toHaveBeenCalled();
+	});
+
+	it("queues the unmount save behind a save still in flight", async () => {
+		const resolvers: Array<(value: unknown) => void> = [];
+		server.updateArticle.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolvers.push(resolve);
+				}),
+		);
+		const utils = renderPage();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור עכשיו" }),
+			).toBeEnabled(),
+		);
+
+		act(() => server.editorOnChange?.("<p>גרסה ראשונה</p>"));
+		fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+		await waitFor(() =>
+			expect(server.updateArticle).toHaveBeenCalledTimes(1),
+		);
+
+		server.pendingContent = "<p>גרסה שנייה</p>";
+		utils.unmount();
+
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.updateArticle).toHaveBeenCalledTimes(1);
+
+		resolvers[0]?.(article);
+		await waitFor(() =>
+			expect(server.updateArticle).toHaveBeenLastCalledWith({
+				data: expect.objectContaining({
+					content: "<p>גרסה שנייה</p>",
+				}),
+			}),
+		);
 	});
 });
 

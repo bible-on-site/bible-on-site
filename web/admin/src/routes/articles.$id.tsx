@@ -108,11 +108,22 @@ function ArticleEditPage() {
 	const contentRef = useRef("");
 	const latestRef = useRef({ formData, hasChanges });
 	const mountedRef = useRef(true);
+	/* Saves serialize through this promise so a second write never overtakes
+	   an in-flight one (an older save landing last would overwrite newer
+	   edits, and a second create would duplicate a new article). */
+	const inFlightSaveRef = useRef<Promise<unknown> | null>(null);
+	/* Once an article exists, later saves update it — even ones queued while
+	   the create was still in flight. */
+	const savedIdRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		latestRef.current = { formData, hasChanges };
 	});
+	/* StrictMode replays mount/unmount in dev; the setup must restore
+	   mountedRef or the deferred unmount save and the isNew navigation are
+	   permanently disabled after the replayed cleanup. */
 	useEffect(() => {
+		mountedRef.current = true;
 		return () => {
 			mountedRef.current = false;
 		};
@@ -191,12 +202,14 @@ function ArticleEditPage() {
 					data.coverageVerified === true,
 				),
 			};
-			if (isNew || articleId === null) {
+			const targetId = savedIdRef.current ?? articleId;
+			if (targetId === null) {
 				return createArticle({ data: payload });
 			}
-			return updateArticle({ data: { id: articleId, ...payload } });
+			return updateArticle({ data: { id: targetId, ...payload } });
 		},
 		onSuccess: async (savedArticle: Article) => {
+			savedIdRef.current = savedArticle.id;
 			queryClient.invalidateQueries({ queryKey: ["article", savedArticle.id] });
 			queryClient.invalidateQueries({
 				queryKey: ["articles", "perek", savedArticle.perek_id],
@@ -244,6 +257,22 @@ function ArticleEditPage() {
 		setHasChanges(true);
 	}, []);
 
+	const saveLatest = (data: ArticleFormData) => {
+		const inFlight = inFlightSaveRef.current;
+		const run = () => {
+			inFlightSaveRef.current = saveMutation
+				.mutateAsync(data)
+				.then(
+					() => true,
+					() => false,
+				);
+		};
+		if (inFlight) inFlight.then(run);
+		else run();
+	};
+	const saveLatestRef = useRef(saveLatest);
+	saveLatestRef.current = saveLatest;
+
 	// Auto-save effect
 	useEffect(() => {
 		if (!hasChanges || saveMutation.isPending) return;
@@ -252,7 +281,7 @@ function ArticleEditPage() {
 			editorRef.current?.flush();
 			const data = { ...formData, content: contentRef.current };
 			if (data.name.trim()) {
-				saveMutation.mutate(data);
+				saveLatestRef.current(data);
 			}
 		}, 2000);
 
@@ -265,7 +294,6 @@ function ArticleEditPage() {
 	   final-save decision is deferred until teardown delivers any pending
 	   content to contentRef. mountedRef skips the deferred save on
 	   StrictMode's dev remount. */
-	const { mutate: saveNow } = saveMutation;
 	useEffect(() => {
 		return () => {
 			setTimeout(() => {
@@ -275,11 +303,11 @@ function ArticleEditPage() {
 					(dirty || contentRef.current !== fd.content) &&
 					fd.name.trim()
 				) {
-					saveNow({ ...fd, content: contentRef.current });
+					saveLatestRef.current({ ...fd, content: contentRef.current });
 				}
 			}, 0);
 		};
-	}, [saveNow]);
+	}, []);
 
 
 	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
@@ -585,7 +613,7 @@ function ArticleEditPage() {
 						type="button"
 						onClick={() => {
 							editorRef.current?.flush();
-							saveMutation.mutate({
+							saveLatest({
 								...formData,
 								content: contentRef.current,
 							});

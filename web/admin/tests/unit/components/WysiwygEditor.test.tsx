@@ -350,6 +350,28 @@ describe("WysiwygEditor", () => {
 		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
+	it("delivers source-mode edits on flush without a mode switch", () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "מקור HTML" }));
+		fireEvent.change(screen.getByRole("textbox"), {
+			target: { value: "<p>Source edit</p>" },
+		});
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledWith("<p>Source edit</p>");
+	});
+
 	it("syncs changed content props back into TipTap", () => {
 		const onChange = vi.fn();
 		const { rerender } = renderEditor(onChange);

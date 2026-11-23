@@ -129,9 +129,19 @@ export function WysiwygEditor({
 			clearTimeout(saveTimeoutRef.current);
 			saveTimeoutRef.current = null;
 		}
+		/* Source-mode edits sit in sourceDraft and only reach the editor on a
+		   mode switch — deliver the draft itself. */
+		if (mode === "source") {
+			const stored = toStoredFootnoteHtml(sourceDraft);
+			if (stored !== lastSavedContent.current) {
+				lastSavedContent.current = stored;
+				onChange(stored);
+			}
+			return;
+		}
 		if (!ed) return;
 		flushEditorHtml(ed);
-	}, [flushEditorHtml]);
+	}, [flushEditorHtml, mode, onChange, sourceDraft]);
 
 	useImperativeHandle(
 		ref,
