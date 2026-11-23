@@ -435,7 +435,8 @@ mod tests {
 
     // The same cases are asserted in search-normalize.test.ts (website),
     // SearchTextTests.cs (app) and the index builder's search_text.rs: every
-    // open or close block-level tag is a word break in all four ports.
+    // open or close block-level tag is a word break in all four ports, and
+    // each emits the same plain text byte-for-byte.
     #[test]
     fn block_tags_break_words_like_the_other_ports() {
         for (html, expected) in [
@@ -452,7 +453,7 @@ mod tests {
             ("<p>א</p><p>ב</p>", "א ב"),
             ("א<br>ב", "א ב"),
         ] {
-            assert_eq!(normalize(&strip_html(html)), expected, "for {html}");
+            assert_eq!(strip_html(html), expected, "for {html}");
         }
     }
 

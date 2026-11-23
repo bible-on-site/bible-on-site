@@ -9,7 +9,7 @@ public class SearchTextTests
     {
         // The same cases are asserted in search-normalize.test.ts (website),
         // search_text.rs (the delivered index builder) and article_search/text.rs
-        // (api): every open or close block-level tag is a word break in all four ports.
+        // (api): every open or close block-level tag is a word break in all four ports, and each emits the same plain text.
         [Theory]
         [InlineData("<td>foo</td><td>bar</td>", "foo bar")]
         [InlineData("<th>א</th><td>ב</td>", "א ב")]
@@ -25,7 +25,7 @@ public class SearchTextTests
         [InlineData("א<br>ב", "א ב")]
         public void breaks_words_on_every_block_tag_like_the_other_ports(string html, string expected)
         {
-            SearchText.Normalize(SearchText.PlainText(html)).Should().Be(expected);
+            SearchText.PlainText(html).Should().Be(expected);
         }
     }
 

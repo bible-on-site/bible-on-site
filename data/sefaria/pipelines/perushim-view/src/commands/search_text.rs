@@ -110,8 +110,9 @@ pub fn plain_text(text: &str) -> String {
             "footer",
             "hr",
         ];
-        if BREAK.contains(&tag.as_str()) {
-            // A block tag (open or close) emits the break the element stands for.
+        if BREAK.contains(&tag.as_str()) && !result.ends_with(' ') {
+            // A block tag (open or close) emits the break the element stands for;
+            // adjacent ones share a single break like the other ports.
             result.push(' ');
         }
         // All other tags drop entirely.
@@ -313,7 +314,8 @@ mod tests {
 
     // The same cases are asserted in search-normalize.test.ts (website),
     // SearchTextTests.cs (app) and article_search/text.rs (api): every open or
-    // close block-level tag is a word break in all four ports.
+    // close block-level tag is a word break in all four ports, and each emits
+    // the same plain text byte-for-byte (one space per boundary cluster).
     #[test]
     fn block_tags_break_words_like_the_other_ports() {
         for (html, expected) in [
@@ -330,7 +332,7 @@ mod tests {
             ("<p>א</p><p>ב</p>", "א ב"),
             ("א<br>ב", "א ב"),
         ] {
-            assert_eq!(normalize(&plain_text(html)), expected, "for {html}");
+            assert_eq!(plain_text(html), expected, "for {html}");
         }
     }
 }

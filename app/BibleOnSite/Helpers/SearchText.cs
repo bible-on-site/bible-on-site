@@ -20,8 +20,11 @@ public static class SearchText
     // the delivered index builder (`data/sefaria/pipelines/perushim-view/src/commands/search_text.rs`)
     // and the article-search service (`web/api/src/services/article_search/text.rs`): every block tag —
     // open or close — is a word break, so all ports emit the same plain text for the same HTML.
-    private const string BlockTagsXPath =
-        "//br|//p|//div|//li|//tr|//td|//th|//h1|//h2|//h3|//h4|//h5|//h6|//ul|//ol|//table|//blockquote|//section|//article|//header|//footer|//hr";
+    private static readonly HashSet<string> BlockTagNames = new(StringComparer.Ordinal)
+    {
+        "br", "p", "div", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "table", "blockquote", "section", "article", "header", "footer", "hr",
+    };
 
     public static string PlainText(string text)
     {
@@ -35,21 +38,33 @@ public static class SearchText
         {
             node.Remove();
         }
-        foreach (var node in (document.DocumentNode.SelectNodes(BlockTagsXPath) ?? Enumerable.Empty<HtmlNode>()).ToArray())
+        var builder = new StringBuilder();
+        AppendPlainText(document.DocumentNode, builder);
+        return HtmlEntity.DeEntitize(builder.ToString()).Trim();
+    }
+
+    // Each block-element boundary emits one space unless output already ends in
+    // one — the same dedup `search_text.rs` and `normalize.ts` apply per tag.
+    private static void AppendPlainText(HtmlNode node, StringBuilder builder)
+    {
+        if (node is HtmlTextNode textNode)
         {
-            var parent = node.ParentNode!;
-            // One space per boundary: adjacent block elements (and text already
-            // spaced around the element) share the same break.
-            if (node.PreviousSibling is not HtmlTextNode previous || !previous.Text.EndsWith(' '))
-            {
-                parent.InsertBefore(document.CreateTextNode(" "), node);
-            }
-            if (node.NextSibling is not HtmlTextNode next || !next.Text.StartsWith(' '))
-            {
-                parent.InsertAfter(document.CreateTextNode(" "), node);
-            }
+            builder.Append(textNode.Text);
+            return;
         }
-        return HtmlEntity.DeEntitize(document.DocumentNode.InnerText).Trim();
+        var isBlock = BlockTagNames.Contains(node.Name);
+        if (isBlock && builder.Length > 0 && builder[^1] != ' ')
+        {
+            builder.Append(' ');
+        }
+        foreach (var child in node.ChildNodes)
+        {
+            AppendPlainText(child, builder);
+        }
+        if (isBlock && builder.Length > 0 && builder[^1] != ' ')
+        {
+            builder.Append(' ');
+        }
     }
 
     public static string Normalize(string text)

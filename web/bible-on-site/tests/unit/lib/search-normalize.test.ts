@@ -181,6 +181,6 @@ describe("htmlToPlainText", () => {
 		["<p>א</p><p>ב</p>", "א ב"],
 		["א<br>ב", "א ב"],
 	])("splits %s into normalized words %s", (html, expected) => {
-		expect(normalizeSearchText(htmlToPlainText(html))).toBe(expected);
+		expect(htmlToPlainText(html)).toBe(expected);
 	});
 });
