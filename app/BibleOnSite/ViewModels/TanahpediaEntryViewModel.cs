@@ -24,8 +24,8 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly PerekDataService _perekData;
     private readonly IDedicationService _dedicationService;
 
-    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid link or
-    /// badge taps must not stack duplicate pushed pages (#2640).</summary>
+    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid badge
+    /// taps must not stack duplicate pushed pages (#2640).</summary>
     private readonly NavigationGate _navigationGate = new();
 
     /// <summary>A second Back trigger during an in-flight pop or absolute
@@ -36,14 +36,36 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// Back steps through prior people before leaving the page.</summary>
     private readonly Stack<string> _entryHistory = new();
 
-    /// <summary>Cancels superseded in-place loads; combined with <see
-    /// cref="_loadVersion"/> the latest requested entry always wins.</summary>
+    /// <summary>Every entry load owns this token — a newer load cancels the
+    /// previous transport; combined with <see cref="_loadVersion"/> the
+    /// latest requested entry always wins and stale writes are discarded.</summary>
     private CancellationTokenSource? _loadCts;
     private int _loadVersion;
+
+    /// <summary>Resolved entry surfaces by requested name — a Back replay or
+    /// a re-hop restores the body plus the sections its deferred loads already
+    /// produced, without a network round-trip (the pushed page used to keep
+    /// that resolved state alive), while not-found and disambiguation states
+    /// stay uncached so they always re-resolve (#2640).</summary>
+    private readonly Dictionary<string, EntrySnapshot> _entryCache = new(StringComparer.Ordinal);
+
+    /// <summary>The entry surface as the deferred loads resolved it — the
+    /// same state the pushed destination page kept underneath (#2640).</summary>
+    private sealed record EntrySnapshot(
+        TanahpediaEntryDetail Detail,
+        TanahpediaFamilyTree? FamilyTree,
+        List<TanahpediaPlaceMarker> PlaceMarkers,
+        List<string> DedicationLines,
+        ObservableCollection<TanahpediaOccurrenceItem> Occurrences);
 
     /// <summary>True while a family-tree trail is pending above the entry
     /// the page was opened with.</summary>
     public bool HasEntryHistory => _entryHistory.Count > 0;
+
+    /// <summary>True when the latest <see cref="UniqueName"/> change replayed
+    /// the entry trail via Back — a forward hop opens a new visit at the top,
+    /// while a replay restores the reader's saved offset (#2640).</summary>
+    public bool LastChangeWasTrailReplay { get; private set; }
 
     public TanahpediaEntryViewModel() : this(
         TanahpediaService.Instance,
@@ -195,7 +217,20 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        await LoadCoreAsync(CancellationToken.None);
+        await LoadCoreAsync(BeginEntryLoad());
+    }
+
+    /// <summary>
+    /// Hands the next entry load the owned cancellation token: a newer load
+    /// cancels and replaces the previous one, so an in-place hop or Back also
+    /// supersedes a pending initial/retry transport - not only a prior hop.
+    /// </summary>
+    private CancellationToken BeginEntryLoad()
+    {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        var cts = _loadCts = new CancellationTokenSource();
+        return cts.Token;
     }
 
     /// <summary>
@@ -212,6 +247,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         try
         {
+            if (_entryCache.TryGetValue(UniqueName, out var snapshot))
+            {
+                RestoreEntry(snapshot);
+                return;
+            }
+
             var detail = await _service.GetEntryDetailAsync(UniqueName, ct);
             if (version != _loadVersion)
             {
@@ -219,7 +260,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             }
             if (detail != null)
             {
-                await SetEntryAsync(detail);
+                await SetEntryAsync(detail, ct);
                 return;
             }
 
@@ -239,7 +280,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 }
                 if (alias != null)
                 {
-                    await SetEntryAsync(alias);
+                    await SetEntryAsync(alias, ct);
                     return;
                 }
             }
@@ -266,10 +307,15 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia entry load failed for {UniqueName}: {ex}");
-            ErrorMessage = "התוכן אינו זמין כרגע";
-            // The error pane is exclusive - a failed in-place switch must not
-            // leave the previous entry's content rendered underneath (#2640).
-            IsLoaded = false;
+            // A superseded load's late failure must not flip the newer load's
+            // state to error (#2640).
+            if (version == _loadVersion)
+            {
+                ErrorMessage = "התוכן אינו זמין כרגע";
+                // The error pane is exclusive - a failed in-place switch must not
+                // leave the previous entry's content rendered underneath (#2640).
+                IsLoaded = false;
+            }
         }
         finally
         {
@@ -281,18 +327,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Rebinds this same view model to another entry in place (family-tree
-    /// person hops): the previous entry's content stays under the loading
-    /// overlay until the destination detail arrives, then everything swaps
-    /// atomically - no page close/open transition.
+    /// Rebinds this same view model to another entry in place: the previous
+    /// entry's content stays under the loading overlay until the destination
+    /// detail arrives, then everything swaps atomically - no page close/open
+    /// transition.
     /// </summary>
-    private async Task SwitchToCurrentEntryAsync()
-    {
-        _loadCts?.Cancel();
-        _loadCts?.Dispose();
-        var cts = _loadCts = new CancellationTokenSource();
-        await LoadCoreAsync(cts.Token);
-    }
+    private Task SwitchToCurrentEntryAsync() => LoadCoreAsync(BeginEntryLoad());
 
     /// <summary>
     /// Clears the entry-body surface for a non-entry terminal state
@@ -321,16 +361,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
-    private async Task SetEntryAsync(TanahpediaEntryDetail detail)
+    /// <summary>Binds the entry body - shared by a fresh network load and a
+    /// cached-surface replay.</summary>
+    private void ApplyEntryBody(TanahpediaEntryDetail detail)
     {
-        // The destination may lack the previous entry's deferred sections -
-        // reset them with the swap so no stale tree, map or rows linger.
-        FamilyTree = null;
-        PlaceMarkers = [];
-        Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
-        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
-        DedicationLines = [];
-
         Title = detail.Title;
         Content = TanahpediaFootnotes.Normalize(detail.Content);
         ReadingTimeBadge = detail.ReadingTimeBadge;
@@ -342,15 +376,57 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
+    }
+
+    /// <summary>
+    /// Replays a visited entry from its resolved snapshot - body, family tree,
+    /// map pins, dedication lines and occurrence rows exactly as they loaded,
+    /// with no network or local-DB dependency (#2640).
+    /// </summary>
+    private void RestoreEntry(EntrySnapshot snapshot)
+    {
+        ApplyEntryBody(snapshot.Detail);
+        FamilyTree = snapshot.FamilyTree;
+        PlaceMarkers = snapshot.PlaceMarkers;
+        Occurrences = snapshot.Occurrences;
+        DedicationLines = snapshot.DedicationLines;
+        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        OnPropertyChanged(nameof(HasContent));
+        OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasOccurrences));
+        OnPropertyChanged(nameof(ShowNoContentNotice));
+    }
+
+    private async Task SetEntryAsync(TanahpediaEntryDetail detail, CancellationToken ct)
+    {
+        var version = _loadVersion;
+        // The destination may lack the previous entry's deferred sections -
+        // reset them with the swap so no stale tree, map or rows linger.
+        FamilyTree = null;
+        PlaceMarkers = [];
+        Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
+        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        DedicationLines = [];
+
+        ApplyEntryBody(detail);
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
         OnPropertyChanged(nameof(ShowNoContentNotice));
 
         await Task.WhenAll(
             LoadOccurrencesAsync(detail.Occurrences),
-            LoadEntityExtrasAsync(detail),
-            LoadDedicationsAsync(detail.Id));
+            LoadEntityExtrasAsync(detail, ct),
+            LoadDedicationsAsync(detail.Id, ct));
         OnPropertyChanged(nameof(ShowNoContentNotice));
+
+        // Snapshot the resolved surface for Back/re-hop replay - only while
+        // this load still owns the page, so a superseded load leaves the
+        // entry uncached and a revisit resolves it fresh (#2640).
+        if (version == _loadVersion)
+        {
+            _entryCache[UniqueName] =
+                new EntrySnapshot(detail, FamilyTree, PlaceMarkers, DedicationLines, Occurrences);
+        }
     }
 
     /// <summary>
@@ -359,17 +435,21 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// An in-place entry hop must not show the previous entry's lines — stale
     /// responses are discarded by the entry load version.
     /// </summary>
-    private async Task LoadDedicationsAsync(string entryId)
+    private async Task LoadDedicationsAsync(string entryId, CancellationToken ct)
     {
         var version = _loadVersion;
         try
         {
             var dedications = await _dedicationService.GetDedicationsAsync(
-                new DedicationContext { EntryIds = [entryId] }, CancellationToken.None);
+                new DedicationContext { EntryIds = [entryId] }, ct);
             if (version == _loadVersion)
             {
                 DedicationLines = DedicationFormatter.FormatAll(dedications);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
         catch (Exception ex) //NOSONAR — dedication lines are best-effort.
@@ -390,33 +470,40 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// tolerance as occurrences and the website's try/catch around these
     /// loads).
     /// </summary>
-    private async Task LoadEntityExtrasAsync(TanahpediaEntryDetail detail)
+    private async Task LoadEntityExtrasAsync(TanahpediaEntryDetail detail, CancellationToken ct)
     {
         var tasks = new List<Task>();
 
         var person = detail.Entities.FirstOrDefault(e => e.EntityType == "PERSON");
         if (person is not null)
         {
-            tasks.Add(LoadFamilyAsync(person.EntityId));
+            tasks.Add(LoadFamilyAsync(person.EntityId, ct));
         }
 
         if (detail.Entities.Any(e => e.EntityType == "PLACE"))
         {
-            tasks.Add(LoadMarkersAsync(detail.Id));
+            tasks.Add(LoadMarkersAsync(detail.Id, ct));
         }
 
         await Task.WhenAll(tasks);
     }
 
-    private async Task LoadFamilyAsync(string entityId)
+    private async Task LoadFamilyAsync(string entityId, CancellationToken ct)
     {
+        var version = _loadVersion;
         try
         {
-            var family = await _service.GetPersonFamilyAsync(entityId, CancellationToken.None);
-            if (family is not null)
+            var family = await _service.GetPersonFamilyAsync(entityId, ct);
+            // A superseded hop's late family section must not land on the
+            // newer entry - same version guard as dedications (#2640).
+            if (family is not null && version == _loadVersion)
             {
                 FamilyTree = TanahpediaFamily.BuildTree(family);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: family-section load is best-effort
         catch (Exception ex) //NOSONAR — family-section load is best-effort.
@@ -426,11 +513,22 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
     }
 
-    private async Task LoadMarkersAsync(string entryId)
+    private async Task LoadMarkersAsync(string entryId, CancellationToken ct)
     {
+        var version = _loadVersion;
         try
         {
-            PlaceMarkers = await _service.GetPlaceMarkersAsync(entryId, CancellationToken.None) ?? [];
+            var markers = await _service.GetPlaceMarkersAsync(entryId, ct);
+            // A superseded hop's late map section must not land on the newer
+            // entry (#2640).
+            if (version == _loadVersion)
+            {
+                PlaceMarkers = markers ?? [];
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer entry load - the newer load owns state.
         }
         #pragma warning disable S2221 // Deliberate failure boundary: place-marker load is best-effort
         catch (Exception ex) //NOSONAR — place-marker load is best-effort.
@@ -447,6 +545,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// </summary>
     private async Task LoadOccurrencesAsync(List<TanahpediaEntryOccurrence> occurrences)
     {
+        var version = _loadVersion;
         try
         {
             if (!_perekData.IsLoaded)
@@ -497,8 +596,13 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 }
             }
 
-            Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>(items);
-            OnPropertyChanged(nameof(HasOccurrences));
+            // A superseded hop's late occurrences table must not land on the
+            // newer entry (#2640).
+            if (version == _loadVersion)
+            {
+                Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>(items);
+                OnPropertyChanged(nameof(HasOccurrences));
+            }
         }
         #pragma warning disable S2221 // Deliberate failure boundary: occurrences mapping failure drops the table, not the page
         catch (Exception ex) //NOSONAR — occurrences mapping failure drops the table, not the page.
@@ -509,7 +613,13 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
     }
 
-    /// <summary>Opens an entry by its canonical unique name (internal links, alias rows).</summary>
+    /// <summary>
+    /// Opens an entry by name (internal links, alias rows, map pins): the
+    /// requested name can be canonical, a synonym or ambiguous - the load
+    /// resolves all three. Rides the same in-place trail as the family-tree
+    /// hop: a page push per link tap is what accumulated pages, handlers and
+    /// native views until repeated navigation crashed on iOS (#2640).
+    /// </summary>
     [RelayCommand]
     public async Task OpenEntryAsync(string? uniqueName)
     {
@@ -518,17 +628,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        try
-        {
-            await _navigationGate.RunAsync(() =>
-                _navigator.GoToAsync(AppRoutes.TanahpediaEntry(uniqueName)));
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
-        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Entry navigation failed for {uniqueName}: {ex}");
-        }
+        await HopToEntryAsync(uniqueName);
     }
 
     /// <summary>
@@ -544,8 +644,20 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
+        await HopToEntryAsync(uniqueName);
+    }
+
+    /// <summary>
+    /// The shared entry hop: the current name goes onto the trail and the
+    /// requested name loads in place. Back replays the trail, so entry hops
+    /// keep the pushed-page history UX without stacking a page per tap - the
+    /// whole entry navigation surface stays bounded to this one page (#2640).
+    /// </summary>
+    private async Task HopToEntryAsync(string uniqueName)
+    {
         _entryHistory.Push(UniqueName);
         OnPropertyChanged(nameof(HasEntryHistory));
+        LastChangeWasTrailReplay = false;
         UniqueName = uniqueName;
         await SwitchToCurrentEntryAsync();
     }
@@ -591,6 +703,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             {
                 if (_entryHistory.Count > 0)
                 {
+                    LastChangeWasTrailReplay = true;
                     UniqueName = _entryHistory.Pop();
                     OnPropertyChanged(nameof(HasEntryHistory));
                     await SwitchToCurrentEntryAsync();
