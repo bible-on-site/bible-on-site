@@ -298,7 +298,14 @@ async function completedBuild(
 	{ github = githubCli } = {},
 ) {
 	const prefix = `repos/${repository}/actions/runs/${run}/attempts/${attempt}`;
-	const metadata = await github(prefix);
+	let metadata;
+	try {
+		metadata = await github(prefix);
+	} catch {
+		// A deleted CI run cannot be verified and no longer needs access; the
+		// sweep keeps its leases reported rather than aborting other builds.
+		throw new Error(`Completed CI attempt ${run}/${attempt} is no longer recorded`);
+	}
 	if (
 		String(metadata.id) !== run ||
 		String(metadata.run_attempt) !== attempt ||
@@ -567,7 +574,9 @@ export async function cleanupCompletedBuilds(
 			// completion event sweeps it later. Any other failure (AWS, rule
 			// ownership, revoke confirmation) fails the run like cleanup-run.
 			if (
-				/completed CI attempt|active, incomplete/.test(error.message)
+				/completed CI attempt|active, incomplete|no longer recorded/.test(
+					error.message,
+				)
 			)
 				skipped.push(`${run}/${attempt}: ${error.message}`);
 			else throw error;
