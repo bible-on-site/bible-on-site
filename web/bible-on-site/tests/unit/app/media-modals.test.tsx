@@ -192,6 +192,33 @@ describe("JournalismGallery", () => {
 			expect(opener).toHaveFocus();
 		});
 
+		it("wraps Tab onto itself when the nav buttons are hidden", () => {
+			// jsdom has no checkVisibility; stub it so the nav buttons read
+			// hidden, matching the ≤768px stylesheet where they are display:none.
+			const proto = HTMLElement.prototype as {
+				checkVisibility?: () => boolean;
+			};
+			const real = proto.checkVisibility;
+			proto.checkVisibility = function (this: HTMLElement) {
+				return !this.className.includes("modalNav");
+			};
+			try {
+				render(<JournalismGallery items={ITEMS} />);
+				openModal();
+				const closeButton = screen.getByRole("button", { name: "סגור" });
+				closeButton.focus();
+
+				fireEvent.keyDown(closeButton, { key: "Tab" });
+				expect(closeButton).toHaveFocus();
+
+				fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+				expect(closeButton).toHaveFocus();
+			} finally {
+				if (real) proto.checkVisibility = real;
+				else delete proto.checkVisibility;
+			}
+		});
+
 		it("keeps Enter and Space on the nav buttons inside the dialog", () => {
 			render(<JournalismGallery items={ITEMS} />);
 			const dialog = openModal();
