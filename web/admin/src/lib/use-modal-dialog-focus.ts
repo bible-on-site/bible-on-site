@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR =
-	"a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex='-1'])";
+	"a[href], button:not([disabled]), textarea, input, select, summary, [tabindex]:not([tabindex='-1'])";
 
 /**
  * Modal-dialog focus contract (the same one the website's

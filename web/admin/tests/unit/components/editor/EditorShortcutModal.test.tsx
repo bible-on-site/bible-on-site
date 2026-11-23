@@ -196,6 +196,13 @@ describe("EditorShortcutModal", () => {
 		expect(search).toHaveFocus();
 		expect(fireEvent.keyDown(textarea, { key: "Tab" })).toBe(true);
 
+		// <summary> is natively tabbable and sits in the trap's list — from it,
+		// forward Tab advances into the advanced section instead of wrapping.
+		const summary = screen.getByText("מתקדם: קיצורים נוספים (JSON)");
+		summary.focus();
+		expect(fireEvent.keyDown(summary, { key: "Tab" })).toBe(true);
+		expect(summary).toHaveFocus();
+
 		// On close the focus goes back to the element that opened the modal.
 		utils.rerender(
 			<EditorShortcutModal
