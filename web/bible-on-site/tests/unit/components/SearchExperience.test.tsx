@@ -450,7 +450,7 @@ describe("SearchExperience", () => {
 		);
 		await act(async () => {});
 		expect(mockFetch).toHaveBeenCalledWith(
-			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent('רש"י')}`,
+			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent('רש"י')}&note=0`,
 		);
 		expect(screen.getByRole("tooltip")).toHaveTextContent("הערת רשי");
 	});

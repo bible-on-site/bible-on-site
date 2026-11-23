@@ -47,13 +47,20 @@ describe("parsePasukRefFromHref", () => {
 			parsePasukRefFromHref(
 				"/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=0&q=%D7%A4%D7%A1%D7%95%D7%A7",
 			),
-		).toEqual({ perekId: 1, pasuk: 3, perush: "רשי" });
+		).toEqual({ perekId: 1, pasuk: 3, perush: "רשי", note: 0 });
+	});
+
+	it("captures the note index of perush-search links", () => {
+		expect(
+			parsePasukRefFromHref("/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=2"),
+		).toEqual({ perekId: 1, pasuk: 3, perush: "רשי", note: 2 });
 	});
 
 	it("parses pasuk anywhere in the query params", () => {
 		expect(parsePasukRefFromHref("/929/1?note=0&pasuk=3")).toEqual({
 			perekId: 1,
 			pasuk: 3,
+			note: 0,
 		});
 	});
 
@@ -140,7 +147,7 @@ describe("PasukPreviewLink", () => {
 			}),
 		} as Response);
 		render(
-			<PasukPreviewLink href="/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=0&q=x">
+			<PasukPreviewLink href="/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=2&q=x">
 				רשי בראשית א ג
 			</PasukPreviewLink>,
 		);
@@ -151,7 +158,7 @@ describe("PasukPreviewLink", () => {
 			expect(screen.getByRole("tooltip")).toHaveTextContent("הערת רשי");
 		});
 		expect(fetchMock).toHaveBeenCalledWith(
-			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent("רשי")}`,
+			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent("רשי")}&note=2`,
 		);
 	});
 
