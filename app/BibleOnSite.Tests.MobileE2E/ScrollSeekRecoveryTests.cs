@@ -39,11 +39,13 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
         // The drawer's ScrollView carries no AutomationId on Android; a drawer
         // item marks it open.
         Page.WaitFor("FlyoutAlHaperek");
-        // Same overshoot inside the flyout drawer. At densities where the
-        // item list fits the drawer exactly (the Android CI emulator), no
-        // item can scroll off its top edge — skip there rather than assert
-        // an unreachable precondition.
-        var id = "FlyoutPreferences";
+        // Same overshoot inside the flyout drawer on its FIRST row: a bottom
+        // row can never pass the top edge (the scroll clamps at the end), but
+        // a leading row does once deeper items fill the viewport. At densities
+        // where the item list already fits the drawer (the Android CI
+        // emulator), nothing can scroll off — skip rather than assert an
+        // unreachable precondition.
+        var id = "FlyoutAlHaperek";
         if (!ScrolledOffscreen(id, () => Page.DragFlyoutSurface(down: true)))
         {
             Assert.Skip($"the flyout fits its viewport at this density, so {id} cannot overshoot");

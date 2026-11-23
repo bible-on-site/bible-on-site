@@ -369,9 +369,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     private Rectangle FlyoutViewport()
     {
-        var drawer = WaitFor(platform.FlyoutScroller);
-        return Rectangle.Intersect(new Rectangle(drawer.Location, drawer.Size),
-            new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
+        Rectangle drawer = default;
+        // Read the frame inside the poll: a replaced drawer view throws
+        // StaleElementReference on the read, which WaitFor retries.
+        WaitFor(platform.FlyoutScroller, element =>
+        {
+            drawer = new Rectangle(element.Location, element.Size);
+            return true;
+        });
+        return Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
     }
 
     private void DragFlyout(Rectangle viewport, bool down)
