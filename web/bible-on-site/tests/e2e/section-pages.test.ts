@@ -75,4 +75,22 @@ test.describe("Section pages", () => {
 		const response = await page.goto("/no-such-section");
 		expect(response?.status()).toBe(404);
 	});
+
+	// The accessibility statement promises reduced-motion is honored: the
+	// global smooth-scroll rule and the ScrollToSection effect must both
+	// flatten to an instant jump under prefers-reduced-motion.
+	test("landing scroll stays smooth by default", async ({ page }) => {
+		await page.goto("/contact");
+		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "smooth");
+		await expect(page.locator("#contact")).toBeInViewport();
+	});
+
+	test("landing scroll jumps instantly under reduced motion", async ({
+		page,
+	}) => {
+		await page.emulateMedia({ reducedMotion: "reduce" });
+		await page.goto("/contact");
+		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
+		await expect(page.locator("#contact")).toBeInViewport();
+	});
 });
