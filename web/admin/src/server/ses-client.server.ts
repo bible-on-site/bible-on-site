@@ -495,11 +495,15 @@ export class SesClient {
 	 * inside the provider call itself remains a SES last-writer window no
 	 * client can close.
 	 *
-	 * The re-read is best-effort: a successful UpdateContact already applied
-	 * the opt-out, and SES paces contact operations to about one request per
-	 * second, so a throttled or otherwise failed verification must not
-	 * report a false failed mirror — the pending-mirror retry reconciles a
-	 * genuinely lost write.
+	 * The settle re-read is the verdict, never a formality: a failed
+	 * verification proves neither that the write settled nor that a racing
+	 * update superseded it, so it loops back to a fresh read rather than
+	 * reporting either outcome. SES paces contact operations to about one
+	 * request per second, so a throttled settle read is routine and simply
+	 * gets another convergence round; a mirror that never verifies reports
+	 * `uncertain` and stays on the pending-mirror retry list, which can
+	 * reconcile a write another preference update superseded before the
+	 * verification landed.
 	 */
 	async unsubscribeTopic(
 		email: string,
@@ -537,12 +541,11 @@ export class SesClient {
 				throw requestError(error, true, "update-contact");
 			}
 			const settled = await this.getContact(normalized).catch(() => null);
-			if (
-				!settled ||
-				settled.unsubscribeAll ||
-				settled.topics[topic] === "OPT_OUT"
-			)
-				return;
+			// Unverified is not verified: a failed settle read cannot tell a
+			// landed opt-out from one a racing update just superseded, so keep
+			// converging on a fresh read instead of claiming success.
+			if (!settled) continue;
+			if (settled.unsubscribeAll || settled.topics[topic] === "OPT_OUT") return;
 		}
 		throw new SesError(
 			"SES topic opt-out did not settle after retrying",

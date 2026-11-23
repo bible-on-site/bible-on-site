@@ -193,6 +193,19 @@ describe("BulletinEmailEngagement", () => {
 		expect(screen.getByText("מסנכרן...")).toBeDefined();
 		resolveConfirm?.();
 		await waitFor(() => expect(screen.queryByText("מסיר...")).toBeNull());
+		// The sync-retry label must also hold while the retry itself runs.
+		fireEvent.click(
+			await screen.findByRole("button", { name: "ניסיון סנכרון חוזר" }),
+		);
+		expect(await screen.findByText("מסנכרן...")).toBeDefined();
+		expect(screen.queryByText("מסיר...")).toBeNull();
+		await waitFor(() =>
+			expect(mocks.confirm).toHaveBeenLastCalledWith({
+				data: { subscriberId: 9 },
+			}),
+		);
+		resolveConfirm?.();
+		await waitFor(() => expect(screen.queryByText("מסנכרן...")).toBeNull());
 	});
 	it("keeps a failed SES mirror reachable with an explicit retry", async () => {
 		mocks.read.mockResolvedValue(

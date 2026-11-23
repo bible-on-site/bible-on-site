@@ -427,18 +427,56 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("update")).toHaveLength(2);
 	});
 	it.each([429, 500])(
-		"treats the settle read as best-effort once the write lands (HTTP %s)",
+		"re-verifies on a fresh read when the settle read fails (HTTP %s)",
 		async (status) => {
 			mocks.send
 				.mockResolvedValueOnce(contact())
 				.mockResolvedValueOnce({}) // UpdateContact
-				.mockRejectedValueOnce(sdkError(status, "TooManyRequestsException"));
+				.mockRejectedValueOnce(sdkError(status, "TooManyRequestsException"))
+				// The next convergence round reads fresh state: the opt-out
+				// landed, so the mirror verifies without rewriting.
+				.mockResolvedValueOnce({
+					...contact(),
+					TopicPreferences: [
+						{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+						{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+					],
+				});
 			await new SesClient(config).unsubscribeTopic(request.to, "real");
-			// The write applied the opt-out; a throttled or failed verification
-			// must not report a false failed mirror.
 			expect(calls("update")).toHaveLength(1);
 		},
 	);
+	it("re-asserts a topic opt-out a racing update dropped while verification failed", async () => {
+		mocks.send
+			.mockResolvedValueOnce(contact()) // read
+			.mockResolvedValueOnce({}) // first UpdateContact
+			.mockRejectedValueOnce(sdkError(500, "TooManyRequestsException")) // settle read fails
+			.mockResolvedValueOnce(contact()) // fresh read: the opt-out was superseded
+			.mockResolvedValueOnce({}) // second UpdateContact re-asserts it
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			});
+		await new SesClient(config).unsubscribeTopic(request.to, "real");
+		expect(calls("update")).toHaveLength(2);
+	});
+	it("reports uncertain instead of an unverified success when verification never lands", async () => {
+		let gets = 0;
+		mocks.send.mockImplementation(async (command: { kind: string }) => {
+			// Every settle read fails while the attempt's fresh read succeeds:
+			// the writes may have landed but no verification ever proves it.
+			if (command.kind === "get" && ++gets % 2 === 0)
+				throw sdkError(429, "TooManyRequestsException");
+			return command.kind === "get" ? contact() : {};
+		});
+		await expect(
+			new SesClient(config).unsubscribeTopic(request.to, "real"),
+		).rejects.toMatchObject({ outcome: "uncertain" });
+		expect(calls("update")).toHaveLength(3);
+	});
 	it("fails uncertain rather than looping forever when the opt-out never settles", async () => {
 		mocks.send.mockImplementation(async (command: { kind: string }) =>
 			command.kind === "get" ? contact() : {},
