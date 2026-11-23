@@ -2,14 +2,16 @@ import { expect, test } from "../util/playwright/test-fixture";
 
 // Hebrew roots arrive percent-encoded in the URL; the navigation wait below
 // decodes the pathname before comparing it to each item's semantic href.
+// Item names are the full accessible names — label plus the visible subtitle
+// added in #3731. The קבוצת ווטסאפ row left the drawer in that issue; its
+// join action keeps living on the bulletin card.
 const MENU_ITEMS = [
-	["מסורה על הפרק", "/מסורה"],
-	["לוח לימוד יומי", "/לוח"],
-	["הרבנים", "/929/authors"],
-	["תנכפדיה", "/pedia"],
-	["עלון יומי", "/dailyBulletin"],
-	["קבוצת ווטסאפ", "/whatsappGroup"],
-	["תנאי שימוש", "/tos"],
+	["מסורה על הפרק חלוקת המסורה היהודית הקדומה", "/מסורה"],
+	["לוח לימוד יומי לוח עזר פרקים לפי תאריך", "/לוח"],
+	["הרבנים איתור מאמרים לפי המחברים", "/929/authors"],
+	['תנכפדיה אנציקלופדיה תנ"כית', "/pedia"],
+	["עלון יומי הפרק היומי והמאמרים ישירות אליכם", "/dailyBulletin"],
+	["תנאי שימוש והצהרות פרטיות ונגישות", "/tos"],
 	["יישומון", "/app"],
 	["צור קשר", "/contact"],
 	["תרומות", "/donation"],

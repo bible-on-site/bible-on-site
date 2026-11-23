@@ -1,161 +1,176 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	PUSH_MESSAGES,
+	PUSH_SECTION_ID,
+	PUSH_STATUS_EVENT,
+	type PushState,
+	type PushStatus,
+	readPushState,
+	requestAndSubscribePush,
+	subscribePush,
+	unsubscribePush,
+} from "@/lib/push-notifications";
+import cardStyles from "./DailyBulletinSection.module.css";
 import styles from "./PushNotificationsToggle.module.css";
 
-const SUBSCRIPTION_API = "/api/push/subscription";
-const SERVICE_WORKER_URL = "/sw.js";
+/**
+ * Shared subscription state and operations for the daily perek browser
+ * reminder (#3732). The dedicated bulletin card and the reader settings
+ * dropdown both drive the same browser subscription through this hook, and
+ * a same-tab event keeps every mounted surface in sync (a reload re-reads
+ * the real state anyway).
+ */
+export function usePushSubscription({ auto = true }: { auto?: boolean } = {}) {
+	const [state, setState] = useState<PushState>({
+		status: "loading",
+		publicKey: null,
+	});
+	const [busy, setBusy] = useState(false);
 
-type Status =
-	| "loading"
-	| "hidden"
-	| "unsupported"
-	| "denied"
-	| "off"
-	| "on"
-	| "error";
+	const refresh = useCallback(async () => {
+		try {
+			setState(await readPushState());
+		} catch (error) {
+			console.warn("Push notification status check failed", error);
+			setState({ status: "hidden", publicKey: null });
+		}
+	}, []);
 
-const MESSAGES: Partial<Record<Status, string>> = {
-	unsupported: "הדפדפן הזה אינו תומך בהתראות.",
-	denied:
-		"ההתראות חסומות בדפדפן. כדי לקבל אותן יש לאפשר התראות לאתר בהגדרות הדפדפן.",
-	on: "ההתראה היומית פעילה. אפשר לבטל אותה כאן בכל עת.",
-	error: "לא הצלחנו לעדכן את ההתראות. נסו שוב.",
-};
+	useEffect(() => {
+		if (auto) void refresh();
+		const synced = (event: Event) =>
+			setState((current) => ({
+				...current,
+				status: (event as CustomEvent<PushStatus>).detail,
+			}));
+		window.addEventListener(PUSH_STATUS_EVENT, synced);
+		return () => window.removeEventListener(PUSH_STATUS_EVENT, synced);
+	}, [auto, refresh]);
 
-/** `applicationServerKey` as bytes: Safari rejects the base64url string form. */
-export function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
-	const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-	const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
-	return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
+	const run = useCallback(async (action: () => Promise<PushStatus>) => {
+		setBusy(true);
+		let next: PushStatus = "error";
+		try {
+			next = await action();
+			setState((current) => ({ ...current, status: next }));
+		} catch (error) {
+			console.warn("Push notification toggle failed", error);
+			setState((current) => ({ ...current, status: "error" }));
+		} finally {
+			setBusy(false);
+			window.dispatchEvent(
+				new CustomEvent<PushStatus>(PUSH_STATUS_EVENT, { detail: next }),
+			);
+		}
+		return next;
+	}, []);
 
-function isPushSupported(): boolean {
-	return (
-		"serviceWorker" in navigator &&
-		"PushManager" in window &&
-		"Notification" in window
+	// The controls only render for interactive states, which are only
+	// reachable after the VAPID key loaded.
+	/** Section-only path: requestPermission must stay behind this click. */
+	const requestEnable = useCallback(
+		() =>
+			run(async () => {
+				/* istanbul ignore next: controls render only after the key loads */
+				if (!state.publicKey) throw new Error("push public key not loaded");
+				return requestAndSubscribePush(state.publicKey);
+			}),
+		[run, state.publicKey],
 	);
-}
+	/** Already-granted path: subscribes without any permission prompt. */
+	const subscribe = useCallback(
+		() =>
+			run(async () => {
+				/* istanbul ignore next: controls render only after the key loads */
+				if (!state.publicKey) throw new Error("push public key not loaded");
+				return subscribePush(state.publicKey);
+			}),
+		[run, state.publicKey],
+	);
+	const disable = useCallback(() => run(unsubscribePush), [run]);
 
-async function currentSubscription(): Promise<PushSubscription | null> {
-	const registration =
-		await navigator.serviceWorker.getRegistration(SERVICE_WORKER_URL);
-	return (await registration?.pushManager.getSubscription()) ?? null;
+	return { ...state, busy, refresh, requestEnable, subscribe, disable };
 }
 
 /**
- * Opt-in/out control for the daily perek browser notification (#1096). The
- * service worker is only registered when the reader opts in, so visitors who
- * never enable notifications get no worker at all. Renders nothing when the
- * deployment has push turned off.
+ * The dedicated browser-reminder card, mounted inside the bulletin section
+ * alongside the Telegram, WhatsApp and email cards (#3732). The service
+ * worker is only registered when the reader opts in, so visitors who never
+ * enable notifications get no worker at all. Renders nothing while loading
+ * or when the deployment has push turned off.
+ *
+ * Enable/disable controls: `requestEnable` is the only call path that can
+ * reach `Notification.requestPermission()`, and it runs exclusively from a
+ * direct click on this card's enable button.
  */
 export function PushNotificationsToggle() {
-	const [status, setStatus] = useState<Status>("loading");
-	const [publicKey, setPublicKey] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
+	const push = usePushSubscription();
+	const cardRef = useRef<HTMLElement>(null);
 
+	// The reader dropdown navigates here (PUSH_SECTION_HREF) when a permission
+	// prompt is required; once the state load resolves and the card exists it
+	// takes focus — focusing is a read-only operation, never a prompt (#3732).
 	useEffect(() => {
-		let active = true;
-		(async () => {
-			const response = await fetch(SUBSCRIPTION_API);
-			if (!response.ok) return "hidden";
-			const { publicKey: key } = (await response.json()) as {
-				publicKey: string | null;
-			};
-			if (!key) return "hidden";
-			// iPhone/iPad ordinary tabs land here too: Apple limits iOS Web Push
-			// to Home Screen apps, and the product decision is to report
-			// "unsupported" rather than funnel readers into installing (#2936).
-			if (!isPushSupported()) return "unsupported";
-			setPublicKey(key);
-			if (Notification.permission === "denied") return "denied";
-			return (await currentSubscription()) ? "on" : "off";
-		})()
-			.catch((error: unknown) => {
-				console.warn("Push notification status check failed", error);
-				return "hidden" as const;
-			})
-			.then((next) => {
-				if (active) setStatus(next);
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
+		if (
+			push.status !== "loading" &&
+			push.status !== "hidden" &&
+			window.location.hash === `#${PUSH_SECTION_ID}`
+		)
+			cardRef.current?.focus();
+	}, [push.status]);
 
-	async function enable(key: string): Promise<Status> {
-		const permission = await Notification.requestPermission();
-		if (permission !== "granted")
-			return permission === "denied" ? "denied" : "off";
-		const registration = await navigator.serviceWorker.register(
-			SERVICE_WORKER_URL,
-			{ scope: "/", updateViaCache: "none" },
-		);
-		await navigator.serviceWorker.ready;
-		const subscription = await registration.pushManager.subscribe({
-			userVisibleOnly: true,
-			applicationServerKey: base64UrlToBytes(key),
-		});
-		const response = await fetch(SUBSCRIPTION_API, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(subscription.toJSON()),
-		});
-		if (!response.ok) {
-			await subscription.unsubscribe();
-			return "error";
-		}
-		return "on";
-	}
-
-	async function disable(): Promise<Status> {
-		const subscription = await currentSubscription();
-		if (subscription) {
-			const response = await fetch(SUBSCRIPTION_API, {
-				method: "DELETE",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ endpoint: subscription.endpoint }),
-			});
-			if (!response.ok) return "error";
-			await subscription.unsubscribe();
-		}
-		return "off";
-	}
-
-	async function toggle(checked: boolean) {
-		setBusy(true);
-		try {
-			// Interactive states are only reachable after the key loaded.
-			setStatus(checked ? await enable(publicKey as string) : await disable());
-		} catch (error) {
-			console.warn("Push notification toggle failed", error);
-			setStatus("error");
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	if (status === "loading" || status === "hidden") return null;
-	const interactive = status === "on" || status === "off" || status === "error";
+	if (push.status === "loading" || push.status === "hidden") return null;
+	const interactive =
+		push.status === "on" || push.status === "off" || push.status === "error";
 
 	return (
-		<section className={styles.push} aria-labelledby="push-notifications-title">
-			<h3 id="push-notifications-title">התראה יומית בדפדפן</h3>
+		<article
+			id={PUSH_SECTION_ID}
+			ref={cardRef}
+			// Programmatic focus target for the dropdown's navigation path.
+			tabIndex={-1}
+			className={`${cardStyles.card} ${cardStyles.cardPush}`}
+			aria-labelledby="push-notifications-title"
+		>
+			<Image
+				className={cardStyles.cardIcon}
+				src="/icons/bell.svg"
+				alt=""
+				width={40}
+				height={40}
+			/>
+			<h3 id="push-notifications-title" className={cardStyles.cardTitle}>
+				דפדפן
+			</h3>
+			<p className={cardStyles.cardText}>
+				התראה יומית בדפדפן - הפרק היומי ישירות אליכם.
+			</p>
 			{interactive && (
-				<label className={styles.toggle}>
-					<input
-						type="checkbox"
-						checked={status === "on"}
-						disabled={busy}
-						onChange={(event) => toggle(event.target.checked)}
-					/>
-					<span>קבלו בכל יום לימוד התראה עם הפרק היומי</span>
-				</label>
+				<div className={styles.actions}>
+					<button
+						type="button"
+						className={cardStyles.cardAction}
+						disabled={push.busy || push.status === "on"}
+						onClick={push.requestEnable}
+					>
+						הפעלת התראות
+					</button>
+					<button
+						type="button"
+						className={styles.disableAction}
+						disabled={push.busy || push.status !== "on"}
+						onClick={push.disable}
+					>
+						ביטול התראות
+					</button>
+				</div>
 			)}
 			<p className={styles.status} role="status">
-				{MESSAGES[status] ?? ""}
+				{PUSH_MESSAGES[push.status] ?? ""}
 			</p>
-		</section>
+		</article>
 	);
 }

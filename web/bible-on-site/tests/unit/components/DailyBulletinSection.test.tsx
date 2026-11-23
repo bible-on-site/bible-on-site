@@ -10,10 +10,15 @@ jest.mock("next/image", () => ({
 	),
 }));
 
+// The browser-reminder card has its own suite; it fetches its state on mount.
+jest.mock("@/app/components/PushNotificationsToggle", () => ({
+	PushNotificationsToggle: () => <article id="bulletin-push" />,
+}));
+
 import { DailyBulletinSection } from "@/app/components/DailyBulletinSection";
 
 describe("DailyBulletinSection", () => {
-	it("renders exactly three join cards with stable first-party actions", () => {
+	it("renders the three provider cards plus the browser-reminder card (#3732)", () => {
 		render(<DailyBulletinSection />);
 		expect(
 			screen.getByRole("heading", { name: "עלון יומי" }),
@@ -35,6 +40,8 @@ describe("DailyBulletinSection", () => {
 		expect(container.querySelector("#bulletin-telegram")).not.toBeNull();
 		expect(container.querySelector("#bulletin-whatsapp")).not.toBeNull();
 		expect(container.querySelector("#bulletin-email")).not.toBeNull();
+		// The reader settings dropdown navigates here to ask for permission.
+		expect(container.querySelector("#bulletin-push")).not.toBeNull();
 	});
 
 	it("renders the shared shaped edge separating it from the sefarim shelf", () => {

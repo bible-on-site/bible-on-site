@@ -47,7 +47,10 @@ test.describe("מסורה reading root", () => {
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 		await page
 			.locator("#main-menu")
-			.getByRole("link", { name: "מסורה על הפרק", exact: true })
+			.getByRole("link", {
+				name: "מסורה על הפרק חלוקת המסורה היהודית הקדומה",
+				exact: true,
+			})
 			.click();
 		await page.waitForURL(
 			(url) => decodeURIComponent(url.pathname) === "/מסורה",
