@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+	type ComponentPropsWithoutRef,
 	type JSX,
 	type ReactNode,
 	useCallback,
@@ -28,22 +29,28 @@ interface PasukPreviewData {
 
 const previewCache = new Map<string, PasukPreviewData | null>();
 
-/** Extracts perekId+pasuk (and perush name for perush pages) from tanach hrefs. */
+/** Extracts perekId+pasuk (and perush name + note index for perush pages) from tanach hrefs. */
 export function parsePasukRefFromHref(
 	href: string,
-): { perekId: number; pasuk: number; perush?: string } | null {
-	const anchor = /^\/929\/(\d+)(?:\/([^?#]+))?(?:\?pasuk=(\d+)|#pasuk-(\d+))$/.exec(
-		href,
-	);
+): { perekId: number; pasuk: number; perush?: string; note?: number } | null {
+	// `?pasuk=N` may sit anywhere among the query params — perush-search links
+	// append `&note=` and `&q=` after it — so pasuk must be a whole `?`/`&`-delimited
+	// param ending in digits; `#pasuk-N` still always ends the href.
+	const anchor =
+		/^\/929\/(\d+)(?:\/([^?#]+))?(?:\?(?:[^#&]*?&)*?pasuk=(\d+)(?=[&#]|$)|#pasuk-(\d+)$)/.exec(
+			href,
+		);
 	if (!anchor) return null;
 	const pasukRaw = anchor[3] ?? anchor[4];
 	/* istanbul ignore next -- the regex alternation guarantees one pasuk group; defensive guard */
 	if (!pasukRaw) return null;
+	const noteRaw = /[?&]note=(\d+)(?=[&#]|$)/.exec(href)?.[1];
 	const perushSlug = anchor[2];
 	return {
 		perekId: Number(anchor[1]),
 		pasuk: Number(pasukRaw),
 		...(perushSlug ? { perush: decodeURIComponent(perushSlug) } : {}),
+		...(noteRaw ? { note: Number(noteRaw) } : {}),
 	};
 }
 
@@ -51,11 +58,14 @@ async function fetchPasukPreview(
 	perekId: number,
 	pasuk: number,
 	perush?: string,
+	note?: number,
 ): Promise<PasukPreviewData | null> {
-	const key = `${perekId}:${pasuk}:${perush ?? ""}`;
+	const key = `${perekId}:${pasuk}:${perush ?? ""}:${note ?? ""}`;
 	if (previewCache.has(key)) return previewCache.get(key) ?? null;
 	try {
-		const query = perush ? `?perush=${encodeURIComponent(perush)}` : "";
+		const query = perush
+			? `?perush=${encodeURIComponent(perush)}${note != null ? `&note=${note}` : ""}`
+			: "";
 		const res = await fetch(`/api/tanah/pasuk/${perekId}/${pasuk}${query}`);
 		if (!res.ok) {
 			previewCache.set(key, null);
@@ -75,11 +85,15 @@ export function PasukPreviewLink({
 	href,
 	className,
 	children,
+	...rest
 }: {
 	href: string;
 	className?: string;
-	children: ReactNode;
-}): JSX.Element {
+	children?: ReactNode;
+} & Omit<
+	ComponentPropsWithoutRef<"a">,
+	"href" | "className" | "children" | "onMouseEnter" | "onMouseLeave"
+>): JSX.Element {
 	const pasukRef = parsePasukRefFromHref(href);
 	const masking = useSyncExternalStore(
 		subscribeDivineNameMasking,
@@ -103,9 +117,12 @@ export function PasukPreviewLink({
 			}
 			setPosition({ x: e.clientX, y: e.clientY });
 			setVisible(true);
-			fetchPasukPreview(pasukRef.perekId, pasukRef.pasuk, pasukRef.perush).then(
-				setPreview,
-			);
+			fetchPasukPreview(
+				pasukRef.perekId,
+				pasukRef.pasuk,
+				pasukRef.perush,
+				pasukRef.note,
+			).then(setPreview);
 		},
 		[pasukRef],
 	);
@@ -158,6 +175,7 @@ export function PasukPreviewLink({
 	return (
 		<>
 			<Link
+				{...rest}
 				href={href}
 				className={className}
 				onMouseEnter={showPreview}
