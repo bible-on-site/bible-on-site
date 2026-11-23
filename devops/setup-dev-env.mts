@@ -358,6 +358,15 @@ async function runSyncFromProd(): Promise<void> {
 					"Production still uses MD5 in tanah_article.content_hash. Sync to a local MySQL 8.4 database until the SHA-2 migration is applied.",
 				);
 			}
+			if (
+				mysqlQuery(
+					prodDb,
+					"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND UPPER(EXTRA) LIKE '%MASKING POLICY%'",
+					tlsArgs,
+				).trim() !== "0"
+			) {
+				throw new Error("Local sync does not support column masking policies.");
+			}
 			prodWatermark = queryTableUpdateTimes(prodDb, tlsArgs);
 		}
 
@@ -368,6 +377,7 @@ async function runSyncFromProd(): Promise<void> {
 			...tlsArgs,
 			"--skip-lock-tables",
 			"--no-tablespaces",
+			"--loose-skip-masking-policies",
 			"--column-statistics=0",
 			"--set-gtid-purged=OFF",
 			"--routines",

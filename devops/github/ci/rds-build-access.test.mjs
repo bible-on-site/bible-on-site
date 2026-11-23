@@ -490,11 +490,14 @@ function dumpFixture(t, failures = {}) {
 	const env = {
 		...process.env,
 		CURL_EXIT: "0",
+		MASK_CHECK_EXIT: "0",
+		MASKED_COLUMNS: "0",
 		DUMP_EXIT: "0",
 		IMPORT_EXIT: "0",
 		RUNNER_TEMP: dir.replace(/\\/g, "/"),
 		GITHUB_OUTPUT: join(dir, "output").replace(/\\/g, "/"),
 		CURL_ARGS: join(dir, "curl.args").replace(/\\/g, "/"),
+		MASK_CHECK_ARGS: join(dir, "mask-check.args").replace(/\\/g, "/"),
 		DUMP_ARGS: join(dir, "dump.args").replace(/\\/g, "/"),
 		IMPORT_ARGS: join(dir, "import.args").replace(/\\/g, "/"),
 		IMPORTED_SQL: join(dir, "import.sql").replace(/\\/g, "/"),
@@ -506,7 +509,18 @@ function dumpFixture(t, failures = {}) {
 python3() { case "$*" in *u.hostname*) printf 'db.fixture.example 3306 ci fixture\n';; *) printf 'fixture-password';; esac; }
 curl() { printf '%s\0' "$@" > "$CURL_ARGS"; return "$CURL_EXIT"; }
 mysqldump() { printf '%s\0' "$@" > "$DUMP_ARGS"; printf 'CREATE DATABASE fixture;\n'; return "$DUMP_EXIT"; }
-mysql() { printf '%s\0' "$@" > "$IMPORT_ARGS"; cat > "$IMPORTED_SQL"; return "$IMPORT_EXIT"; }
+mysql() {
+  case "$*" in
+    *information_schema.COLUMNS*)
+      printf '%s\0' "$@" > "$MASK_CHECK_ARGS"
+      printf '%s\n' "$MASKED_COLUMNS"
+      return "$MASK_CHECK_EXIT"
+      ;;
+  esac
+  printf '%s\0' "$@" > "$IMPORT_ARGS"
+  cat > "$IMPORTED_SQL"
+  return "$IMPORT_EXIT"
+}
 `;
 	const result = spawnSync(
 		shell,
@@ -540,6 +554,10 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(dump.includes("--single-transaction"));
+	assert.ok(dump.includes("--loose-skip-masking-policies"));
+	const maskCheck = f.args(f.env.MASK_CHECK_ARGS);
+	assert.ok(maskCheck.includes("--ssl-mode=VERIFY_IDENTITY"));
+	assert.ok(maskCheck.includes("--database=fixture"));
 	// SSG needs the catalogs and existing note chapters together to preserve
 	// production commentary IDs and chapters absent from the incoming pack.
 	assert.ok(dump.includes("--databases"));
@@ -568,6 +586,8 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 
 for (const [stage, failure] of [
 	["CA download", { CURL_EXIT: "22" }],
+	["masking policy check", { MASK_CHECK_EXIT: "1" }],
+	["unsupported masking policy", { MASKED_COLUMNS: "1" }],
 	["production dump", { DUMP_EXIT: "2" }],
 	["local import", { IMPORT_EXIT: "1" }],
 ]) {
@@ -575,7 +595,7 @@ for (const [stage, failure] of [
 		const f = dumpFixture(t, failure);
 		assert.notEqual(f.result.status, 0);
 		assert.throws(() => readFileSync(f.env.GITHUB_OUTPUT), { code: "ENOENT" });
-		if (failure.CURL_EXIT)
+		if (failure.CURL_EXIT || failure.MASK_CHECK_EXIT || failure.MASKED_COLUMNS)
 			assert.throws(() => readFileSync(f.env.DUMP_ARGS), { code: "ENOENT" });
 	});
 }

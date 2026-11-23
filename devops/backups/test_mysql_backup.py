@@ -218,6 +218,22 @@ class BackupTests(unittest.TestCase):
             with self.assertRaises(backup.BackupError):
                 backup.catalog(self.source, self.directory, "phase")
 
+    def test_catalog_rejects_column_masking_policies(self):
+        rows = {
+            "TABLES": [{"type": "BASE TABLE", "engine": "InnoDB"}],
+            "COLUMNS": [{"extra": "MASKING POLICY"}],
+        }
+        self.source.query = MagicMock(
+            side_effect=lambda sql, directory, phase: [
+                json.dumps(row)
+                for table, values in rows.items()
+                if f".{table} " in sql
+                for row in values
+            ]
+        )
+        with self.assertRaisesRegex(backup.BackupError, "column masking policies"):
+            backup.catalog(self.source, self.directory, "phase")
+
     def test_export_uses_complete_nonlocking_dump_and_detects_failure(self):
         for code in [0, 1]:
             with patch.object(
@@ -235,6 +251,7 @@ class BackupTests(unittest.TestCase):
                 for flag in [
                     "--single-transaction",
                     "--no-tablespaces",
+                    "--loose-skip-masking-policies",
                     "--set-gtid-purged=OFF",
                     "--routines",
                     "--events",

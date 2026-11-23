@@ -307,11 +307,19 @@ jobs:
           curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
             https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
             --output "$RDS_CA_BUNDLE"
+          MASKED_COLUMNS=$(mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
+            --batch --skip-column-names --database="$DB_NAME" \
+            --execute="SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND UPPER(EXTRA) LIKE '%MASKING POLICY%'")
+          if [[ "$MASKED_COLUMNS" != 0 ]]; then
+            echo "::error::The SSG database snapshot does not support column masking policies"
+            exit 1
+          fi
           # Commentary catalogs and notes must be cloned before the additive
           # replay, so SSG uses the same IDs and retained chapters as RDS.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
             --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
-            --single-transaction --quick --no-tablespaces --column-statistics=0 \
+            --single-transaction --quick --no-tablespaces --loose-skip-masking-policies --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
             | sed -e 's/DEFINER[ ]*=[ ]*[^ ]* / /g' \

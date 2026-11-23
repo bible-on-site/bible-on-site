@@ -62,6 +62,8 @@ The worker streams `mysqldump` through gzip without writing an uncompressed
 production dump. It uses the regional RDS CA bundle and verifies the hostname.
 Routines, triggers, events, views, binary values and all tables are included;
 GTID state and tablespace administration are excluded.
+The MySQL 9.7 client skips Oracle Enterprise masking-policy definitions.
+The catalog check stops the export if an application column uses a masking policy.
 
 Before upload, it imports the compressed archive into a fresh, disposable
 MySQL server on `127.0.0.1`, with the event scheduler and local infile

@@ -306,6 +306,8 @@ def catalog(database, directory, phase):
         raise BackupError(
             "A consistent backup requires nonempty InnoDB application tables"
         )
+    if any("MASKING POLICY" in row["extra"].upper() for row in result["COLUMNS"]):
+        raise BackupError("Logical backup does not support column masking policies")
     return result
 
 
@@ -318,6 +320,9 @@ def dump_archive(database, path, directory):
             "--single-transaction",
             "--quick",
             "--no-tablespaces",
+            # MySQL 9.7 otherwise reads privileged system metadata. 8.4
+            # accepts the loose form, and the catalog check excludes policies.
+            "--loose-skip-masking-policies",
             "--column-statistics=0",
             "--set-gtid-purged=OFF",
             "--default-character-set=utf8mb4",
