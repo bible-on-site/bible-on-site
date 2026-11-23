@@ -188,6 +188,9 @@ const Sefer = (props: {
 	perekObj: PerekObj;
 	sefer: SefarimItem;
 	articles: ArticleSummary[];
+	/** לקריאה נוספת (#3752) for the current perek — verified secondary
+	 * coverage; other perakim's arrives through the batch summary fetch. */
+	furtherArticles?: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
@@ -210,6 +213,7 @@ const Sefer = (props: {
 	const {
 		perekObj,
 		articles,
+		furtherArticles,
 		perushim,
 		perekIds,
 		entityRefsByPerek,
@@ -686,6 +690,15 @@ const Sefer = (props: {
 										: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
 												?.articles
 							}
+							// Secondary-coverage recommendations ride a separate prop:
+							// the daily override replaces the primary list only (#3098),
+							// לקריאה נוספת always reflects coverage (#3752).
+							furtherArticles={
+								perekIdx === currentPerekIdx
+									? furtherArticles
+									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
+											?.furtherReading
+							}
 							perushim={
 								perekIdx === currentPerekIdx
 									? perushim
@@ -720,6 +733,7 @@ const Sefer = (props: {
 			activePerekId,
 			isVisible,
 			articles,
+			furtherArticles,
 			perushim,
 			batchSummaries,
 			dailyOverride,

@@ -375,6 +375,7 @@
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
             <controls:ReaderArticlesView Grid.Row="2"
                             x:Name="ArticlesCollection"
+                            IsGrouped="True"
                             EmptyText="אין מאמרים לפרק זה"
                             SelectedArticleId="{Binding SelectedArticleId}"/>
         </Grid>

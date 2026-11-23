@@ -233,6 +233,80 @@ public class StarterServiceTests
 
     #endregion
 
+    #region לקריאה נוספת — secondary-coverage recommendations (#3752)
+
+    private const string CoverageResponse = """
+        {"data":{"starter":{"authors":[{"id":1,"articlesCount":5,"details":"d","name":"מחבר"}],
+        "articles":[
+        {"id":10,"perekId":9,"authorId":1,"abstract":null,"name":"verified cross","priority":20,
+         "coverageVerified":true,"coveringSources":[{"perekId":2,"pasuk":3},{"perekId":2,"pasuk":7}]},
+        {"id":11,"perekId":8,"authorId":1,"abstract":null,"name":"verified far","priority":5,
+         "coverageVerified":true,"coveringSources":[{"perekId":2,"pasuk":1}]},
+        {"id":12,"perekId":2,"authorId":1,"abstract":null,"name":"own perek","priority":1,
+         "coverageVerified":true,"coveringSources":[{"perekId":2,"pasuk":4}]},
+        {"id":13,"perekId":7,"authorId":1,"abstract":null,"name":"unverified","priority":1,
+         "coverageVerified":false,"coveringSources":[{"perekId":2,"pasuk":5}]},
+        {"id":14,"perekId":6,"authorId":1,"abstract":null,"name":"unrelated","priority":1,
+         "coverageVerified":true,"coveringSources":[{"perekId":30,"pasuk":2}]}],
+        "perekArticlesCounters":[0,0,0,0,0,0,0,0,0]}}}
+        """;
+
+    [Fact]
+    public async Task GetFurtherReadingArticles_ReturnsVerifiedCrossPerekCoverageOrderedByPriority()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(CoverageResponse);
+        var service = new StarterService(http.Client, storage.FileSystem.Object);
+        await service.LoadAsync();
+
+        var articles = service.GetFurtherReadingArticles(2);
+
+        // Priority asc; the own-perek, unverified and unrelated rows stay out.
+        articles.Select(article => article.Id).Should().Equal(11, 10);
+    }
+
+    [Fact]
+    public async Task GetFurtherReadingArticles_DedupesAnArticleAcrossItsCoveringSources()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(CoverageResponse);
+        var service = new StarterService(http.Client, storage.FileSystem.Object);
+        await service.LoadAsync();
+
+        // Article 10 covers two pesukim of perek 2 — still one recommendation.
+        service.GetFurtherReadingArticles(2)
+            .Count(article => article.Id == 10).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetFurtherReadingArticles_NoMatches_ReturnsEmpty()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(CoverageResponse);
+        var service = new StarterService(http.Client, storage.FileSystem.Object);
+        await service.LoadAsync();
+
+        // Perek 3 is covered by nothing verified beyond its own (absent) list.
+        service.GetFurtherReadingArticles(3).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetFurtherReadingArticles_OlderPayloads_ReturnEmpty()
+    {
+        // Starter payloads (and cached JSON) written before coverage fields
+        // existed deserialize to unverified/no sources — no recommendations.
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(StarterWithoutOverridesResponse);
+        var service = new StarterService(http.Client, storage.FileSystem.Object);
+        await service.LoadAsync();
+
+        service.Articles.Should().OnlyContain(
+            a => !a.CoverageVerified && a.CoveringSources.Count == 0);
+        service.GetFurtherReadingArticles(2).Should().BeEmpty();
+    }
+
+    #endregion
+
     private static StarterService CreateService()
     {
         var constructor = typeof(StarterService).GetConstructor(

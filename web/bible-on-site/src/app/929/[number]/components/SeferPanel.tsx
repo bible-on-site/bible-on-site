@@ -57,6 +57,9 @@ interface SeferPanelProps {
 	/** Only the displayed chapter may start commentary reads. */
 	isActive?: boolean;
 	articles?: ArticleSummary[];
+	/** לקריאה נוספת (#3752): verified secondary coverage — articles primarily
+	 * attached to other perakim, rendered below this perek's own list. */
+	furtherArticles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
 	/** Sefer name scoping the perush-selection override (#2544). */
@@ -127,6 +130,7 @@ interface PasukGroup {
 export const SeferPanel = memo(function SeferPanel({
 	isActive = true,
 	articles = NO_ARTICLES,
+	furtherArticles = NO_ARTICLES,
 	perushim = NO_PERUSHIM,
 	perekId = 0,
 	seferName = "",
@@ -155,9 +159,12 @@ export const SeferPanel = memo(function SeferPanel({
 	const deepPerush = slug
 		? eligible.find((perush) => perush.name === slug)
 		: undefined;
+	// A recommendation card (#3752) opens embedded exactly like a primary one,
+	// so the slug lookup spans both lists.
 	const deepArticleSummary =
 		slug && !deepPerush
-			? articles.find((item) => String(item.id) === slug)
+			? (articles.find((item) => String(item.id) === slug) ??
+				furtherArticles.find((item) => String(item.id) === slug))
 			: undefined;
 
 	/* ─── Active tab ─── */
@@ -602,6 +609,67 @@ export const SeferPanel = memo(function SeferPanel({
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
 
+	// One card body for both article lists — each card routes through its own
+	// primary perek (`article.perekId`), which for a further-reading card is a
+	// different chapter than the panel's (#3752).
+	const articleCard = (article: ArticleSummary) => (
+		<Link
+			key={article.id}
+			id={`article-${article.id}`}
+			href={`/929/${article.perekId}/${article.id}`}
+			prefetch={false}
+			className={styles.articleCard}
+			onClick={(event) => {
+				if (
+					event.metaKey ||
+					event.ctrlKey ||
+					event.shiftKey ||
+					event.altKey
+				) {
+					return;
+				}
+				event.preventDefault();
+				navigate(String(article.id));
+			}}
+		>
+			<div className={styles.articleCardAuthor}>
+				<Image
+					src={article.authorImageUrl}
+					alt=""
+					aria-hidden="true"
+					width={28}
+					height={28}
+					className={styles.articleCardImg}
+				/>
+				<span className={styles.articleCardAuthorName}>
+					{article.authorName}
+				</span>
+			</div>
+			<div className={styles.articleCardTitle}>{article.name}</div>
+			{/* Codacy anchors the XSS finding at this
+			 * conditional expression, so the nosemgrep
+			 * suppression must sit here rather than beside
+			 * the attribute. */}
+			{/* nosemgrep -- DOMPurify-sanitized abstract */}
+			{article.abstract && (
+				<div
+					className={styles.articleCardAbstract}
+					// nosemgrep -- DOMPurify-sanitized abstract
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(
+							normalizeAbstractHtml(article.abstract),
+						),
+					}}
+				/>
+			)}
+			<ReadingTime
+				estimatedSeconds={article.metric?.estimatedSeconds}
+				className={styles.articleCardMetric}
+			/>
+		</Link>
+	);
+
 	return (
 		<section
 			ref={rootRef}
@@ -894,66 +962,28 @@ export const SeferPanel = memo(function SeferPanel({
 							<p className={styles.emptyState}>אין מאמרים לפרק זה</p>
 						) : (
 							<div className={styles.articlesMasonry}>
-								{articles.map((article) => (
-									<Link
-										key={article.id}
-										id={`article-${article.id}`}
-										href={`/929/${article.perekId}/${article.id}`}
-										prefetch={false}
-										className={styles.articleCard}
-										onClick={(event) => {
-											if (
-												event.metaKey ||
-												event.ctrlKey ||
-												event.shiftKey ||
-												event.altKey
-											) {
-												return;
-											}
-											event.preventDefault();
-											navigate(String(article.id));
-										}}
-									>
-										<div className={styles.articleCardAuthor}>
-											<Image
-												src={article.authorImageUrl}
-												alt=""
-												aria-hidden="true"
-												width={28}
-												height={28}
-												className={styles.articleCardImg}
-											/>
-											<span className={styles.articleCardAuthorName}>
-												{article.authorName}
-											</span>
-										</div>
-										<div className={styles.articleCardTitle}>
-											{article.name}
-										</div>
-										{/* Codacy anchors the XSS finding at this
-										 * conditional expression, so the nosemgrep
-										 * suppression must sit here rather than beside
-										 * the attribute. */}
-										{/* nosemgrep -- DOMPurify-sanitized abstract */}
-										{article.abstract && (
-											<div
-												className={styles.articleCardAbstract}
-												// nosemgrep -- DOMPurify-sanitized abstract
-												// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-												dangerouslySetInnerHTML={{
-													__html: DOMPurify.sanitize(
-														normalizeAbstractHtml(article.abstract),
-													),
-												}}
-											/>
-										)}
-										<ReadingTime
-											estimatedSeconds={article.metric?.estimatedSeconds}
-											className={styles.articleCardMetric}
-										/>
-									</Link>
-								))}
+								{articles.map(articleCard)}
 							</div>
+						)}
+						{/* לקריאה נוספת (#3752): verified secondary coverage —
+						    articles from other perakim discussing a source in
+						    this one. Renders below the primary list and keeps
+						    showing even when that list is empty. */}
+						{furtherArticles.length > 0 && (
+							<section
+								className={styles.furtherReadingGroup}
+								aria-labelledby={`sefer-further-reading-${perekId}`}
+							>
+								<h3
+									id={`sefer-further-reading-${perekId}`}
+									className={styles.furtherReadingTitle}
+								>
+									לקריאה נוספת
+								</h3>
+								<div className={styles.articlesMasonry}>
+									{furtherArticles.map(articleCard)}
+								</div>
+							</section>
 						)}
 					</div>
 

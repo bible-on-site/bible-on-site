@@ -1305,3 +1305,138 @@ describe("reading metrics", () => {
 		expect(mockGetNoteProgressUnitsBatch).toHaveBeenCalledWith(1, [1]);
 	});
 });
+
+describe("לקריאה נוספת recommendations (#3752)", () => {
+	const furtherArticle: Article = {
+		id: 42,
+		perekId: 5,
+		authorId: 20,
+		name: "מאמר מפרק אחר",
+		abstract: "<p>תקציר נוסף</p>",
+		content: "<p>תוכן</p>",
+		priority: 2,
+		authorName: "הרב דוגמה",
+		authorImageUrl: "https://example.com/2.jpg",
+	};
+
+	const switchToArticlesTab = async () => {
+		fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+		await flushAsync();
+	};
+
+	it("renders the recommendation group below the primary article list", async () => {
+		await renderPanel(
+			<SeferPanel {...PROPS} furtherArticles={[furtherArticle]} />,
+		);
+		await switchToArticlesTab();
+
+		const heading = screen.getByRole("heading", { name: "לקריאה נוספת" });
+		const primaryCard = document.getElementById("article-7");
+		const furtherCard = document.getElementById("article-42");
+		expect(primaryCard).not.toBeNull();
+		expect(furtherCard).not.toBeNull();
+		// The recommendation follows the perek's own cards in document order.
+		expect(
+			// biome-ignore lint/style/noNonNullAssertion: asserted above
+			primaryCard!.compareDocumentPosition(furtherCard!) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		// Cards route standalone navigation through the article's OWN primary
+		// perek — the recommendation lives on a different chapter (#3752).
+		expect(furtherCard?.getAttribute("href")).toBe("/929/5/42");
+		expect(primaryCard?.getAttribute("href")).toBe("/929/1/7");
+		// Heading and cards share one labelled group region.
+		expect(heading.closest("section")?.contains(furtherCard)).toBe(true);
+	});
+
+	it("hides the group when the perek has no recommendations", async () => {
+		await renderPanel(<SeferPanel {...PROPS} />);
+		await switchToArticlesTab();
+
+		expect(
+			screen.queryByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeNull();
+	});
+
+	it("shows recommendations even when the perek has no articles of its own", async () => {
+		await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				articles={[]}
+				furtherArticles={[furtherArticle]}
+			/>,
+		);
+		await switchToArticlesTab();
+
+		expect(screen.getByText("אין מאמרים לפרק זה")).toBeTruthy();
+		expect(
+			screen.getByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeTruthy();
+		expect(document.getElementById("article-42")).not.toBeNull();
+	});
+
+	it("opens a recommendation embedded and returns to the grid", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: furtherArticle,
+			dedicationLines: [],
+		});
+		await renderPanel(
+			<SeferPanel {...PROPS} furtherArticles={[furtherArticle]} />,
+		);
+		await switchToArticlesTab();
+
+		fireEvent.click(document.getElementById("article-42") as HTMLElement);
+		await screen.findByRole("button", { name: "חזרה למאמרים" });
+		expect(mockGetArticleForBook).toHaveBeenCalledWith(42);
+		expect(
+			screen.getByRole("heading", { name: "מאמר מפרק אחר" }),
+		).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("button", { name: "חזרה למאמרים" }));
+		// Back lands on this panel's grid — recommendations still there.
+		expect(
+			screen.getByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeTruthy();
+		expect(document.getElementById("article-42")).not.toBeNull();
+	});
+
+	it("resolves a deep-linked recommendation slug through the further list", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: furtherArticle,
+			dedicationLines: [],
+		});
+		await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				furtherArticles={[furtherArticle]}
+				initialSlug="42"
+			/>,
+		);
+		await screen.findByRole("button", { name: "חזרה למאמרים" });
+		expect(mockGetArticleForBook).toHaveBeenCalledWith(42);
+		expect(
+			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
+		).toBe("true");
+	});
+
+	it("keeps the viewed perek in the book route when a recommendation opens", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: furtherArticle,
+			dedicationLines: [],
+		});
+		const onNavigate = jest.fn();
+		await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				furtherArticles={[furtherArticle]}
+				onNavigate={onNavigate}
+			/>,
+		);
+		await switchToArticlesTab();
+		fireEvent.click(document.getElementById("article-42") as HTMLElement);
+		await screen.findByRole("button", { name: "חזרה למאמרים" });
+		// The parent navigation owns the URL and keeps the panel's perek
+		// (not the article's primary perek) — returning lands on chapter 1.
+		expect(onNavigate).toHaveBeenCalledWith("42");
+	});
+});

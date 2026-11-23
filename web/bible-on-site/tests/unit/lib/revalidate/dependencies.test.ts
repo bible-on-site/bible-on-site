@@ -156,6 +156,63 @@ describe("resolveEntityChanges", () => {
 		expect(out.urls).toEqual(out.paths);
 	});
 
+	it("expires the covered perek's לקריאה נוספת surface on an article change (#3752)", async () => {
+		stubDb({
+			articleCovering: [
+				{ perek_id: 9, pasuk: 3 },
+				{ perek_id: 9, pasuk: 4 },
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		// Perek 9's recommendation section lists article 12 — its tag and
+		// flat route expire, but NOT a bogus /929/9/12 detail route: the
+		// article's own page lives under its primary perek only.
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+		expect(out.paths).not.toContain("/929/9/12");
+		// Multiple covered pesukim of the same perek stay one invalidation.
+		expect(out.tags.filter((t) => t === "perek:9:articles")).toHaveLength(1);
+	});
+
+	it("expires covered pereks from destroyed covering rows the live rows no longer show", async () => {
+		// Coverage removed pre-commit: the live lookup returns nothing, the
+		// event's destroyed spans still expire perek 9's recommendations.
+		stubDb({ articleCovering: [] });
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+	});
+
+	it("expires covered pereks on an author change — names render on recommendation cards", async () => {
+		stubDb({
+			authorName: "רשי",
+			authorArticles: [{ id: 7, perek_id: 5 }],
+			authorCovering: [{ perek_id: 9, pasuk: 3 }],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+		expect(out.paths).not.toContain("/929/9/7");
+	});
+
 	it("expires a moed's detail and the wheel on a moed change, including the old slug", async () => {
 		const out = await resolveEntityChanges([
 			{ kind: "moed", id: 3, slug: "חנוכה", oldSlug: "חנוכה-ישן" },

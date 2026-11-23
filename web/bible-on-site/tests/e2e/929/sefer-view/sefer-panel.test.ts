@@ -348,6 +348,37 @@ test.describe("Sefer left-page panel", () => {
 		await expect(blank.locator("a#article-1")).toBeFocused();
 	});
 
+	test("groups לקריאה נוספת below the panel's own cards and keeps the browsed perek (#3752)", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		// בראשית ב carries no articles of its own; fixture article 1
+		// (primary בראשית א) verifiably covers בראשית ב א, so the
+		// recommendation group is the whole list.
+		await seferPage.openSeferViewForPerek(2);
+		const blank = page.locator('.he-book .page[data-page-index="6"]');
+		await blank.getByRole("tab", { name: "מאמרים" }).click();
+
+		await expect(
+			blank.getByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeVisible();
+		const card = blank.locator("a#article-1");
+		await expect(card).toBeVisible();
+		// The crawlable href still routes through the article's own perek.
+		await expect(card).toHaveAttribute("href", "/929/1/1");
+
+		// Opening the recommendation embeds the article while the browsed
+		// perek stays in the URL — back lands on the same grouped grid.
+		await card.click();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
+		await expect(card).toBeVisible();
+	});
+
 	test("deep-linked perush view selects only that perush without touching defaults", async ({
 		page,
 	}) => {

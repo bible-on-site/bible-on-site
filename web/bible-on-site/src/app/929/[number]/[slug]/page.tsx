@@ -15,6 +15,7 @@ import {
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getFurtherReadingSummariesByPerekId,
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
@@ -65,6 +66,7 @@ import {
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ArticleActions } from "../components/ArticleActions";
+import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { DailyArticlesSection } from "../components/DailyArticlesSection";
 import { PerekHeading } from "../components/PerekHeading";
@@ -141,6 +143,20 @@ const getCachedArticles = cachedPerKey(
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getArticleSummariesByPerekId(perekId),
+);
+
+/**
+ * The perek's לקריאה נוספת list (#3752): verified secondary coverage —
+ * articles primarily attached elsewhere that discuss a source in this
+ * perek. Shares the `perek:{id}:articles` tag: a covering-row change is an
+ * article change, and the dependency resolver expires the covered perek's
+ * tag on either side of it (old ∪ live covering rows).
+ */
+const getCachedFurtherReading = cachedPerKey(
+	"further-reading-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),
 );
 
 const getCachedPerushim = cachedPerKey(
@@ -336,6 +352,7 @@ export default async function ArticlePage({
 
 	const perekObj = getPerekByPerekId(perekId);
 	const articles = await getCachedArticles(perekId);
+	const furtherArticles = await getCachedFurtherReading(perekId);
 	const perushim = await getCachedPerushim(perekId);
 
 	const sefer = getSeferByName(perekObj.sefer);
@@ -457,6 +474,7 @@ export default async function ArticlePage({
 					<SeferComposite
 						perekObj={perekObj}
 						articles={articles}
+						furtherArticles={furtherArticles}
 						perushim={perushim}
 						perekIds={perekIds}
 						entityRefsByPerek={entityRefsByPerek}
@@ -490,6 +508,15 @@ export default async function ArticlePage({
 						articles={articles}
 						scrollStorageKey={`articles-perek-${perekId}`}
 					/>
+
+					{/* לקריאה נוספת (#3752) — see the flat perek route. */}
+					{furtherArticles.length > 0 && (
+						<ArticlesSection
+							articles={furtherArticles}
+							title="לקריאה נוספת"
+							scrollStorageKey={`further-reading-perek-${perekId}`}
+						/>
+					)}
 				</div>
 			</>
 		);
@@ -593,6 +620,7 @@ export default async function ArticlePage({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
+					furtherArticles={furtherArticles}
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
@@ -626,6 +654,15 @@ export default async function ArticlePage({
 					articles={articles}
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>
+
+				{/* לקריאה נוספת (#3752) — see the flat perek route. */}
+				{furtherArticles.length > 0 && (
+					<ArticlesSection
+						articles={furtherArticles}
+						title="לקריאה נוספת"
+						scrollStorageKey={`further-reading-perek-${perekId}`}
+					/>
+				)}
 			</div>
 		</>
 	);

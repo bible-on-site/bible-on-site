@@ -651,6 +651,28 @@ async function addPediaEntryDeps(
 	await addMoedDepsForPediaNames(sink, names);
 }
 
+/**
+ * לקריאה נוספת (#3752): a covered perek's recommendation section lists the
+ * article even though its primary perek sits elsewhere, so every covering
+ * span perek is a consumer of the article's summary. Its perek-scoped
+ * article tag + flat route expire alongside the primary perek's (already
+ * invalidated through the caller's primary loop — skipped here). The span
+ * union the callers pass covers both sides of a coverage edit: supplied
+ * destroyed spans and the post-commit live rows.
+ */
+function addFurtherReadingDeps(
+	sink: Sink,
+	spans: ArticleCoveringSpan[],
+	primaryPerekIds: number[],
+) {
+	const primary = new Set(primaryPerekIds);
+	for (const span of spans) {
+		if (primary.has(span.perekId)) continue;
+		addTag(sink, perekArticlesTag(span.perekId));
+		addPath(sink, `/929/${span.perekId}`);
+	}
+}
+
 // --- per-kind resolution ----------------------------------------------------
 
 async function resolveArticle(
@@ -694,6 +716,8 @@ async function resolveArticle(
 	for (const unit of unitsForArticle(change.perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	// Each covered perek's לקריאה נוספת section consumes this summary (#3752).
+	addFurtherReadingDeps(sink, spans, change.perekIds);
 	await addMoedDepsForArticleCoverage(sink, change.perekIds, spans, [
 		change.id,
 	]);
@@ -732,6 +756,9 @@ async function resolveAuthor(
 	for (const unit of unitsForArticle(perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	// The author's name renders on their articles' recommendation cards in
+	// every covered perek's לקריאה נוספת section too (#3752).
+	addFurtherReadingDeps(sink, spans, perekIds);
 	await addMoedDepsForArticleCoverage(
 		sink,
 		perekIds,

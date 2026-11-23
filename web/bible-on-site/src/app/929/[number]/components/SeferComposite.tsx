@@ -45,6 +45,8 @@ const Sefer = dynamic(() => import("./LoadedSefer"), {
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
 	articles: ArticleSummary[];
+	/** לקריאה נוספת (#3752) for the current perek — verified secondary coverage. */
+	furtherArticles?: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
@@ -227,6 +229,7 @@ const ClientWrapper = (props: {
 						key={props.perekObj.sefer}
 						perekObj={props.perekObj}
 						articles={props.articles}
+						furtherArticles={props.furtherArticles}
 						perushim={props.perushim}
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}

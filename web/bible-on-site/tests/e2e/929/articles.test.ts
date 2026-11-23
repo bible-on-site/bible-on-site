@@ -204,4 +204,40 @@ test.describe("Articles Section", () => {
 		await expect(articlesSection.getByText("אין מאמרים לפרק זה")).toBeVisible();
 		await expect(articlesSection.locator("a")).toHaveCount(0);
 	});
+
+	test("shows לקריאה נוספת on a perek whose only articles are secondary coverage (#3752)", async ({
+		page,
+	}) => {
+		// Fixture: article 1 (primary בראשית א) verifiably covers בראשית ב א.
+		// Perek 2 carries no articles of its own, so the recommendation
+		// section is the entire card list.
+		await page.goto("/929/2");
+
+		const further = page.locator("section").filter({
+			has: page.locator("text=לקריאה נוספת"),
+		});
+		await expect(further).toBeVisible();
+		const card = further.locator("a#article-1");
+		await expect(card).toBeVisible();
+		// The card routes through the article's OWN primary perek.
+		await expect(card).toHaveAttribute("href", "/929/1/1");
+
+		// The regular section keeps its empty state above the recommendations.
+		const primary = page.locator("section").filter({
+			has: page.locator("text=מאמרים על הפרק"),
+		});
+		await expect(
+			primary.getByText("אין מאמרים לפרק זה"),
+		).toBeVisible();
+	});
+
+	test("hides לקריאה נוספת on a perek nothing verified covers (#3752)", async ({
+		page,
+	}) => {
+		await page.goto("/929/3");
+		await expect(page.locator("article").first()).toBeVisible();
+		await expect(
+			page.locator("section").filter({ hasText: "לקריאה נוספת" }),
+		).toHaveCount(0);
+	});
 });

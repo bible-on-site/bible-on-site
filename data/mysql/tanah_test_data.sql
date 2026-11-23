@@ -178,10 +178,14 @@ VALUES (
 -- verified coverage of its two opening pesukim. Every other fixture article
 -- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
 -- fallback), so range lookups exercise both matching branches.
+-- The (1, 2, 1) row additionally covers one pasuk of בראשית ב, which has no
+-- primary articles — the לקריאה נוספת section (#3752) can assert a
+-- secondary-only recommendation on /929/2 whose card still routes through
+-- the article's own perek (/929/1/1).
 -- The perek FK needs tanah_perek populated, so the db-populator loads this
 -- file only after tanah_sefarim_and_perakim_data.sql.
 INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk)
-VALUES (1, 1, 1), (1, 1, 2);
+VALUES (1, 1, 1), (1, 1, 2), (1, 2, 1);
 UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 
 -- Representative recurring Hebrew-date overrides (#3098). These are test
