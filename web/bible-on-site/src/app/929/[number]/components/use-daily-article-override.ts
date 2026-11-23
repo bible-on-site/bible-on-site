@@ -29,7 +29,9 @@ export function useDailyArticleOverride(): DailyArticleOverride | null {
 
 	useEffect(() => {
 		let cancelled = false;
+		let lastRefreshAt = Number.NEGATIVE_INFINITY;
 		const refresh = () => {
+			lastRefreshAt = Date.now();
 			const now = new Date();
 			const todaysPerekId = getPerekIdByDate(now);
 			const hebrewDate = constructTsetAwareHDate(now);
@@ -48,15 +50,23 @@ export function useDailyArticleOverride(): DailyArticleOverride | null {
 					if (!cancelled) setOverride(null);
 				});
 		};
+		// Re-showing a hidden tab fires both visibilitychange and focus —
+		// coalesce them (and any refresh fresher than a second) into one
+		// lookup, and skip the lookup entirely while the tab is hidden.
+		const refreshOnReactivate = () => {
+			if (document.visibilityState !== "visible") return;
+			if (Date.now() - lastRefreshAt < 1_000) return;
+			refresh();
+		};
 		refresh();
 		const intervalId = window.setInterval(refresh, 60_000);
-		window.addEventListener("focus", refresh);
-		document.addEventListener("visibilitychange", refresh);
+		window.addEventListener("focus", refreshOnReactivate);
+		document.addEventListener("visibilitychange", refreshOnReactivate);
 		return () => {
 			cancelled = true;
 			window.clearInterval(intervalId);
-			window.removeEventListener("focus", refresh);
-			document.removeEventListener("visibilitychange", refresh);
+			window.removeEventListener("focus", refreshOnReactivate);
+			document.removeEventListener("visibilitychange", refreshOnReactivate);
 		};
 	}, []);
 

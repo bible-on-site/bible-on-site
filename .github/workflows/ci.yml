@@ -398,7 +398,7 @@ jobs:
       data_deploy_ci_changed: ${{ steps.determine.outputs.data_deploy_ci_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
-      # Every touched path sits under root docs/ and no module check fired:
+      # Every touched path is inert documentation and no module check fired:
       # downstream jobs skip while required checks still resolve (#3621).
       docs_only: ${{ steps.determine.outputs.docs_only }}
       release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}

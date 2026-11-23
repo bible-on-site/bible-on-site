@@ -1756,6 +1756,74 @@ describe("main", () => {
 			assert.match(output, /^docs_only=true$/m);
 		});
 
+		test("an evidence screenshot deletion stays docs_only on master", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"data/recitation/docs/complete-concern-before.png",
+				"delete",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+			assert.match(output, /^data_deploy_changed=false$/m);
+		});
+
+		test("audited module evidence and its review notes stay docs_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"app/docs/evidence/issue-1/before.png",
+				"write",
+				undefined,
+				{
+					extraPaths: [
+						"web/admin/docs/evidence/issue-1/README.md",
+						"web/bible-on-site/docs/evidence/issue-1/after.jpg",
+						"web/bulletin/docs/daily-bulletin.md",
+						"web/bulletin/docs/daily-bulletin-before-after.png",
+						"web/bulletin/docs/daily-bulletin-typography-before-after.png",
+						"web/bulletin/docs/daily-bulletin-typography-page2.png",
+						"data/recitation/README.md",
+						"data/recitation/benchmarks/accumulated-listening-ui/before.png",
+						"data/recitation/benchmarks/listening-ui/README.md",
+						"data/recitation/benchmarks/review-version-handoff/after.jpg",
+					],
+				},
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("module evidence leaves release input paths routed to their modules", () => {
+			for (const [module, path] of [
+				["app", "app/BibleOnSite/Resources/Images/after.png"],
+				["admin", "web/admin/docs/evidence/harness.ts"],
+				["website", "web/bible-on-site/public/images/before.jpg"],
+				["bulletin", "web/bulletin/assets/email/footer.png"],
+				["data", "data/recitation/benchmarks/listening-ui/fixture.json"],
+			] as const) {
+				const changes = detectChanges([
+					"web/admin/docs/evidence/issue-1/before.png",
+					path,
+				]);
+				assert.equal(changes[module].module_changed, true, path);
+			}
+		});
+
+		test("recitation evidence alongside a migration preserves schema-only routing", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"data/mysql/tanahpedia_alter_example.sql",
+				"write",
+				undefined,
+				{ extraPaths: ["data/recitation/docs/cut-editor-after.png"] },
+			);
+			assert.equal(changes.data.module_changed, true);
+			assert.match(output, /^data_schema_only_changed=true$/m);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
 		test("a multi-commit docs-only push stays docs_only", () => {
 			const { changes, output } = run(
 				"push",
@@ -1787,6 +1855,16 @@ describe("main", () => {
 			);
 			// Without the docs-only bypass the queue forces every ci_changed on;
 			// the docs delta must keep them all off so heavy jobs stay skipped.
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("an evidence-only merge group skips heavy module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"web/admin/docs/evidence/issue-1/after.webp",
+			);
 			noChecks(changes);
 			assert.match(output, /^docs_only=true$/m);
 		});

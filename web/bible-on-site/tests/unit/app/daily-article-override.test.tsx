@@ -4,7 +4,7 @@
  * slug pages, and the panel selection Sefer relies on.
  */
 
-import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ArticleSummary } from "../../../src/lib/articles";
 
 jest.mock("../../../src/app/929/[number]/components/ArticlesSection", () => ({
@@ -111,6 +111,74 @@ describe("useDailyArticleOverride", () => {
 		await waitFor(() => expect(mockGetDailyArticleOverride).toHaveBeenCalled());
 		await waitFor(() => expect(result.current).toBeNull());
 		expect(console.warn).toHaveBeenCalled();
+	});
+
+	describe("when the tab is hidden and shown again", () => {
+		const setVisibility = (state: "visible" | "hidden") => {
+			Object.defineProperty(document, "visibilityState", {
+				configurable: true,
+				value: state,
+			});
+		};
+
+		beforeEach(() => {
+			jest.useFakeTimers();
+			mockGetPerekIdByDate.mockReturnValue(55);
+			mockConstructHDate.mockReturnValue({ getUniformMonth: () => 11, day: 9 });
+			mockGetDailyArticleOverride.mockResolvedValue(null);
+		});
+		afterEach(() => {
+			jest.useRealTimers();
+			// Drop the mocked property so later tests get the jsdom default.
+			delete (document as { visibilityState?: string }).visibilityState;
+		});
+
+		it("does not refetch when the tab is hidden", async () => {
+			const { unmount } = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+
+			// Well past any dedupe window: the hidden event alone decides.
+			act(() => jest.advanceTimersByTime(2_000));
+			setVisibility("hidden");
+			act(() => document.dispatchEvent(new Event("visibilitychange")));
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+			unmount();
+		});
+
+		it("coalesces visibilitychange and focus into one refetch on return", async () => {
+			const { unmount } = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+
+			for (let cycle = 0; cycle < 2; cycle++) {
+				act(() => jest.advanceTimersByTime(2_000));
+				setVisibility("hidden");
+				act(() => document.dispatchEvent(new Event("visibilitychange")));
+				act(() => jest.advanceTimersByTime(2_000));
+				setVisibility("visible");
+				// Chrome fires both events when a hidden tab is re-shown.
+				act(() => {
+					document.dispatchEvent(new Event("visibilitychange"));
+					window.dispatchEvent(new Event("focus"));
+				});
+				await act(async () => {});
+				expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2 + cycle);
+			}
+			unmount();
+		});
+
+		it("still refetches on the 60-second interval", async () => {
+			const { unmount } = renderHook(() => useDailyArticleOverride());
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(1);
+
+			act(() => jest.advanceTimersByTime(60_000));
+			await act(async () => {});
+			expect(mockGetDailyArticleOverride).toHaveBeenCalledTimes(2);
+			unmount();
+		});
 	});
 });
 
