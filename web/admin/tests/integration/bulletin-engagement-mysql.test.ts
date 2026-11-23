@@ -687,7 +687,7 @@ describe("one-year inactivity review", () => {
 	});
 
 	async function seedHistory(
-		email: string,
+		subscriber: string | number,
 		editions: {
 			monthsAgo: number;
 			deliveredAgo?: number;
@@ -697,7 +697,10 @@ describe("one-year inactivity review", () => {
 		}[],
 		consent = "confirmed",
 	): Promise<number> {
-		const subscriberId = await seedSubscriber(email, consent);
+		const subscriberId =
+			typeof subscriber === "number"
+				? subscriber
+				: await seedSubscriber(subscriber, consent);
 		for (const edition of editions) {
 			const date = await db.queryOne<{ d: string }>(
 				"SELECT DATE_FORMAT(UTC_DATE() - INTERVAL ? MONTH, '%Y-%m-%d') AS d",
@@ -862,38 +865,49 @@ describe("one-year inactivity review", () => {
 		).rejects.toThrow();
 	});
 
-	it("excludes a recent collection outage even on an older edition", async () => {
-		const subscriberId = await seedHistory("older-outage@example.invalid", [
-			{ monthsAgo: 13 },
-			{ monthsAgo: 2 },
-		]);
-		const { jobId, recipientId } = await seedDelivered({
-			date: "2023-01-01",
-			subscriberId,
-			tracked: 0,
-		});
-		await db.execute(
-			"UPDATE tanah_daily_bulletin_email_recipient SET delivered_at = UTC_TIMESTAMP(3) - INTERVAL 18 MONTH WHERE id = ?",
-			[recipientId],
-		);
-		await db.execute(
-			"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 1 MONTH WHERE id = ?",
-			[jobId],
-		);
-		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
-		await expect(
-			engagement.confirmInactivityUnsubscribe(subscriberId, "admin-1"),
-		).rejects.toThrow();
-		await db.execute(
-			"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 13 MONTH WHERE id = ?",
-			[jobId],
-		);
-		expect(
-			(await engagement.readEmailEngagementPanel())?.inactive.map(
-				(row) => row.id,
-			),
-		).toEqual([subscriberId]);
-	});
+	it.each(["delivered", "accepted"] as const)(
+		"excludes a recent collection outage on an older %s attempt",
+		async (status) => {
+			const subscriberId = await seedHistory("older-outage@example.invalid", [
+				{ monthsAgo: 13 },
+				{ monthsAgo: 2 },
+			]);
+			const { jobId, recipientId } = await seedDelivered({
+				date: "2023-01-01",
+				subscriberId,
+				tracked: 0,
+				status,
+				delivered: Number(status === "delivered"),
+				accepted: Number(status === "accepted"),
+			});
+			await db.execute(
+				`UPDATE tanah_daily_bulletin_email_recipient
+			 SET started_at = UTC_TIMESTAMP(3) - INTERVAL 18 MONTH,
+			     delivered_at = IF(status = 'delivered', UTC_TIMESTAMP(3) - INTERVAL 18 MONTH, NULL)
+			 WHERE id = ?`,
+				[recipientId],
+			);
+			await db.execute(
+				"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 1 MONTH WHERE id = ?",
+				[jobId],
+			);
+			expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual(
+				[],
+			);
+			await expect(
+				engagement.confirmInactivityUnsubscribe(subscriberId, "admin-1"),
+			).rejects.toThrow();
+			await db.execute(
+				"UPDATE tanah_daily_bulletin_email_job SET tracking_gap_at = UTC_TIMESTAMP(3) - INTERVAL 13 MONTH WHERE id = ?",
+				[jobId],
+			);
+			expect(
+				(await engagement.readEmailEngagementPanel())?.inactive.map(
+					(row) => row.id,
+				),
+			).toEqual([subscriberId]);
+		},
+	);
 
 	it("restores an inactivity-removed subscription after a verified SES opt-in", async () => {
 		const email = "rejoin@example.invalid";
@@ -932,6 +946,29 @@ describe("one-year inactivity review", () => {
 			admin_action: "inactivity-unsubscribe",
 		});
 		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
+
+		// Age the pre-removal deliveries and the rejoin together, then add
+		// deliveries from the new subscription period.
+		await db.execute(
+			`UPDATE tanah_daily_bulletin_email_recipient
+			 SET delivered_at = delivered_at - INTERVAL 14 MONTH WHERE subscriber_id = ?`,
+			[subscriberId],
+		);
+		await db.execute(
+			`UPDATE tanah_daily_bulletin_subscriber
+			 SET admin_action_at = UTC_TIMESTAMP(3) - INTERVAL 15 MONTH,
+			     last_event_at = UTC_TIMESTAMP(3) - INTERVAL 14 MONTH WHERE id = ?`,
+			[subscriberId],
+		);
+		await seedHistory(subscriberId, [{ monthsAgo: 1 }]);
+		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
+
+		await seedHistory(subscriberId, [{ monthsAgo: 13 }]);
+		expect(
+			(await engagement.readEmailEngagementPanel())?.inactive.map(
+				(row) => row.id,
+			),
+		).toEqual([subscriberId]);
 	});
 
 	it("leaves subscribers with an unresolved recent attempt out of the review", async () => {

@@ -59,10 +59,11 @@ const INACTIVITY_FILTER = `
 		WHERE ux.subscriber_id = s.id AND uj.audience = 'real' AND (
 			(ux.status = 'delivered' AND uj.tracked = 0 AND (
 				COALESCE(ux.delivered_at, ux.event_at) IS NULL
-				OR COALESCE(ux.delivered_at, ux.event_at) >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)
-				OR uj.tracking_gap_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
+				OR COALESCE(ux.delivered_at, ux.event_at) >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
 			OR (ux.status IN ('sending', 'accepted', 'uncertain') AND (
-				ux.started_at IS NULL OR ux.started_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))))
+				ux.started_at IS NULL OR ux.started_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR)))
+			OR (ux.status IN ('delivered', 'sending', 'accepted', 'uncertain')
+				AND uj.tracking_gap_at >= (UTC_TIMESTAMP(3) - INTERVAL 1 YEAR))))
 	AND NOT EXISTS (
 		SELECT 1 FROM tanah_daily_bulletin_email_recipient ax
 		JOIN tanah_daily_bulletin_email_job aj ON aj.id = ax.job_id
