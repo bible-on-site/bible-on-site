@@ -8,10 +8,14 @@ issue's November 3 triage note: fresh measurements, reference/CI compatibility
 checks, preservation/recovery evidence, and the choices that still need owner
 review before a coordinated execution.
 
-**No part of this plan has been executed against the remote.** The rewrite was
-rehearsed on a local scratch mirror only. Execution requires an explicit go-ahead
-plus a coordinated freeze window, because it force-pushes every branch and tag
-and invalidates every existing clone.
+This document records the proposal and rehearsal for the dump cleanup. The
+production rewrite ran on November 16-17, 2026. The execution record covers
+the backup, ruleset restoration, and recovery of 16 auto-closed pull requests.
+[Execution record](https://github.com/bible-on-site/bible-on-site/issues/1968#issuecomment-6954738468)
+
+Another published rewrite requires an explicit go-ahead and a coordinated
+freeze window. The branches and tags in its scope will move to new commit IDs,
+and affected clones will need to synchronize their local refs.
 
 ## Fresh measurements (November 2026)
 

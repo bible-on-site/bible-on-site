@@ -3,8 +3,8 @@
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
  * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
  * data deployment routing decision and `docs_only` — true only when every
- * touched path sits under the repository-root `docs/` tree and no module's
- * checks fired, letting required checks resolve without heavy validation.
+ * touched path is inert documentation and no module's checks fired,
+ * letting required checks resolve without heavy validation.
  *
  * Works on a shallow checkout. PRs compare the tested merge commit with its
  * first parent; the event payload's base can lag behind that tested base.
@@ -317,6 +317,35 @@ const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
 const DOCUMENTATION_PATH =
 	/^docs\/(?!aws\/).+\.(?:md|markdown|mdx|txt|rst|adoc|pdf|csv|tsv|json|gz|dbml|puml|drawio|png|jpe?g|gif|svg|webp|ico|bmp|avif|mp4|mov|webm|mp3|wav|m4a|zip|patch|diff)$/i;
 
+// These module directories contain only review prose and screenshots in
+// the allowed formats. Runtime assets and benchmark inputs still route by
+// module, even when they sit near review notes.
+const MODULE_EVIDENCE_DIRECTORIES = [
+	"app/docs/evidence",
+	"web/admin/docs/evidence",
+	"web/bible-on-site/docs/evidence",
+	"data/recitation/docs",
+	"data/recitation/benchmarks/accumulated-listening-ui",
+	"data/recitation/benchmarks/listening-ui",
+	"data/recitation/benchmarks/review-version-handoff",
+];
+const MODULE_EVIDENCE_FILES = new Set([
+	"data/recitation/README.md",
+	"web/bulletin/docs/daily-bulletin.md",
+	"web/bulletin/docs/daily-bulletin-before-after.png",
+	"web/bulletin/docs/daily-bulletin-typography-before-after.png",
+	"web/bulletin/docs/daily-bulletin-typography-page2.png",
+]);
+const EVIDENCE_EXTENSION = /\.(?:avif|gif|jpe?g|md|png|webp)$/i;
+
+function isModuleEvidenceDocumentation(file: string): boolean {
+	return (
+		MODULE_EVIDENCE_FILES.has(file) ||
+		(EVIDENCE_EXTENSION.test(file) &&
+			MODULE_EVIDENCE_DIRECTORIES.some((directory) => isAt(file, directory)))
+	);
+}
+
 /** Release intent for data delivery tooling, separate from generic CI checks. */
 export function isDataDeployChange(changedFiles: string[]): boolean {
 	return changedFiles.some((file) =>
@@ -330,7 +359,10 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * also stay manual rather than triggering a full production bootstrap.
  */
 export function isSchemaOnlyDataChange(files: string[]): boolean {
-	const changedFiles = files.filter((file) => !DATA_CI_ONLY_PATTERN.test(file));
+	const changedFiles = files.filter(
+		(file) =>
+			!DATA_CI_ONLY_PATTERN.test(file) && !isModuleEvidenceDocumentation(file),
+	);
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
 	// Calendar exports are repaired through a guarded date-only database operation.
 	// Converter/fixture changes must not launch a replacement production bootstrap.
@@ -389,6 +421,7 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 				module_changed: changedFiles.some(
 					(file) =>
 						(isAt(file, rule.directory) &&
+							!isModuleEvidenceDocumentation(file) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
 						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
 				),
@@ -563,16 +596,19 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const mergeGroup = GITHUB_EVENT_NAME === "merge_group";
-	// Changes confined to the repository-root docs/ tree request no automatic
-	// validation: every touched path (rename sources included) carries an inert
-	// documentation format under docs/ and nothing routed any module's checks
-	// (#3621). The merge-group diff already spans the combined candidate — a
+	// Inert documentation requests no automatic validation when every
+	// touched path (rename sources included) falls within a documentation
+	// boundary and nothing routed any module's checks (#3621).
+	// The merge-group diff already spans the combined candidate — a
 	// batched code entry keeps docs_only false — while a tail group's own
 	// docs-only delta may skip because ALLGREEN requires every earlier entry's
 	// checks green before this group can merge.
 	const docsOnly =
 		files.length > 0 &&
-		files.every((file) => DOCUMENTATION_PATH.test(file)) &&
+		files.every(
+			(file) =>
+				DOCUMENTATION_PATH.test(file) || isModuleEvidenceDocumentation(file),
+		) &&
 		!Object.values(changes).some(
 			(flags) => flags.module_changed || flags.ci_changed,
 		);

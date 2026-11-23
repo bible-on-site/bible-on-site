@@ -111,9 +111,9 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
-  - `docs_only` (#3621) means every touched path sits under the
-    repository-root `docs/` tree with an inert documentation format
-    (`DOCUMENTATION_PATH` in the router) **and** no module check fired. When
+  - `docs_only` (#3621) means every touched path is an inert root
+    `docs/` file or a module documentation path listed in the router
+    **and** no module check fired. When
     it is true the validation surface skips — `workflow_timeouts`,
     `root_evidence_guard`, the independent suites (`database_backups`,
     `transcription_ci`, `perushim_data`) and every module job — so docs-only
