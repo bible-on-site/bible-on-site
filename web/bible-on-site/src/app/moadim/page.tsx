@@ -237,7 +237,7 @@ export default async function MoadimLanding() {
 				<nav aria-label="רשימת המועדים" className={styles.index}>
 					<ol className={styles.indexList}>
 						{wheel.slices.map((slice) => (
-							<li key={slice.moed.id} className={styles.indexItem}>
+							<li key={slice.moed.id}>
 								<Link
 									href={moedHref(slice.moed.slug)}
 									className={styles.indexLink}
