@@ -23,7 +23,7 @@ public class SearchTextTests
         [InlineData("<div>א", "א")]
         [InlineData("<p>א</p><p>ב</p>", "א ב")]
         [InlineData("א<br>ב", "א ב")]
-        // A boundary emits one space unless the text already ends in one;
+        // A boundary emits one space unless preceding text ends in one.
         // whitespace around tags stays literal in every port.
         [InlineData("א <br>ב", "א ב")]
         [InlineData("א  <br>ב", "א  ב")]

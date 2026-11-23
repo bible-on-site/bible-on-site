@@ -193,7 +193,7 @@ export function htmlToPlainText(html: string): string {
 		if (text.includes("<")) {
 			// A boundary emits one space only when the preceding char isn't
 			// already a space — the same dedup the other three ports apply.
-			text = text.replace(BLOCK_TAGS, (match, offset) =>
+			text = text.replace(BLOCK_TAGS, (_match, offset) =>
 				offset > 0 && text[offset - 1] === " " ? "" : " ",
 			);
 		}
