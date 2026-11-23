@@ -1373,7 +1373,7 @@ jobs:
         # exact same image on every run (packaging jobs are master-only).
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout.
-        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
@@ -1789,7 +1789,7 @@ jobs:
         # exact same image on every run (packaging jobs are master-only).
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout.
-        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/typecheck/unit/build and is gated before E2E. On a

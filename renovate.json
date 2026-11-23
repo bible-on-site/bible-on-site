@@ -82,6 +82,22 @@
 			"automerge": true
 		},
 		{
+			"description": "AWS SDK and production Bun build updates require explicit merge approval. A grouped update inherits this restriction.",
+			"matchPackageNames": [
+				"@aws-sdk/*",
+				"aws-config",
+				"aws-credential-types",
+				"aws-sdk-*",
+				"aws-sigv4",
+				"aws-smithy-*",
+				"boto3",
+				"botocore",
+				"bun",
+				"oven/bun"
+			],
+			"automerge": false
+		},
+		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
 			"matchManagers": [
 				"github-actions"

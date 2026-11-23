@@ -1,6 +1,6 @@
 FROM node:26.13.1-alpine AS base
 # Bun ships as a standalone binary — copy the pinned release matching
-# packageManager (bun@1.4.4) rather than installing a package manager.
+# packageManager rather than installing a package manager.
 COPY --from=oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b /usr/local/bin/bun /usr/local/bin/bun
 
 # Version-only releases must not invalidate the dependency layer.
