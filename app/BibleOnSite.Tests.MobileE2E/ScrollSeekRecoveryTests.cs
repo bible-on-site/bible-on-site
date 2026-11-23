@@ -20,8 +20,10 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
     {
         Page.Tap(Platform.FlyoutButton);
         // The last drawer row sits below the fold on taller drawers (CI's
-        // Pixel 7); scroll the drawer to it rather than tapping blind.
-        Platform.Tap(Driver!, Page.ScrollFlyoutTo("FlyoutPreferences"));
+        // Pixel 7); scroll the drawer to it rather than tapping blind, then
+        // tap through the page helper so a recycled view re-resolves.
+        Page.ScrollFlyoutTo("FlyoutPreferences");
+        Page.Tap("FlyoutPreferences");
         Page.Tap("SettingsDisplayRow");
         // Drive the switch above the viewport before the seek begins: the
         // page's scroll surface is taller than the window, so a burst of
