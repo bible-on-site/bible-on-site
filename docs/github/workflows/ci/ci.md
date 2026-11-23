@@ -9,7 +9,7 @@
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
-| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Data-deploy tooling tests (path-scoped, independent of `ci.yml`) |
+| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Reusable data deployment and MySQL rehearsal checks |
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
@@ -75,9 +75,9 @@ deployment-ledger freshness checks rather than requiring source SHA to
 remain the exact current master forever. Recovery additionally verifies
 the published receipt and the actual selected package bytes.
 
-`ci-data-deploy.yml` is separate: it validates the data-deployment tooling and
-triggers on its own path filter (`devops/deploy/data-deploy/**`,
-`devops/package.json`, itself) for PRs, master pushes and merge-queue checks.
+The main workflow calls `ci-data-deploy.yml` when data-deploy tooling,
+manual migrations, the Lambda handler or package pin, or its workflow inputs
+change. Cross Module CI requires the called workflow to succeed when selected.
 
 ## Pipeline Stages
 

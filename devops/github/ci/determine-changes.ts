@@ -1,8 +1,8 @@
 /**
  * Determines, in one job, which CI modules changed between the event's base
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
- * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
- * data deployment routing decision and `docs_only` — true only when every
+ * to GITHUB_OUTPUT for every module in MODULES, plus the data deployment
+ * and validation routing decisions and `docs_only` — true only when every
  * touched path sits under the repository-root `docs/` tree and no module's
  * checks fired, letting required checks resolve without heavy validation.
  *
@@ -311,8 +311,15 @@ const MANUAL_DATA_MIGRATION_PATH = `${DATA_DEPLOY_PATH}/manual`;
 const DATA_DEPLOY_TEST_PATTERN =
 	/(?:^|\/)test_[^/]+\.py$|_test\.py$|\.test\.mts$/;
 const DATA_DEPLOY_REGRESSION_SCRIPTS = new Set([
-	`${DATA_DEPLOY_PATH}/mysql_fingerprint_regression.py`,
+	`${DATA_DEPLOY_PATH}/mysql-fingerprint-regression.mjs`,
 	`${DATA_DEPLOY_PATH}/mysql_import_regression.py`,
+]);
+const DATA_DEPLOY_CI_FILES = new Set([
+	".github/workflows/ci-data-deploy.yml",
+	".github/workflows/ci.yml",
+	"devops/package.json",
+	"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+	"docs/aws/cloudformation/data-deploy/requirements.txt",
 ]);
 
 // Root docs/ counts as documentation only for inert prose, media and data
@@ -333,6 +340,12 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
 			!isAt(file, MANUAL_DATA_MIGRATION_PATH) &&
 			!DATA_DEPLOY_TEST_PATTERN.test(file) &&
 			!DATA_DEPLOY_REGRESSION_SCRIPTS.has(file),
+	);
+}
+
+export function isDataDeployCiChange(changedFiles: string[]): boolean {
+	return changedFiles.some(
+		(file) => isAt(file, DATA_DEPLOY_PATH) || DATA_DEPLOY_CI_FILES.has(file),
 	);
 }
 
@@ -604,6 +617,15 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	// The queue event base can already contain an earlier unmerged entry.
+	// The required rehearsals must cover deployment inputs from that entry too.
+	const dataDeployCiChanged =
+		isDataDeployCiChange(files) ||
+		(mergeGroup &&
+			isDataDeployCiChange(
+				listChangedFiles({ kind: "branch", branch: "master" }, cwd),
+			));
+	lines.push(`data_deploy_ci_changed=${dataDeployCiChanged}`);
 	lines.push(`docs_only=${docsOnly}`);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(

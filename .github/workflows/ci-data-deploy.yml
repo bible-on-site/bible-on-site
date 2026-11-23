@@ -1,55 +1,20 @@
 name: Data Deployment Tests
 
 on:
-  pull_request:
-    paths:
-      - devops/deploy/data-deploy/**
-      - devops/package.json
-      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
-      - docs/aws/cloudformation/data-deploy/requirements.txt
-      - .github/workflows/ci-data-deploy.yml
-  push:
-    branches: [master]
-    paths:
-      - devops/deploy/data-deploy/**
-      - devops/package.json
-      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
-      - docs/aws/cloudformation/data-deploy/requirements.txt
-      - .github/workflows/ci-data-deploy.yml
-  merge_group:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  # Merge groups have no path filters: the shared router decides whether the
-  # combined head is docs-only and skips this validation for it (#3621).
-  detect_docs:
-    timeout-minutes: 10
-    name: Docs-only change detection
+  test:
+    timeout-minutes: 60
+    name: Data deploy and MySQL rehearsals
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      docs_only: ${{ steps.detect.outputs.docs_only }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: devops/package.json
-      - name: Detect docs-only change
-        id: detect
-        run: node devops/github/ci/determine-changes.ts
-  test:
-    timeout-minutes: 60
-    name: Lambda restoration recovery
-    needs: detect_docs
-    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
 
@@ -64,7 +29,7 @@ jobs:
       - name: Test additive migration preservation without AWS
         run: python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"
       - name: Rehearse the article fingerprint migration on MySQL 8.4
-        run: python devops/deploy/data-deploy/mysql_fingerprint_regression.py
+        run: node devops/deploy/data-deploy/mysql-fingerprint-regression.mjs --mysql-tag 8.4.9
       - name: Test the packaged Lambda connector against MySQL 9.7 with TLS required
         shell: bash
         run: |

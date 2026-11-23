@@ -231,17 +231,25 @@ test("releases and version bumps stay tied to module changes on master", () => {
 	assert.ok(String(pending.if).includes("docs_only != 'true'"));
 });
 
-test("data deploy CI runs when the Lambda package pin changes by itself", () => {
+test("Cross Module CI gates the rehearsals when data deploy inputs change", () => {
 	const workflow = load("ci-data-deploy.yml");
-	const requirements = "docs/aws/cloudformation/data-deploy/requirements.txt";
-	for (const event of ["pull_request", "push"]) {
-		assert.ok(workflow.on[event].paths.includes(requirements), event);
-	}
+	assert.ok(Object.hasOwn(workflow.on, "workflow_call"));
+	const dataDeploy = jobs.data_deploy_ci;
+	assert.equal(dataDeploy.uses, "./.github/workflows/ci-data-deploy.yml");
+	assert.equal(dataDeploy.needs, "determine_changes");
+	assert.ok(job_if_includes("data_deploy_ci", "data_deploy_ci_changed == 'true'"));
+	assert.ok(jobs.cross_module_ci.needs.includes("data_deploy_ci"));
+	const check = jobs.cross_module_ci.steps.find(
+		(step) => step.id === "check_prerequisites",
+	);
+	assert.match(
+		String(check.run),
+		/data_deploy_ci_changed }}" = "true" \]; then\s+if \[ "\$\{\{ needs\.data_deploy_ci\.result }}" != "success"/,
+	);
 });
 
 test("auxiliary workflows gate merge-group work through the shared router", () => {
 	for (const [file, downstream] of [
-		["ci-data-deploy.yml", ["test"]],
 		["perek-images.yml", ["prepare-images"]],
 		["dependency-submission.yml", ["submit-snapshots"]],
 		["dependency-review.yml", ["nuget-snapshots", "dependency-review"]],

@@ -19,6 +19,7 @@ import {
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
+	isDataDeployCiChange,
 	isSchemaOnlyDataChange,
 	listChangedFiles,
 	main,
@@ -1272,7 +1273,7 @@ describe("isDataDeployChange", () => {
 		const tests = [
 			"deploy-payload.test.mts",
 			"lambda_mysql_package_test.py",
-			"mysql_fingerprint_regression.py",
+			"mysql-fingerprint-regression.mjs",
 			"mysql_import_regression.py",
 			"test_lambda_credentials.py",
 			"test_lambda_parser.py",
@@ -1283,6 +1284,7 @@ describe("isDataDeployChange", () => {
 				ci_changed: true,
 			});
 			assert.equal(isDataDeployChange([file]), false, file);
+			assert.equal(isDataDeployCiChange([file]), true, file);
 		}
 		assert.equal(isDataDeployChange([migration, ...tests]), false);
 		assert.equal(
@@ -1307,6 +1309,26 @@ describe("isDataDeployChange", () => {
 		])
 			assert.equal(isDataDeployChange(files), false, JSON.stringify(files));
 	});
+});
+
+test("deployment rehearsal inputs request CI without expressing release intent", () => {
+	for (const file of [
+		".github/workflows/ci-data-deploy.yml",
+		".github/workflows/ci.yml",
+		"devops/package.json",
+		"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+		"docs/aws/cloudformation/data-deploy/requirements.txt",
+	]) {
+		assert.equal(isDataDeployCiChange([file]), true, file);
+		assert.equal(isDataDeployChange([file]), false, file);
+	}
+	for (const file of [
+		"docs/guide.md",
+		"web/bible-on-site/src/page.tsx",
+		"devops/deploy/data-deploy-old.mts",
+		"docs/aws/cloudformation/data-deploy/requirements-dev.txt",
+	])
+		assert.equal(isDataDeployCiChange([file]), false, file);
 });
 
 describe("baseRevision", () => {
@@ -1479,7 +1501,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 5,
+				Object.keys(MODULES).length * 2 + 6,
 			);
 			return { changes, output };
 		} finally {
@@ -1638,6 +1660,20 @@ describe("main", () => {
 		}
 		assert.match(output, /^data_schema_only_changed=false$/m);
 		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=false$/m);
+	});
+
+	test("a merge-group tail rehearses data deployment inputs in an earlier entry", () => {
+		const { output } = run(
+			"merge_group",
+			({ base }) => ({ merge_group: { base_sha: base } }),
+			"docs/guide.md",
+			"write",
+			"docs/aws/cloudformation/data-deploy/requirements.txt",
+		);
+		assert.match(output, /^docs_only=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=true$/m);
 	});
 
 	for (const path of [
