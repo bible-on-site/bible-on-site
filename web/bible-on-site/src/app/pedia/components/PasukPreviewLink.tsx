@@ -7,11 +7,16 @@ import {
 	type ReactNode,
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+	computePreviewPosition,
+	type PreviewPosition,
+} from "@/app/components/tanahpedia-entry-preview";
 import { maskDivineNameText } from "@/lib/divine-name-masking";
 import {
 	getDivineNameMaskingServerSnapshot,
@@ -102,30 +107,25 @@ export function PasukPreviewLink({
 	);
 	const [preview, setPreview] = useState<PasukPreviewData | null>(null);
 	const [visible, setVisible] = useState(false);
-	const [position, setPosition] = useState<{ x: number; y: number }>({
-		x: 0,
-		y: 0,
-	});
+	const [position, setPosition] = useState<PreviewPosition | null>(null);
 	const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+	const anchorRef = useRef<HTMLAnchorElement>(null);
+	const tooltipRef = useRef<HTMLDivElement>(null);
 
-	const showPreview = useCallback(
-		(e: React.MouseEvent) => {
-			if (!pasukRef) return;
-			if (hideTimeoutRef.current) {
-				clearTimeout(hideTimeoutRef.current);
-				hideTimeoutRef.current = null;
-			}
-			setPosition({ x: e.clientX, y: e.clientY });
-			setVisible(true);
-			fetchPasukPreview(
-				pasukRef.perekId,
-				pasukRef.pasuk,
-				pasukRef.perush,
-				pasukRef.note,
-			).then(setPreview);
-		},
-		[pasukRef],
-	);
+	const showPreview = useCallback(() => {
+		if (!pasukRef) return;
+		if (hideTimeoutRef.current) {
+			clearTimeout(hideTimeoutRef.current);
+			hideTimeoutRef.current = null;
+		}
+		setVisible(true);
+		fetchPasukPreview(
+			pasukRef.perekId,
+			pasukRef.pasuk,
+			pasukRef.perush,
+			pasukRef.note,
+		).then(setPreview);
+	}, [pasukRef]);
 
 	const hidePreview = useCallback(() => {
 		hideTimeoutRef.current = setTimeout(() => setVisible(false), 200);
@@ -138,19 +138,58 @@ export function PasukPreviewLink({
 		}
 	}, []);
 
-	useEffect(() => {
-		return () => {
-			if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-		};
+	const closePreview = useCallback(() => {
+		if (hideTimeoutRef.current) {
+			clearTimeout(hideTimeoutRef.current);
+			hideTimeoutRef.current = null;
+		}
+		setVisible(false);
 	}, []);
+
+	// Mirrors TanahpediaEntryPreview: a scroll or resize detaches the fixed
+	// tooltip from its anchor, so it dismisses instead of floating stale.
+	useEffect(() => {
+		if (!visible) return;
+		document.addEventListener("scroll", closePreview, true);
+		window.addEventListener("resize", closePreview);
+		return () => {
+			document.removeEventListener("scroll", closePreview, true);
+			window.removeEventListener("resize", closePreview);
+		};
+	}, [visible, closePreview]);
+
+	// Measure the mounted tooltip and clamp it inside the viewport (below the
+	// anchor first, above when the anchor sits near the top edge). When the
+	// preview is taller than the space on either side, cap it to the roomier
+	// side so it scrolls instead of covering its own link.
+	useLayoutEffect(() => {
+		if (!visible || !preview) return;
+		const anchor = anchorRef.current;
+		const tooltip = tooltipRef.current;
+		if (!anchor || !tooltip) return;
+		const rect = anchor.getBoundingClientRect();
+		const viewport = { width: window.innerWidth, height: window.innerHeight };
+		const room = Math.max(viewport.height - rect.bottom, rect.top) - 10 - 8;
+		if (room > 0 && tooltip.offsetHeight > room) {
+			tooltip.style.maxHeight = `${room}px`;
+		}
+		setPosition(
+			computePreviewPosition(
+				rect,
+				{ width: tooltip.offsetWidth, height: tooltip.offsetHeight },
+				viewport,
+			),
+		);
+	}, [visible, preview]);
 
 	const tooltip =
 		visible && preview
 			? createPortal(
 					<div
+						ref={tooltipRef}
 						role="tooltip"
 						className={styles.pasukTooltip}
-						style={{ left: position.x, top: position.y }}
+						style={{ left: position?.x ?? 0, top: position?.y ?? 0 }}
 						onMouseEnter={keepPreview}
 						onMouseLeave={hidePreview}
 					>
@@ -176,6 +215,7 @@ export function PasukPreviewLink({
 		<>
 			<Link
 				{...rest}
+				ref={anchorRef}
 				href={href}
 				className={className}
 				onMouseEnter={showPreview}

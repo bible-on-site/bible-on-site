@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+
 import {
 	act,
 	fireEvent,
@@ -8,6 +9,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { type ComponentProps, forwardRef } from "react";
 import {
 	PasukPreviewLink,
 	parsePasukRefFromHref,
@@ -15,17 +17,16 @@ import {
 
 jest.mock("next/link", () => ({
 	__esModule: true,
-	default({
-		href,
-		children,
-		...rest
-	}: { href: string; children: React.ReactNode } & Record<string, unknown>) {
+	default: forwardRef<HTMLAnchorElement, ComponentProps<"a">>(function LinkMock(
+		{ href, children, ...rest },
+		ref,
+	) {
 		return (
-			<a href={href} {...rest}>
+			<a href={href} ref={ref} {...rest}>
 				{children}
 			</a>
 		);
-	},
+	}),
 }));
 
 describe("parsePasukRefFromHref", () => {
@@ -302,6 +303,94 @@ describe("PasukPreviewLink", () => {
 		await waitFor(() =>
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(),
 		);
+		jest.useRealTimers();
+	});
+
+	it("positions the tooltip inside the viewport below a top-edge anchor", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "קצה" }),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/41#pasuk-3">בראשית מא ג</PasukPreviewLink>,
+		);
+		const link = screen.getByRole("link", { name: "בראשית מא ג" });
+		jest.spyOn(link, "getBoundingClientRect").mockReturnValue({
+			top: 4,
+			bottom: 20,
+			left: 200,
+			width: 60,
+			right: 260,
+			height: 16,
+			x: 200,
+			y: 4,
+			toJSON: () => ({}),
+		} as DOMRect);
+		fireEvent.mouseEnter(link);
+		// jsdom measures the tooltip at 0x0; with the anchor hugging the top
+		// edge it lands 10px below the anchor instead of clipping above the
+		// viewport.
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toHaveStyle({
+				top: "30px",
+				left: "230px",
+			}),
+		);
+	});
+
+	it("dismisses the tooltip on scroll", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "גלילה" }),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/42#pasuk-5">בראשית מב ה</PasukPreviewLink>,
+		);
+		fireEvent.mouseEnter(screen.getByRole("link", { name: "בראשית מב ה" }));
+		await screen.findByRole("tooltip");
+		act(() => {
+			fireEvent.scroll(document);
+		});
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+	});
+
+	it("dismisses the tooltip on window resize", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "שינוי" }),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/43#pasuk-7">בראשית מג ז</PasukPreviewLink>,
+		);
+		fireEvent.mouseEnter(screen.getByRole("link", { name: "בראשית מג ז" }));
+		await screen.findByRole("tooltip");
+		act(() => {
+			fireEvent(window, new Event("resize"));
+		});
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+	});
+
+	it("closes immediately on scroll while a hide is pending", async () => {
+		jest.useFakeTimers();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "מיידי" }),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/44#pasuk-8">בראשית מד ח</PasukPreviewLink>,
+		);
+		const link = screen.getByRole("link", { name: "בראשית מד ח" });
+		await act(async () => {
+			fireEvent.mouseEnter(link);
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
+		fireEvent.mouseLeave(link);
+		act(() => {
+			fireEvent.scroll(document);
+		});
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		jest.useRealTimers();
 	});
 
