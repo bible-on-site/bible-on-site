@@ -142,7 +142,7 @@ describe("PasukPreviewLink", () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => ({
-				reference: 'רשי בראשית א ג',
+				reference: "רשי בראשית א ג",
 				text: "וַיִּקְרָא",
 				noteHtml: "<p>הערת רשי</p>",
 			}),
@@ -152,9 +152,7 @@ describe("PasukPreviewLink", () => {
 				רשי בראשית א ג
 			</PasukPreviewLink>,
 		);
-		fireEvent.mouseEnter(
-			screen.getByRole("link", { name: "רשי בראשית א ג" }),
-		);
+		fireEvent.mouseEnter(screen.getByRole("link", { name: "רשי בראשית א ג" }));
 		await waitFor(() => {
 			expect(screen.getByRole("tooltip")).toHaveTextContent("הערת רשי");
 		});
@@ -392,6 +390,53 @@ describe("PasukPreviewLink", () => {
 		});
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 		jest.useRealTimers();
+	});
+
+	it("caps an oversized tooltip to the roomier side so it never covers its link", async () => {
+		const innerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+		Object.defineProperty(window, "innerHeight", {
+			value: 300,
+			configurable: true,
+		});
+		// jsdom reports offsetHeight 0; fake a tall tooltip that reflows to
+		// its capped height once maxHeight lands.
+		const heightSpy = jest
+			.spyOn(HTMLElement.prototype, "offsetHeight", "get")
+			.mockImplementation(function (this: HTMLElement) {
+				return this.style.maxHeight
+					? Number.parseInt(this.style.maxHeight, 10)
+					: 600;
+			});
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "כבדה" }),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/45#pasuk-2">בראשית מה ב</PasukPreviewLink>,
+		);
+		const link = screen.getByRole("link", { name: "בראשית מה ב" });
+		jest.spyOn(link, "getBoundingClientRect").mockReturnValue({
+			top: 100,
+			bottom: 116,
+			left: 200,
+			width: 60,
+			right: 260,
+			height: 16,
+			x: 200,
+			y: 100,
+			toJSON: () => ({}),
+		} as DOMRect);
+		fireEvent.mouseEnter(link);
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toHaveStyle({
+				maxHeight: "166px",
+				top: "126px",
+			}),
+		);
+		heightSpy.mockRestore();
+		if (innerHeight) {
+			Object.defineProperty(window, "innerHeight", innerHeight);
+		}
 	});
 
 	it("keeps a preview entered directly without a pending hide timer", async () => {
