@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { HebrewDatesEditor } from "~/components/HebrewDatesEditor";
@@ -90,6 +91,7 @@ function ArticleEditPage() {
 
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
 
 	const { data: article, isLoading: articleLoading } = useQuery({
 		queryKey: ["article", articleId],
@@ -226,11 +228,7 @@ function ArticleEditPage() {
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => {
-		if (window.confirm("האם אתה בטוח שברצונך למחוק את המאמר?")) {
-			deleteMutation.mutate();
-		}
-	};
+	const handleDelete = () => setConfirmDelete(true);
 
 	if (articleLoading) {
 		return (
@@ -579,6 +577,18 @@ function ArticleEditPage() {
 					coverageVerified={formData.coverageVerified === true}
 				/>
 			)}
+
+			<ConfirmDialog
+				open={confirmDelete}
+				title="מחיקת מאמר"
+				message="האם אתה בטוח שברצונך למחוק את המאמר?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setConfirmDelete(false);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setConfirmDelete(false)}
+			/>
 		</div>
 	);
 }

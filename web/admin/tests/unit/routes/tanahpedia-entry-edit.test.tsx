@@ -5,8 +5,10 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 import { RevisionConflictError } from "~/lib/tanahpedia/revisions-shared";
 
 const {
@@ -139,7 +141,9 @@ function renderPage() {
 	};
 	render(
 		<QueryClientProvider client={client}>
-			<Page />
+			<UndoToastProvider durationMs={30}>
+				<Page />
+			</UndoToastProvider>
 		</QueryClientProvider>,
 	);
 	return client;
@@ -1396,7 +1400,6 @@ describe("EntryEditPage", () => {
 		});
 
 		it("reverts uncommitted edits and deletes the draft on בטל שינויים", async () => {
-			const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 			renderPage();
 			await screen.findByTestId("wysiwyg-editor");
 			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
@@ -1406,11 +1409,38 @@ describe("EntryEditPage", () => {
 			await waitFor(() => expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy());
 
 			fireEvent.click(screen.getByRole("button", { name: "בטל שינויים" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "בטל שינויים",
+				}),
+			);
 
 			expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("משה רבנו");
 			expect(updateEntryMock).not.toHaveBeenCalled();
-			confirmSpy.mockRestore();
+		});
+
+		it("keeps the edits when the revert dialog is cancelled", async () => {
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "כותרת זמנית" },
+			});
+			await waitFor(() =>
+				expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "בטל שינויים" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "ביטול",
+				}),
+			);
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת זמנית");
+			expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy();
 		});
 
 		it("mirrors /new edits under a stable new-entry draft key and clears it on create", async () => {
@@ -1486,12 +1516,16 @@ describe("EntryEditPage", () => {
 	});
 
 	describe("deleting", () => {
-		it("deletes the entry after confirmation and goes back to the list", async () => {
-			const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+		it("deletes the entry after the dialog confirms and goes back to the list", async () => {
 			deleteEntryMock.mockResolvedValue({ success: true });
 			localStorage.setItem(DRAFT_KEY, JSON.stringify(storedDraft()));
 			renderPage();
 			fireEvent.click(await screen.findByRole("button", { name: "מחק ערך" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "מחק",
+				}),
+			);
 
 			await waitFor(() =>
 				expect(deleteEntryMock).toHaveBeenCalledWith({ data: "entry-1" }),
@@ -1503,16 +1537,18 @@ describe("EntryEditPage", () => {
 			);
 			// A deleted entry's draft can never commit — it is removed.
 			expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
-			confirmSpy.mockRestore();
 		});
 
-		it("does nothing when the confirmation is cancelled", async () => {
-			const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+		it("does nothing when the dialog is cancelled", async () => {
 			renderPage();
 			fireEvent.click(await screen.findByRole("button", { name: "מחק ערך" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "ביטול",
+				}),
+			);
 
 			expect(deleteEntryMock).not.toHaveBeenCalled();
-			confirmSpy.mockRestore();
 		});
 	});
 
@@ -1530,13 +1566,17 @@ describe("EntryEditPage", () => {
 		};
 		const utils = render(
 			<QueryClientProvider client={client}>
-				<Page />
+				<UndoToastProvider durationMs={30}>
+					<Page />
+				</UndoToastProvider>
 			</QueryClientProvider>,
 		);
 		const rerender = () =>
 			utils.rerender(
 				<QueryClientProvider client={client}>
-					<Page />
+					<UndoToastProvider durationMs={30}>
+						<Page />
+					</UndoToastProvider>
 				</QueryClientProvider>,
 			);
 

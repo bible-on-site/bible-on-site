@@ -179,5 +179,38 @@ public class PerekViewModelReadingModesTests
             viewModel.HasCurrentPerekRecitation.Should().BeFalse();
             viewModel.ShowHeaderPlayButton.Should().BeFalse();
         }
+
+        [Fact]
+        public void downloading_sefer_yields_the_button_slot_to_a_spinner()
+        {
+            // #3704: while the tapped sefer's pack downloads, the header keeps
+            // the play affordance contract but the glyph yields to a spinner.
+            var viewModel = CreateViewModel(_ => true);
+            viewModel.Perek = MakePerek(1);
+            viewModel.ShowHeaderPlayButton.Should().BeTrue();
+            viewModel.HeaderPlayVisible.Should().BeTrue();
+
+            viewModel.IsRecitationDownloading = true;
+            viewModel.HeaderPlayVisible.Should().BeFalse();
+            viewModel.ShowHeaderPlayButton.Should().BeTrue(
+                "the affordance contract stays — only the glyph is replaced");
+
+            viewModel.IsRecitationDownloading = false;
+            viewModel.HeaderPlayVisible.Should().BeTrue();
+        }
+
+        [Fact]
+        public void qriynot_toggle_refreshes_header_play_visibility()
+        {
+            var viewModel = CreateViewModel(_ => true);
+            viewModel.Perek = MakePerek(1);
+            var notified = new List<string>();
+            viewModel.PropertyChanged += (_, e) => notified.Add(e.PropertyName!);
+
+            viewModel.IsQriynotEnabled = false;
+
+            viewModel.HeaderPlayVisible.Should().BeFalse();
+            notified.Should().Contain(nameof(PerekViewModel.HeaderPlayVisible));
+        }
     }
 }

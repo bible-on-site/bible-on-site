@@ -39,8 +39,14 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Only sections near the viewport are exposed (AccessibleTextSectionsTests
         // proves the split keeps every paragraph); the 2,200-line document must
-        // not put its ~147 sections into every WDA snapshot.
-        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
+        // not put its ~147 sections into every WDA snapshot. A section is one
+        // accessible element for its whole laid-out height, so the first block's
+        // center can sit a few points below the viewport — invisible to every
+        // center-in-viewport wait while its top edge is already on screen, and
+        // taller-than-viewport elements can never satisfy that wait at all.
+        // The assertions below only need the sections present in the tree
+        // (#3735).
+        Page.WaitForPresent("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
@@ -127,16 +133,30 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stale (#3421). Frames identify distinct rows so a re-render after
         // a tap never re-taps a row that was already checked.
         var tapped = new List<(System.Drawing.Point Location, System.Drawing.Size Size)>();
+        // The open sheet leaves its rows' accessibility frames reaching into
+        // the floating bottom chrome. WDA still reports such a row hittable,
+        // but the synthesized viewport-coordinate touch lands on whatever is
+        // topmost there — the chevron — and toggles the sheet instead of the
+        // row (#3735). The chevron's top edge bounds the ambiguous band.
+        var chromeTop = Page.RenderedElements("PerushimChevronButton")
+            .Select(element => element.Frame.Location.Y)
+            .DefaultIfEmpty(int.MaxValue)
+            .Min();
         for (var attempt = 0; tapped.Count < 5 && attempt < 15; attempt++)
         {
-            var next = Page.RenderedElements("PerushCheckBox")
-                .FirstOrDefault(checkbox => !tapped.Contains(checkbox.Frame));
-            if (next.Element == null)
-            {
-                break;
-            }
             try
             {
+                // The "0" switch value skips a row recycled back checked, and
+                // CanTap drops rows the snapshot itself marks unhittable.
+                var next = Page.RenderedElements("PerushCheckBox")
+                    .FirstOrDefault(checkbox => checkbox.Text == "0"
+                        && !tapped.Contains(checkbox.Frame)
+                        && checkbox.Frame.Location.Y + checkbox.Frame.Size.Height / 2 < chromeTop
+                        && Platform.CanTap(checkbox.Element));
+                if (next.Element == null)
+                {
+                    break;
+                }
                 Platform.Tap(Driver!, next.Element);
                 tapped.Add(next.Frame);
             }
@@ -147,7 +167,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         }
         Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
-        Page.Tap("PerushimChevronButton");
+        Page.DismissPerushimSheet();
         return tapped.Count;
     }
 }

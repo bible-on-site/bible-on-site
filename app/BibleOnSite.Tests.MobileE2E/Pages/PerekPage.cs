@@ -77,10 +77,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// accessibility tree entirely on iOS, but a closing animation or a stale
     /// snapshot can keep a copy around briefly.
     /// </summary>
-    public void WaitForHidden(string automationId)
+    public void WaitForHidden(string automationId) =>
+        WaitForHidden(automationId, TimeSpan.FromSeconds(30));
+
+    /// <inheritdoc cref="WaitForHidden(string)"/>
+    public void WaitForHidden(string automationId, TimeSpan timeout)
     {
         var locator = platform.AutomationId(automationId);
-        var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
@@ -158,6 +161,91 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public void Tap(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
         Tap(platform.AutomationId(automationId), element => condition(element) && platform.CanTap(element), timeout);
 
+    public void DismissPerushimSheet() => DismissPerushimSheet(TimeSpan.FromSeconds(5));
+
+    internal void DismissPerushimSheet(TimeSpan hiddenTimeout)
+    {
+        By[] markers =
+        [
+            platform.AutomationId("PerushimContentViewport"),
+            platform.AutomationId("PerushCheckBox"),
+            platform.AutomationId("PerushimEmptyState")
+        ];
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        // A row tap may have hit the chevron. Allow the 250ms closing
+        // animation to finish before deciding that the sheet needs a tap.
+        // Transient lookup failures can use the rest of the observation window.
+        var initialTimeout = RemainingTime(hiddenTimeout);
+        var settleTime = TimeSpan.FromMilliseconds(Math.Min(350, initialTimeout.TotalMilliseconds));
+        if (WaitForDetached(markers, initialTimeout, settleTime))
+        {
+            return;
+        }
+        for (var taps = 0; taps < 3 && DateTime.UtcNow < deadline; taps++)
+        {
+            Tap("PerushimChevronButton", _ => true, RemainingTime(TimeSpan.FromSeconds(10)));
+            var timeout = RemainingTime(hiddenTimeout);
+            if (WaitForDetached(markers, timeout, timeout))
+            {
+                return;
+            }
+        }
+        throw new WebDriverTimeoutException("The perushim sheet remained attached after dismissal.");
+
+        TimeSpan RemainingTime(TimeSpan maximum)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            return remaining < maximum ? remaining : maximum;
+        }
+    }
+
+    private bool WaitForDetached(IReadOnlyList<By> locators, TimeSpan timeout, TimeSpan settleTime)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return false;
+        }
+        var start = DateTime.UtcNow;
+        var deadline = start.Add(timeout);
+        var settledAt = start.Add(settleTime);
+        Exception? observationError = null;
+        while (true)
+        {
+            try
+            {
+                if (!locators.Any(IsPresent))
+                {
+                    return true;
+                }
+                if (DateTime.UtcNow >= settledAt)
+                {
+                    return false;
+                }
+                observationError = null;
+            }
+            catch (StaleElementReferenceException exception)
+            {
+                observationError = exception;
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                observationError = exception;
+            }
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+            Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(200, remaining.TotalMilliseconds)));
+        }
+        if (observationError != null)
+        {
+            // An inconclusive poll cannot authorize another toggle.
+            throw new InvalidOperationException("Could not verify that the perushim sheet was dismissed.", observationError);
+        }
+        return false;
+    }
+
     public void Tap(By locator) => Tap(locator, platform.CanTap, TimeSpan.FromSeconds(45));
 
     private void Tap(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
@@ -203,6 +291,47 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }, timeout);
         return observed;
     }
+
+    /// <summary>
+    /// Waits until an element matching the automation id exists in the
+    /// accessibility tree, wherever it sits relative to the viewport. An
+    /// element taller than the viewport can never satisfy a center-in-viewport
+    /// wait even when its top edge is on screen, and displayed-only lookups
+    /// report it not visible for the same reason (#3735).
+    /// </summary>
+    public void WaitForPresent(string automationId) =>
+        WaitForPresent(automationId, TimeSpan.FromSeconds(45));
+
+    /// <inheritdoc cref="WaitForPresent(string)"/>
+    public void WaitForPresent(string automationId, TimeSpan timeout)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                if (IsPresent(locator))
+                {
+                    return;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // A snapshot can reference a node the page just recycled.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout can retry within this deadline.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"No element matching {locator} appeared in the accessibility tree within {timeout.TotalSeconds} seconds.");
+    }
+
+    private bool IsPresent(By locator) => driver is IosSnapshotDriver snapshots
+        ? snapshots.FindSnapshots(locator).Count != 0
+        : driver.FindElements(locator).Count != 0;
 
     /// <summary>
     /// Scrolls the page's own scroll surface down until the element's center is

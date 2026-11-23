@@ -4,9 +4,8 @@ import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getPerakim, getSefarim, matchedRoute } = vi.hoisted(() => ({
+const { getPerakim, matchedRoute } = vi.hoisted(() => ({
 	getPerakim: vi.fn(),
-	getSefarim: vi.fn(),
 	matchedRoute: { value: null as string | null },
 }));
 
@@ -23,13 +22,16 @@ vi.mock("@tanstack/react-router", () => ({
 		to,
 		params,
 		className,
+		...rest
 	}: {
 		children: ReactNode;
 		to: string;
 		params?: Record<string, string>;
 		className?: string;
+		[key: string]: unknown;
 	}) => (
 		<a
+			{...rest}
 			className={className}
 			href={Object.entries(params ?? {}).reduce(
 				(path, [key, value]) => path.replace(`$${key}`, value),
@@ -41,7 +43,6 @@ vi.mock("@tanstack/react-router", () => ({
 	),
 }));
 vi.mock("~/server/perakim", () => ({ getPerakim }));
-vi.mock("~/server/sefarim", () => ({ getSefarim }));
 
 import { Route } from "~/routes/articles";
 
@@ -71,12 +72,13 @@ async function hydrate(container: HTMLElement) {
 		roots.push(hydrateRoot(container, <Page />));
 	});
 }
-function controls(container: HTMLElement = document.body) {
-	const queries = within(container);
-	return {
-		input: queries.getByPlaceholderText("מספר פרק (1-929)"),
-		button: queries.getByRole("button", { name: /עבור לפרק/ }),
-	};
+function combobox(container: HTMLElement = document.body) {
+	return within(container).getByRole("combobox", {
+		name: "חיפוש ספר ופרק",
+	});
+}
+function options() {
+	return screen.queryAllByRole("option");
 }
 function navigationDestination(action: () => void) {
 	const location = { href: "unchanged" };
@@ -96,9 +98,47 @@ function navigationDestination(action: () => void) {
 	return location.href;
 }
 
+const PERAKIM = [
+	{
+		id: 1,
+		perek_id: 1,
+		sefer_id: 1,
+		sefer_name: "בראשית",
+		perek_in_context: 1,
+		perek: 1,
+		additional_letter: null,
+	},
+	{
+		id: 2,
+		perek_id: 2,
+		sefer_id: 1,
+		sefer_name: "בראשית",
+		perek_in_context: null,
+		perek: 2,
+		additional_letter: null,
+	},
+	{
+		id: 3,
+		perek_id: 300,
+		sefer_id: 9,
+		sefer_name: "מלכים",
+		perek_in_context: 1,
+		perek: 1,
+		additional_letter: "ב",
+	},
+	{
+		id: 4,
+		perek_id: 929,
+		sefer_id: null,
+		sefer_name: null,
+		perek_in_context: null,
+		perek: null,
+		additional_letter: null,
+	},
+];
+
 beforeEach(() => {
-	getPerakim.mockReset().mockReturnValue([]);
-	getSefarim.mockReset().mockReturnValue([]);
+	getPerakim.mockReset().mockReturnValue(PERAKIM);
 	matchedRoute.value = null;
 });
 afterEach(async () => {
@@ -110,28 +150,19 @@ afterEach(async () => {
 });
 
 describe("Article chapter navigation", () => {
-	it("keeps server controls inactive until their own handlers mount", async () => {
+	it("keeps the server-rendered combobox inactive until its handlers mount", async () => {
 		const container = serverMarkup();
-		const { input, button } = controls(container);
-		expect(input).toBeDisabled();
-		expect(button).toBeDisabled();
+		expect(combobox(container)).toBeDisabled();
 		await hydrate(container);
-		expect(input).toBeEnabled();
-		expect(button).toBeEnabled();
-		fireEvent.change(input, { target: { value: "1" } });
-		expect(input).toHaveValue(1);
-		expect(navigationDestination(() => fireEvent.click(button))).toBe(
-			"/articles/perek/1",
-		);
+		expect(combobox(container)).toBeEnabled();
 	});
 
 	it("keeps another server render inactive after an earlier copy hydrated", async () => {
 		await hydrate(serverMarkup());
 		const second = serverMarkup();
-		expect(controls(second).input).toBeDisabled();
-		expect(controls(second).button).toBeDisabled();
+		expect(combobox(second)).toBeDisabled();
 		await hydrate(second);
-		expect(controls(second).input).toBeEnabled();
+		expect(combobox(second)).toBeEnabled();
 	});
 
 	it.each(["/articles/$id", "/articles/perek/$perekId"])(
@@ -141,110 +172,166 @@ describe("Article chapter navigation", () => {
 			render(<Page />);
 			expect(screen.getByTestId("child-route")).toBeInTheDocument();
 			expect(
-				screen.queryByPlaceholderText("מספר פרק (1-929)"),
+				screen.queryByRole("combobox", { name: "חיפוש ספר ופרק" }),
 			).not.toBeInTheDocument();
 		},
 	);
 
-	it("uses Enter for a valid chapter and ignores unrelated keys", () => {
+	it("lists every perek as a direct link to its articles page", () => {
 		render(<Page />);
-		const { input } = controls();
-		fireEvent.change(input, { target: { value: "929" } });
 		expect(
-			navigationDestination(() => fireEvent.keyDown(input, { key: "x" })),
+			options().map((option) => option.getAttribute("href")),
+		).toEqual([
+			"/articles/perek/1",
+			"/articles/perek/2",
+			"/articles/perek/300",
+			"/articles/perek/929",
+		]);
+		expect(
+			screen.getByRole("option", { name: /מלכים\s*פרק ב א/ }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("option", { name: /אחר\s*פרק/ }),
+		).toBeInTheDocument();
+	});
+
+	it("filters options by sefer and perek text", () => {
+		render(<Page />);
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		expect(options()).toHaveLength(1);
+		fireEvent.change(combobox(), { target: { value: "בראשית ב" } });
+		expect(options()).toHaveLength(1);
+		expect(
+			screen.getByRole("option", { name: /בראשית\s*פרק ב/ }),
+		).toBeInTheDocument();
+	});
+
+	it("keeps the canonical perek-number jump through a digit query", () => {
+		render(<Page />);
+		fireEvent.change(combobox(), { target: { value: "300" } });
+		expect(options()).toHaveLength(1);
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
+	});
+
+	it("moves the active option with arrow keys before Enter", () => {
+		render(<Page />);
+		const input = combobox();
+		expect(input).toHaveAttribute(
+			"aria-activedescendant",
+			"perek-option-1",
+		);
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		expect(input).toHaveAttribute(
+			"aria-activedescendant",
+			"perek-option-2",
+		);
+		expect(
+			screen.getByRole("option", { name: /בראשית\s*פרק ב/ }),
+		).toHaveAttribute("aria-selected", "true");
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		fireEvent.keyDown(input, { key: "ArrowUp" });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(input, { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
+	});
+
+	it("uses Enter for the first match and ignores unrelated keys", () => {
+		render(<Page />);
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "x" }),
+			),
 		).toBe("unchanged");
 		expect(
-			navigationDestination(() => fireEvent.keyDown(input, { key: "Enter" })),
-		).toBe("/articles/perek/929");
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
 	});
 
-	it.each(["", "0", "930"])("rejects chapter input '%s'", (value) => {
+	it("clears the query on Escape", () => {
 		render(<Page />);
-		const { input, button } = controls();
-		fireEvent.change(input, { target: { value } });
-		expect(navigationDestination(() => fireEvent.click(button))).toBe(
-			"unchanged",
-		);
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		fireEvent.keyDown(combobox(), { key: "Escape" });
+		expect(combobox()).toHaveValue("");
+		expect(options()).toHaveLength(4);
 	});
 
-	it("groups chapters and preserves Hebrew labels while books expand independently", () => {
-		getSefarim.mockReturnValue([
-			{ id: 1, name: "בראשית" },
-			{ id: 2, name: "שמואל" },
-			{ id: 0, name: "לא משויך" },
-			{ id: 3, name: "ללא פרקים" },
-		]);
-		getPerakim.mockReturnValue([
-			{
-				id: 1,
-				perek_id: 1,
-				sefer_id: 1,
-				perek_in_context: 1,
-				perek: 1,
-				additional_letter: null,
-			},
-			{
-				id: 2,
-				perek_id: 2,
-				sefer_id: 1,
-				perek_in_context: null,
-				perek: 2,
-				additional_letter: null,
-			},
-			{
-				id: 3,
-				perek_id: 300,
-				sefer_id: 2,
-				perek_in_context: 3,
-				perek: 3,
-				additional_letter: "ב",
-			},
-			{
-				id: 4,
-				perek_id: 4,
-				sefer_id: null,
-				perek_in_context: null,
-				perek: null,
-				additional_letter: null,
-			},
-		]);
+	it("reveals the first option again when the search resets", () => {
 		render(<Page />);
-		fireEvent.click(screen.getByRole("button", { name: /^בראשית/ }));
-		expect(screen.getByRole("link", { name: "א" })).toHaveAttribute(
-			"href",
-			"/articles/perek/1",
-		);
-		expect(screen.getByRole("link", { name: "ב" })).toHaveAttribute(
-			"href",
-			"/articles/perek/2",
-		);
-		fireEvent.click(screen.getByRole("button", { name: /^שמואל/ }));
-		expect(screen.getByRole("link", { name: "ב ג" })).toBeVisible();
-		fireEvent.click(screen.getByRole("button", { name: /^בראשית/ }));
-		expect(screen.queryByRole("link", { name: "א" })).not.toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "ב ג" })).toBeVisible();
-		fireEvent.click(screen.getByRole("button", { name: /^לא משויך/ }));
+		const listbox = screen.getByRole("listbox", { name: "פרקים" });
+		listbox.scrollTop = 120;
+		fireEvent.change(combobox(), { target: { value: "מלכים" } });
+		expect(listbox.scrollTop).toBe(0);
+		listbox.scrollTop = 120;
+		fireEvent.keyDown(combobox(), { key: "Escape" });
+		expect(listbox.scrollTop).toBe(0);
+	});
+
+	it("reports no matching perakim", () => {
+		render(<Page />);
+		fireEvent.change(combobox(), { target: { value: "לא קיים" } });
+		expect(options()).toHaveLength(0);
+		expect(screen.getByText("אין פרקים תואמים")).toBeInTheDocument();
+		// Arrows on an empty list leave the first-match selection in place.
+		fireEvent.keyDown(combobox(), { key: "ArrowDown" });
 		expect(
-			document.querySelector('a[href="/articles/perek/4"]'),
-		).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: /^ללא פרקים/ }));
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("unchanged");
+	});
+
+	it("keeps the first option selected when matches arrive after arrow keys", () => {
+		getPerakim.mockReturnValue([]);
+		const { rerender } = render(<Page />);
+		fireEvent.keyDown(combobox(), { key: "ArrowDown" });
+		// Options arrive without a query change, so the index must not be -1.
+		getPerakim.mockReturnValue(PERAKIM);
+		rerender(<Page />);
 		expect(
-			screen.getByRole("button", { name: /^ללא פרקים/ }),
-		).toBeInTheDocument();
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/1");
 	});
 
-	it("keeps the navigation available while chapter data is still pending", () => {
-		getPerakim.mockReturnValue(undefined);
-		getSefarim.mockReturnValue([{ id: 1, name: "בראשית" }]);
+	it("caps the empty-query list and shows the running count", () => {
+		getPerakim.mockReturnValue(
+			Array.from({ length: 80 }, (_, i) => ({
+				id: i + 1,
+				perek_id: i + 1,
+				sefer_id: 1,
+				sefer_name: "בראשית",
+				perek_in_context: i + 1,
+				perek: i + 1,
+				additional_letter: null,
+			})),
+		);
 		render(<Page />);
-		fireEvent.click(screen.getByRole("button", { name: /^בראשית/ }));
-		expect(controls().input).toBeEnabled();
+		expect(options()).toHaveLength(60);
+		expect(screen.getByText("60 מתוך 80 פרקים")).toBeInTheDocument();
 	});
 
-	it("renders the navigation shell while both data queries are pending", () => {
+	it("keeps the combobox available while chapter data is still pending", () => {
 		getPerakim.mockReturnValue(undefined);
-		getSefarim.mockReturnValue(undefined);
 		render(<Page />);
-		expect(controls().input).toBeEnabled();
+		expect(combobox()).toBeEnabled();
+		expect(screen.getByText("אין פרקים תואמים")).toBeInTheDocument();
+		// The canonical-number jump does not wait for the option list.
+		fireEvent.change(combobox(), { target: { value: "300" } });
+		expect(
+			navigationDestination(() =>
+				fireEvent.keyDown(combobox(), { key: "Enter" }),
+			),
+		).toBe("/articles/perek/300");
 	});
 });

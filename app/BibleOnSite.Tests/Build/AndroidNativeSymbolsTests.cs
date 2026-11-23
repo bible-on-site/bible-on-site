@@ -344,6 +344,22 @@ public class AndroidNativeSymbolsTests : IDisposable
     }
 
     [Fact]
+    public void Offline_packaging_validates_local_symbols_without_consulting_symbol_stores()
+    {
+        var buildId = Convert.FromHexString("0123456789ABCDEF");
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libmonodroid.so", Elf(id: 5)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: buildId)));
+        Func<string, byte[]?> lookup = _ => throw new InvalidOperationException("Unexpected symbol store lookup");
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, findPublicSymbols: lookup,
+            findVendorSymbols: lookup, includeExternalSymbols: false);
+
+        Assert.Equal(["arm64-v8a/libcoreclr.so"], AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
     public void Includes_public_and_embedded_symbols_but_keeps_unavailable_files_and_data_explicit()
     {
         var coreId = Enumerable.Repeat((byte)2, 20).ToArray();

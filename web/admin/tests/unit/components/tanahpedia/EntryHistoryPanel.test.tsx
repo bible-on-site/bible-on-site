@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { EntryRevisionRow } from "~/lib/tanahpedia/revisions-shared";
 
@@ -130,22 +136,30 @@ describe("EntryHistoryPanel", () => {
 		await waitFor(() => expect(rejectMock).toHaveBeenCalled());
 	});
 
-	it("restores an applied revision only after confirmation", async () => {
+	it("restores an applied revision only after the dialog confirms", async () => {
 		listMock.mockResolvedValue([makeRevision({ status: "APPLIED" })]);
 		restoreMock.mockResolvedValue({});
-		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 		renderPanel({ baseRevisionId: "rev-00000001" });
 		fireEvent.click(await screen.findByText("שחזר גרסה זו"));
+
+		fireEvent.click(
+			within(await screen.findByRole("dialog")).getByRole("button", {
+				name: "ביטול",
+			}),
+		);
 		expect(restoreMock).not.toHaveBeenCalled();
 
-		confirmSpy.mockReturnValue(true);
 		fireEvent.click(screen.getByText("שחזר גרסה זו"));
+		fireEvent.click(
+			within(await screen.findByRole("dialog")).getByRole("button", {
+				name: "שחזר",
+			}),
+		);
 		await waitFor(() =>
 			expect(restoreMock).toHaveBeenCalledWith({
 				data: { id: "rev-00000001", baseRevisionId: "rev-00000001" },
 			}),
 		);
-		confirmSpy.mockRestore();
 	});
 
 	it("shows a friendly message on revision conflict errors", async () => {

@@ -105,7 +105,7 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
                 Output.WriteLine("The rendered perush checkbox never became tappable; scrolling without it.");
             }
         }
-        Page.Tap("PerushimChevronButton");
+        Page.DismissPerushimSheet();
     }
 
     internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)

@@ -1,5 +1,6 @@
 import { Folder } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useUndoAction } from "~/components/UndoToast";
 import type { Directory } from "~/lib/archive";
 import { setArchiveBusy } from "~/lib/archive-busy";
 import styles from "./archive.module.css";
@@ -54,10 +55,16 @@ interface UploadItem {
 }
 
 export function ArchiveArea() {
+	const scheduleUndo = useUndoAction();
 	const [loginRequired, setLoginRequired] = useState(false);
 	const [directory, setDirectory] = useState<Directory | null>(null);
 	const [error, setError] = useState("");
-	const [busy, setBusy] = useState(false);
+	// Overlapping operations (an upload plus a deferred delete) share this flag —
+	// a count keeps one completion from unlocking the top bar mid-upload.
+	const [opCount, setOpCount] = useState(0);
+	const busy = opCount > 0;
+	const beginOp = () => setOpCount((count) => count + 1);
+	const endOp = () => setOpCount((count) => Math.max(0, count - 1));
 	const [dragging, setDragging] = useState(false);
 	const dragDepth = useRef(0);
 	const [cursor, setCursor] = useState("");
@@ -71,6 +78,14 @@ export function ArchiveArea() {
 	const cancel = useRef(false);
 	const request = useRef<AbortController | null>(null);
 	const listingRequest = useRef(0);
+	// Current listing view — a deferred delete refreshes only when its folder
+	// is still the visible one, and with live cursor/history rather than the
+	// stale closure captured at schedule time.
+	const activeViewRef = useRef<{
+		dir: string;
+		cursor: string;
+		history: string[];
+	} | null>(null);
 	const load = useCallback(
 		async (directoryId: string, after: string, previous: string[] = []) => {
 			const generation = ++listingRequest.current;
@@ -84,6 +99,11 @@ export function ArchiveArea() {
 						: `/archive/${result.path.slice(1).split("/").filter(Boolean).map(encodeURIComponent).join("/")}`;
 				window.history.replaceState(null, "", path);
 				setActiveDirectory(result.id);
+				activeViewRef.current = {
+					dir: result.id,
+					cursor: after,
+					history: previous,
+				};
 				setCursor(after);
 				setHistory(previous);
 			}
@@ -261,31 +281,31 @@ export function ArchiveArea() {
 	}
 
 	async function showPage(after: string, previous: string[]) {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await load(activeDirectory, after, previous);
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function openDirectory(id: string) {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await load(id, "");
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function createFolder() {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await api({
@@ -298,13 +318,13 @@ export function ArchiveArea() {
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
 	async function upload(files: FileList | File[] | null) {
 		if (!files?.length || busy) return;
-		setBusy(true);
+		beginOp();
 		setError("");
 		cancel.current = false;
 		await uploadPrepared(
@@ -370,7 +390,7 @@ export function ArchiveArea() {
 			} catch (e) {
 				setError((e as Error).message);
 			} finally {
-				setBusy(false);
+				endOp();
 			}
 		}
 	}
@@ -414,7 +434,7 @@ export function ArchiveArea() {
 			setError("יש להמתין לסיום הפעולה הנוכחית לפני גרירה נוספת");
 			return;
 		}
-		setBusy(true);
+		beginOp();
 		setError("");
 		cancel.current = false;
 		let items: UploadItem[] = [];
@@ -435,7 +455,7 @@ export function ArchiveArea() {
 			} catch (loadError) {
 				setError((loadError as Error).message);
 			} finally {
-				setBusy(false);
+				endOp();
 			}
 			return;
 		}
@@ -451,7 +471,7 @@ export function ArchiveArea() {
 					setError((e as Error).message);
 				}
 			}
-			setBusy(false);
+			endOp();
 		}
 		const problems = [
 			...(skipped.length
@@ -466,15 +486,20 @@ export function ArchiveArea() {
 	}
 
 	async function remove(id: string) {
-		setBusy(true);
+		beginOp();
 		setError("");
 		try {
 			await api({ action: "remove", id });
-			await refresh();
+			// A deferred delete can resolve after the admin moved to another
+			// folder. Refresh the CURRENT view (live dir/cursor, never the
+			// stale schedule-time closure) — the listing and quota meter stay
+			// current without navigating anywhere.
+			const view = activeViewRef.current;
+			if (view) await load(view.dir, view.cursor, view.history);
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
-			setBusy(false);
+			endOp();
 		}
 	}
 
@@ -688,11 +713,13 @@ export function ArchiveArea() {
 														type="button"
 														disabled={busy}
 														onClick={() => {
-															if (
-																file.status !== "ready" ||
-																window.confirm(`למחוק את ${file.filename}?`)
-															)
-																void remove(file.id);
+															if (file.status === "ready")
+																scheduleUndo({
+																	key: `archive-${file.id}`,
+																	message: `הקובץ ${file.filename} יימחק`,
+																	commit: () => void remove(file.id),
+																});
+															else void remove(file.id);
 														}}
 													>
 														{file.status === "ready"
