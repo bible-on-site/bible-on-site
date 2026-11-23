@@ -64,9 +64,12 @@ public class FurtherReadingGroupingTests
     {
         var doc = XDocument.Load(Path.Join(AppRoot, "Pages", "PerekPage.xaml"));
 
-        doc.Descendants(Controls + "ReaderArticlesView").Single()
-            .Attribute("IsGrouped")?.Value.Should().Be("True",
-                "the perek reader groups its articles strip so לקריאה נוספת renders below the perek's own list");
+        var isGrouped = doc.Descendants(Controls + "ReaderArticlesView").Single()
+            .Attribute("IsGrouped");
+        isGrouped.Should().NotBeNull(
+            "the perek reader must mark its articles strip grouped — the לקריאה נוספת header only renders under grouping");
+        isGrouped!.Value.Should().Be("True",
+            "the perek reader groups its articles strip so לקריאה נוספת renders below the perek's own list");
     }
 
     [Fact]

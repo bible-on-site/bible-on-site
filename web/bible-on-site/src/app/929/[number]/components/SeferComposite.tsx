@@ -218,6 +218,13 @@ const ClientWrapper = (props: {
 		bookPageFromQuery(searchParams.get("bookPage")) ??
 		(searchParams.get("toc") != null ? "toc" : null);
 
+	// A לקריאה נוספת deep link (#3752) keeps the browsed chapter in the path
+	// and carries the article id in `?further=` — reload restores it like the
+	// canonical `/929/{perek}/{slug}?book` form.
+	const furtherSlug = searchParams.get("further");
+	const initialSlug = props.initialSlug ?? furtherSlug ?? undefined;
+	const initialFurther = props.initialSlug == null && furtherSlug != null;
+
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
@@ -240,7 +247,8 @@ const ClientWrapper = (props: {
 						imagesByPerek={props.imagesByPerek}
 						seferDedications={props.seferDedications}
 						perekDedications={props.perekDedications}
-						initialSlug={props.initialSlug}
+						initialSlug={initialSlug}
+						initialFurther={initialFurther}
 						initialBookPage={initialBookPage}
 						perekPasukUnits={props.perekPasukUnits}
 						perekMetric={props.perekMetric}

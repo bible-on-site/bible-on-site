@@ -215,6 +215,7 @@ export default async function Perek({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
+					furtherArticles={furtherArticles}
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}

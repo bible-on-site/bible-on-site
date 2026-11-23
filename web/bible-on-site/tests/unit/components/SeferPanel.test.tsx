@@ -961,7 +961,7 @@ describe("pending commentary regression", () => {
 		fireEvent.click(screen.getByText("תקציר"));
 		expect(await screen.findByText("תוכן")).toBeTruthy();
 		expect(await screen.findByText("מוקדש לבדיקה")).toBeTruthy();
-		expect(onNavigate).toHaveBeenCalledWith("7");
+		expect(onNavigate).toHaveBeenCalledWith("7", false);
 		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
 	});
 });
@@ -1435,8 +1435,9 @@ describe("לקריאה נוספת recommendations (#3752)", () => {
 		await switchToArticlesTab();
 		fireEvent.click(document.getElementById("article-42") as HTMLElement);
 		await screen.findByRole("button", { name: "חזרה למאמרים" });
-		// The parent navigation owns the URL and keeps the panel's perek
-		// (not the article's primary perek) — returning lands on chapter 1.
-		expect(onNavigate).toHaveBeenCalledWith("42");
+		// The parent navigation owns the URL and marks the selection as
+		// לקריאה נוספת, so the route keeps the browsed perek (not the
+		// article's primary perek) — returning lands on chapter 1.
+		expect(onNavigate).toHaveBeenCalledWith("42", true);
 	});
 });

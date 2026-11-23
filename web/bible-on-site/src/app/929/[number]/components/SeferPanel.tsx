@@ -67,7 +67,7 @@ interface SeferPanelProps {
 	hebrewDateStr: string;
 	/** Article ID or perush name selected by the current book route. */
 	initialSlug?: string;
-	onNavigate?: (slug?: string) => void;
+	onNavigate?: (slug?: string, further?: boolean) => void;
 	/** Title parts of this page's perek, for the perush document title. */
 	perekTitleParts?: SeferPerekTitle;
 	/** Reports the shown article/perush document title (null when none). */
@@ -589,9 +589,14 @@ export const SeferPanel = memo(function SeferPanel({
 	}, [selectedArticle, deepPerush, onContentTitle, perekTitleParts]);
 
 	const navigate = useCallback(
-		(nextSlug?: string) => {
-			if (onNavigate) onNavigate(nextSlug);
-			else if (perekId) writeSeferContentHistory(perekId, nextSlug);
+		(nextSlug?: string, further = false) => {
+			// A לקריאה נוספת selection keeps the *browsed* chapter in the URL and
+			// carries the article id in `?further=` — the canonical
+			// /929/{perek}/{slug} path would 404 on reload because the article
+			// belongs to another perek (#3752).
+			if (onNavigate) onNavigate(nextSlug, further);
+			else if (perekId)
+				writeSeferContentHistory(perekId, nextSlug, false, further);
 			setSlug(nextSlug);
 		},
 		[onNavigate, perekId],
@@ -612,7 +617,7 @@ export const SeferPanel = memo(function SeferPanel({
 	// One card body for both article lists — each card routes through its own
 	// primary perek (`article.perekId`), which for a further-reading card is a
 	// different chapter than the panel's (#3752).
-	const articleCard = (article: ArticleSummary) => (
+	const articleCard = (article: ArticleSummary, further = false) => (
 		<Link
 			key={article.id}
 			id={`article-${article.id}`}
@@ -629,7 +634,7 @@ export const SeferPanel = memo(function SeferPanel({
 					return;
 				}
 				event.preventDefault();
-				navigate(String(article.id));
+				navigate(String(article.id), further);
 			}}
 		>
 			<div className={styles.articleCardAuthor}>
@@ -962,7 +967,7 @@ export const SeferPanel = memo(function SeferPanel({
 							<p className={styles.emptyState}>אין מאמרים לפרק זה</p>
 						) : (
 							<div className={styles.articlesMasonry}>
-								{articles.map(articleCard)}
+								{articles.map((article) => articleCard(article))}
 							</div>
 						)}
 						{/* לקריאה נוספת (#3752): verified secondary coverage —
@@ -981,7 +986,7 @@ export const SeferPanel = memo(function SeferPanel({
 									לקריאה נוספת
 								</h3>
 								<div className={styles.articlesMasonry}>
-									{furtherArticles.map(articleCard)}
+									{furtherArticles.map((article) => articleCard(article, true))}
 								</div>
 							</section>
 						)}

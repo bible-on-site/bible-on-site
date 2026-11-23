@@ -200,6 +200,10 @@ const Sefer = (props: {
 	/** Perek-scoped dedication lines by canonical perek id (#2731). */
 	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
+	/** The initial slug names a לקריאה נוספת recommendation, not a primary
+	 * article/perush — keeps its `?book&further=` URL shape on rewrite
+	 * (#3752). */
+	initialFurther?: boolean;
 	initialBookPage?: BookPage | null;
 	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
 	perekPasukUnits?: ReadingProgressUnit[];
@@ -219,6 +223,7 @@ const Sefer = (props: {
 		entityRefsByPerek,
 		imagesByPerek,
 		initialSlug,
+		initialFurther,
 		initialBookPage,
 		perekPasukUnits,
 		perekMetric,
@@ -232,6 +237,7 @@ const Sefer = (props: {
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
+		initialFurther,
 	);
 	// Memoized so the contentPages memo below keeps its identity across
 	// per-flip re-renders (additionals flatMap would otherwise rebuild it).
@@ -247,8 +253,8 @@ const Sefer = (props: {
 	const navigateFromPage = useMemo(
 		() =>
 			perekIds?.map(
-				(perekId) => (slug?: string) =>
-					contentNavigation.navigate(perekId, slug),
+				(perekId) => (slug?: string, further?: boolean) =>
+					contentNavigation.navigate(perekId, slug, further),
 			),
 		[perekIds, contentNavigation.navigate],
 	);
