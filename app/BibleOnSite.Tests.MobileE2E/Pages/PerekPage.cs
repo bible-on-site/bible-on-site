@@ -2,6 +2,7 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
+using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -340,6 +341,43 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// cannot reach them.
     /// </summary>
     public AppiumElement ScrollToVisible(string automationId)
+        => ScrollToVisible(automationId, down =>
+        {
+            if (down)
+            {
+                platform.ScrollPageDown(driver);
+            }
+            else
+            {
+                platform.ScrollPageUp(driver);
+            }
+        });
+
+    public AppiumElement ScrollFlyoutTo(string automationId)
+    {
+        var drawer = WaitForObservation("FlyoutScrollView",
+            element => new Rectangle(element.Location, element.Size));
+        var viewport = Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
+        return ScrollToVisible(automationId, down =>
+        {
+            // Start inside the RTL drawer so the underlying reader cannot receive the drag.
+            var x = viewport.Left + viewport.Width / 2;
+            var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
+            var gesture = new ActionSequence(finger, 0);
+            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+                x, down ? viewport.Top + viewport.Height * 4 / 5 : viewport.Top + viewport.Height / 5,
+                TimeSpan.Zero));
+            gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
+            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+                x, down ? viewport.Top + viewport.Height / 5 : viewport.Top + viewport.Height * 4 / 5,
+                TimeSpan.FromMilliseconds(350)));
+            gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
+            driver.PerformActions([gesture]);
+        }, element => viewport.Contains(element.Location.X + element.Size.Width / 2,
+            element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
+    }
+
+    private AppiumElement ScrollToVisible(string automationId, Action<bool> scroll, Func<AppiumElement, bool>? condition = null)
     {
         var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.AddSeconds(45);
@@ -349,7 +387,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var visible = FindVisible(locator).FirstOrDefault();
+                var visible = FindVisible(locator, condition).FirstOrDefault();
                 if (visible != null)
                 {
                     return visible.Element;
@@ -357,14 +395,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 var surface = driver.PageSource;
                 scrollingDown = SeekScrollsDown(scrollingDown, lastSurface, surface);
                 lastSurface = surface;
-                if (scrollingDown)
-                {
-                    platform.ScrollPageDown(driver);
-                }
-                else
-                {
-                    platform.ScrollPageUp(driver);
-                }
+                scroll(scrollingDown);
             }
             catch (StaleElementReferenceException)
             {
@@ -375,7 +406,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 // An observation timeout can retry within this deadline.
             }
         }
-        var found = FindVisible(locator).FirstOrDefault();
+        var found = FindVisible(locator, condition).FirstOrDefault();
         if (found != null)
         {
             return found.Element;
@@ -488,6 +519,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
         RenderedElements(string automationId) =>
         RenderedElements(automationId, element => element.Text);
+
+    public (AppiumElement Element, (Point Location, Size Size) Frame)? FirstVisibleElement(
+        string automationId, Func<AppiumElement, bool> condition)
+    {
+        var match = FindVisible(platform.AutomationId(automationId), condition).FirstOrDefault();
+        return match is null ? null : (match.Element, (match.Frame.Location, match.Frame.Size));
+    }
 
     /// <summary>
     /// Same single-scan read as <see cref="RenderedElements(string)"/>, but

@@ -34,12 +34,23 @@ public partial class TanahpediaEntryPage : ContentPage
         // The in-place person trail is a page-owned Back surface: it keeps
         // the capsule Back enabled even at root stack depth (#2467).
         TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
-        // Person hops rebind this page in place - return to the top of the
-        // destination entry instead of keeping the scrolled family section.
+        // Entry hops rebind this page in place - each forward hop pushes the
+        // outgoing visit's offset onto its own trail frame so a Back replay
+        // restores it, while forward hops open a new visit at the top (#2640).
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
             {
+                if (_viewModel.LastChangeWasTrailReplay)
+                {
+                    _pendingScrollRestore = _scrollTrail.PopForReplay(_viewModel.UniqueName);
+                }
+                else
+                {
+                    _scrollTrail.PushOutgoing(_currentEntryName, EntryScroll.ScrollY);
+                    _pendingScrollRestore = null;
+                }
+                _currentEntryName = _viewModel.UniqueName;
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
             }
             else if (e.PropertyName == nameof(TanahpediaEntryViewModel.HasEntryHistory))
@@ -81,8 +92,20 @@ public partial class TanahpediaEntryPage : ContentPage
     /// the counted extent without scrolling — re-measure at the current
     /// offset so the bar stays honest (issue #2607).
     /// </summary>
-    private void OnEntryContentSizeChanged(object? sender, EventArgs e) =>
+    private void OnEntryContentSizeChanged(object? sender, EventArgs e)
+    {
+        // A Back replay's saved offset applies only once the restored entry
+        // finished loading (the outgoing entry's late layout passes must not
+        // consume it) and is tall enough to reach it.
+        if (_pendingScrollRestore is { } restore &&
+            !_viewModel.IsLoading && _viewModel.ShowEntry &&
+            EntryScroll.ContentSize.Height - EntryScroll.Height >= restore)
+        {
+            _pendingScrollRestore = null;
+            EntryScroll.ScrollToAsync(0, restore, false);
+        }
         RefreshReadingProgress(EntryScroll.ScrollY);
+    }
 
     private void RefreshReadingProgress(double scrollY)
     {
@@ -128,11 +151,28 @@ public partial class TanahpediaEntryPage : ContentPage
         return base.OnBackButtonPressed();
     }
 
+    /// <summary>The route-supplied name applies once: a re-appearing page
+    /// (a page pushed above it popped) must not rewind an in-place hop back
+    /// to the original route parameter (#2640).</summary>
+    private string? _appliedRouteName;
+
+    /// <summary>Per-visit scroll frames: a hop snapshots where the reader
+    /// left the outgoing entry on its own frame, and a Back replay restores
+    /// the popped visit's offset once the content lays out — the pushed page
+    /// used to keep its scroll alive underneath (#2640).</summary>
+    private readonly EntryScrollTrail _scrollTrail = new();
+    private string _currentEntryName = string.Empty;
+    private double? _pendingScrollRestore;
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
 
-        _viewModel.UniqueName = UniqueName;
+        if (!string.Equals(_appliedRouteName, UniqueName, StringComparison.Ordinal))
+        {
+            _appliedRouteName = UniqueName;
+            _viewModel.UniqueName = UniqueName;
+        }
 
         if (!_viewModel.IsLoaded && !_viewModel.IsLoading)
         {
@@ -141,8 +181,8 @@ public partial class TanahpediaEntryPage : ContentPage
     }
 
     /// <summary>
-    /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
-    /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// Links inside the entry body: <c>/pedia/{slug}</c> hops the entry in
+    /// place over the view model's trail - no pushed page per tap (#2640);
     /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>

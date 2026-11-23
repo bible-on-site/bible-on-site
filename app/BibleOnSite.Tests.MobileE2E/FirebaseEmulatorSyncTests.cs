@@ -195,7 +195,7 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
     private bool ToggleDivineNameMasking()
     {
         Page.Tap(Platform.FlyoutButton);
-        Page.Tap("FlyoutPreferences");
+        Platform.Tap(Driver!, Page.ScrollFlyoutTo("FlyoutPreferences"));
         Page.Tap("SettingsDisplayRow");
         // The switch sits near the bottom of the display-preferences
         // ScrollView — a plain wait cannot reach it on a short viewport.

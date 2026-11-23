@@ -148,17 +148,16 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
             {
                 // The "0" switch value skips a row recycled back checked, and
                 // CanTap drops rows the snapshot itself marks unhittable.
-                var next = Page.RenderedElements("PerushCheckBox")
-                    .FirstOrDefault(checkbox => checkbox.Text == "0"
-                        && !tapped.Contains(checkbox.Frame)
-                        && checkbox.Frame.Location.Y + checkbox.Frame.Size.Height / 2 < chromeTop
-                        && Platform.CanTap(checkbox.Element));
-                if (next.Element == null)
+                var next = Page.FirstVisibleElement("PerushCheckBox", checkbox => checkbox.Text.Trim() == "0"
+                    && !tapped.Contains((checkbox.Location, checkbox.Size))
+                    && checkbox.Location.Y + checkbox.Size.Height / 2 < chromeTop
+                    && Platform.CanTap(checkbox));
+                if (next is not { } row)
                 {
                     break;
                 }
-                Platform.Tap(Driver!, next.Element);
-                tapped.Add(next.Frame);
+                Platform.Tap(Driver!, row.Element);
+                tapped.Add(row.Frame);
             }
             catch (OpenQA.Selenium.StaleElementReferenceException)
             {
