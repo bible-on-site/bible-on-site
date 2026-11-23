@@ -1,9 +1,9 @@
-# SES bulletin panel visual evidence
+# Daily bulletin validation notes
 
-These are full-page captures of the real local admin application at `/bulletins`, using an isolated Chromium session with a 1440 x 1100 viewport.
+Validation used an isolated Chromium session at 1440 x 1100 to capture the full `/bulletins` page in the local admin application.
 
-- [Before](ses-before.png): the original bulletin preparation, delivery summary and HTML/PDF preview, captured before the email controls were added.
-- [After](ses-after.png): the SES panel with the persisted test audience, synthetic test recipients, consent counts and disabled subscriber audience. The existing chapter and preview sections remain visible.
+- Before the email controls were added, the panel showed bulletin preparation, a delivery summary and an HTML/PDF preview.
+- The SES panel showed the saved test audience, synthetic recipients, consent counts and disabled subscriber audience alongside the existing chapter and preview sections.
 
 The after capture uses the disposable, local-only database `tanah_ses_ui_test_20261028`: one saved bulletin for 2026-10-28, test mode at revision 0, two confirmed `example.com` test recipients, and 52 pending `example.com` legacy subscribers. No real subscriber addresses appear in either image. The bulletin and PDF are local fixtures.
 
@@ -19,9 +19,9 @@ The disposable fixture script and private preview environment remain under ignor
 
 ## Email design evidence
 
-- [Email before](email-before.png): the original rendered Hosea 2 email, including its separate verse paragraphs and contact footer outside the content card. This faithful baseline has no article, matching the original test input.
-- [Email after](email-after.png): the redesigned email composed from the actual Rust CLI output and the actual SES transport's contact footer, at a 900 x 1100 viewport.
-- [Email on a phone](email-after-mobile.png): the same composed email at a 390 x 844 viewport.
+- The original Hosea 2 email had separate verse paragraphs and a contact footer outside the content card. The baseline used the original test input, which had no article.
+- The redesigned email used the actual Rust CLI output and SES transport contact footer at a 900 x 1100 viewport.
+- The same composed email was checked at a 390 x 844 phone viewport.
 
 The after fixture includes existing public article 1599, `וארשתיך לי לעולם`, copied from the local database for preview and test use. No production article content, distribution approval flags, chapter routes or book routes were changed to create these images. The article remains complete, its heading appears once before its author, and canonical scripture retains its taamim and biblical maqaf. The PDF rendering content path remains unchanged.
 
@@ -32,13 +32,12 @@ The chapter and article paragraphs are justified, with their last line aligned r
 The local source artifacts are `.outputs/ses-email-before.html` and `.outputs/ses-email-react-footer-complete.html`. The final after source uses the reviewed React server rendering of the footer. Fresh desktop and phone captures from that final composition were compared against the approved images; both their PNG hashes and pixel contents are identical. Reproduce the after capture from the repository root:
 
 ```powershell
-node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html docs/daily-bulletin/screenshots/email-after.png
+node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html .outputs/ses-email-after.png
 ```
 
 ## WhatsApp panel evidence
 
-- [Desktop before](whatsapp-before.png) and [desktop after](whatsapp-after.png): 1440 x 1100 viewports.
-- [Phone before](whatsapp-before-mobile.png) and [phone after](whatsapp-after-mobile.png): 390 x 844 viewports.
+The before and after checks used 1440 x 1100 desktop and 390 x 844 phone viewports.
 
 The baseline renders the committed `DailyBulletinPage` before the WhatsApp controls were added. The after captures render the modified component and the real `BulletinWhatsAppControls`. Both use the admin's actual React components, Tailwind CSS and TanStack Router, with only the server-function modules replaced by local fixture functions. These are full-page captures from fresh, isolated Chromium contexts, without a user browser profile.
 
@@ -50,24 +49,23 @@ The ignored reproduction sources are `.outputs/whatsapp-visual/`; `capture-repor
 
 ## Telegram controls evidence
 
-- [Before](telegram-before.png): the original actual DailyBulletinPage before Telegram controls were added, at 1440 x 1100. This baseline image is preserved unchanged.
-- [After](telegram-after.png): the current actual component with independent Telegram controls, saved test mode, a named private test destination and disabled public activation.
-- [Phone](telegram-after-mobile.png): the current component at 390 x 844, retaining the existing chapter, email controls and HTML preview.
+- The baseline showed the original `DailyBulletinPage` at 1440 x 1100, before Telegram controls were added.
+- The updated component showed independent Telegram controls, saved test mode, a named private test destination and disabled public activation.
+- At 390 x 844, the existing chapter, email controls and HTML preview remained visible.
 
 The refreshed after captures use the ignored local Vite harness in .outputs/telegram-visual/. They render the actual source components, admin Tailwind CSS and TanStack Router with memory history. Only server-function modules use fixture adapters. The saved bulletin, two example.com email recipients, 52 pending subscribers and private destination are synthetic display fixtures. The public handle is the owner-selected @alhaperek channel. These fixture values do not establish that any bot or destination is configured or verified.
 
 Every fixture mutation throws instead of sending, preparing or changing an audience. The preview disables environment-file loading and public-file serving and rejects backend imports beyond its three explicit server-function mocks. Fresh Chromium contexts have no user browser profile. Their request interceptor permits only local GET requests and refuses every external request, API/server-function request and non-GET request. The capture report records zero external, provider or mutation requests, zero page errors, no horizontal overflow and zero send clicks for both after captures. No database, AWS profile, token, provider API, authentication session or personal browser profile was accessed.
 
-The desktop and phone captures show target-neutral private-test wording, the correct public channel and the existing email actions. The iframe is scrolled into view before capture so Chromium paints its local sample contents. Reproduce the after captures from the repository root by starting the isolated Vite configuration on 127.0.0.1:3123 and then running node .outputs/telegram-visual/capture.mjs. The ignored capture-report.json records the checks and viewports. The original before capture remains the pre-Telegram baseline. The preview server was stopped after capture.
+The desktop and phone captures show target-neutral private-test wording, the correct public channel and the existing email actions. The iframe is scrolled into view before capture so Chromium paints its local sample contents. Reproduce the after captures from the repository root by starting the isolated Vite configuration on 127.0.0.1:3123 and then running node .outputs/telegram-visual/capture.mjs. The ignored capture-report.json records the checks and viewports. The preview server was stopped after capture.
 
 ## App join cards evidence (#2806)
 
 Real captures from Android emulators running the native עלון יומי join cards.
 
-- [Flyout before](app-bulletin-flyout-before.png): the app menu without a bulletin entry.
-- [Flyout after](app-bulletin-flyout-after.png): the עלון יומי flyout entry, a single row like every other destination.
-- [Phone stacked](app-bulletin-phone-stacked.png): phone viewport — the three cards stack one above the other.
-- [Tablet side by side](app-bulletin-tablet-side-by-side.png): tablet viewport — the three cards lay out side by side.
+- The updated flyout added a single עלון יומי row to the original menu.
+- The three cards stacked vertically on a phone.
+- The three cards sat side by side on a tablet.
 
 The cards mirror the website's join order — Telegram, WhatsApp, email — in RTL, show the shared top bar and expose `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. הצטרפות opens the verified public channel `https://t.me/alhaperek`, the published `wa.me` join number with a prefilled join request, and the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`). No private test groups, destination IDs or provider credentials appear in the captures.
 
@@ -75,11 +73,11 @@ The cards mirror the website's join order — Telegram, WhatsApp, email — in R
 
 Real captures from the local Next.js dev server (`.dev.env`, `tanah-dev`) at `localhost:3001` and the local Vite admin at `localhost:3101`, taken through isolated Chromium contexts — no user profile, no provider calls, no real invitations.
 
-- [Homepage before](join-home-before.png): the same homepage flow with the new section removed — the legacy state, where joining meant scrolling to the contact section.
-- [Bulletin section desktop](join-section-desktop.png): the new `#bulletin` homepage section at 1280 x 900 — exactly three Hebrew RTL cards (Telegram, WhatsApp, email) side by side.
-- [Bulletin section mobile](join-section-mobile.png): the same section captured at 390px wide — the full section showing all three cards stacked vertically in reading order, no carousel chrome (review on #3083).
-- [Email signup page](join-email-page.png): `/dailyBulletin/join/email`, the shareable standalone signup page reusing the homepage card's `EmailSignupForm` with the explicit consent checkbox; signup is direct — no confirmation mail.
-- [Admin join links](join-admin-links.png): the "קישורי הצטרפות לעלון" panel on the admin `/bulletins` page — per-channel enable toggle, validated destination field, stable public URL display, save with optimistic-concurrency revision, and the append-only audit list. Captured with `SKIP_AUTH=true`; telegram shown seeded enabled at the verified public channel, whatsapp still unset.
+- In the original homepage flow, joining meant scrolling to the contact section.
+- The new `#bulletin` homepage section showed three Hebrew RTL cards (Telegram, WhatsApp, email) side by side at 1280 x 900.
+- At 390px wide, all three cards stacked vertically in reading order (review on #3083).
+- The shareable `/dailyBulletin/join/email` page reused the homepage card's `EmailSignupForm` with an explicit consent checkbox. Signup completed directly.
+- The "קישורי הצטרפות לעלון" panel on the admin `/bulletins` page showed per-channel enable toggles, validated destinations, stable public URLs, optimistic-concurrency revisions and an append-only audit list. The capture used `SKIP_AUTH=true`, with Telegram enabled at the verified public channel and WhatsApp unset.
 
 Verified live at capture time: `GET`/`HEAD /dailyBulletin/join/telegram` → 307 to `https://t.me/alhaperek` with `Cache-Control: no-store`; an unconfigured channel → 307 to `/dailyBulletin`; `POST /api/bulletin/subscribe` → 202 generic acknowledgement with the subscriber confirmed and the intent persisted for SES contact sync.
 
@@ -87,7 +85,7 @@ Verified live at capture time: `GET`/`HEAD /dailyBulletin/join/telegram` → 307
 
 Panel captures from the local Vite admin at `localhost:3101` (`.test.env`, `tanah_test`, `SKIP_AUTH=true`) at a 1440 x 1100 viewport through an isolated Chromium session.
 
-- [Running](rollout-panel-running.png): the rollout panel enabled — cumulative admitted/remaining/excluded counts, today's Jerusalem reservation marked הושלם, and the revision-checked השהיית צירופים / ביטול מלא controls.
-- [Disabled](rollout-panel-disabled.png): the same panel after clicking ביטול מלא — the server function applied the revision-checked transition and refreshed to the כבויה state, proving the controls work end to end; admitted history remains visible.
+- While rollout was running, the panel showed cumulative admitted, remaining and excluded counts, today's Jerusalem reservation marked הושלם, and revision-checked השהיית צירופים / ביטול מלא controls.
+- Clicking ביטול מלא applied the revision-checked transition and refreshed the panel to כבויה with admitted history still visible.
 
 The fixture used only `example.invalid` addresses in the disposable local `tanah_test` schema: one admitted, two pending and one excluded `original`-cohort member plus a saved bulletin fixture for the capture date. No real subscriber data, provider calls or sends occurred.

@@ -7,19 +7,16 @@ directory. The flyout nav pane is pinned open on wide windows, so the
 catalogue/reader captures also show the pinned pane with the
 מועדים על הפרק destination in its selected state.
 
-## What each file shows
+## Flyout and reader validation
 
-The historical before state is the [Android flyout captured on 2026-10-31](https://github.com/bible-on-site/bible-on-site/blob/480e6ea26537e0b373b017e8e31936093f421552/docs/daily-bulletin/screenshots/app-bulletin-flyout-after.png):
-פרשה על הפרק is followed directly by רבנים, without a מועדים destination.
-The Windows captures below show the added destination, catalogue and reader.
-These captures use different platforms and themes; they document feature
-availability, not a pixel-for-pixel layout comparison.
+The Android flyout on 2026-10-31 placed רבנים immediately after פרשה על הפרק.
+Windows validation covered the added מועדים destination, catalogue and reader.
 
-| File | Content |
+| Screen | Result |
 | --- | --- |
-| `after-flyout-entry.png` | The shared flyout open on the catalogue page. The new **מועדים על הפרק / קריאות לימוד למועדים** destination sits between פרשה על הפרק and רכנים and renders highlighted as the current page. |
-| `after-moadim-list.png` | `MoadimListPage` (`AutomationId=MoadimMenuButton`): published moadim grouped by Hebrew month — תשרי (ראש השנה, יום כיפור), ללא חודש (שבת שובה), אב (תשעה באב) — each row showing the moed name and date label. |
-| `after-moed-reader.png` | `MoedPage` for ראש השנה: moed heading + date label (א-ב בתשרי) + summary (יום הזיכרון והתקיעה), a labelled section header **קריאת תורה — יום ראשון** with its source refs (בראשית כא א-י), the canonical perek header בראשית כא, and the resolved pesukim — all rendered through the shared reader chrome (bottom nav bar, fullscreen/source controls). |
+| Flyout | The shared flyout opens on the catalogue page. The **מועדים על הפרק / קריאות לימוד למועדים** destination sits between פרשה על הפרק and רבנים and is highlighted as the current page. |
+| Catalogue | `MoadimListPage` (`AutomationId=MoadimMenuButton`) groups published moadim by Hebrew month, including תשרי (ראש השנה, יום כיפור), ללא חודש (שבת שובה), and אב (תשעה באב). Each row shows the moed name and date label. |
+| Reader | `MoedPage` for ראש השנה shows the heading, date label (א-ב בתשרי), and summary (יום הזיכרון והתקיעה). The **קריאת תורה - יום ראשון** section shows its source reference (בראשית כא א-י), the canonical perek header בראשית כא, and the resolved pesukim using the shared reader controls. |
 
 ## Data source
 
