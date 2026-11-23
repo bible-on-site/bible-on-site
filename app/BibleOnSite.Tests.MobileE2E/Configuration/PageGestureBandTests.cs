@@ -71,4 +71,37 @@ public sealed class PageGestureBandTests
         Assert.Equal(960,
             AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [everything]));
     }
+
+    [Fact]
+    public void UpDragStartPrefersTheUpperFifth()
+    {
+        Assert.Equal(240,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartStepsAboveAClaimingControl()
+    {
+        var slider = new Rectangle(0, 220, 540, 80);
+        Assert.Equal(219,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [slider], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartTurnsDownwardAtTheStatusBarStrip()
+    {
+        // Stepping above a control beginning inside the status-bar strip would
+        // land in it, so the scan turns downward instead.
+        var slider = new Rectangle(0, 150, 540, 140);
+        Assert.Equal(291,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [slider], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartFallsBackToTheUpperFifthWhenEveryPointIsClaimed()
+    {
+        var everything = new Rectangle(0, 0, 540, 1200);
+        Assert.Equal(240,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [everything], preferLowerHalf: false));
+    }
 }

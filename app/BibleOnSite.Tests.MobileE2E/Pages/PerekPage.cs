@@ -334,7 +334,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         : driver.FindElements(locator).Count != 0;
 
     /// <summary>
-    /// Scrolls the page's own scroll surface down until the element's center is
+    /// Scrolls the page's own scroll surface until the element's center is
     /// inside the viewport. Deep settings sections (e.g. הסתר שם השם under
     /// תצוגה preferences) never render on a short viewport, so a plain WaitFor
     /// cannot reach them.
@@ -343,6 +343,14 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     {
         var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.AddSeconds(45);
+        // A single scroll step can carry the target across the viewport — the
+        // injected drag releases with fling inertia — and a fully offscreen
+        // node is absent from the source tree, so a downward-only seek never
+        // recovers an overshot element (#3746's merge-queue ejection). A
+        // scroll that leaves the page untouched reached its edge, so the
+        // sweep reverses there.
+        var scrollingDown = true;
+        string? lastSurface = null;
         for (var attempt = 0; attempt < 12 && DateTime.UtcNow < deadline; attempt++)
         {
             try
@@ -352,7 +360,20 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 {
                     return visible.Element;
                 }
-                platform.ScrollPageDown(driver);
+                var surface = driver.PageSource;
+                if (surface == lastSurface)
+                {
+                    scrollingDown = !scrollingDown;
+                }
+                lastSurface = surface;
+                if (scrollingDown)
+                {
+                    platform.ScrollPageDown(driver);
+                }
+                else
+                {
+                    platform.ScrollPageUp(driver);
+                }
             }
             catch (StaleElementReferenceException)
             {
@@ -368,7 +389,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             return found.Element;
         }
-        throw new WebDriverTimeoutException($"Scrolling the page down never revealed a visible element matching {locator} within 45 seconds.");
+        throw new WebDriverTimeoutException($"Scrolling the page never revealed a visible element matching {locator} within 45 seconds.");
     }
 
     /// <summary>
