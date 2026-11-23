@@ -1242,19 +1242,21 @@ test("sweep keeps a deleted run's access reported without aborting others", asyn
 
 test("sweep keeps cleaning other builds when a lease's run was deleted", async (t) => {
 	const { env, rules, deps } = await sweepFixture(t, {
+		// Deleted attempt first, so the test proves builds listed after it
+		// are still revoked.
+		"9999/1": {},
 		"1234/2": {},
-		"9999/1": { deleted: true },
 	});
 	const github = async (path) => {
-		if (path.includes("/9999/")) throw new Error("HTTP 404: Not Found");
+		if (path.includes("/9999/")) throw new Error("gh: Not Found (HTTP 404)");
 		return deps.github(path);
 	};
 	const result = await cleanupCompletedBuilds(env, { ...deps, github });
-	assert.deepStrictEqual(result.removed, ["sgr-00000000000000000"]);
+	assert.deepStrictEqual(result.removed, ["sgr-00000000000000001"]);
 	assert.deepStrictEqual(result.skipped.length, 1);
 	assert.match(result.skipped[0], /^9999\/1:/);
 	assert.strictEqual(rules.length, 1);
-	assert.strictEqual(rules[0].SecurityGroupRuleId, "sgr-00000000000000001");
+	assert.strictEqual(rules[0].SecurityGroupRuleId, "sgr-00000000000000000");
 });
 
 test("sweep paginates the tagged rule inventory", async (t) => {

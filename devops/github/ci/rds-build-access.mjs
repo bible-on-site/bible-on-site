@@ -301,10 +301,14 @@ async function completedBuild(
 	let metadata;
 	try {
 		metadata = await github(prefix);
-	} catch {
+	} catch (error) {
 		// A deleted CI run cannot be verified and no longer needs access; the
 		// sweep keeps its leases reported rather than aborting other builds.
-		throw new Error(`Completed CI attempt ${run}/${attempt} is no longer recorded`);
+		// Any other GitHub failure still fails the run like cleanup-run.
+		if (!/Not Found|HTTP 404/i.test(error.message)) throw error;
+		throw new Error(
+			`Completed CI attempt ${run}/${attempt} is no longer recorded`,
+		);
 	}
 	if (
 		String(metadata.id) !== run ||
