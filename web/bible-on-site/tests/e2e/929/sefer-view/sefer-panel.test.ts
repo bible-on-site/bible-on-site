@@ -369,12 +369,24 @@ test.describe("Sefer left-page panel", () => {
 		await expect(card).toHaveAttribute("href", "/929/1/1");
 
 		// Opening the recommendation embeds the article while the browsed
-		// perek stays in the URL — back lands on the same grouped grid.
+		// perek stays in the URL. The article id rides `?further=` — the
+		// canonical /929/{perek}/{slug} path would 404 on reload because the
+		// article belongs to בראשית א, not the viewed ב (#3752 review).
 		await card.click();
 		await expect(
 			blank.getByRole("button", { name: "חזרה למאמרים" }),
 		).toBeVisible({ timeout: 30_000 });
-		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(/\/929\/2\?book&further=1/);
+
+		// A fresh load of that URL restores the same embedded article.
+		await page.reload();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(
+			blank.getByRole("heading", { name: "בראשית ברא - עיון בפסוק הראשון" }),
+		).toBeVisible();
+
 		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
 		await expect(card).toBeVisible();
 	});
