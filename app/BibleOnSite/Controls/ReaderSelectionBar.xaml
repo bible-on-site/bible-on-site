@@ -61,6 +61,14 @@
             WidthRequest="40" HeightRequest="36" Padding="0"
             BackgroundColor="Transparent" TextColor="White"
             IsVisible="False" Clicked="OnRecitationClicked"/>
+    <!-- Download→play spinner (#3704): takes the recitation button's cell
+         while its sefer pack downloads. -->
+    <ActivityIndicator Grid.Column="3"
+            x:Name="RecitationSpinner"
+            AutomationId="SelectionRecitationSpinner"
+            SemanticProperties.Description="מוריד את הקלטות הספר"
+            WidthRequest="22" HeightRequest="22"
+            IsVisible="False" IsRunning="False"/>
     <!-- Share button -->
     <Button Grid.Column="4"
             x:Name="ShareButton"

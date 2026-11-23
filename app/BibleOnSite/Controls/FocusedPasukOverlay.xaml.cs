@@ -58,11 +58,31 @@ public partial class FocusedPasukOverlay : Grid
         set => PerushimList.ItemsSource = value;
     }
 
+    private bool _playButtonVisible;
+
     /// <summary>Shows/hides the קריינות play button (hidden = no recording).</summary>
     public bool PlayButtonVisible
     {
-        get => PlayButton.IsVisible;
-        set => PlayButton.IsVisible = value;
+        get => _playButtonVisible;
+        set
+        {
+            _playButtonVisible = value;
+            PlayButton.IsVisible = value && !PlayButtonBusy;
+        }
+    }
+
+    /// <summary>
+    /// Swaps the play button for a spinner while its tap's request downloads
+    /// (#3704) — the button's enabled state is untouched meanwhile.
+    /// </summary>
+    public bool PlayButtonBusy
+    {
+        get => PlaySpinner.IsVisible;
+        set
+        {
+            PlaySpinner.IsVisible = value;
+            PlayButton.IsVisible = _playButtonVisible && !value;
+        }
     }
 
     /// <summary>Enables/dims the קריינות play button.</summary>
