@@ -92,7 +92,7 @@ export function PasukPreviewLink({
 	children?: ReactNode;
 } & Omit<
 	ComponentPropsWithoutRef<"a">,
-	"href" | "className" | "children"
+	"href" | "className" | "children" | "onMouseEnter" | "onMouseLeave"
 >): JSX.Element {
 	const pasukRef = parsePasukRefFromHref(href);
 	const masking = useSyncExternalStore(
