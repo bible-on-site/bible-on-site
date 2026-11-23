@@ -580,6 +580,44 @@ describe("התראה יומית בדפדפן (#3732)", () => {
 		expect(checkbox).not.toBeChecked();
 	});
 
+	it("keeps the reminder checked and lets opt-out retry when the delete fails", async () => {
+		const { existing } = setupPush({ subscribed: true });
+		let deleteOk = false;
+		(global.fetch as jest.Mock).mockImplementation(
+			async (_url: string, init?: RequestInit) =>
+				init
+					? { ok: init.method === "POST" ? true : deleteOk }
+					: {
+							ok: true,
+							json: async () => ({ publicKey: "AQID" }),
+						},
+		);
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).toBeChecked();
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		// The subscription is still live — the checkbox must keep reflecting
+		// "on" so unchecking retries the DELETE rather than offering opt-in.
+		expect(existing?.unsubscribe).not.toHaveBeenCalled();
+		expect(checkbox).toBeChecked();
+		expect(
+			screen.getByRole("group", { name: "התראה יומית בדפדפן" }),
+		).toHaveTextContent("נסו שוב");
+
+		deleteOk = true;
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			"/api/push/subscription",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(existing?.unsubscribe).toHaveBeenCalled();
+		expect(checkbox).not.toBeChecked();
+	});
+
 	it("shows the blocked state with a disabled control", async () => {
 		setupPush({ permission: "denied" });
 		await openPanel();

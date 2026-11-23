@@ -8,6 +8,7 @@ import {
 	PUSH_STATUS_EVENT,
 	type PushState,
 	type PushStatus,
+	type PushSync,
 	readPushState,
 	requestAndSubscribePush,
 	subscribePush,
@@ -28,11 +29,17 @@ export function usePushSubscription({ auto = true }: { auto?: boolean } = {}) {
 		status: "loading",
 		publicKey: null,
 	});
+	// Whether the last subscribe/unsubscribe attempt failed. `status` keeps
+	// the ground truth on failure — a failed opt-out still reads "on" because
+	// the subscription is still live — so every surface can retry the action
+	// that actually failed (#3732).
+	const [failed, setFailed] = useState(false);
 	const [busy, setBusy] = useState(false);
 
 	const refresh = useCallback(async () => {
 		try {
 			setState(await readPushState());
+			setFailed(false);
 		} catch (error) {
 			console.warn("Push notification status check failed", error);
 			setState({ status: "hidden", publicKey: null });
@@ -41,32 +48,44 @@ export function usePushSubscription({ auto = true }: { auto?: boolean } = {}) {
 
 	useEffect(() => {
 		if (auto) void refresh();
-		const synced = (event: Event) =>
-			setState((current) => ({
-				...current,
-				status: (event as CustomEvent<PushStatus>).detail,
-			}));
+		const synced = (event: Event) => {
+			const detail = (event as CustomEvent<PushSync>).detail;
+			setState((current) => ({ ...current, status: detail.status }));
+			setFailed(detail.failed);
+		};
 		window.addEventListener(PUSH_STATUS_EVENT, synced);
 		return () => window.removeEventListener(PUSH_STATUS_EVENT, synced);
 	}, [auto, refresh]);
 
-	const run = useCallback(async (action: () => Promise<PushStatus>) => {
-		setBusy(true);
-		let next: PushStatus = "error";
-		try {
-			next = await action();
-			setState((current) => ({ ...current, status: next }));
-		} catch (error) {
-			console.warn("Push notification toggle failed", error);
-			setState((current) => ({ ...current, status: "error" }));
-		} finally {
-			setBusy(false);
-			window.dispatchEvent(
-				new CustomEvent<PushStatus>(PUSH_STATUS_EVENT, { detail: next }),
-			);
-		}
-		return next;
-	}, []);
+	const run = useCallback(
+		async (action: () => Promise<PushStatus>) => {
+			setBusy(true);
+			let next: PushStatus = "error";
+			// On failure the status does not change — the broadcast carries the
+			// unchanged truth plus the failure so every surface agrees.
+			let sync: PushSync = { status: state.status, failed: true };
+			try {
+				next = await action();
+				if (next === "error") {
+					setFailed(true);
+				} else {
+					setFailed(false);
+					setState((current) => ({ ...current, status: next }));
+					sync = { status: next, failed: false };
+				}
+			} catch (error) {
+				console.warn("Push notification toggle failed", error);
+				setFailed(true);
+			} finally {
+				setBusy(false);
+				window.dispatchEvent(
+					new CustomEvent<PushSync>(PUSH_STATUS_EVENT, { detail: sync }),
+				);
+			}
+			return next;
+		},
+		[state.status],
+	);
 
 	// The controls only render for interactive states, which are only
 	// reachable after the VAPID key loaded.
@@ -92,7 +111,7 @@ export function usePushSubscription({ auto = true }: { auto?: boolean } = {}) {
 	);
 	const disable = useCallback(() => run(unsubscribePush), [run]);
 
-	return { ...state, busy, refresh, requestEnable, subscribe, disable };
+	return { ...state, busy, failed, refresh, requestEnable, subscribe, disable };
 }
 
 /**
@@ -123,8 +142,7 @@ export function PushNotificationsToggle() {
 	}, [push.status]);
 
 	if (push.status === "loading" || push.status === "hidden") return null;
-	const interactive =
-		push.status === "on" || push.status === "off" || push.status === "error";
+	const interactive = push.status === "on" || push.status === "off";
 
 	return (
 		<article
@@ -161,6 +179,8 @@ export function PushNotificationsToggle() {
 					<button
 						type="button"
 						className={styles.disableAction}
+						// A failed opt-out keeps status "on" — the subscription is
+						// still live — so this stays enabled and retries the DELETE.
 						disabled={push.busy || push.status !== "on"}
 						onClick={push.disable}
 					>
@@ -169,7 +189,9 @@ export function PushNotificationsToggle() {
 				</div>
 			)}
 			<p className={styles.status} role="status">
-				{PUSH_MESSAGES[push.status] ?? ""}
+				{push.failed
+					? PUSH_MESSAGES.error
+					: (PUSH_MESSAGES[push.status] ?? "")}
 			</p>
 		</article>
 	);

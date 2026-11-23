@@ -241,6 +241,9 @@ describe("PushNotificationsToggle", () => {
 			await click("הפעלת התראות");
 			expect(created.unsubscribe).toHaveBeenCalled();
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			// Nothing was stored — opt-in stays retryable, opt-out inert.
+			expect(enableButton()).toBeEnabled();
+			expect(disableButton()).toBeDisabled();
 		});
 
 		it("reports an error when subscribing throws", async () => {
@@ -250,6 +253,7 @@ describe("PushNotificationsToggle", () => {
 			await renderToggle();
 			await click("הפעלת התראות");
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			expect(enableButton()).toBeEnabled();
 			expect(warn).toHaveBeenCalled();
 		});
 	});
@@ -281,12 +285,48 @@ describe("PushNotificationsToggle", () => {
 			expect(enableButton()).toBeEnabled();
 		});
 
-		it("keeps the subscription when the server delete fails", async () => {
-			const { existing } = setup({ subscribed: true, deleteOk: false });
+		it("keeps the subscription and lets opt-out retry when the server delete fails", async () => {
+			const { existing, fetchMock } = setup({
+				subscribed: true,
+				deleteOk: false,
+			});
+			const events: { status: string; failed: boolean }[] = [];
+			window.addEventListener(PUSH_STATUS_EVENT, (event) =>
+				events.push(
+					(
+						event as CustomEvent<{
+							status: string;
+							failed: boolean;
+						}>
+					).detail,
+				),
+			);
 			await renderToggle();
 			await click("ביטול התראות");
 			expect(existing?.unsubscribe).not.toHaveBeenCalled();
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			// The subscription is still live: opt-out stays retryable and the
+			// broadcast keeps reporting "on" rather than a bogus "off".
+			expect(disableButton()).toBeEnabled();
+			expect(enableButton()).toBeDisabled();
+			expect(events).toEqual([{ status: "on", failed: true }]);
+
+			fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+				init
+					? { ok: true }
+					: {
+							ok: true,
+							json: async () => ({ publicKey: "AQID" }),
+						},
+			);
+			await click("ביטול התראות");
+			expect(fetchMock).toHaveBeenLastCalledWith(
+				"/api/push/subscription",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+			expect(existing?.unsubscribe).toHaveBeenCalled();
+			expect(enableButton()).toBeEnabled();
+			expect(screen.getByRole("status")).not.toHaveTextContent("נסו שוב");
 		});
 	});
 
@@ -301,13 +341,20 @@ describe("PushNotificationsToggle", () => {
 
 	it("broadcasts status changes so other mounted surfaces stay in sync", async () => {
 		setup();
-		const events: string[] = [];
+		const events: { status: string; failed: boolean }[] = [];
 		window.addEventListener(PUSH_STATUS_EVENT, (event) =>
-			events.push((event as CustomEvent<string>).detail),
+			events.push(
+				(
+					event as CustomEvent<{
+						status: string;
+						failed: boolean;
+					}>
+				).detail,
+			),
 		);
 		await renderToggle();
 		await click("הפעלת התראות");
-		expect(events).toEqual(["on"]);
+		expect(events).toEqual([{ status: "on", failed: false }]);
 	});
 });
 

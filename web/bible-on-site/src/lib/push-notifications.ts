@@ -36,6 +36,15 @@ export type PushStatus =
 	| "on"
 	| "error";
 
+/**
+ * Same-tab sync payload. `status` is always the ground truth — a failed
+ * operation leaves it unchanged (a failed opt-out still reports "on"
+ * because the subscription is still live), while `failed` carries the
+ * error so every surface can show the retry hint and keep its opt-in /
+ * opt-out controls wired to the real state.
+ */
+export type PushSync = { status: PushStatus; failed: boolean };
+
 export const PUSH_MESSAGES: Partial<Record<PushStatus, string>> = {
 	unsupported: "הדפדפן הזה אינו תומך בהתראות.",
 	denied:

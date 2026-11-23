@@ -591,8 +591,10 @@ export default function ReaderSettings() {
 											</label>
 										</legend>
 										<small>
-											{PUSH_MESSAGES[push.status] ??
-												"התראה עם הפרק היומי, גם כשהאתר סגור"}
+											{push.failed
+												? PUSH_MESSAGES.error
+												: (PUSH_MESSAGES[push.status] ??
+													"התראה עם הפרק היומי, גם כשהאתר סגור")}
 										</small>
 									</fieldset>
 								)}

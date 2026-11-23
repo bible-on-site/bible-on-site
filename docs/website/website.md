@@ -209,14 +209,24 @@ never delays or fails the admin request.
 
 Readers can opt in to a browser notification with the daily perek (#1096).
 
-- **Opt-in UI**: `PushNotificationsToggle` in the app section of the home
-  page. It registers `public/sw.js` only when the reader opts in, asks for
-  notification permission, subscribes with the VAPID public key and stores
-  the subscription. Unchecking deletes it on the server and unsubscribes the
-  browser. Unsupported browsers get an accurate "not supported" state —
-  including iPhone/iPad ordinary tabs, where Web Push is limited to
-  installed web apps and the product decision is no installation funnel
-  (#2936). Blocked permission is explained instead of re-prompting.
+- **Opt-in UI** (#3732): a dedicated browser-reminder card
+  (`PushNotificationsToggle`, `#bulletin-push`) sits alongside the Telegram,
+  WhatsApp and email cards in the daily-bulletin section of the home page,
+  with separate `הפעלת התראות` and `ביטול התראות` controls. The reader
+  settings dropdown carries the same subscription as a
+  `התראה יומית בדפדפן` checkbox; both surfaces share
+  `src/lib/push-notifications.ts` and a same-tab status event, so an action
+  on either is mirrored on the other and on reload. Permission is asked
+  only from a direct click on the card's enable control — the dropdown
+  disables directly, subscribes in place when permission is already
+  granted, and otherwise navigates to `#bulletin-push` instead of
+  prompting. Opting in registers `public/sw.js`, subscribes with the VAPID
+  public key and stores the subscription; opting out deletes it on the
+  server and unsubscribes the browser. Unsupported browsers get an
+  accurate "not supported" state — including iPhone/iPad ordinary tabs,
+  where Web Push is limited to installed web apps and the product decision
+  is no installation funnel (#2936). Blocked permission is explained
+  instead of re-prompting.
 - **Storage**: `tanah_web_push_subscription`
   (`data/mysql/tanah_web_push_upgrade.sql`, data-deploy manifest), keyed by
   the sha256 of the endpoint. A row is the opt-in, and there is no other
