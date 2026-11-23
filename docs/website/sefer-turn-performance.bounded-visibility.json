@@ -833,11 +833,11 @@
     ],
     "realQriLightAndDark": true,
     "screenshotOnlyFixedDate": "2026-11-03T12:00:00.000Z",
-    "reader-bounded-visibility-before.png": {
+    "before": {
       "sha256": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582",
       "bytes": 230755
     },
-    "reader-bounded-visibility-after.png": {
+    "after": {
       "sha256": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582",
       "bytes": 230755
     }
@@ -4832,7 +4832,6 @@
       "textGeometryComparisons": 8,
       "movedText": 0,
       "fixedDisplayDateOnly": true,
-      "attachedAfter": "images/sefer-turn-lag/reader-bounded-visibility-after.png",
       "capture": "reader814-appearance/300-leaf-light-angled.png"
     },
     "windows": {

@@ -18,7 +18,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     /// <summary>Perushim chevron tapped — the page toggles the perushim sheet.</summary>
     public event EventHandler? PerushimToggleRequested;
 
-    /// <summary>Text-mode (א ב ג) button tapped.</summary>
+    /// <summary>Text-mode button tapped.</summary>
     public event EventHandler? TextModeRequested;
 
     /// <summary>Articles button tapped — the page toggles the articles view.</summary>

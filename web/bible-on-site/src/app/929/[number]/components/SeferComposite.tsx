@@ -12,6 +12,7 @@ import { SeferLoadingIndicator } from "@/app/components/reading/SeferLoadingIndi
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
+import { isPasukCitationHash } from "@/lib/pasuk-anchor";
 import {
 	getStoredPerekViewMode,
 	pathnameWithBookQuery,
@@ -126,7 +127,7 @@ const ClientWrapper = (props: {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
 		// A verse citation takes the reader to its visible anchor in the text view.
-		if (/^#pasuk-[1-9]\d*$/.test(window.location.hash)) return;
+		if (isPasukCitationHash(window.location.hash)) return;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
 			const next = pathnameWithBookQuery(
@@ -137,13 +138,6 @@ const ClientWrapper = (props: {
 			window.history.replaceState(null, "", next);
 		}
 	}, [isWideEnough, pathname, searchParams]);
-
-	// URL is source of truth: persist when user lands with ?book
-	useEffect(() => {
-		if (toggled) {
-			setStoredPerekViewMode("book");
-		}
-	}, [toggled]);
 
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
@@ -194,10 +188,19 @@ const ClientWrapper = (props: {
 	// the SEO DOM from the rendering pipeline, eliminating the layout
 	// recalculation cost that was causing flip animation lag.
 	useEffect(() => {
-		if (currentlyToggled && isWideEnough === true) {
+		const bookOpen = currentlyToggled && isWideEnough === true;
+		if (bookOpen) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
+		}
+		// html[data-book-view] already display:nones .seo-content; mirror the
+		// same state in the hidden attribute so the document never holds two
+		// un-hidden <main> elements (HTML allows one without `hidden`).
+		for (const el of document.querySelectorAll<HTMLElement>(
+			"main.seo-content",
+		)) {
+			el.hidden = bookOpen;
 		}
 		return () => {
 			delete document.documentElement.dataset.bookView;
@@ -218,7 +221,8 @@ const ClientWrapper = (props: {
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
-			<div
+			<main
+				hidden={display === "none"}
 				style={{ display }}
 				className={`${styles.seferOverlay} ${
 					currentlyToggled ? styles.visible : styles.hidden
@@ -245,7 +249,7 @@ const ClientWrapper = (props: {
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />
 				) : null}
-			</div>
+			</main>
 		</>
 	);
 };

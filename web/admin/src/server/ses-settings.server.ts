@@ -35,6 +35,8 @@ import {
 export interface EmailRuntime extends SesConfig {
 	queueUrl: string;
 	accountId: string;
+	/** Whether the deployed event destination collects OPEN/CLICK events. */
+	trackingEnabled: boolean;
 }
 
 export function loadEmailRuntime(): EmailRuntime | null {
@@ -72,6 +74,9 @@ export function loadEmailRuntime(): EmailRuntime | null {
 		configurationSetName,
 		queueUrl,
 		accountId,
+		// Flipped only after the deployed event destination publishes
+		// OPEN/CLICK; editions enqueued earlier stay marked untracked.
+		trackingEnabled: process.env.BULLETIN_SES_TRACKING_ENABLED === "true",
 	};
 }
 
@@ -264,7 +269,9 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 		);
 		const client = new SesClient(runtime);
 		try {
-			await client.unsubscribeContact(value.email, value.audience);
+			// The local update above covers every audience row for the address,
+			// so the provider mirror is intentionally global.
+			await client.unsubscribeContact(value.email);
 		} finally {
 			client.destroy();
 		}

@@ -1,25 +1,11 @@
-import type { CategoryKey, EntityType } from "./labels";
-import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "./labels";
+import type { CategoryKey } from "./labels";
 
-export interface CategoryHierarchyItem {
-	type: EntityType;
-	children?: CategoryKey[];
-}
-
-export const CATEGORY_HIERARCHY: CategoryHierarchyItem[] = [
-	{ type: "PERSON", children: ["PROPHET", "KING"] },
-	{ type: "PLACE" },
-	{ type: "EVENT", children: ["WAR"] },
-	{ type: "SAYING", children: ["PROPHECY"] },
-	{ type: "OBJECT", children: ["TEMPLE_TOOL", "ASTRONOMICAL_OBJECT"] },
-	{
-		type: "ANIMAL",
-		children: ["BEHEMA", "CHAYA", "OF", "SHERETZ", "TAHOR", "TAMEH"],
-	},
-	{ type: "PLANT" },
-	{ type: "SEFER", children: ["TANAH_SEFER"] },
-	{ type: "NATION" },
-];
+// The shared taxonomy (#3710); the admin keeps only its website-URL helper.
+export {
+	CATEGORY_HIERARCHY,
+	type CategoryHierarchyItem,
+	labelForCategoryKey,
+} from "../../../../shared/tanahpedia/index";
 
 const ANIMAL_KINDS: CategoryKey[] = ["BEHEMA", "CHAYA", "OF", "SHERETZ"];
 const ANIMAL_PURITIES: CategoryKey[] = ["TAHOR", "TAMEH"];
@@ -36,8 +22,4 @@ export function websiteSubcategoryPath(key: CategoryKey): string {
 		return `/tanahpedia/animal?purity=${key.toLowerCase()}`;
 	}
 	return `/tanahpedia/${key.toLowerCase()}`;
-}
-
-export function labelForCategoryKey(key: CategoryKey): string {
-	return CATEGORY_LABELS[key] ?? ENTITY_TYPE_LABELS[key as EntityType] ?? key;
 }

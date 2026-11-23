@@ -26,44 +26,9 @@ jest.mock("next/link", () => ({
 	},
 }));
 
-jest.mock("../../../src/lib/tanahpedia/service", () => ({
-	CATEGORY_LABELS: {
-		PERSON: "People",
-		PROPHET: "Prophets",
-		KING: "Kings",
-		PLACE: "Places",
-		EVENT: "Events",
-		WAR: "Wars",
-		SAYING: "Sayings",
-		PROPHECY: "Prophecies",
-		OBJECT: "Objects",
-		TEMPLE_TOOL: "Temple tools",
-		ASTRONOMICAL_OBJECT: "Astronomical objects",
-		ANIMAL: "Animals",
-		BEHEMA: "Behema",
-		CHAYA: "Chaya",
-		OF: "Birds",
-		SHERETZ: "Sheretz",
-		TAHOR: "Tahor",
-		TAMEH: "Tameh",
-		PLANT: "Plants",
-		SEFER: "Books",
-		TANAH_SEFER: "Tanach books",
-		NATION: "Nations",
-	},
-	ENTITY_TYPE_LABELS: {
-		PERSON: "People",
-		PLACE: "Places",
-		EVENT: "Events",
-		SAYING: "Sayings",
-		OBJECT: "Objects",
-		ANIMAL: "Animals",
-		PLANT: "Plants",
-		SEFER: "Books",
-		NATION: "Nations",
-	},
-}));
-
+// The component consumes the shared taxonomy contract directly (#3710), so
+// the assertions below pin the real Hebrew labels — drift in
+// web/shared/tanahpedia/ fails here.
 describe("TanahpediaBreadcrumb", () => {
 	it("renders category and entry dropdown links with the current entry marked", () => {
 		render(
@@ -78,23 +43,21 @@ describe("TanahpediaBreadcrumb", () => {
 			/>,
 		);
 
-		expect(
-			screen.getByRole("button", { name: /Prophets/ }),
-		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /נביאים/ })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: /Moshe/ })).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "אישים" })).toHaveAttribute(
 			"href",
 			"/pedia/אישים",
 		);
-		expect(screen.getByRole("link", { name: "Kings" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "מלכים" })).toHaveAttribute(
 			"href",
 			"/pedia/מלכים",
 		);
-		expect(screen.getByRole("link", { name: "Chaya" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "חיות" })).toHaveAttribute(
 			"href",
 			"/pedia/חיות",
 		);
-		expect(screen.getByRole("link", { name: "Tahor" })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "טהורים" })).toHaveAttribute(
 			"href",
 			"/pedia/טהורים",
 		);

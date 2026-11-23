@@ -3,9 +3,8 @@
  *
  * The estimate is a silent-reading baseline, not required learning time,
  * recitation length, or measured reader performance — hence the hedged label.
- * Mirrors the counting-side policy in `web/shared/reading-metrics/policy.ts`
- * (the website package does not cross its bundler root, so the small display
- * contract is restated here).
+ * The counting-side policy lives in `web/shared/reading-metrics/policy.ts`;
+ * this module owns the website-local display wording.
  */
 
 /** Canonical UI label for the estimate. */

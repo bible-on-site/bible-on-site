@@ -174,6 +174,26 @@ public class ReaderRecitationDownloadTests
     }
 
     [Fact]
+    public void Cancel_WithNothingPending_IsAQuietNoOp()
+    {
+        var request = new ReaderRecitationDownload();
+        var act = request.Cancel;
+        act.Should().NotThrow();
+        request.IsPending.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CancelIgnoringDisposed_ToleratesAnAlreadyDisposedSource()
+    {
+        // The request's scope-exit disposal can beat a concurrent cancel to
+        // the token; the guarded call swallows that exact race (#3704).
+        using var source = new CancellationTokenSource();
+        source.Dispose();
+        var act = () => ReaderRecitationDownload.CancelIgnoringDisposed(source);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public async Task FailedDownload_ReleasesTheRequest_AndTheNextTapRetries()
     {
         var request = new ReaderRecitationDownload();

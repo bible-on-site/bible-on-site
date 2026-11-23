@@ -69,9 +69,9 @@ export default function LoadedSefer(
 		// regardless of their query, so stripping ?book cannot leave the
 		// book there — the escape lands on the plain perek page instead.
 		// Every other route keeps its flat chapter/article target (#3095).
-		// Landing on ?book= also stored the book preference, which the flat
-		// page would restore — re-entering the failed reader. The escape
-		// clears it to "seo" first, the same write the view toggle makes.
+		// A stored "book" preference would restore the failed reader on
+		// the flat page. The escape clears it to "seo" first, the same
+		// write the view toggle makes.
 		const flatViewHref = bookPageFromPath(
 			window.location.pathname,
 			props.perekObj.sefer,

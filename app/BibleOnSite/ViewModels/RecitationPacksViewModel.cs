@@ -322,7 +322,7 @@ public partial class RecitationPacksViewModel : ObservableObject
     /// the service installs the packs in catalog order, so cumulative bytes
     /// identify the book in flight — completed rows read 100%, queued rows 0.
     /// </summary>
-    private void ApplyBookProgress(double p, HashSet<int> ids)
+    internal void ApplyBookProgress(double p, HashSet<int> ids)
     {
         var packs = _recitation.Books.Where(b => b.PerekIds.Any(ids.Contains)).ToList();
         var total = packs.Sum(b => b.SizeBytes);

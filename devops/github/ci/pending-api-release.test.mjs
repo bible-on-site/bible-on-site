@@ -90,7 +90,16 @@ function fixture({
 		if (args[0] === "show") return source.get(args[1].slice(41));
 		if (args[0] === "ls-tree") {
 			const modes = beforeRef ? beforeModes : afterModes;
+			// Honor the pathspecs after `--` exactly like Git does: exact file
+			// or directory prefix — otherwise a narrowed listing could not
+			// prove the shared contract paths reach the comparison (#3726).
+			const pathspecs = args.slice(args.indexOf("--") + 1);
 			return [...source]
+				.filter(([file]) =>
+					pathspecs.some(
+						(spec) => file === spec || file.startsWith(`${spec}/`),
+					),
+				)
 				.map(
 					([file, content]) =>
 						`${modes[file] ?? "100644"} blob ${createHash("sha1").update(content).digest("hex")}\t${file}\0`,
@@ -363,6 +372,32 @@ for (const [name, change] of [
 		assert.equal(result.changedFiles.length, 1);
 	});
 }
+
+test("unreleased shared registry changes select an API release (#3710)", () => {
+	// The API compiles web/shared/article-relationships into the release, so a
+	// registry-only diff between the published commit and HEAD must report
+	// pending — a blocked release cannot leave it unpublished (#3726 review).
+	for (const [name, before, after] of [
+		[
+			"blob differs",
+			'{"articles": {"old": []}}\n',
+			'{"articles": {"new": []}}\n',
+		],
+		["addition", undefined, '{"articles": {"new": []}}\n'],
+		["deletion", '{"articles": {"old": []}}\n', undefined],
+	]) {
+		const beforeFiles = files("0.1.93");
+		const afterFiles = files("0.1.94");
+		const registry = "web/shared/article-relationships/registry.json";
+		if (before !== undefined) beforeFiles.set(registry, before);
+		if (after !== undefined) afterFiles.set(registry, after);
+		const result = pendingApiRelease(
+			fixture({ before: beforeFiles, after: afterFiles }),
+		);
+		assert.equal(result.pending, true, name);
+		assert.deepEqual(result.changedFiles, [registry], name);
+	}
+});
 
 test("Git executable mode changes remain production differences", () => {
 	const result = pendingApiRelease(

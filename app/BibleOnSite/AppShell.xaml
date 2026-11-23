@@ -17,6 +17,21 @@
     FlowDirection="RightToLeft"
     FlyoutBackdrop="#80000000">
 
+    <Shell.Resources>
+        <Style x:Key="FlyoutGroupHeading" TargetType="Label">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="SemanticProperties.HeadingLevel" Value="Level2"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+            <Setter Property="Margin" Value="16,8,16,0"/>
+        </Style>
+        <Style x:Key="FlyoutGroupDivider" TargetType="BoxView">
+            <Setter Property="HeightRequest" Value="1"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
+        </Style>
+    </Shell.Resources>
+
     <!-- Flyout Header with Logo -->
     <Shell.FlyoutHeader>
         <Grid HeightRequest="180"
@@ -33,14 +48,14 @@
     <!-- Custom Flyout Content with Icons and Subtitles -->
     <Shell.FlyoutContentTemplate>
         <DataTemplate>
-            <ScrollView>
+            <ScrollView AutomationId="FlyoutScrollView">
                 <VerticalStackLayout Spacing="0" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
                     <!-- iOS/MacCatalyst lay the flyout content under FlyoutHeader (the
                          header height is applied as a scroll inset that races header
                          measurement and can leave the first rows permanently hidden
                          under the opaque header) — the logo is rendered in-content
                          there instead; see AppShell.xaml.cs. -->
-                    <Grid HeightRequest="180"
+                    <Grid HeightRequest="100"
                           BackgroundColor="White"
                           Padding="0">
                         <Grid.IsVisible>
@@ -52,42 +67,32 @@
                                Aspect="AspectFit"
                                VerticalOptions="Center"
                                HorizontalOptions="Center"
-                               Margin="20"/>
+                               Margin="12"/>
                     </Grid>
 
                     <!-- Destination rows share FlyoutMenuRow (#2766): on Windows
                          its handler wraps the row in a native Button so the menu is
                          reachable and activatable with keyboard/screen reader, with
                          hover/pressed/focus visuals; touch platforms keep the
-                         identical tap layout. -->
+                         identical tap layout. The order mirrors the website
+                         drawer (#3731), with Preferences as a native destination. -->
+                    <Label Style="{StaticResource FlyoutGroupHeading}" Text="לימוד על הפרק" Margin="16,12,16,0"/>
+
                     <!-- על הפרק -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_today_24_regular}"
                                             Title="על הפרק"
-                                            Subtitle="לימוד תנ&quot;ך יומי"
+                                            Subtitle="הלימוד בחלוקה המוכרת"
                                             AutomationId="FlyoutAlHaperek"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAlHaperekCurrent}"
                                             Activated="OnAlHaperekTapped"/>
 
-                    <!-- תנכפדיה -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
-                                            Title="תנכפדיה"
-                                            Subtitle="אנציקלופדיה לתנ&quot;ך"
-                                            AutomationId="FlyoutTanahpedia"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
-                                            Activated="OnTanahpediaTapped"/>
-
-                    <!-- לוח לימוד יומי -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
-                                            Title="לוח לימוד יומי"
-                                            Subtitle="הפרק היומי בלוח השנה"
-                                            AutomationId="FlyoutLearningCalendar"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
-                                            Activated="OnLearningCalendarTapped"/>
+                    <BoxView Style="{StaticResource FlyoutGroupDivider}"/>
+                    <Label Style="{StaticResource FlyoutGroupHeading}" Text="חלוקות נוספות"/>
 
                     <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.split_horizontal_24_regular}"
                                             Title="מסורה על הפרק"
-                                            Subtitle="חלוקת פרשיות פתוחה וסתומה"
+                                            Subtitle="חלוקת המסורה היהודית הקדומה"
                                             AutomationId="FlyoutMasora"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMasoraCurrent}"
                                             IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}"
@@ -96,7 +101,7 @@
                     <!-- פרשה על הפרק -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.book_open_24_regular}"
                                             Title="פרשה על הפרק"
-                                            Subtitle="קריאת התורה וההפטרה"
+                                            Subtitle="לימוד לפי סדר הפרשות"
                                             AutomationId="FlyoutParasha"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsParashaCurrent}"
                                             Activated="OnParashaTapped"/>
@@ -104,34 +109,73 @@
                     <!-- מועדים על הפרק -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_star_24_regular}"
                                             Title="מועדים על הפרק"
-                                            Subtitle="קריאות לימוד למועדים"
+                                            Subtitle="לימוד במעגל השנה"
                                             AutomationId="FlyoutMoadim"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMoadimCurrent}"
                                             Activated="OnMoadimTapped"/>
 
-                    <!-- רבנים -->
+                    <!-- הרבנים -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.edit_person_24_regular}"
-                                            Title="רבנים"
-                                            Subtitle="כותבים בתכנית"
+                                            Title="הרבנים"
+                                            Subtitle="איתור מאמרים לפי המחברים"
                                             AutomationId="FlyoutAuthors"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAuthorsCurrent}"
                                             Activated="OnAuthorsTapped"/>
 
+                    <BoxView Style="{StaticResource FlyoutGroupDivider}"/>
+                    <Label Style="{StaticResource FlyoutGroupHeading}" Text="אפשרויות לימוד נוספות"/>
+
                     <!-- עלון יומי — join cards (#2806) -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.news_24_regular}"
                                             Title="עלון יומי"
-                                            Subtitle="במייל, בטלגרם ובווטסאפ"
+                                            Subtitle="הפרק היומי והמאמרים ישירות אליכם"
                                             AutomationId="FlyoutDailyBulletin"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDailyBulletinCurrent}"
                                             Activated="OnDailyBulletinTapped"/>
 
+                    <BoxView Style="{StaticResource FlyoutGroupDivider}"/>
+                    <Label Style="{StaticResource FlyoutGroupHeading}" Text="כלי לימוד"/>
+
+                    <!-- תנכפדיה -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
+                                            Title="תנכפדיה"
+                                            Subtitle="אנציקלופדיה תנ&quot;כית"
+                                            AutomationId="FlyoutTanahpedia"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
+                                            Activated="OnTanahpediaTapped"/>
+
+                    <!-- לוח לימוד יומי -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
+                                            Title="לוח לימוד יומי"
+                                            Subtitle="לוח עזר פרקים לפי תאריך"
+                                            AutomationId="FlyoutLearningCalendar"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
+                                            Activated="OnLearningCalendarTapped"/>
+
+                    <BoxView Style="{StaticResource FlyoutGroupDivider}"/>
+                    <Label Style="{StaticResource FlyoutGroupHeading}" Text="שונות"/>
+
                     <!-- תנאי שימוש -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.shield_question_24_regular}"
                                             Title="תנאי שימוש"
-                                            Subtitle="הצהרות פרטיות ונגישות"
+                                            Subtitle="והצהרות פרטיות ונגישות"
                                             AutomationId="FlyoutTerms"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTermsCurrent}"
                                             Activated="OnTermsTapped"/>
+
+                    <!-- תרומות -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.money_hand_24_regular}"
+                                            Title="תרומות"
+                                            AutomationId="FlyoutDonations"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDonationsCurrent}"
+                                            Activated="OnDonationsTapped"/>
+
+                    <!-- צור קשר -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.contact_card_24_regular}"
+                                            Title="צור קשר"
+                                            AutomationId="FlyoutContact"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsContactCurrent}"
+                                            Activated="OnContactTapped"/>
 
                     <!-- העדפות -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.settings_24_regular}"
@@ -140,22 +184,6 @@
                                             AutomationId="FlyoutPreferences"
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsPreferencesCurrent}"
                                             Activated="OnPreferencesTapped"/>
-
-                    <!-- צור קשר -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.contact_card_24_regular}"
-                                            Title="צור קשר"
-                                            Subtitle="צוות התכנית"
-                                            AutomationId="FlyoutContact"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsContactCurrent}"
-                                            Activated="OnContactTapped"/>
-
-                    <!-- תרומות -->
-                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.money_hand_24_regular}"
-                                            Title="תרומות"
-                                            Subtitle="תמיכה בקיום התכנית"
-                                            AutomationId="FlyoutDonations"
-                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDonationsCurrent}"
-                                            Activated="OnDonationsTapped"/>
                 </VerticalStackLayout>
             </ScrollView>
         </DataTemplate>

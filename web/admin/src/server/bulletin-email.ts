@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
 	validateAudienceChange,
 	validateEmailQueueRequest,
+	validateInactivityUnsubscribe,
 	validateSubscriberChange,
 } from "~/lib/bulletin-email";
 import { validateRolloutChange } from "~/lib/bulletin-rollout";
@@ -43,4 +44,30 @@ export const setDailyBulletinEmailRollout = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const { setRolloutState } = await import("./rollout-state.server");
 		return setRolloutState(data);
+	});
+
+export const getDailyBulletinEmailEngagement = createServerFn({
+	method: "GET",
+}).handler(async () => {
+	const { readEmailEngagementPanel } = await import(
+		"./bulletin-engagement.server"
+	);
+	return readEmailEngagementPanel();
+});
+
+export const confirmDailyBulletinInactivityUnsubscribe = createServerFn({
+	method: "POST",
+})
+	.validator(validateInactivityUnsubscribe)
+	.handler(async ({ data }) => {
+		const { resolveEditorIdentity } = await import("./editor-identity");
+		const { confirmInactivityUnsubscribe } = await import(
+			"./bulletin-engagement.server"
+		);
+		// The session edge already gates this call to admins; the resolved
+		// identity is recorded on the subscriber row as the acting admin.
+		await confirmInactivityUnsubscribe(
+			data.subscriberId,
+			(await resolveEditorIdentity()).id,
+		);
 	});
