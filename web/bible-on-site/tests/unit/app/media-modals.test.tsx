@@ -154,15 +154,24 @@ describe("JournalismGallery", () => {
 			render(<JournalismGallery items={ITEMS} />);
 			openModal();
 			const closeButton = screen.getByRole("button", { name: "סגור" });
+			const next = screen.getByRole("button", { name: "הבא" });
 			const last = screen.getByRole("button", { name: "הקודם" });
 
+			// fireEvent returns false only when the handler called preventDefault
+			// — that is what proves the trap intercepted the key.
 			last.focus();
-			fireEvent.keyDown(last, { key: "Tab" });
+			expect(fireEvent.keyDown(last, { key: "Tab" })).toBe(false);
 			expect(closeButton).toHaveFocus();
 
 			closeButton.focus();
-			fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+			expect(fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true })).toBe(
+				false,
+			);
 			expect(last).toHaveFocus();
+
+			// Mid-list Tab is left to the browser.
+			next.focus();
+			expect(fireEvent.keyDown(next, { key: "Tab" })).toBe(true);
 		});
 
 		it("wraps Tab and Shift+Tab when focus sits on the dialog container", () => {
@@ -171,11 +180,13 @@ describe("JournalismGallery", () => {
 			// Clicking the image lands focus on the container (tabIndex -1).
 			dialog.focus();
 
-			fireEvent.keyDown(dialog, { key: "Tab" });
+			expect(fireEvent.keyDown(dialog, { key: "Tab" })).toBe(false);
 			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
 
 			dialog.focus();
-			fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+			expect(fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true })).toBe(
+				false,
+			);
 			expect(screen.getByRole("button", { name: "הקודם" })).toHaveFocus();
 		});
 
@@ -208,10 +219,12 @@ describe("JournalismGallery", () => {
 				const closeButton = screen.getByRole("button", { name: "סגור" });
 				closeButton.focus();
 
-				fireEvent.keyDown(closeButton, { key: "Tab" });
+				expect(fireEvent.keyDown(closeButton, { key: "Tab" })).toBe(false);
 				expect(closeButton).toHaveFocus();
 
-				fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+				expect(
+					fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true }),
+				).toBe(false);
 				expect(closeButton).toHaveFocus();
 			} finally {
 				if (real) proto.checkVisibility = real;
