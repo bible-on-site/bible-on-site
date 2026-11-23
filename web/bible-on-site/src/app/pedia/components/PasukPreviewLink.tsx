@@ -32,9 +32,12 @@ const previewCache = new Map<string, PasukPreviewData | null>();
 export function parsePasukRefFromHref(
 	href: string,
 ): { perekId: number; pasuk: number; perush?: string } | null {
-	const anchor = /^\/929\/(\d+)(?:\/([^?#]+))?(?:\?pasuk=(\d+)|#pasuk-(\d+))$/.exec(
-		href,
-	);
+	// `?pasuk=N` may sit anywhere among the query params — perush-search links
+	// append `&note=` and `&q=` after it — while `#pasuk-N` always ends the href.
+	const anchor =
+		/^\/929\/(\d+)(?:\/([^?#]+))?(?:\?[^#]*?\bpasuk=(\d+)|#pasuk-(\d+)$)/.exec(
+			href,
+		);
 	if (!anchor) return null;
 	const pasukRaw = anchor[3] ?? anchor[4];
 	/* istanbul ignore next -- the regex alternation guarantees one pasuk group; defensive guard */

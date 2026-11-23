@@ -42,6 +42,25 @@ describe("parsePasukRefFromHref", () => {
 		).toEqual({ perekId: 32, pasuk: 23, perush: "הכתב" });
 	});
 
+	it("parses perush-search links carrying extra query params", () => {
+		expect(
+			parsePasukRefFromHref(
+				"/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=0&q=%D7%A4%D7%A1%D7%95%D7%A7",
+			),
+		).toEqual({ perekId: 1, pasuk: 3, perush: "רשי" });
+	});
+
+	it("parses pasuk anywhere in the query params", () => {
+		expect(parsePasukRefFromHref("/929/1?note=0&pasuk=3")).toEqual({
+			perekId: 1,
+			pasuk: 3,
+		});
+	});
+
+	it("returns null for query links without a pasuk param", () => {
+		expect(parsePasukRefFromHref("/929/1/some-article?q=x")).toBeNull();
+	});
+
 	it("returns null for perek-only links", () => {
 		expect(parsePasukRefFromHref("/929/29")).toBeNull();
 	});
@@ -100,6 +119,31 @@ describe("PasukPreviewLink", () => {
 		});
 		expect(fetchMock).toHaveBeenCalledWith(
 			`/api/tanah/pasuk/32/23?perush=${encodeURIComponent("הכתב והקבלה")}`,
+		);
+	});
+
+	it("shows the pasuk preview for perush-search hrefs with extra params", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				reference: 'רשי בראשית א ג',
+				text: "וַיִּקְרָא",
+				noteHtml: "<p>הערת רשי</p>",
+			}),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/1/%D7%A8%D7%A9%D7%99?pasuk=3&note=0&q=x">
+				רשי בראשית א ג
+			</PasukPreviewLink>,
+		);
+		fireEvent.mouseEnter(
+			screen.getByRole("link", { name: "רשי בראשית א ג" }),
+		);
+		await waitFor(() => {
+			expect(screen.getByRole("tooltip")).toHaveTextContent("הערת רשי");
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent("רשי")}`,
 		);
 	});
 
