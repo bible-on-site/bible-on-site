@@ -152,7 +152,7 @@ const HTML_ENTITIES: Record<string, string> = {
 const BLOCK_TAG_NAMES =
 	"(?:br|p|div|li|tr|td|th|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)";
 const BLOCK_TAGS = new RegExp(
-	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:\\s*<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
+	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
 	"gi",
 );
 const SCRIPT_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
@@ -188,10 +188,14 @@ export function htmlToPlainText(html: string): string {
 	let previous = "";
 	while (text !== previous && text.includes("<")) {
 		previous = text;
-		text = text.replace(SCRIPT_STYLE, " ");
+		text = text.replace(SCRIPT_STYLE, "");
 		// Each regex pass rescans the whole string; skip it once no '<' remains.
 		if (text.includes("<")) {
-			text = text.replace(BLOCK_TAGS, " ");
+			// A boundary emits one space only when the preceding char isn't
+			// already a space — the same dedup the other three ports apply.
+			text = text.replace(BLOCK_TAGS, (match, offset) =>
+				offset > 0 && text[offset - 1] === " " ? "" : " ",
+			);
 		}
 		if (text.includes("<")) {
 			text = text.replace(ALL_TAGS, "");

@@ -331,6 +331,13 @@ mod tests {
             ("<div>א", "א"),
             ("<p>א</p><p>ב</p>", "א ב"),
             ("א<br>ב", "א ב"),
+            // A boundary emits one space unless the text already ends in one;
+            // whitespace around tags stays literal in every port.
+            ("א <br>ב", "א ב"),
+            ("א  <br>ב", "א  ב"),
+            ("א<br> ב", "א  ב"),
+            ("א <br> <br>ב", "א  ב"),
+            ("א<div></div>ב", "א ב"),
         ] {
             assert_eq!(plain_text(html), expected, "for {html}");
         }

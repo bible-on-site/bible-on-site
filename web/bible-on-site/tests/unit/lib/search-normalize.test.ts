@@ -121,7 +121,7 @@ describe("htmlToPlainText", () => {
 
 	it("stops scanning a large plain remainder for tags once all openers are removed", () => {
 		const html = "<p>שלום </p>".repeat(10_000);
-		const plain = "שלום  ".repeat(10_000).trim();
+		const plain = "שלום ".repeat(10_000).trim();
 		const replace = String.prototype.replace;
 		const spy = jest
 			.spyOn(String.prototype, "replace")
@@ -180,6 +180,13 @@ describe("htmlToPlainText", () => {
 		["<div>א", "א"],
 		["<p>א</p><p>ב</p>", "א ב"],
 		["א<br>ב", "א ב"],
+		// A boundary emits one space unless the text already ends in one;
+		// whitespace around tags stays literal in every port.
+		["א <br>ב", "א ב"],
+		["א  <br>ב", "א  ב"],
+		["א<br> ב", "א  ב"],
+		["א <br> <br>ב", "א  ב"],
+		["א<div></div>ב", "א ב"],
 	])("splits %s into normalized words %s", (html, expected) => {
 		expect(htmlToPlainText(html)).toBe(expected);
 	});
