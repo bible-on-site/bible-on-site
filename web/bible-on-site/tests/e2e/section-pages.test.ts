@@ -78,19 +78,60 @@ test.describe("Section pages", () => {
 
 	// The accessibility statement promises reduced-motion is honored: the
 	// global smooth-scroll rule and the ScrollToSection effect must both
-	// flatten to an instant jump under prefers-reduced-motion.
-	test("landing scroll stays smooth by default", async ({ page }) => {
+	// flatten to an instant jump under prefers-reduced-motion. The frame
+	// sampler proves it — toBeInViewport alone passes after either an
+	// instant jump or a finished glide.
+	test("landing scroll glides smoothly by default", async ({ page }) => {
+		await page.addInitScript(() => {
+			const steps: number[] = [];
+			const t0 = performance.now();
+			const tick = () => {
+				const y = Math.round(window.scrollY);
+				if (steps.at(-1) !== y) steps.push(y);
+				if (performance.now() - t0 < 4000)
+					requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+			(window as unknown as { __scrollSteps: number[] }).__scrollSteps =
+				steps;
+		});
 		await page.goto("/contact");
 		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "smooth");
 		await expect(page.locator("#contact")).toBeInViewport();
+		const steps = await page.evaluate(
+			() =>
+				(window as unknown as { __scrollSteps: number[] }).__scrollSteps,
+		);
+		// A smooth glide walks through many intermediate positions.
+		expect(steps.length).toBeGreaterThan(10);
 	});
 
 	test("landing scroll jumps instantly under reduced motion", async ({
 		page,
 	}) => {
+		await page.addInitScript(() => {
+			const steps: number[] = [];
+			const t0 = performance.now();
+			const tick = () => {
+				const y = Math.round(window.scrollY);
+				if (steps.at(-1) !== y) steps.push(y);
+				if (performance.now() - t0 < 4000)
+					requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+			(window as unknown as { __scrollSteps: number[] }).__scrollSteps =
+				steps;
+		});
 		await page.emulateMedia({ reducedMotion: "reduce" });
 		await page.goto("/contact");
 		await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
 		await expect(page.locator("#contact")).toBeInViewport();
+		const steps = await page.evaluate(
+			() =>
+				(window as unknown as { __scrollSteps: number[] }).__scrollSteps,
+		);
+		// One jump: top, then the target.
+		expect(steps.length).toBeLessThanOrEqual(3);
+		expect(steps.at(-1)).toBeGreaterThan(0);
 	});
 });
