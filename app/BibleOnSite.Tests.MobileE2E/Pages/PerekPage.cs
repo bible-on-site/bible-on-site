@@ -355,26 +355,40 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     public AppiumElement ScrollFlyoutTo(string automationId)
     {
-        var drawer = WaitForObservation("FlyoutScrollView",
-            element => new Rectangle(element.Location, element.Size));
-        var viewport = Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
-        return ScrollToVisible(automationId, down =>
-        {
-            // Start inside the RTL drawer so the underlying reader cannot receive the drag.
-            var x = viewport.Left + viewport.Width / 2;
-            var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
-            var gesture = new ActionSequence(finger, 0);
-            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
-                x, down ? viewport.Top + viewport.Height * 4 / 5 : viewport.Top + viewport.Height / 5,
-                TimeSpan.Zero));
-            gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
-            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
-                x, down ? viewport.Top + viewport.Height / 5 : viewport.Top + viewport.Height * 4 / 5,
-                TimeSpan.FromMilliseconds(350)));
-            gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
-            driver.PerformActions([gesture]);
-        }, element => viewport.Contains(element.Location.X + element.Size.Width / 2,
-            element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
+        var viewport = FlyoutViewport();
+        return ScrollToVisible(automationId, down => DragFlyout(viewport, down),
+            element => viewport.Contains(element.Location.X + element.Size.Width / 2,
+                element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
+    }
+
+    /// <summary>
+    /// One drawer drag on <see cref="ScrollFlyoutTo"/>'s surface. Tests drive
+    /// it to force an overshot drawer item.
+    /// </summary>
+    public void DragFlyoutSurface(bool down) => DragFlyout(FlyoutViewport(), down);
+
+    private Rectangle FlyoutViewport()
+    {
+        var drawer = WaitFor(platform.FlyoutScroller);
+        return Rectangle.Intersect(new Rectangle(drawer.Location, drawer.Size),
+            new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
+    }
+
+    private void DragFlyout(Rectangle viewport, bool down)
+    {
+        // Start inside the RTL drawer so the underlying reader cannot receive the drag.
+        var x = viewport.Left + viewport.Width / 2;
+        var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
+        var gesture = new ActionSequence(finger, 0);
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height * 4 / 5 : viewport.Top + viewport.Height / 5,
+            TimeSpan.Zero));
+        gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height / 5 : viewport.Top + viewport.Height * 4 / 5,
+            TimeSpan.FromMilliseconds(350)));
+        gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([gesture]);
     }
 
     private AppiumElement ScrollToVisible(string automationId, Action<bool> scroll, Func<AppiumElement, bool>? condition = null)

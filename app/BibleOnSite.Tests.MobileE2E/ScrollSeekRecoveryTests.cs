@@ -27,16 +27,46 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
         // Assert the overshoot actually happened — if the switch never left
         // the viewport, the seek never reverses and proves nothing.
         var id = "DivineNameMaskingSwitch";
-        var overshot = false;
-        var lastSurface = Driver!.PageSource;
-        for (var step = 0; step < 8 && !overshot; step++)
-        {
-            Platform.ScrollPageDown(Driver!);
-            var surface = Driver!.PageSource;
-            overshot = surface != lastSurface && !surface.Contains(id);
-            lastSurface = surface;
-        }
-        Assert.True(overshot, $"the display preferences never scrolled {id} off the viewport");
+        Assert.True(ScrolledOffscreen(id, () => Platform.ScrollPageDown(Driver!)),
+            $"the display preferences never scrolled {id} off the viewport");
         Assert.NotNull(Page.ScrollToVisible(id));
     });
+
+    [Fact]
+    public void SeekRecoversAnOvershotFlyoutItem() => Scenario(() =>
+    {
+        Page.Tap(Platform.FlyoutButton);
+        // The drawer's ScrollView carries no AutomationId on Android; a drawer
+        // item marks it open.
+        Page.WaitFor("FlyoutAlHaperek");
+        // Same overshoot inside the flyout drawer. At densities where the
+        // item list fits the drawer exactly (the Android CI emulator), no
+        // item can scroll off its top edge — skip there rather than assert
+        // an unreachable precondition.
+        var id = "FlyoutPreferences";
+        if (!ScrolledOffscreen(id, () => Page.DragFlyoutSurface(down: true)))
+        {
+            Assert.Skip($"the flyout fits its viewport at this density, so {id} cannot overshoot");
+        }
+        Assert.NotNull(Page.ScrollFlyoutTo(id));
+    });
+
+    // Scrolls down until `id` was seen and then pruned from the source tree
+    // (a fully offscreen node is absent on Android), proving the seek must
+    // reverse to recover it — not merely that it never rendered.
+    private bool ScrolledOffscreen(string id, Action scrollDown)
+    {
+        var seen = Driver!.PageSource.Contains(id);
+        for (var step = 0; step < 8; step++)
+        {
+            scrollDown();
+            var surface = Driver!.PageSource;
+            seen |= surface.Contains(id);
+            if (seen && !surface.Contains(id))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -65,6 +65,12 @@ public abstract class MobilePlatformAdapter
     }
     protected abstract By LocateAnyOfAutomationIds(string[] ids);
     public abstract By FlyoutButton { get; }
+
+    /// <summary>
+    /// The flyout drawer's scroll surface. Its ScrollView carries no
+    /// AutomationId on Android, so it is located by class there.
+    /// </summary>
+    public abstract By FlyoutScroller { get; }
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
     // SemanticProperties.Description surfaces as content-desc on Android and
@@ -411,6 +417,9 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     protected override By LocateAnyOfAutomationIds(string[] ids) =>
         By.XPath($"//*[{string.Join(" or ", ids.Select(id => $"@resource-id='com.tanah.daily929:id/{id}'"))}]");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
+    // The drawer's ScrollView carries no AutomationId; it is the scrollable one
+    // (the outer shell container is a non-scrollable ScrollView).
+    public override By FlyoutScroller => By.XPath("//android.widget.ScrollView[@scrollable='true']");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override void ScrollPageDown(AppiumDriver driver) => ScrollPage(driver, "down");
     public override void ScrollPageUp(AppiumDriver driver) => ScrollPage(driver, "up");
@@ -616,6 +625,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     protected override By LocateAnyOfAutomationIds(string[] ids) =>
         new ByIosNSPredicate($"name IN {{{string.Join(",", ids.Select(id => $"'{id}'"))}}}");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
+    public override By FlyoutScroller => AutomationId("FlyoutScrollView");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
     public override void Tap(AppiumDriver driver, AppiumElement element)
