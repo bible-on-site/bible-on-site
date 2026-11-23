@@ -95,7 +95,12 @@ export function latestPublishedApiRelease(repo, request = requestGitHub) {
 	return latest;
 }
 
-export function publishedReleaseCommit(repo, release, request = requestGitHub) {
+export function publishedReleaseCommit(
+	repo,
+	release,
+	request = requestGitHub,
+	git = runGit,
+) {
 	const tag = release.tag_name;
 	if (!apiTagVersion(tag)) throw new Error("Invalid API release tag");
 	const ref = request(`repos/${repo}/git/ref/tags/${tag}`);
@@ -119,7 +124,14 @@ export function publishedReleaseCommit(repo, release, request = requestGitHub) {
 	}
 	const payload = releasePayload(release);
 	if (payload && payload.ref !== object.sha) {
-		throw new Error("Published API delivery source differs from its tag");
+		// A rewritten master re-anchors the tag while the release marker keeps
+		// the run's real delivery source: identical API trees prove the same
+		// publication, different trees remain a genuine desync.
+		ensurePublishedCommit(payload.ref, git);
+		ensurePublishedCommit(object.sha, git);
+		if (!apiTreesEqual(payload.ref, object.sha, git)) {
+			throw new Error("Published API delivery source differs from its tag");
+		}
 	}
 	return object.sha;
 }
@@ -239,6 +251,23 @@ function apiTree(ref, git) {
 	return entries;
 }
 
+function apiTreesEqual(left, right, git) {
+	const a = apiTree(left, git);
+	const b = apiTree(right, git);
+	if (a.size !== b.size) return false;
+	for (const [file, entry] of a) {
+		const other = b.get(file);
+		if (
+			!other ||
+			entry.mode !== other.mode ||
+			entry.type !== other.type ||
+			entry.oid !== other.oid
+		)
+			return false;
+	}
+	return true;
+}
+
 /** Fetch metadata only when absent, preserving an existing full repository. */
 function ensurePublishedCommit(sha, git) {
 	try {
@@ -287,7 +316,7 @@ export function pendingApiRelease({
 	if (git(["rev-parse", "HEAD"]).trim() !== headSha)
 		throw new Error("Checkout differs from API source SHA");
 	const release = latestPublishedApiRelease(repo, request);
-	const baselineSha = publishedReleaseCommit(repo, release, request);
+	const baselineSha = publishedReleaseCommit(repo, release, request, git);
 	ensurePublishedCommit(baselineSha, git);
 	const baseline = apiTree(baselineSha, git);
 	const current = apiTree(headSha, git);
