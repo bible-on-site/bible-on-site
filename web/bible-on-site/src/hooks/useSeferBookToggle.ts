@@ -8,6 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { isPasukCitationHash } from "@/lib/pasuk-anchor";
 import type { PerekViewMode } from "@/lib/perek-view-preference";
 
 /**
@@ -92,7 +93,7 @@ export function useSeferBookToggle(
 	useEffect(() => {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
-		if (/^#pasuk-[1-9]\d*(-\d+)?$/.test(window.location.hash)) return;
+		if (isPasukCitationHash(window.location.hash)) return;
 		const stored = prefsRef.current.getStored();
 		if (stored === "book" && searchParams.get("book") == null) {
 			const next = prefsRef.current.withBookQuery(
