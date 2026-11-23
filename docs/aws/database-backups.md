@@ -1,9 +1,9 @@
 # Independent database backups (#1828)
 
-Status: implemented for review; production activation requires approval of this
-PR and the setup below. Existing RDS seven-day automated backups remain in use.
-This mechanism protects application data beyond that window and independently
-of the RDS instance's lifecycle. It is not a copy outside AWS account 250598594267.
+The production backup workflow exports weekly and monthly copies to private
+S3 storage with Object Lock. It complements the RDS seven-day automated
+backups and retains application data independently of the RDS instance's
+lifecycle. It is not a copy outside AWS account 250598594267.
 Account-wide compromise or account closure requires a separately controlled
 off-account copy; S3 governance retention can be bypassed by an authorized
 administrator. No cross-account protection is claimed.
