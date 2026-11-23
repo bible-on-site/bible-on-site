@@ -159,6 +159,14 @@ describe("htmlToPlainText", () => {
 		expect(htmlToPlainText("א &amp; ב")).toBe("א & ב");
 	});
 
+	it("keeps text after a comment that mentions a tag", () => {
+		expect(htmlToPlainText("א <!-- <style> --> ב")).toBe("א  ב");
+	});
+
+	it("removes an unterminated script block to end of input", () => {
+		expect(htmlToPlainText("א<script>x")).toBe("א");
+	});
+
 	it("leaves unknown entities untouched", () => {
 		expect(htmlToPlainText("&notanentity;")).toBe("&notanentity;");
 	});
