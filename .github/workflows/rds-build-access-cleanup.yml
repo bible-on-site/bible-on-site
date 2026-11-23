@@ -7,20 +7,21 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Completed CI run ID
+        description: Completed CI run ID (leave empty to sweep every stale lease)
         type: string
-        required: true
+        required: false
       run_attempt:
         description: Exact completed CI attempt number
         type: string
-        required: true
+        required: false
 
 permissions: {}
 
+# A single cleanup runs at a time and each run sweeps every stale build lease,
+# so a newer completion superseding the queued run loses no coverage.
 concurrency:
-  group: ${{ github.repository }}-rds-cleanup-${{ github.event.workflow_run.id || inputs.run_id }}-${{ github.event.workflow_run.run_attempt || inputs.run_attempt }}
+  group: ${{ github.repository }}-rds-cleanup
   cancel-in-progress: false
-  queue: max
 
 jobs:
   cleanup:
@@ -48,6 +49,7 @@ jobs:
         with:
           node-version-file: devops/package.json
       - name: Require a completed repository CI attempt
+        if: github.event_name == 'workflow_dispatch' && inputs.run_id != ''
         run: node devops/github/ci/rds-build-access.mjs check-run
       - name: Configure existing RDS build role
         uses: aws-actions/configure-aws-credentials@v6
@@ -55,6 +57,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Remove only access owned by the completed attempt
+        if: github.event_name == 'workflow_dispatch' && inputs.run_id != ''
         env:
           RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: node devops/github/ci/rds-build-access.mjs cleanup-run
+      - name: Remove access owned by every completed CI attempt
+        if: github.event_name == 'workflow_run' || inputs.run_id == ''
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: node devops/github/ci/rds-build-access.mjs cleanup-all
