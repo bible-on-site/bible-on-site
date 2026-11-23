@@ -46,7 +46,7 @@ function panel(
 				trackedLastYear: 40,
 			},
 		],
-		pendingMirror: [],
+		reviewEnabled: true,
 		...overrides,
 	};
 }
@@ -76,7 +76,7 @@ describe("BulletinEmailEngagement", () => {
 		expect(screen.getByText("5 (10%)")).toBeDefined();
 		expect(screen.getByText("50")).toBeDefined();
 		expect(
-			screen.getByText(/לפני הפעלת המדידה - אין נתוני פתיחות וקליקים/),
+			screen.getByText(/אין נתוני פתיחות וקליקים עבור עלון זה/),
 		).toBeDefined();
 	});
 	it("labels the statistics as tracked activity with its privacy caveats", async () => {
@@ -120,9 +120,7 @@ describe("BulletinEmailEngagement", () => {
 	it("shows the empty-editions note when nothing was sent yet", async () => {
 		mocks.read.mockResolvedValue(panel({ editions: [] }));
 		mount();
-		expect(
-			await screen.findByText(/אין עדיין משלוחי מנויים/),
-		).toBeDefined();
+		expect(await screen.findByText(/אין עדיין משלוחי מנויים/)).toBeDefined();
 	});
 	it("shows an empty review list when nobody qualifies", async () => {
 		mocks.read.mockResolvedValue(panel({ inactive: [] }));
@@ -171,11 +169,9 @@ describe("BulletinEmailEngagement", () => {
 		expect(await screen.findByRole("alert")).toHaveTextContent("נרשמה פעילות");
 		expect(mocks.confirm).toHaveBeenCalledTimes(1);
 	});
-	it("labels in-flight removals and mirror retries while pending", async () => {
+	it("disables the confirmation and cancel buttons while a removal is pending", async () => {
 		let resolveConfirm: (() => void) | undefined;
-		mocks.read.mockResolvedValue(
-			panel({ pendingMirror: [{ id: 9, email: "mirror@example.com" }] }),
-		);
+		mocks.read.mockResolvedValue(panel());
 		mocks.confirm.mockImplementation(
 			() =>
 				new Promise<void>((resolve) => {
@@ -189,41 +185,18 @@ describe("BulletinEmailEngagement", () => {
 		fireEvent.click(
 			await screen.findByRole("button", { name: "אישור הסרה מהדיוור" }),
 		);
-		expect(await screen.findByText("מסיר...")).toBeDefined();
-		expect(screen.getByText("מסנכרן...")).toBeDefined();
+		expect(
+			await screen.findByRole("button", { name: "מסיר..." }),
+		).toBeDisabled();
+		expect(screen.getByRole("button", { name: "ביטול" })).toBeDisabled();
 		resolveConfirm?.();
 		await waitFor(() => expect(screen.queryByText("מסיר...")).toBeNull());
-		// The sync-retry label must also hold while the retry itself runs.
-		fireEvent.click(
-			await screen.findByRole("button", { name: "ניסיון סנכרון חוזר" }),
-		);
-		expect(await screen.findByText("מסנכרן...")).toBeDefined();
-		expect(screen.queryByText("מסיר...")).toBeNull();
-		await waitFor(() =>
-			expect(mocks.confirm).toHaveBeenLastCalledWith({
-				data: { subscriberId: 9 },
-			}),
-		);
-		resolveConfirm?.();
-		await waitFor(() => expect(screen.queryByText("מסנכרן...")).toBeNull());
 	});
-	it("keeps a failed SES mirror reachable with an explicit retry", async () => {
-		mocks.read.mockResolvedValue(
-			panel({ pendingMirror: [{ id: 9, email: "mirror@example.com" }] }),
-		);
-		mocks.confirm.mockResolvedValue(undefined);
+	it("explains a paused review and keeps historical metrics visible", async () => {
+		mocks.read.mockResolvedValue(panel({ reviewEnabled: false, inactive: [] }));
 		mount();
-		expect(
-			await screen.findByText(/הסרות הממתינות לסנכרון אל SES/),
-		).toBeDefined();
-		expect(screen.getByText("mirror@example.com")).toBeDefined();
-		fireEvent.click(
-			screen.getByRole("button", { name: "ניסיון סנכרון חוזר" }),
-		);
-		await waitFor(() =>
-			expect(mocks.confirm).toHaveBeenCalledExactlyOnceWith({
-				data: { subscriberId: 9 },
-			}),
-		);
+		expect(await screen.findByText(/סקירת חוסר פעילות מושהית/)).toBeVisible();
+		expect(screen.getByText("25 (50%)")).toBeVisible();
+		expect(screen.queryByRole("button", { name: "הסרה מהדיוור" })).toBeNull();
 	});
 });

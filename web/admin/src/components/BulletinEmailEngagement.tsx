@@ -27,7 +27,7 @@ function EditionRow({ edition }: { edition: EmailEditionStats }) {
 				</>
 			) : (
 				<td className="px-3 py-2 text-gray-500" colSpan={2}>
-					לפני הפעלת המדידה - אין נתוני פתיחות וקליקים
+					אין נתוני פתיחות וקליקים עבור עלון זה
 				</td>
 			)}
 		</tr>
@@ -61,8 +61,6 @@ export function BulletinEmailEngagement({
 			confirmDailyBulletinInactivityUnsubscribe({ data: { subscriberId } }),
 		retry: false,
 		onSettled: () => {
-			// Refetch even on failure: a rejected mirror leaves the local opt-out
-			// on the pending-sync list, which the panel must show immediately.
 			setConfirming(null);
 			return queryClient.invalidateQueries({
 				queryKey: ["bulletin-email-engagement"],
@@ -113,10 +111,10 @@ export function BulletinEmailEngagement({
 					<p className="text-sm text-gray-600">
 						המדידה מתבססת על אירועי המעקב של SES: פתיחה נרשמת כשנטען פיקסל
 						המעקב, וקליק נרשם רק בקישורי התוכן - קישורי ההסרה וניהול המנוי אינם
-						נספרים. חסימת תמונות מדווחת פתיחה נמוכה מהאמת; שירותי פרטיות (כגון
-						Apple Mail Privacy Protection) וסורקי קישורים של שירותי דואר עשויים
-						לדווח פתיחות וקליקים גם בלי פעולה אמיתית של הקורא. יש להתייחס
-						למספרים כאומדן פעילות מדודה ולא כראיה מלאה לקריאה.
+						נספרים. חסימת תמונות עלולה להסתיר פתיחות. שירותי פרטיות (כגון Apple
+						Mail Privacy Protection) וסורקי קישורים של שירותי דואר עשויים לדווח
+						פתיחות וקליקים גם בלי פעולה אמיתית של הקורא. יש להתייחס למספרים
+						כאומדן פעילות מדודה ולא כראיה מלאה לקריאה.
 					</p>
 					<section className="space-y-2">
 						<h4 className="font-semibold">
@@ -128,7 +126,11 @@ export function BulletinEmailEngagement({
 							הקישורים או פיקסל הפתיחה שלו הופעלו בשנה זו אינו מופיע. אישור
 							ההסרה בודק שוב את הזכאות ושומר את פעולת המנהל.
 						</p>
-						{data.inactive.length === 0 ? (
+						{!data.reviewEnabled ? (
+							<p className="text-sm text-gray-600">
+								סקירת חוסר פעילות מושהית כאשר המדידה כבויה.
+							</p>
+						) : data.inactive.length === 0 ? (
 							<p className="text-sm text-gray-600">
 								אין מנויים העומדים כרגע בתנאי ההסרה.
 							</p>
@@ -185,35 +187,6 @@ export function BulletinEmailEngagement({
 							</p>
 						)}
 					</section>
-					{data.pendingMirror.length > 0 && (
-						<section className="space-y-2">
-							<h4 className="font-semibold">הסרות הממתינות לסנכרון אל SES</h4>
-							<p className="text-sm text-gray-600">
-								המנויים הבאים הוסרו מקומית מהדיוור, אך סנכרון ההסרה אל SES טרם
-								הושלם. ההסרה המקומית תקפה; ניתן לנסות את הסנכרון שוב.
-							</p>
-							<ul className="space-y-2">
-								{data.pendingMirror.map((subscriber) => (
-									<li
-										key={subscriber.id}
-										className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-3"
-									>
-										<bdi className="font-mono text-sm">{subscriber.email}</bdi>
-										<button
-											type="button"
-											disabled={busy}
-											onClick={() => unsubscribe.mutate(subscriber.id)}
-											className="rounded-lg border border-blue-600 px-3 py-1 text-blue-700 disabled:opacity-50"
-										>
-											{unsubscribe.isPending
-												? "מסנכרן..."
-												: "ניסיון סנכרון חוזר"}
-										</button>
-									</li>
-								))}
-							</ul>
-						</section>
-					)}
 				</>
 			)}
 		</div>

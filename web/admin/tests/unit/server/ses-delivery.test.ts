@@ -562,28 +562,31 @@ function write(sqlRaw: string, p: unknown[] = []) {
 			const column = sql.includes("opened_at") ? "opened_at" : "clicked_at";
 			const counter = column === "opened_at" ? "open_count" : "click_count";
 			const engagement = state.recipients.find(
-				(r) => r.id === p[2] && r.attempt_token === p[3],
+				(r) => r.id === p[5] && r.attempt_token === p[6],
 			);
 			if (!engagement) return result(0);
 			if (!engagement[column] || engagement[column] < String(p[1]))
 				engagement[column] = String(p[1]);
 			engagement[counter] += 1;
+			engagement.message_id = String(p[2]);
+			const earliest =
+				engagement.delivered_at ??
+				(engagement.status === "delivered" ? engagement.event_at : null);
+			engagement.delivered_at =
+				earliest && earliest < String(p[3]) ? earliest : String(p[3]);
 			return result();
 		}
-		// A tracked open or click lifts a mid-flight row to delivered and
-		// stamps its first delivery evidence at the engagement instant.
+		// A tracked open or click lifts a mid-flight row to delivered.
 		if (sql.includes("SET status = 'delivered', event_at = ?")) {
 			const lifted = state.recipients.find(
 				(r) =>
-					r.id === p[3] &&
-					r.attempt_token === p[4] &&
+					r.id === p[1] &&
+					r.attempt_token === p[2] &&
 					["sending", "accepted", "uncertain"].includes(r.status),
 			);
 			if (!lifted) return result(0);
 			lifted.status = "delivered";
 			lifted.event_at = String(p[0]);
-			if (!lifted.delivered_at || lifted.delivered_at > String(p[1]))
-				lifted.delivered_at = String(p[1]);
 			lifted.last_error = null;
 			return result();
 		}
@@ -1663,7 +1666,6 @@ describe("tracked engagement events", () => {
 		"lifts a %s row to delivered on tracked engagement",
 		async (status) => {
 			const row = seed("real", status);
-			if (status === "sending") row.message_id = "message-1";
 			await applySesEvent(delivery("open"));
 			expect(row.status).toBe("delivered");
 			expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
@@ -1784,7 +1786,7 @@ describe("tracked engagement events", () => {
 		mocks.queryOne.mockImplementation(async (sql, p) => {
 			if (compact(String(sql)).includes("opened_at"))
 				return { opened: null, clicked: null };
-			return inner?.(sql, p) ?? (read(sql, p)[0] ?? null);
+			return inner?.(sql, p) ?? read(sql, p)[0] ?? null;
 		});
 		expect(await readLatestEmailJob(date, "test")).toMatchObject({
 			tracked: false,
@@ -2089,9 +2091,7 @@ describe("summary and queue loop", () => {
 				return {};
 			}
 			return {
-				Messages: [
-					{ Body: bodies[next], ReceiptHandle: `receipt-${next++}` },
-				],
+				Messages: [{ Body: bodies[next], ReceiptHandle: `receipt-${next++}` }],
 			};
 		});
 		await startEmailWorker(c.signal);

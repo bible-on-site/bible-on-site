@@ -133,6 +133,12 @@ Before considering rollout complete, verify TEST remains selected; send only the
 
 Keep native unsubscribe and received-message validation separate from an SES delivery event: delivery confirms acceptance by the recipient's mail server, not its displayed headers or content. Both received test versions had the managed unsubscribe headers and passed SPF/DKIM. The downloaded revised message also confirmed that DKIM covered both unsubscribe headers. It predated the DMARC record. The owner confirmed Gmail's control was visible again on the later test, and a second real opt-out was independently verified. Compare received headers when diagnosing a missing Gmail control; [Google's eligibility checks](https://support.google.com/mail/answer/14229414) mean its top-of-message control is not guaranteed merely by adding headers. Do not add conflicting manual headers over SES management. Record deployed-worker checks before declaring rollout complete.
 
+### Engagement measurement and inactivity review
+
+The admin inactivity action records an audited opt-out for the production audience in MySQL. The send worker checks that record before submitting a message, and the original-cohort rollout honors it. SES continues to manage recipient-initiated unsubscribes. The admin action avoids SES contact-wide preference writes because they can overwrite a concurrent recipient preference or affect another topic.
+
+During a known engagement collection outage, turn off `BULLETIN_SES_TRACKING_ENABLED` to pause inactivity removals. Before re-enabling it, mark affected jobs as untracked (`tracked = 0`), including older editions whose open or click events could have been lost during the outage. Keep the delivery and activity records. An untracked delivery in the trailing year disqualifies the recipient from inactivity review.
+
 ## Rollback and retirement
 
 1. Disable the background worker and force the persisted audience to TEST. Stop new enqueues, preserve contact preferences and inspect outstanding jobs. Do not purge queues or blindly redrive uncertain send jobs.

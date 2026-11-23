@@ -15,7 +15,6 @@ import {
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 
 const unsubscribedInSes: { email: string; topic: string }[] = [];
-let failSesMirror = false;
 vi.mock("~/server/ses-client.server", () => {
 	class SesError extends Error {
 		constructor(
@@ -41,10 +40,6 @@ vi.mock("~/server/ses-client.server", () => {
 			}
 			async unsubscribeContact(email: string) {
 				unsubscribedInSes.push({ email, topic: "*" });
-			}
-			async unsubscribeTopic(email: string, topic: string) {
-				if (failSesMirror) throw new SesError("mirror failed", "uncertain");
-				unsubscribedInSes.push({ email, topic });
 			}
 			async sendOne() {
 				return `native-${randomBytes(6).toString("hex")}`;
@@ -378,7 +373,6 @@ beforeEach(async () => {
 		"UPDATE tanah_daily_bulletin_email_rollout SET state = 'disabled', revision = 0, last_error = NULL, started_at = NULL, completed_at = NULL WHERE id = 1",
 	);
 	unsubscribedInSes.length = 0;
-	failSesMirror = false;
 	nextSubscriber = 0;
 	vi.stubEnv("BULLETIN_SES_TRACKING_ENABLED", "");
 });
@@ -412,17 +406,16 @@ describe("engagement schema upgrade", () => {
 			[schema],
 		);
 		expect(tables).toHaveLength(1);
-		const mirror = await db.query<{ COLUMN_NAME: string }>(
+		const audit = await db.query<{ COLUMN_NAME: string }>(
 			`SELECT COLUMN_NAME FROM information_schema.COLUMNS
 			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_subscriber'
-			 AND COLUMN_NAME IN ('ses_mirrored','admin_action','admin_actor','admin_action_at')`,
+			 AND COLUMN_NAME IN ('admin_action','admin_actor','admin_action_at')`,
 			[schema],
 		);
-		expect(mirror.map((c) => c.COLUMN_NAME).sort()).toEqual([
+		expect(audit.map((c) => c.COLUMN_NAME).sort()).toEqual([
 			"admin_action",
 			"admin_action_at",
 			"admin_actor",
-			"ses_mirrored",
 		]);
 	});
 });
@@ -529,16 +522,8 @@ describe("tracked SES engagement events", () => {
 			date: bulletinDate,
 			subscriberId: subscriber,
 		});
-		const open = event(
-			"open",
-			recipientId,
-			token,
-			"same-ms@example.invalid",
-		);
-		await delivery.applySesEvent(
-			open,
-			'{"open":{"ipAddress":"10.0.0.1"}}',
-		);
+		const open = event("open", recipientId, token, "same-ms@example.invalid");
+		await delivery.applySesEvent(open, '{"open":{"ipAddress":"10.0.0.1"}}');
 		// Provider details the parser drops still separate two real events
 		// sharing every parsed field down to the millisecond; a
 		// byte-identical copy deduplicates.
@@ -606,18 +591,46 @@ describe("tracked SES engagement events", () => {
 		const { recipientId, jobId, token } = await seedDelivered({
 			date: bulletinDate,
 			subscriberId: subscriber,
-			status: "accepted",
+			status: "sending",
 			delivered: 0,
-			accepted: 1,
+			accepted: 0,
 		});
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_recipient SET message_id = NULL WHERE id = ?",
+			[recipientId],
+		);
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_job SET cnt_sending = 1 WHERE id = ?",
+			[jobId],
+		);
 		await delivery.applySesEvent(
 			event("open", recipientId, token, "d@example.invalid"),
 		);
-		const row = await db.queryOne<{ status: string }>(
-			"SELECT status FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+		await delivery.applySesEvent(
+			event("open", recipientId, token, "d@example.invalid", {
+				timestamp: "2026-11-03T12:00:00.000Z",
+			}),
+		);
+		await delivery.applySesEvent(
+			event("open", recipientId, token, "d@example.invalid", {
+				messageId: "wrong-message-id",
+				timestamp: "2026-11-03T11:00:00.000Z",
+			}),
+		);
+		const row = await db.queryOne<RowDataPacket>(
+			`SELECT status, message_id, open_count,
+				DATE_FORMAT(delivered_at, '%H:%i:%s') AS delivered_time,
+				DATE_FORMAT(opened_at, '%H:%i:%s') AS opened_time
+			 FROM tanah_daily_bulletin_email_recipient WHERE id = ?`,
 			[recipientId],
 		);
-		expect(row?.status).toBe("delivered");
+		expect(row).toMatchObject({
+			status: "delivered",
+			message_id: `msg-${token}`,
+			open_count: 2,
+			delivered_time: "12:00:00",
+			opened_time: "12:01:00",
+		});
 		const job = await db.queryOne<{
 			status: string;
 			cnt_delivered: number;
@@ -659,6 +672,10 @@ describe("tracked SES engagement events", () => {
 });
 
 describe("one-year inactivity review", () => {
+	beforeEach(() => {
+		vi.stubEnv("BULLETIN_SES_TRACKING_ENABLED", "true");
+	});
+
 	async function seedHistory(
 		email: string,
 		editions: {
@@ -760,11 +777,39 @@ describe("one-year inactivity review", () => {
 	});
 
 	it("confirms removal with a re-checked eligibility and records the admin", async () => {
+		const testSubscriber = await seedSubscriber(
+			"quiet2@example.invalid",
+			"confirmed",
+			"test",
+		);
 		const quiet = await seedHistory("quiet2@example.invalid", [
 			{ monthsAgo: 13 },
 			{ monthsAgo: 2 },
 		]);
+		const { recipientId, jobId } = await seedDelivered({
+			date: bulletinDate,
+			subscriberId: quiet,
+			status: "queued",
+			delivered: 0,
+		});
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_job SET cnt_queued = 1 WHERE id = ?",
+			[jobId],
+		);
+		await db.execute(
+			"UPDATE tanah_daily_bulletin_email_recipient SET message_id = NULL, attempt_token = NULL WHERE id = ?",
+			[recipientId],
+		);
 		await engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1");
+		await delivery.processEmailRecipient(recipientId);
+		const attempt = await db.queryOne<{
+			status: string;
+			message_id: string | null;
+		}>(
+			"SELECT status, message_id FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+			[recipientId],
+		);
+		expect(attempt).toEqual({ status: "suppressed", message_id: null });
 		const row = await db.queryOne<RowDataPacket>(
 			"SELECT * FROM tanah_daily_bulletin_subscriber WHERE id = ?",
 			[quiet],
@@ -773,54 +818,58 @@ describe("one-year inactivity review", () => {
 		expect(row?.admin_action).toBe("inactivity-unsubscribe");
 		expect(row?.admin_actor).toBe("admin-sub-1");
 		expect(row?.admin_action_at).not.toBeNull();
-		expect(unsubscribedInSes).toEqual([
-			{ email: "quiet2@example.invalid", topic: "real" },
-		]);
-		// A repeat confirmation only re-mirrors SES; it cannot resurrect consent.
-		await engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1");
-		expect(unsubscribedInSes).toHaveLength(2);
-		const after = await db.queryOne<{ consent_status: string }>(
-			"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+		await engagement.confirmInactivityUnsubscribe(quiet, "different-admin");
+		const after = await db.queryOne<{
+			consent_status: string;
+			admin_actor: string;
+		}>(
+			"SELECT consent_status, admin_actor FROM tanah_daily_bulletin_subscriber WHERE id = ?",
 			[quiet],
 		);
-		expect(after?.consent_status).toBe("unsubscribed");
+		expect(after).toEqual({
+			consent_status: "unsubscribed",
+			admin_actor: "admin-sub-1",
+		});
+		const testRow = await db.queryOne<{ consent_status: string }>(
+			"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+			[testSubscriber],
+		);
+		expect(testRow?.consent_status).toBe("confirmed");
+		expect(unsubscribedInSes).toEqual([]);
 	});
 
-	it("keeps a failed SES mirror pending for an explicit retry", async () => {
-		const quiet = await seedHistory("mirror@example.invalid", [
+	it("hides candidates and rejects removals during a known tracking outage", async () => {
+		const subscriber = await seedHistory("outage@example.invalid", [
 			{ monthsAgo: 13 },
 			{ monthsAgo: 2 },
 		]);
-		failSesMirror = true;
-		await expect(
-			engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1"),
-		).rejects.toThrow("mirror failed");
-		const row = await db.queryOne<{
-			consent_status: string;
-			ses_mirrored: number;
-		}>(
-			"SELECT consent_status, ses_mirrored FROM tanah_daily_bulletin_subscriber WHERE id = ?",
-			[quiet],
-		);
-		// Local consent is already gone; only the provider mirror is pending.
-		expect(row?.consent_status).toBe("unsubscribed");
-		expect(Number(row?.ses_mirrored)).toBe(0);
+		vi.stubEnv("BULLETIN_SES_TRACKING_ENABLED", "");
 		const panel = await engagement.readEmailEngagementPanel();
-		expect(panel?.pendingMirror).toEqual([
-			{ id: quiet, email: "mirror@example.invalid" },
-		]);
-		// The retry path re-mirrors without re-checking engagement eligibility.
-		failSesMirror = false;
-		await engagement.confirmInactivityUnsubscribe(quiet, "admin-sub-1");
-		const after = await db.queryOne<{ ses_mirrored: number }>(
-			"SELECT ses_mirrored FROM tanah_daily_bulletin_subscriber WHERE id = ?",
-			[quiet],
-		);
-		expect(Number(after?.ses_mirrored)).toBe(1);
-		expect((await engagement.readEmailEngagementPanel())?.pendingMirror).toEqual(
-			[],
-		);
+		expect(panel).toMatchObject({ reviewEnabled: false, inactive: [] });
+		expect(panel?.editions).toHaveLength(2);
+		await expect(
+			engagement.confirmInactivityUnsubscribe(subscriber, "admin-1"),
+		).rejects.toThrow();
 	});
+
+	it("leaves subscribers with an unresolved recent attempt out of the review", async () => {
+		const subscriberId = await seedHistory("unresolved@example.invalid", [
+			{ monthsAgo: 13 },
+			{ monthsAgo: 2 },
+		]);
+		await seedDelivered({
+			date: bulletinDate,
+			subscriberId,
+			status: "accepted",
+			delivered: 0,
+			accepted: 1,
+		});
+		expect((await engagement.readEmailEngagementPanel())?.inactive).toEqual([]);
+		await expect(
+			engagement.confirmInactivityUnsubscribe(subscriberId, "admin-1"),
+		).rejects.toThrow();
+	});
+
 	it("refuses removal once eligibility vanished and never calls SES", async () => {
 		const recent = await seedHistory("recent@example.invalid", [
 			{ monthsAgo: 13 },

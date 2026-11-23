@@ -888,22 +888,31 @@ export async function applySesEvent(
 				return;
 			const column = event.type === "open" ? "opened_at" : "clicked_at";
 			const counter = event.type === "open" ? "open_count" : "click_count";
+			const timestamp = sqlTime(event.timestamp);
 			try {
 				await txExecute(
 					connection,
 					`UPDATE tanah_daily_bulletin_email_recipient
-					 SET ${column} = GREATEST(COALESCE(${column}, ?), ?), ${counter} = ${counter} + 1
+					 SET ${column} = GREATEST(COALESCE(${column}, ?), ?), ${counter} = ${counter} + 1,
+					 message_id = ?, delivered_at = LEAST(COALESCE(delivered_at,
+						IF(status = 'delivered', event_at, NULL), ?), ?)
 					 WHERE id = ? AND attempt_token = ?`,
-					[sqlTime(event.timestamp), sqlTime(event.timestamp), id, token],
+					[
+						timestamp,
+						timestamp,
+						event.messageId,
+						timestamp,
+						timestamp,
+						id,
+						token,
+					],
 				);
 			} catch (error) {
 				if (!isMissingEngagementSchema(error)) throw error;
 				return;
 			}
-			// A tracked open or click is itself proof of delivery; lift a row
-			// still mid-flight so rates stay inside the delivered denominator.
-			// The engagement timestamp is also the first delivery evidence, so it
-			// feeds delivered_at exactly like a Delivery event does.
+			// Engagement is evidence of delivery. Promote an in-flight row
+			// while keeping any definitive bounce or complaint in force.
 			if (
 				row.status === "sending" ||
 				row.status === "accepted" ||
@@ -912,16 +921,9 @@ export async function applySesEvent(
 				await txExecute(
 					connection,
 					`UPDATE tanah_daily_bulletin_email_recipient
-					 SET status = 'delivered', event_at = ?,
-					 delivered_at = LEAST(COALESCE(delivered_at, ?), ?), last_error = NULL
+					 SET status = 'delivered', event_at = ?, last_error = NULL
 					 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'accepted', 'uncertain')`,
-					[
-						sqlTime(event.timestamp),
-						sqlTime(event.timestamp),
-						sqlTime(event.timestamp),
-						id,
-						token,
-					],
+					[timestamp, id, token],
 				);
 				await applyRecipientTransition(
 					connection,

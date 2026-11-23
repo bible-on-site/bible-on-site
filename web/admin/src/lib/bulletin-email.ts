@@ -53,7 +53,7 @@ export interface EmailEngagementPanel {
 	 * Admin opt-outs whose SES mirror has not completed; local consent is
 	 * already removed and each row offers an explicit mirror retry.
 	 */
-	pendingMirror: { id: number; email: string }[];
+	reviewEnabled: boolean;
 }
 
 export interface EmailReadiness {

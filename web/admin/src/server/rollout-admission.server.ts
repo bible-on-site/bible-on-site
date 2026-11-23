@@ -327,20 +327,8 @@ async function settleCandidate(
 		return "admitted" as const;
 	});
 	if (committed === "ineligible") {
-		// The recipient opted out between the SES check and activation. Mirror the
-		// opt-out back so SES cannot keep the subscription we just created, then
-		// skip to the next eligible member within the same day.
-		const revert = new SesClient(runtime);
-		try {
-			// Local consent was withdrawn for the 'real' audience only; mirror the
-			// same scope so a 'test' subscription on the address is not suppressed.
-			await revert.unsubscribeTopic(subscriber.email, "real");
-		} catch {
-			// Local consent is authoritative for every future send; SES events also
-			// reconcile the topic preference once the recipient manages it.
-		} finally {
-			revert.destroy();
-		}
+		// Local consent already blocks sends. A contact-wide SES update could
+		// overwrite a recipient preference or suppress a separate test subscription.
 		await releaseCandidate(candidate, "late-event");
 		return candidate.reselectable;
 	}

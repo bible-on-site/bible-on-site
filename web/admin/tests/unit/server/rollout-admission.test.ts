@@ -14,7 +14,6 @@ vi.mock("~/server/ses-client.server", () => ({
 	SesClient: class {
 		ensureSubscribedContact = m.ensureSubscribed;
 		unsubscribeContact = m.unsubscribe;
-		unsubscribeTopic = m.unsubscribe;
 		destroy = m.sesDestroy;
 	},
 }));
@@ -133,7 +132,9 @@ const state = {
 							row.status === "reserved" &&
 							dayOf(row.local_date) < String(params[0]),
 					)
-					.sort((a, b) => dayOf(a.local_date).localeCompare(dayOf(b.local_date)))
+					.sort((a, b) =>
+						dayOf(a.local_date).localeCompare(dayOf(b.local_date)),
+					)
 					.slice(0, limit)
 					.map((row) => ({ ...row }));
 			}
@@ -454,7 +455,7 @@ describe("original-cohort admission sweep", () => {
 			status: "excluded",
 			excluded_reason: "late-event",
 		});
-		expect(m.unsubscribe).toHaveBeenCalledWith("late@x.invalid", "real");
+		expect(m.unsubscribe).not.toHaveBeenCalled();
 		expect(state.cohort.get(2)?.status).toBe("admitted");
 	});
 	it("resumes the same recorded subscriber after an uncertain SES outcome", async () => {
@@ -776,9 +777,7 @@ describe("original-cohort admission sweep", () => {
 		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
 		// The guarded conclude touched nothing on the lapsed row; the still
 		// eligible member was legitimately claimed under today's reservation.
-		expect(state.admissions.get("original|2026-11-01")?.status).toBe(
-			"lapsed",
-		);
+		expect(state.admissions.get("original|2026-11-01")?.status).toBe("lapsed");
 		expect(state.cohort.get(1)).toMatchObject({
 			status: "admitted",
 			admission_date: "2026-11-02",
