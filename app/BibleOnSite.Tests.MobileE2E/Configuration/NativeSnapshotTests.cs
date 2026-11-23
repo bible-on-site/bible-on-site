@@ -221,6 +221,22 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void FirstVisibleElementFiltersHittabilityFromTheSameSnapshot()
+    {
+        var blocked = Entry("blocked");
+        blocked["hittable"] = false;
+        var tappable = Entry("tappable");
+        tappable["hittable"] = true;
+        var executor = new SnapshotExecutor([]) { Respond = _ => new object[] { blocked, tappable } };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var adapter = new IosPlatformAdapter();
+        var row = new PerekPage(driver, adapter).FirstVisibleElement("PerushCheckBox", adapter.CanTap);
+        Assert.Equal("tappable", row?.Element.Id);
+        Assert.DoesNotContain(DriverCommand.IsElementEnabled, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementAttribute, executor.Commands);
+    }
+
+    [Fact]
     public void ScrollReturnRetriesAHeadingLookupStraggler()
     {
         var executor = new SnapshotExecutor(
