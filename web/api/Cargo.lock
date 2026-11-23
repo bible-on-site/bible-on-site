@@ -863,15 +863,14 @@ dependencies = [
 
 [[package]]
 name = "cargo-llvm-cov"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e00647cc92940c4dd82249c480fe08fd3809767e89f056bcec46d8a7962ea5b"
+checksum = "079b7461474a8fc030a9f7c8b00bdc7fa3e70bd69e408dbab156fdd7899b871e"
 dependencies = [
  "anyhow",
  "camino",
  "cargo-config2",
  "duct",
- "fs-err",
  "glob",
  "lcov2cobertura",
  "lexopt",
@@ -1401,15 +1400,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "fs-err"
-version = "3.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b91aa448ca50d7e79433bdf3ee8d99215430d2ec02ade5aefab2a073a1822e8a"
-dependencies = [
- "autocfg",
 ]
 
 [[package]]
