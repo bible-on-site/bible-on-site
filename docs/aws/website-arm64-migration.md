@@ -55,10 +55,9 @@ The live lifecycle policy protects the newest image tagged with the
 `rollback-website-arm64-x86-` prefix, ahead of the general 15-image policy.
 Verify that the exact fallback remains available before changing architecture.
 
-Do not convert an already-published canonical version between single-image and
-index modes. Its immutable collision guard requires a fresh ordinary release
-version. If the first migration release is to use an index, enable the reviewed
-flag before that release is published; do not toggle modes halfway through it.
+Publish new image content under a fresh release version. Existing canonical
+version tags are immutable, and ordinary CD requires the multi-architecture
+index.
 
 ## Architecture handover
 
@@ -74,17 +73,20 @@ flag before that release is published; do not toggle modes halfway through it.
    rule is part of that approved scope. Keep an old healthy task available
    until the replacement is ready and Cloud Map discovery has propagated.
 4. Preserve CPU, memory, health checks, stop timeout, roles, secret mappings,
-   and networking. Verify running image and architecture, deployment state,
-   discovery and public behavior.
+   and networking. For each task definition deployed during the handover,
+   verify the replacement's digest, architecture, readiness, Cloud Map
+   registration, and public routes. After the replacement passes, release only
+   the outgoing task protection owned by this handover so ECS can retire it.
+   Wait for steady state and verify the running digest, discovery, and public
+   routes again.
 5. Before releasing the queue lock, verify that `bible-on-site:latest` selects
    the qualified child for the resulting architecture. If the handover used a
-   digest pin, deploy an equivalent task definition using that release tag
-   and wait for ECS to reach steady state on the release-tag definition.
-   Verify its running digest and architecture, Cloud Map registration, and
-   public routes. Then restore the normal EventBridge rollout owner and
-   clear any task protection and temporary qualification resources. The rollout Lambda reuses the service's
-   task definition, so a remaining pin prevents later releases from loading
-   their new image.
+   digest pin, deploy the equivalent release-tag task definition through the
+   readiness, protection release, and steady-state checks in step 4. Restore
+   the normal EventBridge rollout owner and clean up temporary qualification
+   resources after that deployment is steady. The rollout Lambda reuses the
+   service's task definition, so ordinary CD depends on the release-tag
+   definition.
 
 ## Deployment queue lock
 
@@ -123,12 +125,11 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 
 ## Rollback
 
-Repeat the [architecture handover](#architecture-handover) with the captured
-task configuration and verified immutable fallback. Keep the queue lock
-through both the fallback deployment and restoration of the release-tag
-definition. Step 5 covers the final ECS, digest, discovery, and public checks
-on the release-tag definition before restoring the rollout owner or clearing
-task protection. Ordinary CD resumes when the lock exits.
+Use the [protected deployment and release-tag checks](#architecture-handover)
+in steps 3 through 5 with the captured task configuration and verified
+immutable fallback. Keep the same queue lock through both the fallback
+deployment and restoration of the release-tag definition. Ordinary CD resumes
+when the lock exits.
 
 If the hold expires during rollback, retain the verified fallback and treat
 the interrupted rollback as an incident. Reconcile the actual task definition,
