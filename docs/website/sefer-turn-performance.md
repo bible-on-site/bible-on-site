@@ -170,11 +170,6 @@ dependencies do not; hosted qualifications apply to their actual merge checkout.
 Do not treat those builds as identical. Hosted CI/review, normal deployment and
 live verification remain pending before delivery.
 
-| Before: oblique-only cache | After: stable pane cache |
-| --- | --- |
-| ![Held Kings page before the broader cache](images/sefer-turn-lag/reader-stable-pane-before.png) | ![Same held page with stable pane rendering](images/sefer-turn-lag/reader-stable-pane-after.png) |
-
-
 The following records retain the earlier oblique-only candidate and its results.
 
 The follow-up [engine marker](https://github.com/doradsoft/html-flip-book/pull/390)
@@ -198,10 +193,6 @@ twelve cadence cases, reaching 66.7ms p95 against the unchanged 50ms limit.
 Its 4,025 unit tests, 327 end-to-end tests and both package builds pass; its
 uploaded website coverage contains 11,575/11,585 covered lines (99.91%).
 
-| Before angled-back layer | Actual local integration |
-| --- | --- |
-| ![Held Kings page before the layer](images/sefer-turn-lag/reader-angled-back-before.png) | ![Identical held Kings page with the layer](images/sefer-turn-lag/reader-angled-back-after.png) |
-
 The bookmark-label repair reuses immutable children while their
 visible text and cover color are unchanged. The native provider still refreshes
 on navigation; fresh equivalent bookmark objects no longer recreate all the
@@ -218,10 +209,6 @@ still reaches 50.1ms cadence p95 against the unchanged 50ms limit. Every
 consecutive-turn scope passes. This miss remains a failure, with its original
 samples and separate profile retained; these results do not replace hosted CI
 or establish public delivery.
-
-| Before static-label reuse | After static-label reuse |
-| --- | --- |
-| ![Held Kings page before label reuse](images/sefer-turn-lag/reader-static-bookmarks-before.png) | ![Identical held Kings page after label reuse](images/sefer-turn-lag/reader-static-bookmarks-after.png) |
 
 The [latest hosted run before that site repair](https://github.com/bible-on-site/bible-on-site/actions/runs/41848253815/job/126638364228)
 fails 11 cadence cases and passes 26 checks. Its deliberate-stall control passes.
@@ -323,10 +310,6 @@ and the unchanged 250ms stall. The earlier control failure and all reader sample
 are retained. The application's source tree and production build are unchanged;
 this result does not establish a runtime speedup. Revised Linux and hosted
 qualification remain required.
-
-| Before bounded visibility work | Local prototype after |
-| --- | --- |
-| ![Previous held Kings page](images/sefer-turn-lag/reader-bounded-visibility-before.png) | ![Unchanged held Kings page](images/sefer-turn-lag/reader-bounded-visibility-after.png) |
 
 This branch pins published `0.0.0-alpha.111`. Its earlier
 [bookmark setup repair](https://github.com/doradsoft/html-flip-book/pull/379)
@@ -449,10 +432,6 @@ resting chapter/mode/theme combinations. These include Numbers and Kings, plus
 real qri captions in light and dark themes. The caption marker is a span rather
 than an unassociated form label, with unchanged selector specificity.
 
-| Before the rendering changes | Locally built candidate |
-| --- | --- |
-| ![Original word rendering](images/sefer-turn-lag/reader-parts-before.png) | ![Unchanged current reader](images/sefer-turn-lag/reader-final-after.png) |
-
 The [final capture provenance](images/sefer-turn-lag/reader-final-comparison.json)
 records all 24 pairs, source trees, production build IDs and asset hashes. The
 [earlier word-only comparison](images/sefer-turn-lag/reader-parts-comparison.json)
@@ -507,13 +486,9 @@ changes from the bookmark layer to a fold surface during a turn; theme selectors
 must match both parents. A browser regression checks the background, text and
 border colors on every visible surface at two held fold positions.
 
-These original browser-test attachments show the same held Kings turn before
-and after the theme repair. The moving tab retains the book's blue background;
-the corrected theme is independent of the remaining cadence failures.
-
-| Before the theme repair | After the theme repair |
-| --- | --- |
-| ![Moving tab loses its book color](images/sefer-turn-lag/moving-bookmark-before.png) | ![Moving tab keeps its book color](images/sefer-turn-lag/moving-bookmark-after.png) |
+The browser test compared the same held Kings turn before and after the theme
+repair. The moving tab retains the book's blue background. The corrected theme
+is independent of the remaining cadence failures.
 
 The [capture provenance](images/sefer-turn-lag/moving-bookmark-theme.json)
 records the production-build source and original attachment hashes.
@@ -632,10 +607,6 @@ has zero changed pixels across all 24 poses and zero movement in eight
 character comparisons, including real qri captions in both themes. The earlier
 capture chain independently preserves parity with the original word rendering.
 
-| Before covered back-face preparation | After |
-| --- | --- |
-| ![Previous reader](images/sefer-turn-lag/reader-final-after.png) | ![Prepared reader with unchanged appearance](images/sefer-turn-lag/reader-covered-back-after.png) |
-
 An experimental appearance lock used native element view-transition snapshots
 to freeze already painted scripture while a leaf turned. Opaque snapshots
 changed straight-fold text rasterization. Falling back to live text for that
@@ -648,13 +619,8 @@ complete desktop performance suite passes 35 checks. Separate interaction
 checks pass with real MP3 and Opus playback. The three held-page image guards
 preserve every pixel; 36 additional comparisons cover rest, straight and
 angled folds in every bookmark mode across light, dark and high-contrast
-themes. These captures from the passing leaf-bookmark guard show the live
-original inline-box control beside the optimized body. The two PNG attachments
-are byte-identical.
-
-| Original inline-box control | Optimized body |
-| --- | --- |
-| ![Original held page](images/sefer-turn-lag/reader-held-original.png) | ![Optimized held page](images/sefer-turn-lag/reader-held-optimized.png) |
+themes. The passing leaf-bookmark guard captured the live original inline-box
+control and the optimized body. The two PNGs were byte-identical.
 
 The [public baseline](sefer-turn-performance.public-baseline.json) retains all
 available samples against website 0.2.600 and explicitly records failed cases
