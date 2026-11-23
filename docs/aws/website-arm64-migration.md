@@ -75,8 +75,15 @@ flag before that release is published; do not toggle modes halfway through it.
    until the replacement is ready and Cloud Map discovery has propagated.
 4. Preserve CPU, memory, health checks, stop timeout, roles, secret mappings,
    and networking. Verify running image and architecture, deployment state,
-   discovery and public behavior. Restore the normal EventBridge rollout owner
-   and clear any task protection and temporary qualification resources.
+   discovery and public behavior.
+5. Before releasing the queue lock, verify that `bible-on-site:latest` selects
+   the qualified child for the resulting architecture. If the handover used a
+   digest pin, deploy an equivalent task definition using that release tag
+   and verify the running task still uses the qualified digest. Then restore
+   the normal EventBridge rollout owner and clear any task protection and
+   temporary qualification resources. The rollout Lambda reuses the service's
+   task definition, so a remaining pin prevents later releases from loading
+   their new image.
 
 ## Deployment queue lock
 
@@ -118,5 +125,7 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 If an architecture handover fails, restore the verified immutable fallback
 with the captured task configuration through the same protected handover.
 Verify the public routes and steady ECS counts before releasing protection
-and the deployment lock. Keep both native children and the OCI index
-available for normal releases.
+and the deployment lock. Follow the release-tag verification above before
+resuming ordinary CD. If the tag cannot be verified against a known-good
+image, reconcile the release state while the fallback remains pinned. Keep
+both native children and the OCI index available for normal releases.
