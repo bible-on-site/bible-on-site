@@ -55,9 +55,12 @@ function fixture({
 	afterModes = {},
 	release = published(),
 	extraTrees = {},
+	absentCommits = [],
 } = {}) {
 	const calls = [];
-	let available = present;
+	const absent = new Set(
+		(present ? [] : [baselineSha]).concat(absentCommits),
+	);
 	const trees = { [baselineSha]: before, [headSha]: after, ...extraTrees };
 
 	const request = (endpoint) => {
@@ -72,21 +75,28 @@ function fixture({
 	const git = (args) => {
 		calls.push(args);
 		if (args[0] === "fetch") {
-			available = true;
+			absent.delete(args.at(-1));
 			return "";
 		}
 		if (args[0] === "rev-parse") {
 			if (args[1] === "HEAD") return headSha;
 			if (args[1] === "--is-shallow-repository") return String(shallow);
-			if (args.includes("--quiet") && !available)
+			const sha = args.at(-1).replace(/\^\{commit\}$/, "");
+			if (args.includes("--quiet") && absent.has(sha))
 				throw Object.assign(new Error("missing commit"), {
 					status: 1,
 					stdout: "",
 					stderr: "",
 				});
-			return args.at(-1).replace(/\^\{commit\}$/, "");
+			return sha;
 		}
 		const ref = args[args[0] === "ls-tree" ? 3 : 1].split(":")[0];
+		if (absent.has(ref))
+			throw Object.assign(new Error("unknown commit"), {
+				status: 128,
+				stdout: "",
+				stderr: "",
+			});
 		const source = trees[ref] ?? after;
 		if (args[0] === "show") return source.get(args[1].slice(41));
 		if (args[0] === "ls-tree") {
@@ -252,6 +262,30 @@ test("a re-anchored tag resolves when its API tree matches the recorded delivery
 			),
 		/delivery source differs/,
 	);
+});
+
+test("a re-anchored tag fetches only the recorded delivery source it lacks", () => {
+	// The orphaned delivery commit is absent from a fresh checkout until the
+	// reconciliation fetches exactly that sha.
+	const deliverySha = "e".repeat(40);
+	const release = {
+		...published(),
+		body: `<!-- release-delivery:${JSON.stringify({ module_name: "api", module_version: "0.1.93", ref: deliverySha, ci_run_id: "10", ci_run_attempt: "1" })} -->`,
+	};
+	const request = (endpoint) =>
+		endpoint.includes("/git/ref/")
+			? { ref: `refs/tags/${tag}`, object: { type: "commit", sha: baselineSha } }
+			: { object: { type: "commit", sha: baselineSha } };
+	const input = fixture({
+		extraTrees: { [deliverySha]: files("0.1.93") },
+		absentCommits: [deliverySha],
+	});
+	assert.equal(
+		publishedReleaseCommit(repo, release, request, input.git),
+		baselineSha,
+	);
+	const fetched = input.calls.filter((args) => args[0] === "fetch");
+	assert.deepEqual(fetched.map((args) => args.at(-1)), [deliverySha]);
 });
 
 test("a re-anchored published tag still reconciles pending API changes", () => {
