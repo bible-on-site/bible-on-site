@@ -23,15 +23,24 @@ public sealed class ReaderRecitationDownload
     /// </summary>
     public void Cancel()
     {
+        if (_pending is { } pending)
+        {
+            CancelIgnoringDisposed(pending.Source);
+        }
+        _pending = null;
+    }
+
+    /// <summary>Tolerates a token its own request disposed between the reads.</summary>
+    internal static void CancelIgnoringDisposed(CancellationTokenSource source)
+    {
         try
         {
-            _pending?.Source.Cancel();
+            source.Cancel();
         }
         catch (ObjectDisposedException)
         {
             // The request's finally already disposed the token between reads.
         }
-        _pending = null;
     }
 
     /// <summary>
