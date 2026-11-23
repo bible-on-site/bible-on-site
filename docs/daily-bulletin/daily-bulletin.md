@@ -68,6 +68,22 @@ Input fields: `date`, `hebrewDate`, `perekId`, nullable `article` containing `id
 
 The authenticated admin creates and reads previews. The renderer does not connect to subscriber services or send messages.
 
+### Local visual checks
+
+Run the [local admin app](../../web/admin/README.md#local-development) against
+a disposable MySQL database. Save a bulletin preview with synthetic recipients
+and set `BULLETIN_EMAIL_WORKER_ENABLED=false`. Open `/bulletins` to check the
+saved test audience, consent counts, and HTML/PDF preview. With Playwright
+Chromium installed, capture the page from the repository root.
+
+```powershell
+New-Item -ItemType Directory -Force .outputs | Out-Null
+node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '1440,1100' --full-page --wait-for-selector 'body:has(iframe):has(#email-audience)' http://localhost:3101/bulletins .outputs/bulletin-admin.png
+```
+
+Repeat at `390,844` to inspect the phone layout. Attach captures to the PR or
+issue, or publish them as CI artifacts.
+
 ## Legacy behavior to restore
 
 The old `tanah-back/src/cpanel/distribution` implementation sent HTML campaigns through Smoove, generated PDFs locally with `html-pdf`, posted documents through a Telegram bot, and called a separate WhatsApp server on localhost port 5000.
