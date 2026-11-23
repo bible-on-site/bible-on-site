@@ -67,7 +67,8 @@ describe("ParashaSeferComposite", () => {
 		);
 		render(<ParashaSeferComposite {...props} />);
 		expect(document.documentElement).not.toHaveAttribute("data-book-view");
-		// The toggled effect still reaffirms the stored preference.
-		expect(localStorage.getItem("parashaViewMode")).toBe("book");
+		// A shared ?book link only affects this view; the stored
+		// preference changes only on an explicit user toggle.
+		expect(localStorage.getItem("parashaViewMode")).toBeNull();
 	});
 });
