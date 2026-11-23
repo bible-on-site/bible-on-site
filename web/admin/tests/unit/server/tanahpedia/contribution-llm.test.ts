@@ -69,6 +69,7 @@ vi.mock("~/server/tanahpedia/contribution-service.server", () => ({
 }));
 
 import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
+import { readContributionArticleGroundingContext } from "~/server/tanahpedia/contribution-agent-context.server";
 import { contributionAgentResultSchema } from "~/server/tanahpedia/contribution-agent-output.server";
 import { contributionAgentActionSchema } from "~/server/tanahpedia/contribution-agent-protocol";
 import {
@@ -176,7 +177,7 @@ describe("issue-to-PR LLM generation", () => {
 					chapters: [],
 				},
 			];
-			mocks.grounding.mockResolvedValue({
+			vi.mocked(readContributionArticleGroundingContext).mockResolvedValue({
 				people: [],
 				places: [],
 				entities: [],

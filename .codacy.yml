@@ -67,6 +67,9 @@ exclude_paths:
   # this MySQL file's @-variables, PREPARE-driven DDL and INSERT IGNORE; it is
   # exercised twice against real MySQL by bulletin-rollout-mysql.test.ts.
   - "data/mysql/tanah_daily_bulletin_rollout_upgrade.sql"
+  # Same guarded additive-column idiom; exercised twice by
+  # bulletin-engagement-mysql.test.ts against real MySQL.
+  - "data/mysql/tanah_daily_bulletin_engagement_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_link_proposal_upgrade.sql"
   - "data/mysql/tanah_article_hebrew_date_upgrade.sql"

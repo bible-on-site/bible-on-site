@@ -18,6 +18,42 @@ export interface EmailJobSummary {
 	status: EmailJobStatus;
 	counts: Record<string, number>;
 	createdAt: string;
+	/**
+	 * Whether SES engagement collection was enabled at enqueue; `null` while
+	 * the engagement schema is not deployed — never conflate with a measured 0.
+	 */
+	tracked: boolean | null;
+	/** Recipients with at least one tracked open; `null` without the schema. */
+	opened: number | null;
+	/** Recipients with at least one tracked content click; `null` likewise. */
+	clicked: number | null;
+}
+
+export interface EmailEditionStats {
+	jobId: string;
+	date: string;
+	/** False for editions sent before tracking was enabled — not a measured 0. */
+	tracked: boolean;
+	delivered: number;
+	opened: number;
+	clicked: number;
+}
+
+export interface InactiveSubscriber {
+	id: number;
+	email: string;
+	firstTrackedDelivery: string;
+	trackedLastYear: number;
+}
+
+export interface EmailEngagementPanel {
+	editions: EmailEditionStats[];
+	inactive: InactiveSubscriber[];
+	/**
+	 * Admin opt-outs whose SES mirror has not completed; local consent is
+	 * already removed and each row offers an explicit mirror retry.
+	 */
+	reviewEnabled: boolean;
 }
 
 export interface EmailReadiness {
@@ -121,4 +157,43 @@ export function validateSubscriberChange(value: unknown): SubscriberChange {
 	)
 		throw new Error("יש לציין את מקור ההסכמה המפורשת");
 	return { email, audience: record.audience, action: record.action, source };
+}
+
+/**
+ * Whether a tracked click destination is subscription management rather than
+ * bulletin content. The SES preference page is hosted on AWS endpoints, and
+ * any explicit unsubscribe path stays out of engagement either way.
+ */
+export function isSubscriptionManagementLink(link: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(link);
+	} catch {
+		return true;
+	}
+	if (url.protocol !== "https:" && url.protocol !== "http:") return true;
+	const host = url.hostname.toLowerCase();
+	if (
+		host === "amazonses.com" ||
+		host.endsWith(".amazonses.com") ||
+		host === "amazonaws.com" ||
+		host.endsWith(".amazonaws.com")
+	)
+		return true;
+	return /unsubscribe|subscription/i.test(url.pathname);
+}
+
+export function validateInactivityUnsubscribe(value: unknown): {
+	subscriberId: number;
+} {
+	if (
+		!value ||
+		typeof value !== "object" ||
+		!("subscriberId" in value) ||
+		typeof value.subscriberId !== "number" ||
+		!Number.isSafeInteger(value.subscriberId) ||
+		value.subscriberId <= 0
+	)
+		throw new Error("בקשת ההסרה אינה תקינה");
+	return { subscriberId: value.subscriberId };
 }
