@@ -102,7 +102,7 @@ function RevisionRow({
 	isBusy: boolean;
 	onApprove: (id: string) => void;
 	onReject: (id: string) => void;
-	onRestore: (id: string) => void;
+	onRestore: (id: string, opener: HTMLElement) => void;
 }) {
 	const [expanded, setExpanded] = useState<"none" | "diff" | "preview">("none");
 	const badge = STATUS_BADGE[revision.status] ?? {
@@ -189,7 +189,7 @@ function RevisionRow({
 					<button
 						type="button"
 						disabled={isBusy}
-						onClick={() => onRestore(revision.id)}
+						onClick={(e) => onRestore(revision.id, e.currentTarget)}
 						className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
 						title={
 							baseRevisionId === null
@@ -232,6 +232,7 @@ export function EntryHistoryPanel({
 }: EntryHistoryPanelProps) {
 	const queryClient = useQueryClient();
 	const [pendingRestore, setPendingRestore] = useState<string | null>(null);
+	const [restoreOpener, setRestoreOpener] = useState<HTMLElement | null>(null);
 
 	const revisionsQuery = useQuery({
 		queryKey: ["tanahpedia-entry-revisions", entryId],
@@ -318,7 +319,10 @@ export function EntryHistoryPanel({
 							isBusy={isBusy}
 							onApprove={(id) => approveMutation.mutate(id)}
 							onReject={(id) => rejectMutation.mutate(id)}
-							onRestore={setPendingRestore}
+							onRestore={(id, el) => {
+								setPendingRestore(id);
+								setRestoreOpener(el);
+							}}
 						/>
 					))}
 				</ul>
@@ -326,6 +330,7 @@ export function EntryHistoryPanel({
 
 			<ConfirmDialog
 				open={pendingRestore !== null}
+				opener={restoreOpener}
 				title="שחזור גרסה"
 				message="שחזור ישמור מחדש את הערך עם תוכן הגרסה הזו ויחליף את התוכן בעורך. להמשיך?"
 				confirmLabel="שחזר"

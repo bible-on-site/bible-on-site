@@ -5,7 +5,12 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 import {
 	ArrowLeft,
 	ArrowRight,
@@ -92,6 +97,7 @@ function ArticleEditPage() {
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
 
 	const { data: article, isLoading: articleLoading } = useQuery({
 		queryKey: ["article", articleId],
@@ -228,7 +234,10 @@ function ArticleEditPage() {
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => setConfirmDelete(true);
+	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
+		setDeleteOpener(event.currentTarget);
+		setConfirmDelete(true);
+	};
 
 	if (articleLoading) {
 		return (
@@ -580,6 +589,7 @@ function ArticleEditPage() {
 
 			<ConfirmDialog
 				open={confirmDelete}
+				opener={deleteOpener}
 				title="מחיקת מאמר"
 				message="האם אתה בטוח שברצונך למחוק את המאמר?"
 				confirmLabel="מחק"

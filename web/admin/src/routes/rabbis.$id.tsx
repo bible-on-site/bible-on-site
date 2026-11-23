@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 import {
 	ArrowRight,
 	Camera,
@@ -48,6 +53,7 @@ function RabbiEditPage() {
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
 
 	const { data: author, isLoading: authorLoading } = useQuery({
 		queryKey: ["author", authorId],
@@ -148,7 +154,10 @@ function RabbiEditPage() {
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => setConfirmDelete(true);
+	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
+		setDeleteOpener(event.currentTarget);
+		setConfirmDelete(true);
+	};
 
 	if (authorLoading) {
 		return (
@@ -304,6 +313,7 @@ function RabbiEditPage() {
 
 			<ConfirmDialog
 				open={confirmDelete}
+				opener={deleteOpener}
 				title="מחיקת רב"
 				message="האם אתה בטוח שברצונך למחוק את הרב?"
 				confirmLabel="מחק"

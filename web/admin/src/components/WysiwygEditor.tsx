@@ -76,6 +76,7 @@ export function WysiwygEditor({
 	const [sourceDraft, setSourceDraft] = useState(content);
 	const [shortcutReloadKey, setShortcutReloadKey] = useState(0);
 	const [helpOpen, setHelpOpen] = useState(false);
+	const [helpOpener, setHelpOpener] = useState<HTMLElement | null>(null);
 	const [extrasDraft, setExtrasDraft] = useState("");
 
 	const [linkPanelHref, setLinkPanelHref] = useState("");
@@ -391,6 +392,7 @@ export function WysiwygEditor({
 				extrasDraft={extrasDraft}
 				onExtrasDraftChange={setExtrasDraft}
 				onSaveExtras={saveExtras}
+				opener={helpOpener}
 			/>
 
 			<div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-300 shadow-sm">
@@ -403,7 +405,10 @@ export function WysiwygEditor({
 					<span className="w-px h-6 bg-gray-300 mx-1" />
 					<button
 						type="button"
-						onClick={openHelp}
+						onClick={(e) => {
+							setHelpOpener(e.currentTarget);
+							openHelp();
+						}}
 						className="px-3 py-1.5 rounded text-sm font-medium bg-white border border-gray-300 hover:bg-gray-100"
 					>
 						קיצורים

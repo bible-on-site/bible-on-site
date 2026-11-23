@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
@@ -94,6 +100,7 @@ function EntryEditPage() {
 	// Informational outcome of a committed save (e.g. rename alias handling).
 	const [saveNotice, setSaveNotice] = useState<string | null>(null);
 	// The destructive action awaiting an explicit confirm-dialog answer.
+	const [confirmOpener, setConfirmOpener] = useState<HTMLElement | null>(null);
 	const [pendingConfirm, setPendingConfirm] = useState<
 		"delete" | "revert" | null
 	>(null);
@@ -629,7 +636,10 @@ function EntryEditPage() {
 		}
 	};
 
-	const handleRevert = () => setPendingConfirm("revert");
+	const handleRevert = (event: ReactMouseEvent<HTMLElement>) => {
+		setConfirmOpener(event.currentTarget);
+		setPendingConfirm("revert");
+	};
 
 	// Explicit revert: drop every uncommitted edit AND its local draft, then
 	// re-anchor on whatever the server holds.
@@ -742,7 +752,10 @@ function EntryEditPage() {
 					{!isNew && (
 						<button
 							type="button"
-							onClick={() => setPendingConfirm("delete")}
+							onClick={(e) => {
+								setConfirmOpener(e.currentTarget);
+								setPendingConfirm("delete");
+							}}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
 							מחק ערך
@@ -1070,6 +1083,7 @@ function EntryEditPage() {
 
 			<ConfirmDialog
 				open={pendingConfirm === "delete"}
+				opener={confirmOpener}
 				title="מחיקת ערך"
 				message="האם אתה בטוח שברצונך למחוק ערך זה?"
 				confirmLabel="מחק"
@@ -1081,6 +1095,7 @@ function EntryEditPage() {
 			/>
 			<ConfirmDialog
 				open={pendingConfirm === "revert"}
+				opener={confirmOpener}
 				title="ביטול שינויים"
 				message="לבטל את כל השינויים שלא נשמרו? הטיוטה המקומית תימחק."
 				confirmLabel="בטל שינויים"
