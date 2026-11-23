@@ -24,8 +24,13 @@ async function perushNoteSnippet(
 	);
 	// A `note` param anchors the snippet at the matched hit — the combined
 	// snippet truncates at MAX_NOTE_SNIPPET_LENGTH, so starting from note 0
-	// could crowd out the note the link actually targets.
-	const ordered = noteIdx == null ? pasukNotes : pasukNotes.slice(noteIdx);
+	// could crowd out the note the link actually targets. `note` is a stored
+	// noteIdx, not an array offset — perushim numbering is not guaranteed
+	// gapless — so match on the field rather than position.
+	const ordered =
+		noteIdx == null
+			? pasukNotes
+			: pasukNotes.filter((n) => n.noteIdx >= noteIdx);
 	if (ordered.length === 0) return null;
 	const html = ordered.map((n) => n.noteContent).join("\n");
 	return truncatePreviewSnippet(toPreviewHtml(html), MAX_NOTE_SNIPPET_LENGTH);

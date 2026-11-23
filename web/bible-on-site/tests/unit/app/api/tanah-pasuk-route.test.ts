@@ -77,6 +77,22 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(body.noteHtml).not.toContain("הערה ראשונה");
 	});
 
+	it("matches the note param by index, not array position", async () => {
+		mockNotes.mockResolvedValue([
+			{ pasuk: 23, noteIdx: 0, noteContent: "<p>הערה ראשונה</p>" },
+			{ pasuk: 23, noteIdx: 2, noteContent: "<p>הערה שלישית</p>" },
+		]);
+		const res = await requestFor(
+			"32",
+			"23",
+			`?perush=${encodeURIComponent("הכתב והקבלה")}&note=2`,
+		);
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.noteHtml).toContain("הערה שלישית");
+		expect(body.noteHtml).not.toContain("הערה ראשונה");
+	});
+
 	it("falls back to the plain pasuk preview when the perush is unknown", async () => {
 		mockNotes.mockResolvedValue([]);
 		const res = await requestFor(
