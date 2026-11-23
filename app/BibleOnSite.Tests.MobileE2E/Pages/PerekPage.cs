@@ -343,12 +343,6 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     {
         var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.AddSeconds(45);
-        // A single scroll step can carry the target across the viewport — the
-        // injected drag releases with fling inertia — and a fully offscreen
-        // node is absent from the source tree, so a downward-only seek never
-        // recovers an overshot element (#3746's merge-queue ejection). A
-        // scroll that leaves the page untouched reached its edge, so the
-        // sweep reverses there.
         var scrollingDown = true;
         string? lastSurface = null;
         for (var attempt = 0; attempt < 12 && DateTime.UtcNow < deadline; attempt++)
@@ -361,10 +355,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                     return visible.Element;
                 }
                 var surface = driver.PageSource;
-                if (surface == lastSurface)
-                {
-                    scrollingDown = !scrollingDown;
-                }
+                scrollingDown = SeekScrollsDown(scrollingDown, lastSurface, surface);
                 lastSurface = surface;
                 if (scrollingDown)
                 {
@@ -391,6 +382,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
         throw new WebDriverTimeoutException($"Scrolling the page never revealed a visible element matching {locator} within 45 seconds.");
     }
+
+    // A single scroll step can carry the target across the viewport — the
+    // injected drag releases with fling inertia — and a fully offscreen node
+    // is absent from the source tree, so a downward-only seek never recovers
+    // an overshot element (#3746's merge-queue ejection). A scroll that
+    // leaves the page untouched reached its edge, so the sweep reverses
+    // there.
+    internal static bool SeekScrollsDown(bool scrollingDown, string? previousSurface, string surface) =>
+        surface == previousSurface ? !scrollingDown : scrollingDown;
 
     /// <summary>
     /// A long commentary hit can land several screens below its heading. Scroll

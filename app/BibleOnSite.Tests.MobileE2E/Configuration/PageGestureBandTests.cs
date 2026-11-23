@@ -1,4 +1,5 @@
 using System.Drawing;
+using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using Xunit;
 
@@ -104,4 +105,19 @@ public sealed class PageGestureBandTests
         Assert.Equal(240,
             AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [everything], preferLowerHalf: false));
     }
+
+    [Fact]
+    public void SeekKeepsScrollingDownWhileThePageMoves() =>
+        Assert.True(PerekPage.SeekScrollsDown(true, "before", "after"));
+
+    [Fact]
+    public void SeekReversesWhenAScrollLeavesThePageUntouched()
+    {
+        Assert.False(PerekPage.SeekScrollsDown(true, "same", "same"));
+        Assert.True(PerekPage.SeekScrollsDown(false, "same", "same"));
+    }
+
+    [Fact]
+    public void SeekKeepsDirectionOnTheFirstObservation() =>
+        Assert.True(PerekPage.SeekScrollsDown(true, null, "surface"));
 }
