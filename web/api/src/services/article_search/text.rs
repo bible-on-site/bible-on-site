@@ -125,12 +125,6 @@ pub fn strip_html(html: &str) -> String {
                     .next()
                     .unwrap_or_default()
                     .to_lowercase();
-                if let Some(open) = skipping.as_ref() {
-                    if is_close && name == *open {
-                        skipping = None;
-                    }
-                    continue;
-                }
                 let self_closing = tag.trim_end().ends_with('/');
                 if !is_close && !self_closing && SKIP_CONTENT_TAGS.contains(&name.as_str()) {
                     skipping = Some(name);
