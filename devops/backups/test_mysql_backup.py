@@ -257,11 +257,17 @@ class BackupTests(unittest.TestCase):
                     self.path,
                     self.directory,
                     "production",
+                    "8.4.9",
                     backup.digest(self.path),
                 )
         with self.assertRaisesRegex(backup.BackupError, "SHA-256"):
             backup.restore_archive(
-                self.scratch, self.path, self.directory, "production", "0" * 64
+                self.scratch,
+                self.path,
+                self.directory,
+                "production",
+                "8.4.9",
+                "0" * 64,
             )
 
     def test_restore_refuses_source_server_enabled_events_and_existing_schema(self):
@@ -270,6 +276,7 @@ class BackupTests(unittest.TestCase):
             ({"uuid": "scratch", "events": "ON"}, []),
             ({"uuid": "scratch", "events": "OFF", "version": "8.4.9"}, ["tanah"]),
             ({"uuid": "scratch", "events": "OFF", "version": "8.0.40"}, []),
+            ({"uuid": "scratch", "events": "OFF", "version": "9.7.4"}, []),
         ]:
             with patch.object(backup, "server_identity", return_value=identity):
                 self.scratch.query = MagicMock(return_value=rows)
@@ -279,6 +286,7 @@ class BackupTests(unittest.TestCase):
                         self.path,
                         self.directory,
                         "production",
+                        "8.4.9",
                         backup.digest(self.path),
                     )
 
@@ -303,6 +311,7 @@ class BackupTests(unittest.TestCase):
                         self.path,
                         self.directory,
                         "production",
+                        "8.4.9",
                         backup.digest(self.path),
                     )
         self.assertFalse(list(self.directory.glob("client-*.cnf")))
@@ -420,6 +429,7 @@ class BackupTests(unittest.TestCase):
                 self.restoration,
             )
             self.assertEqual(restore.call_args.args[-1], result["sha256"])
+            self.assertEqual(restore.call_args.args[-2], result["serverVersion"])
         self.s3.objects[(result["key"], "archive-version")] = b"x"
         with self.assertRaises(backup.BackupError):
             recovery.restore(
@@ -440,6 +450,8 @@ class BackupTests(unittest.TestCase):
             ("sha256", "bad"),
             ("bytes", 0),
             ("restoration", {}),
+            ("serverVersion", "9.0.0"),
+            ("serverVersion", None),
         ]:
             invalid = {**result, field: value}
             self.s3.objects[(key, "manifest-version")] = json.dumps(invalid).encode()
@@ -505,9 +517,13 @@ class PreflightTests(unittest.TestCase):
         )
 
     def test_preflight_and_each_safety_rejection(self):
-        source, s3 = backup.preflight(self.session, self.temp)
+        source, s3, version = backup.preflight(self.session, self.temp)
         self.assertEqual(source.username, "bos_backup")
         self.assertIs(s3, self.clients["s3"])
+        self.assertEqual(version, "8.4.13")
+        self.instance["EngineVersion"] = "9.7.4.R2.20261118"
+        backup.urlopen.return_value = io.BytesIO(b"test certificate")
+        self.assertEqual(backup.preflight(self.session, self.temp)[-1], "9.7.4")
         cases = [
             (self.clients["sts"].get_caller_identity, {"Account": "0"}),
             (
@@ -557,7 +573,9 @@ class PreflightTests(unittest.TestCase):
                 ),
                 patch.object(sys, "argv", ["backup", "weekly"]),
                 patch.object(
-                    backup, "preflight", return_value=(MagicMock(), MagicMock())
+                    backup,
+                    "preflight",
+                    return_value=(MagicMock(), MagicMock(), "9.7.4"),
                 ),
                 patch.object(
                     backup,
@@ -575,15 +593,24 @@ class PreflightTests(unittest.TestCase):
             redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(backup.main(), 1)
+        workflow_output = Path(self.temp) / "workflow-output"
         with (
-            patch.dict(os.environ, {"AWS_REGION": backup.REGION}),
+            patch.dict(
+                os.environ,
+                {"AWS_REGION": backup.REGION, "GITHUB_OUTPUT": str(workflow_output)},
+            ),
             patch.object(sys, "argv", ["backup", "check"]),
-            patch.object(backup, "preflight", return_value=(MagicMock(), MagicMock())),
+            patch.object(
+                backup,
+                "preflight",
+                return_value=(MagicMock(), MagicMock(), "9.7.4"),
+            ),
             patch.object(backup, "backup") as export,
             redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(backup.main(), 0)
             export.assert_not_called()
+        self.assertEqual(workflow_output.read_text(), "mysql_version=9.7.4\n")
 
     def test_restore_cli_success_and_failure(self):
         with (

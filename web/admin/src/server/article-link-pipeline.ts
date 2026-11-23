@@ -52,6 +52,10 @@ import {
 	validateArticleLinkChange,
 } from "~/lib/tanahpedia/contribution-article-links";
 import { articleApiConfigured } from "./article-relationships-api";
+import {
+	type ArticleReviewSource,
+	articleReviewToken,
+} from "./article-review-token.server";
 import { isCoveringSourceSchemaMissing } from "./covering-sources";
 import { execute, query, queryOne, transaction, txExecute } from "./db";
 import { callOpenAiJson, llmConfigured } from "./llm-json";
@@ -152,36 +156,30 @@ export async function linkSchemaDeployed(): Promise<boolean> {
 // Loaders
 // ---------------------------------------------------------------------------
 
-interface ArticleGenRow {
+interface ArticleGenRow extends ArticleReviewSource {
 	id: number;
-	perek_id: number;
-	author_id: number;
-	name: string;
-	abstract: string | null;
-	content: string | null;
 	coverage_verified: number;
-	content_hash: string | null;
 }
+
+const ARTICLE_REVIEW_FIELDS =
+	"id, perek_id AS perekId, author_id AS authorId, name, abstract, content";
 
 async function loadArticleRow(
 	articleId: number,
 ): Promise<ArticleGenRow | null> {
 	try {
 		return await queryOne<ArticleGenRow>(
-			`SELECT id, perek_id, author_id, name, abstract, content,
-			        coverage_verified, LOWER(HEX(content_hash)) AS content_hash
+			`SELECT ${ARTICLE_REVIEW_FIELDS}, coverage_verified
 			 FROM tanah_article WHERE id = ?`,
 			[articleId],
 		);
 	} catch (error) {
 		if (!isCoveringSourceSchemaMissing(error)) throw error;
-		const row = await queryOne<ArticleGenRow>(
-			`SELECT id, perek_id, author_id, name, abstract, content,
-			        0 AS coverage_verified, NULL AS content_hash
+		return await queryOne<ArticleGenRow>(
+			`SELECT ${ARTICLE_REVIEW_FIELDS}, 0 AS coverage_verified
 			 FROM tanah_article WHERE id = ?`,
 			[articleId],
 		);
-		return row;
 	}
 }
 
@@ -244,34 +242,18 @@ async function loadDedicationIds(articleId: number): Promise<number[]> {
 	return rows.map((r) => r.dedication_id);
 }
 
-async function loadSnapshot(articleId: number): Promise<ArticleLinkSnapshot> {
-	const [row, coveringSources, dedicationIds] = await Promise.all([
-		loadArticleRow(articleId),
-		loadCoveringSources(articleId),
-		loadDedicationIds(articleId),
+async function loadSnapshot(row: ArticleGenRow): Promise<ArticleLinkSnapshot> {
+	const [coveringSources, dedicationIds] = await Promise.all([
+		loadCoveringSources(row.id),
+		loadDedicationIds(row.id),
 	]);
-	if (!row) throw new Error(`מאמר ${articleId} לא נמצא`);
 	return {
-		perekId: row.perek_id,
-		authorId: row.author_id,
+		perekId: row.perekId,
+		authorId: row.authorId,
 		coverageVerified: row.coverage_verified === 1,
 		coveringSources,
 		dedicationIds,
 	};
-}
-
-/** The article's current generated content hash ("" when undeployed). */
-async function liveContentHash(articleId: number): Promise<string> {
-	try {
-		const row = await queryOne<{ h: string | null }>(
-			"SELECT LOWER(HEX(content_hash)) AS h FROM tanah_article WHERE id = ?",
-			[articleId],
-		);
-		return row?.h ?? "";
-	} catch (error) {
-		if (!isCoveringSourceSchemaMissing(error)) throw error;
-		return "";
-	}
 }
 
 /** The plain-text matching view the model and the extractor both see. */
@@ -316,7 +298,6 @@ interface ProposalRow {
 	applied_snapshot_json: string | null;
 	created_at: string | Date;
 	updated_at: string | Date;
-	live_hash?: string | null;
 }
 
 function parseJson<T>(value: unknown): T | null {
@@ -333,8 +314,10 @@ function parseJson<T>(value: unknown): T | null {
 const toIso = (v: string | Date | null): string | null =>
 	v === null ? null : v instanceof Date ? v.toISOString() : String(v);
 
-function rowToProposal(row: ProposalRow): LinkProposal {
-	const liveHash = row.live_hash ?? null;
+function rowToProposal(
+	row: ProposalRow,
+	liveHash: string | null,
+): LinkProposal {
 	return {
 		id: row.id,
 		runId: row.run_id,
@@ -373,30 +356,7 @@ function rowToProposal(row: ProposalRow): LinkProposal {
 	};
 }
 
-const PROPOSAL_SELECT = `SELECT p.*, LOWER(HEX(a.content_hash)) AS live_hash
-	 FROM tanah_article_link_proposal p
-	 JOIN tanah_article a ON a.id = p.article_id`;
-
-/** Same rows when the article content-hash upgrade is not deployed yet. */
-const PROPOSAL_SELECT_NO_HASH = `SELECT p.*, NULL AS live_hash
-	 FROM tanah_article_link_proposal p`;
-
-/** Query proposals with the freshness join, degrading to no-hash rows when
- *  tanah_article.content_hash is undeployed (ER_BAD_FIELD_ERROR). */
-async function queryProposals(
-	suffix: string,
-	params: unknown[],
-): Promise<ProposalRow[]> {
-	try {
-		return await query<ProposalRow>(`${PROPOSAL_SELECT} ${suffix}`, params);
-	} catch (error) {
-		if (!isCoveringSourceSchemaMissing(error)) throw error;
-		return await query<ProposalRow>(
-			`${PROPOSAL_SELECT_NO_HASH} ${suffix}`,
-			params,
-		);
-	}
-}
+const PROPOSAL_SELECT = "SELECT p.* FROM tanah_article_link_proposal p";
 
 // ---------------------------------------------------------------------------
 // Generation
@@ -623,18 +583,13 @@ export async function runLinkGeneration(
 				});
 				continue;
 			}
-			const contentHash = row.content_hash ?? "";
+			const contentHash = articleReviewToken(row);
 			const plainText = articlePlainText(row);
-			const snapshot = await loadSnapshot(articleId);
+			const snapshot = await loadSnapshot(row);
 			const literalCitations = extractCitations(plainText, catalogue).resolved;
 			const grounding: ArticleLiteralGrounding = {
 				articleId: String(articleId),
-				sourceHash: articleSourceHash({
-					name: row.name,
-					abstract: row.abstract,
-					content: row.content,
-					authorId: row.author_id,
-				}),
+				sourceHash: articleSourceHash(row),
 				coordinates: expandLiteralCitationCoordinates(literalCitations),
 				chapters: [
 					...new Set(literalCitations.map((citation) => citation.perekId)),
@@ -717,10 +672,10 @@ export async function runLinkGeneration(
 
 			if (runLlm) {
 				const generator = llmGenerator;
-				const perekModel = catalogue.perakim.find((p) => p.id === row.perek_id);
+				const perekModel = catalogue.perakim.find((p) => p.id === row.perekId);
 				const perekLabel = perekModel
 					? cataloguePerekLabel(perekModel)
-					: `פרק ${row.perek_id}`;
+					: `פרק ${row.perekId}`;
 				const llmResult = await llmCaller({
 					system: buildArticleLinkSystemPrompt(),
 					user: buildArticleLinkUserMessage({
@@ -729,11 +684,11 @@ export async function runLinkGeneration(
 						articleAbstract: row.abstract,
 						plainText,
 						current: {
-							perekId: row.perek_id,
+							perekId: row.perekId,
 							perekLabel,
-							authorId: row.author_id,
+							authorId: row.authorId,
 							authorName:
-								catalogue.authors.find((a) => a.id === row.author_id)?.name ??
+								catalogue.authors.find((a) => a.id === row.authorId)?.name ??
 								null,
 							coverageVerified: row.coverage_verified === 1,
 							coveringSources: snapshot.coveringSources.map((c) => {
@@ -939,12 +894,28 @@ export async function listProposals(
 	}
 	const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 	const limit = Math.min(Math.max(data.limit ?? 200, 1), 500);
-	const rows = await queryProposals(
-		`${where}
+	const rows = await query<ProposalRow>(
+		`${PROPOSAL_SELECT} ${where}
 			 ORDER BY p.created_at DESC, p.id LIMIT ?`,
 		[...params, limit],
 	);
-	return rows.map(rowToProposal);
+	// Read each article once even if it backs several proposal rows.
+	const articleIds = [
+		...new Set(
+			rows.filter((r) => r.base_content_hash).map((r) => r.article_id),
+		),
+	];
+	const articles = articleIds.length
+		? await query<ArticleReviewSource & { id: number }>(
+				`SELECT ${ARTICLE_REVIEW_FIELDS} FROM tanah_article
+				 WHERE id IN (SELECT id FROM JSON_TABLE(?, '$[*]' COLUMNS (id INT PATH '$')) ids)`,
+				[JSON.stringify(articleIds)],
+			)
+		: [];
+	const hashes = new Map(articles.map((a) => [a.id, articleReviewToken(a)]));
+	return rows.map((row) =>
+		rowToProposal(row, hashes.get(row.article_id) ?? null),
+	);
 }
 
 export interface LinkProposalDetail {
@@ -958,18 +929,19 @@ export async function getProposalDetail(
 	id: string,
 ): Promise<LinkProposalDetail | null> {
 	await ensureLinkSchema();
-	const rows = await queryProposals("WHERE p.id = ?", [id]);
+	const rows = await query<ProposalRow>(`${PROPOSAL_SELECT} WHERE p.id = ?`, [
+		id,
+	]);
 	const row = rows[0];
 	if (!row) return null;
-	const article = await queryOne<{ name: string }>(
-		"SELECT name FROM tanah_article WHERE id = ?",
-		[row.article_id],
-	);
+	const article = await loadArticleRow(row.article_id);
+	if (!article) throw new Error(`מאמר ${row.article_id} לא נמצא`);
+	const liveContentHash = articleReviewToken(article);
 	return {
-		proposal: rowToProposal(row),
-		articleName: article?.name ?? `#${row.article_id}`,
-		liveSnapshot: await loadSnapshot(row.article_id),
-		liveContentHash: await liveContentHash(row.article_id),
+		proposal: rowToProposal(row, liveContentHash),
+		articleName: article.name,
+		liveSnapshot: await loadSnapshot(article),
+		liveContentHash,
 	};
 }
 

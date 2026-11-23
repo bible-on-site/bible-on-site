@@ -408,11 +408,62 @@ test("manifest replay passes the derived database URL as literal data", () => {
 		"pip",
 		"install",
 		"--quiet",
-		"pymysql",
+		"PyMySQL[rsa]==1.2.4",
 		"devops/deploy/data-deploy/validate_lambda_parser.py",
 		"--db",
 		url,
 	]);
+});
+
+test("the SSG restore server and tools follow the live RDS MySQL family", (t) => {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/shared-dockerize.yml", import.meta.url),
+		"utf8",
+	).replace(/\r\n/g, "\n");
+	const credentialScript = workflow
+		.split("      - name: Fetch RDS credentials from AWS\n")[1]
+		?.split("      - name: Grant owned runner access to RDS\n")[0]
+		?.split("        run: |\n")[1];
+	assert.ok(credentialScript, "The live-engine discovery step must exist");
+	assert.match(
+		workflow,
+		/mysql-version: \$\{\{ steps\.rds_creds\.outputs\.mysql_version \}\}/,
+	);
+	const dir = mkdtempSync(join(tmpdir(), "rds-engine-fixture "));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const shell =
+		process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+	const aws = String.raw`
+aws() {
+  case "$1" in
+    ssm) printf 'mysql://user:fixture-only@db.example.test/tanah\n' ;;
+    rds) printf 'sg-0123456789abcdef0\t%s\n' "$ENGINE_VERSION" ;;
+    *) return 2 ;;
+  esac
+}
+`;
+	for (const [engine, expected] of [
+		["8.4.9", "8.4.13"],
+		["9.7.4.R2.20261118", "9.7.4"],
+		["8.0.46", null],
+	]) {
+		const output = join(dir, engine).replace(/\\/g, "/");
+		const result = spawnSync(
+			shell,
+			["--noprofile", "--norc", "-e", "-c", aws + credentialScript],
+			{
+				encoding: "utf8",
+				timeout: 5000,
+				env: { ...process.env, ENGINE_VERSION: engine, GITHUB_OUTPUT: output },
+			},
+		);
+		assert.ifError(result.error);
+		assert.equal(result.status, expected ? 0 : 1, result.stderr);
+		const outputs = readFileSync(output, "utf8").split("\n");
+		assert.ok(outputs.includes("rds_sg=sg-0123456789abcdef0"));
+		if (expected) assert.ok(outputs.includes(`mysql_version=${expected}`));
+		else assert.ok(!outputs.some((line) => line.startsWith("mysql_version=")));
+	}
 });
 
 function productionDumpScript() {

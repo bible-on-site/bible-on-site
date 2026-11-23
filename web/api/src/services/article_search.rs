@@ -1134,6 +1134,30 @@ mod tests {
     use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
     use std::collections::BTreeMap;
 
+    const CREATE_ARTICLE_FIXTURE: &str = "CREATE TABLE tanah_article (
+        id MEDIUMINT PRIMARY KEY,
+        name TEXT NOT NULL,
+        abstract TEXT NULL,
+        content TEXT NULL,
+        perek_id INT NOT NULL,
+        author_id INT NOT NULL,
+        content_hash BINARY(16) GENERATED ALWAYS AS (
+            UNHEX(LEFT(SHA2(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id), 256), 32))
+        ) STORED
+    )";
+
+    async fn mysql_fixture_version(pool: &sqlx::MySqlPool) -> String {
+        let version: String = sqlx::query_scalar("SELECT VERSION()")
+            .fetch_one(pool)
+            .await
+            .expect("read the fixture version");
+        assert!(
+            version.starts_with("8.4.") || version.starts_with("9.7."),
+            "expected a MySQL 8.4 or 9.7 fixture, got {version}"
+        );
+        version
+    }
+
     fn mock_row(
         values: impl IntoIterator<Item = (&'static str, Value)>,
     ) -> BTreeMap<String, Value> {
@@ -1920,11 +1944,7 @@ mod tests {
             .connect_with(options.clone())
             .await
             .expect("isolated observer pool");
-        let version: String = sqlx::query_scalar("SELECT VERSION()")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert!(version.starts_with("8.4."));
+        mysql_fixture_version(&pool).await;
         let cipher: String = sqlx::query_scalar(
             "SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME = 'Ssl_cipher'",
         ).fetch_one(&pool).await.unwrap();
@@ -1932,8 +1952,9 @@ mod tests {
         let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
         pool.execute("DROP TABLE IF EXISTS tanah_article, article_search_doc, article_search_state, article_search_queue")
             .await.expect("reset owned disposable database");
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)")
-            .await.expect("tiny public-shaped source table");
+        pool.execute(CREATE_ARTICLE_FIXTURE)
+            .await
+            .expect("tiny public-shaped source table");
         pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1)")
             .await.expect("tiny test-only corpus");
         store::ensure_schema(&conn)
@@ -2332,8 +2353,9 @@ mod tests {
 
         // Exercise the complete production retrain path, including the same
         // typed integer/blob parameters used by SeaORM's normal binder.
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)")
-            .await.expect("isolated article source");
+        pool.execute(CREATE_ARTICLE_FIXTURE)
+            .await
+            .expect("isolated article source");
         pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1, 'alpha beta', 'alpha', '<p>alpha gamma</p>', 1, 1), (2, 'beta gamma', NULL, 'gamma delta', 1, 1)")
             .await.expect("isolated source rows");
         store::ensure_schema(&conn)
@@ -3107,11 +3129,7 @@ mod tests {
             .connect_with(options)
             .await
             .expect("isolated pool");
-        let version: String = sqlx::query_scalar("SELECT VERSION()")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert!(version.starts_with("8.4."));
+        mysql_fixture_version(&pool).await;
         let cipher: String = sqlx::query_scalar("SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME = 'Ssl_cipher'").fetch_one(&pool).await.unwrap();
         assert!(!cipher.is_empty(), "the fixture connection must use TLS");
         let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
@@ -3125,7 +3143,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)").await.unwrap();
+        pool.execute(CREATE_ARTICLE_FIXTURE).await.unwrap();
         pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1),(3,'delta epsilon',NULL,'delta alpha',1,1)").await.unwrap();
         store::ensure_schema(&conn).await.unwrap();
         let mut observed = Vec::new();
@@ -3224,11 +3242,7 @@ mod tests {
             .connect_with(options)
             .await
             .unwrap();
-        let version: String = sqlx::query_scalar("SELECT VERSION()")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert!(version.starts_with("8.4."));
+        let version = mysql_fixture_version(&pool).await;
         let cipher:String=sqlx::query_scalar("SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME='Ssl_cipher'").fetch_one(&pool).await.unwrap();
         assert!(!cipher.is_empty());
         let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
@@ -3243,7 +3257,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY,name TEXT NOT NULL,abstract TEXT NULL,content TEXT NULL,perek_id INT NOT NULL,author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)").await.unwrap();
+        pool.execute(CREATE_ARTICLE_FIXTURE).await.unwrap();
         for id in 1..=130 {
             sqlx::query("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (?,CONCAT('article ',?),NULL,'server source hash',?,1)").bind(id).bind(id).bind(if id==130 {930} else {1}).execute(&pool).await.unwrap();
         }

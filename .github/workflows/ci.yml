@@ -791,7 +791,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -882,7 +882,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -1112,7 +1112,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1452,7 +1452,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1871,7 +1871,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -2175,7 +2175,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -2683,7 +2683,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -3088,7 +3088,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true

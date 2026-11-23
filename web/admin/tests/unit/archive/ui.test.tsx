@@ -715,18 +715,24 @@ it("refreshes the directory and removes ready files once the undo toast expires"
 	await mount();
 	choose();
 	await screen.findByRole("link", { name: "הורדה" });
-	fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
 
-	// Undo keeps the file: cancel the pending delete from the toast.
-	const toast = await screen.findByRole("status");
-	fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
-	await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
-	await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
-	expect(screen.getByText("content.bin")).toBeVisible();
+	vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+	try {
+		fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
+		const toast = screen.getByRole("status");
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+		await act(() => vi.advanceTimersByTimeAsync(30));
+		expect(screen.queryByRole("status")).toBeNull();
+		expect(screen.getByText("content.bin")).toBeVisible();
 
-	// A second click commits after the toast window elapses.
-	fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
-	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
+		fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
+		await act(() => vi.advanceTimersByTimeAsync(30));
+		expect(
+			screen.getByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן."),
+		).toBeVisible();
+	} finally {
+		vi.useRealTimers();
+	}
 	fireEvent.click(screen.getByRole("button", { name: "רענון" }));
 	await waitFor(() =>
 		expect(fetch).toHaveBeenCalledWith(

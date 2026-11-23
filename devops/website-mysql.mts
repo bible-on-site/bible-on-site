@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { parseDbUrl as parseWebsiteDbUrl } from "../web/bible-on-site/src/lib/db-config.ts";
 
 // The annotation CLIs use the website's pinned driver, regardless of caller cwd.
 const requireFromWebsite = createRequire(
@@ -36,12 +37,11 @@ export function loadDbUrl(envFile: string): string {
 }
 
 export function parseDbUrl(url: string) {
-	const u = new URL(url.replace(/^mysql:\/\//, "http://"));
+	const config = parseWebsiteDbUrl(url);
 	return {
-		host: u.hostname || "localhost",
-		port: Number.parseInt(u.port || "3306", 10),
-		user: u.username || "root",
-		password: u.password || "",
-		database: u.pathname?.slice(1)?.split("?")[0] || "tanah-dev",
+		...config,
+		host: config.host || "localhost",
+		user: config.user || "root",
+		database: config.database || "tanah-dev",
 	};
 }

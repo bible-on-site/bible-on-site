@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: RDS MySQL instance for tanah database
 
-# NOTE: This template documents the RDS configuration created via AWS CLI.
-# See cloudformation.md for important disclaimer about template testing status.
+# Reference configuration for new instances. See cloudformation.md for template
+# testing status and ../mysql-97-upgrade.md for the existing production instance.
 
 Parameters:
   VpcId:
@@ -28,6 +28,14 @@ Parameters:
       - db.t3.micro
       - db.t3.small
       - db.t3.medium
+
+  DBEngineVersion:
+    Type: String
+    Description: MySQL version for a new instance
+    Default: "9.7.4"
+    AllowedValues:
+      - "9.7.4"
+      - "8.4"
 
   DBAllocatedStorage:
     Type: Number
@@ -74,7 +82,7 @@ Resources:
       DBInstanceIdentifier: tanah-mysql
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.4"
+      EngineVersion: !Ref DBEngineVersion
       MasterUsername: admin
       ManageMasterUserPassword: true # Auto-generates password in Secrets Manager
       DBName: tanah

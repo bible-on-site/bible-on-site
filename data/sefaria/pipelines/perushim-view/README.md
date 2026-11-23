@@ -268,7 +268,7 @@ MongoDB dump available, run `cargo test -p perushim-view --features integration`
 (set `MONGO_HOST`, `MONGO_PORT` and `DUMP_NAME` for a non-default local database).
 The integration tests execute the actual aggregation and verify mapped notes.
 
-Integration also requires a local MySQL 8.4 server and Python dependencies from
+Integration also requires a local MySQL 9.7.4 server and Python dependencies from
 `tests/requirements-mysql.txt`. Set `MYSQL_IMPORT_TEST_DB_URL` to its connection
 URL, with permission to create and drop disposable databases. The harness creates
 its own UUID-named databases and exercises the actual generated SQL through both

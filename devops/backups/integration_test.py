@@ -1,4 +1,4 @@
-"""Exercise the actual MySQL 8.4 tools on disposable, internally networked containers."""
+"""Exercise both supported MySQL families on disposable, internally networked containers."""
 
 import base64
 import hashlib
@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from mysql_backup import BackupError, Database, backup
+from mysql_backup import MYSQL_TOOL_VERSIONS, BackupError, Database, backup
 from restore_backup import restore
 
 
@@ -147,7 +147,7 @@ def docker(*args, capture=True):
 FIXTURE = r"""
 CREATE DATABASE tanah CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE tanah;
-CREATE TABLE entries(id INT PRIMARY KEY AUTO_INCREMENT, title TEXT, payload BLOB, optional_text VARCHAR(40) NULL) ENGINE=InnoDB;
+CREATE TABLE entries(id INT PRIMARY KEY AUTO_INCREMENT, title TEXT, payload BLOB, optional_text VARCHAR(40) NULL, title_hash BINARY(16) GENERATED ALWAYS AS (__TITLE_HASH__) STORED) ENGINE=InnoDB;
 CREATE TABLE audit(id INT PRIMARY KEY AUTO_INCREMENT, entry_id INT, CONSTRAINT fk_entry FOREIGN KEY(entry_id) REFERENCES entries(id)) ENGINE=InnoDB;
 INSERT INTO entries(title,payload,optional_text) VALUES ('תנ"ך - בדיקת גיבוי',X'0001FF0A',NULL);
 CREATE VIEW entry_titles AS SELECT id,title FROM entries;
@@ -162,14 +162,14 @@ GRANT SHOW_ROUTINE ON *.* TO 'bos_backup'@'%';
 """
 
 
-def run():
+def run(version):
     token = uuid.uuid4().hex[:12]
     network = f"codex-backup-{token}"
     source_name = f"{network}-source"
     scratch_name = f"{network}-scratch"
     client_name = f"{network}-client"
     created = []
-    image = "mysql:8.4"
+    image = f"mysql:{version}"
     with tempfile.TemporaryDirectory(prefix="bos-backup-fixture-") as root:
         root = Path(root)
         tls = root / "tls"
@@ -214,7 +214,14 @@ def run():
         )
         # Only disposable test keys are world-readable inside this private fixture.
         (tls / "server.key").chmod(0o644)
-        (initial / "fixture.sql").write_text(FIXTURE, encoding="utf-8")
+        hash_expression = (
+            "UNHEX(MD5(title))"
+            if version.startswith("8.4.")
+            else "UNHEX(LEFT(SHA2(title, 256), 32))"
+        )
+        (initial / "fixture.sql").write_text(
+            FIXTURE.replace("__TITLE_HASH__", hash_expression), encoding="utf-8"
+        )
         docker("network", "create", "--internal", network)
         try:
             for name in [source_name, scratch_name]:
@@ -262,6 +269,7 @@ def run():
                         "--ssl-ca=/tls/server.pem",
                         "--ssl-cert=/tls/server.pem",
                         "--ssl-key=/tls/server.key",
+                        "--require-secure-transport=ON",
                     ]
                 docker(*args)
                 created.append(name)
@@ -320,10 +328,10 @@ def run():
             assert manifest["restoration"]["tables"]["entries"]["rows"] == 1
             assert manifest["restoration"]["tables"]["audit"]["rows"] == 0
             assert scratch.query(
-                "SELECT HEX(payload),optional_text IS NULL FROM tanah.entries;",
+                "SELECT HEX(payload),optional_text IS NULL,LENGTH(title_hash) FROM tanah.entries;",
                 work,
                 "Restored data check",
-            ) == ["0001FF0A\t1"]
+            ) == ["0001FF0A\t1\t16"]
             # Only this process's disposable scratch instance is cleared to also
             # exercise the independent version-pinned download/restore command.
             scratch.query("DROP DATABASE tanah;", work, "Scratch reset")
@@ -340,6 +348,7 @@ def run():
                 json.dumps(
                     {
                         "result": "passed",
+                        "mysql": version,
                         "schemaAndObjects": "matched",
                         "tables": len(result["tables"]),
                         "checks": [
@@ -367,4 +376,5 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    for version in MYSQL_TOOL_VERSIONS.values():
+        run(version)

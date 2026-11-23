@@ -21,7 +21,6 @@ const row = {
 	perekId: 1,
 	authorId: 7,
 	coverageVerified: 1,
-	contentHash: "a".repeat(32),
 };
 const perek = (id: number) => ({
 	id,
@@ -198,7 +197,7 @@ it("captures complete link state and expiry without taking locks across an exter
 	expect(state).toMatchObject({
 		perekId: 1,
 		authorId: 7,
-		contentHash: row.contentHash,
+		contentHash: "2a274e19815b61ce5509a69f3a15a4fc",
 		coverageVerified: true,
 		coveringSources: [{ perekId: 1, pasuk: 1 }],
 		dedicationAssignments: [
@@ -261,7 +260,7 @@ it("binds complete plain text and its source hash to the same single article rea
 
 it("does not confuse an approved primary-perek update with a prose change", async () => {
 	const before = await readArticleLinkState(conn, "123");
-	db.one.mockResolvedValue({ ...row, perekId: 2, contentHash: "c".repeat(32) });
+	db.one.mockResolvedValue({ ...row, perekId: 2 });
 	const linkChanged = await readArticleLinkState(conn, "123");
 	expect(linkChanged.sourceHash).toBe(before.sourceHash);
 	expect(linkChanged.contentHash).not.toBe(before.contentHash);
@@ -284,14 +283,10 @@ it.each(["0", "001", "bad", "2147483648"])(
 	},
 );
 
-it("fails closed when the article or exact content-hash schema is unavailable", async () => {
+it("fails closed when the article is unavailable", async () => {
 	db.one.mockResolvedValue(null);
 	await expect(readArticleLinkState(conn, "123")).rejects.toThrow(
 		"Article not found",
-	);
-	db.one.mockResolvedValue({ ...row, contentHash: null });
-	await expect(readArticleLinkState(conn, "123")).rejects.toThrow(
-		/exact content/,
 	);
 });
 

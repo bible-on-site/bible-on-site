@@ -1619,7 +1619,7 @@ SELECT 1";
             apply_article_content_hash_upgrade(&mut conn, base_path).await?;
             assert_eq!(
                 query_scalar::<MySql, i64>(
-                    "SELECT content_hash = UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id))) FROM tanah_article WHERE id = 42"
+                    "SELECT content_hash = UNHEX(LEFT(SHA2(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id), 256), 32)) FROM tanah_article WHERE id = 42"
                 )
                 .fetch_one(&mut conn)
                 .await?,

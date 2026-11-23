@@ -8,9 +8,9 @@ the website follow-up **#2040** — do not build a second corpus there.
 
 ## Why not MySQL FULLTEXT / native vectors
 
-### What MySQL 8.4 offers
+### MySQL search capabilities
 
-The deployment and CI databases run MySQL 8.4 (LTS). Relevant capabilities:
+The search index works with MySQL 8.4 and 9.7.
 
 - `FULLTEXT` indexes on `InnoDB` with `MATCH ... AGAINST` in natural-language
   or boolean mode. Tokenization is whitespace/punctuation driven; there is no
@@ -18,10 +18,9 @@ The deployment and CI databases run MySQL 8.4 (LTS). Relevant capabilities:
   folding, no stemming). The default parser would treat `שמים` and `שמימ` as
   different words and niqqud-marked text as different tokens entirely.
 - `ngram`/`MeCab` parsers target CJK — not useful for Hebrew.
-- **No native vector type or ANN index.** MySQL 9.x added a `VECTOR` type, but
-  8.4 (our LTS) does not have it, and MySQL does not ship kNN operators; even
-  on 9.x you only get storage — scoring would still be a full-table cosine scan
-  per query.
+- RDS for MySQL 9.7 supports `VECTOR` storage. Standard MySQL 9.7 cannot index
+  `VECTOR` values. The API computes vector similarity in its own index.
+  [MySQL 9.7 VECTOR documentation](https://dev.mysql.com/doc/refman/9.7/en/vector.html)
 - No pluggable ranking: BM25-style scoring is not available; ranking is the
   opaque built-in tf-idf with no field weighting between `name`, `abstract`,
   and `content`.
@@ -106,7 +105,7 @@ the public article corpus.
 | article **created/updated/deleted** | the admin transaction enqueues the id into `article_search_queue` in the *same* transaction (`web/admin/src/server/articles.ts`) — a queue failure aborts the write |
 | worker tick (every 15 s) | drains ≤256 queue ids; fetches the article (canonical chapter 1-929 only) and upserts `article_search_doc` under the current model; `None` result (deleted or moved outside the canonical chapter range) purges the doc row |
 | sync failure | `attempts` + `last_error` are recorded; rows past `MAX_ATTEMPTS = 20` are skipped by the regular drain — a poison row can never wedge the worker — and retried only after the reconcile sweep re-enqueues them |
-| reconcile sweep (every ~10 min) | diffs `tanah_article.content_hash` (a STORED generated column holding the `MD5` fingerprint of the indexable fields) against `article_search_doc.content_hash`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or left the canonical chapter range |
+| reconcile sweep (every ~10 min) | diffs `tanah_article.content_hash` (a STORED generated column holding the first 16 bytes of the SHA-256 fingerprint of the indexable fields) against `article_search_doc.content_hash`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or left the canonical chapter range |
 | drift ≥ 32 docs or ≥ 8 % of corpus | full **retrain** under `GET_LOCK('article_search_retrain', 0)` so concurrent API instances never train in parallel; docs are persisted first, then `model_epoch` bumps, so readers never load a half-written snapshot |
 
 The enqueue write is idempotent (`ON DUPLICATE KEY UPDATE` resets the attempt

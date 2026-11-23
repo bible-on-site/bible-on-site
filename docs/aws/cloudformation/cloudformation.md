@@ -141,12 +141,14 @@ Route53 hosted zones and DNS records.
 Nested stack that deploys all components together (for reference).
 
 ### 11. `rds-mysql.yaml`
-Reference for the RDS MySQL instance serving the tanah database.
+Reference configuration for a new RDS MySQL instance. The template defaults to
+MySQL 9.7.4. See the [MySQL 9.7 upgrade runbook](../mysql-97-upgrade.md) for the
+existing production instance.
 
 **Components:**
 - DB Subnet Group: `tanah-db-subnet-group` (spans 3 AZs)
 - Security Group: `tanah-rds-sg` (allows MySQL from ECS)
-- RDS Instance: `tanah-mysql` (MySQL 8.4, db.t3.micro, 20GB gp3)
+- RDS Instance: `tanah-mysql` (db.t3.micro, 20GB gp3)
 - SSM Parameters: Database connection info (username, dbname, host, port)
 
 **Features:**

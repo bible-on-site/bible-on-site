@@ -162,13 +162,23 @@ args = [
 # Run a separate exact selection so missing tests fail and the shared fixture
 # is never mutated by concurrent nextest processes. Accumulate existing profiles.
 [tasks.coverage-full-retrain-documents]
-dependencies = ["coverage-unit-dir-create", "coverage-mysql-timestamps"]
+dependencies = ["coverage-unit-dir-create", "coverage-mysql-editorial-token"]
 command = "cargo"
 args = [
   "llvm-cov", "nextest", "--locked", "--no-clean", "--lcov",
   "--output-path", ".coverage/unit/lcov.info",
   "--run-ignored", "only", "--no-tests", "fail", "-E",
   "test(=services::article_search::tests::mysql_full_retrain_prunes_removed_and_out_of_scope_documents)",
+]
+
+[tasks.coverage-mysql-editorial-token]
+dependencies = ["coverage-unit-dir-create", "coverage-mysql-timestamps"]
+command = "cargo"
+args = [
+  "llvm-cov", "nextest", "--locked", "--no-clean", "--lcov",
+  "--output-path", ".coverage/unit/lcov.info",
+  "--run-ignored", "only", "--no-tests", "fail", "-E",
+  "test(=services::article_relationships_service::tests::mysql_preserves_existing_editorial_token)",
 ]
 
 # Run a separate exact selection so missing tests fail and the shared fixture
