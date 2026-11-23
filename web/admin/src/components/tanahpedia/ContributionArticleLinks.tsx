@@ -802,6 +802,11 @@ export function ContributionArticleLinkDiff({
 		after: change.after,
 	});
 	const after = projectArticleLinks(before, input.after);
+	const commands = input.after.commands.filter(
+		(command) =>
+			command.relationshipKey !== "primaryPerek" ||
+			before.perekId !== after.perekId,
+	);
 	const chapter = (id: number) =>
 		contributionCitation(change.labels[`perek:${id}`] ?? `פרק ${id}`);
 	const targetLabel = (kind: "dedication" | "moed", id: number) =>
@@ -850,13 +855,16 @@ export function ContributionArticleLinkDiff({
 						`מאמר ${change.targetId}`}
 				</a>
 			</p>
-			<ol aria-label="פעולות הקישור המוצעות">
-				{input.after.commands.map((command) => (
-					<li key={canonicalJson(command)}>
-						{RELATIONSHIPS[command.relationshipKey]} - {ACTIONS[command.action]}
-					</li>
-				))}
-			</ol>
+			{commands.length > 0 && (
+				<ol aria-label="פעולות הקישור המוצעות">
+					{commands.map((command) => (
+						<li key={canonicalJson(command)}>
+							{RELATIONSHIPS[command.relationshipKey]} -{" "}
+							{ACTIONS[command.action]}
+						</li>
+					))}
+				</ol>
+			)}
 			<div className="contribution-diff-table-wrap">
 				<table>
 					<thead>
