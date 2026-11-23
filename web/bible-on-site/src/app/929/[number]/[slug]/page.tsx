@@ -401,7 +401,10 @@ export default async function ArticlePage({
 				<Suspense fallback={null}>
 					<ScrollToArticleMatch />
 				</Suspense>
-				<main id="article-view" className={styles.expandedArticle}>
+				<main
+					id="article-view"
+					className={`${styles.expandedArticle} seo-content`}
+				>
 					<ReadingProgress
 						units={articleProgressUnits}
 						scope={`.${styles.expandedArticle}`}
@@ -528,7 +531,10 @@ export default async function ArticlePage({
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />
 			</Suspense>
-			<main id="perush-view" className={styles.expandedPerush}>
+			<main
+				id="perush-view"
+				className={`${styles.expandedPerush} seo-content`}
+			>
 				<ReadingProgress
 					units={perushProgressUnits}
 					scope={`.${styles.expandedPerush}`}

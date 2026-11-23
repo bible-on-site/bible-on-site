@@ -47,10 +47,32 @@ test.describe("main landmark contract", () => {
 		test(`${f.name} (${f.url}) exposes exactly one main landmark`, async ({
 			page,
 		}) => {
-			await page.goto(f.url, { waitUntil: "domcontentloaded" });
+			const response = await page.goto(f.url, {
+				waitUntil: "domcontentloaded",
+			});
+			// The not-found boundary itself emits one <main>, so a fixture URL
+			// that silently 404s would pass the count check — pin the status.
+			if (f.name.startsWith("not-found")) {
+				expect(response?.status()).toBe(404);
+			} else {
+				expect(response?.status()).toBeLessThan(400);
+			}
 			// Hydrated render — what assistive tech actually enumerates.
 			await page.waitForLoadState("load");
 			await expect(page.getByRole("main")).toHaveCount(1);
 		});
 	}
+
+	// Book view replaces the flat page: the seo-content main is display:none'd
+	// and the sefer overlay becomes the page's main landmark — still exactly one.
+	test("perek book view exposes exactly one main landmark", async ({
+		page,
+	}) => {
+		const response = await page.goto("/929/1?book", {
+			waitUntil: "domcontentloaded",
+		});
+		expect(response?.status()).toBeLessThan(400);
+		await page.waitForLoadState("load");
+		await expect(page.getByRole("main")).toHaveCount(1);
+	});
 });

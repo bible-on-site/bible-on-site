@@ -216,7 +216,7 @@ const ClientWrapper = (props: {
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
-			<div
+			<main
 				style={{ display }}
 				className={`${styles.seferOverlay} ${
 					currentlyToggled ? styles.visible : styles.hidden
@@ -242,7 +242,7 @@ const ClientWrapper = (props: {
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />
 				) : null}
-			</div>
+			</main>
 		</>
 	);
 };

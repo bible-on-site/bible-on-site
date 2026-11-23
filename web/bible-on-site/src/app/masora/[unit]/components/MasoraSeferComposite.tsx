@@ -80,7 +80,7 @@ export const MasoraSeferComposite = (props: {
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
-			<div
+			<main
 				style={{ display }}
 				className={`${seferStyles.seferOverlay} ${
 					currentlyToggled ? seferStyles.visible : seferStyles.hidden
@@ -104,7 +104,7 @@ export const MasoraSeferComposite = (props: {
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />
 				) : null}
-			</div>
+			</main>
 		</>
 	);
 };
