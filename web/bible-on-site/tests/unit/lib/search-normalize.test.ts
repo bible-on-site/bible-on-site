@@ -203,6 +203,11 @@ describe("htmlToPlainText", () => {
 		// the closing tag still ends the block.
 		["א<script><!--</script>ב", "אב"],
 		["א<style>x<!-- -->y</style>ב", "אב"],
+		// A script block starting before a comment marker still wins —
+		// whichever construct opens first is the one removed.
+		["א<script>x<!--y</script>ב", "אב"],
+		// An unterminated comment swallows to end of input.
+		["א<!--x", "א"],
 	])("splits %s into normalized words %s", (html, expected) => {
 		expect(htmlToPlainText(html)).toBe(expected);
 	});

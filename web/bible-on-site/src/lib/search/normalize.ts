@@ -155,13 +155,15 @@ const BLOCK_TAGS = new RegExp(
 	`<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>(?:<\\/?${BLOCK_TAG_NAMES}\\b[^>]*>)*`,
 	"gi",
 );
-// Comments drop first so markup inside them (e.g. `<!-- <style> -->`) is
-// never treated as a real element — HtmlAgilityPack keeps them as inert
-// comment nodes that emit no text.
-const COMMENTS = /<!--[\s\S]*?-->/g;
-// An unterminated script/style block swallows to end of input like an HTML
-// parser treats it — never leaving a `<script` fragment in the output.
-const SCRIPT_STYLE = /<(script|style)\b[^>]*(?:>|$)[\s\S]*?(?:<\/\1\s*>|$)/gi;
+// Comments and script/style blocks drop in document order, like the
+// pipeline's find_comment_or_script: whichever starts first wins, so
+// markup inside a comment (e.g. `<!-- <style> -->`) is never a real
+// element, and a `<!--` inside a script body stays inert content. An
+// unterminated comment or script/style block swallows to end of input
+// the way an HTML parser treats it — no `<!--` or `<script` fragment
+// survives in the output.
+const COMMENTS_AND_SCRIPT_STYLE =
+	/<!--[\s\S]*?(?:-->|$)|<(script|style)\b[^>]*(?:>|$)[\s\S]*?(?:<\/\1\s*>|$)/gi;
 const ALL_TAGS = /<[^>]+>/g;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
@@ -194,7 +196,7 @@ export function htmlToPlainText(html: string): string {
 	let previous = "";
 	while (text !== previous && text.includes("<")) {
 		previous = text;
-		text = text.replace(COMMENTS, "").replace(SCRIPT_STYLE, "");
+		text = text.replace(COMMENTS_AND_SCRIPT_STYLE, "");
 		// Each regex pass rescans the whole string; skip it once no '<' remains.
 		if (text.includes("<")) {
 			// A boundary emits one space only when the preceding char isn't

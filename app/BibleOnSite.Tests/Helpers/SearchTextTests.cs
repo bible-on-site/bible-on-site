@@ -38,6 +38,11 @@ public class SearchTextTests
         // the closing tag still ends the block.
         [InlineData("א<script><!--</script>ב", "אב")]
         [InlineData("א<style>x<!-- -->y</style>ב", "אב")]
+        // A script block starting before a comment marker still wins —
+        // whichever construct opens first is the one removed.
+        [InlineData("א<script>x<!--y</script>ב", "אב")]
+        // An unterminated comment swallows to end of input.
+        [InlineData("א<!--x", "א")]
         public void breaks_words_on_every_block_tag_like_the_other_ports(string html, string expected)
         {
             SearchText.PlainText(html).Should().Be(expected);
