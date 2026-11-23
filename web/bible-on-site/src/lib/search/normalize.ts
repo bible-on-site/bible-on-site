@@ -172,9 +172,13 @@ const BLOCK_TAGS = new Set([
 	"footer",
 	"hr",
 ]);
-const SCRIPT_STYLE = /^<(script|style)\b[^>]*>?/i;
-const SCRIPT_CLOSE = /<\/script\s*>/i;
-const STYLE_CLOSE = /<\/style\s*>/i;
+// Sticky/global regexes are reused with `lastIndex` set per walk, so the scan
+// is linear — slicing the remainder per character would be quadratic.
+const SCRIPT_STYLE = /<(script|style)\b[^>]*>?/iy;
+const SCRIPT_CLOSE = /<\/script\s*>/gi;
+const STYLE_CLOSE = /<\/style\s*>/gi;
+const TAG_NAME = /<\/?([a-zA-Z0-9]+)/iy;
+const TAG_START = /[a-zA-Z/!?]/;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
 function decodeEntities(text: string): string {
@@ -211,33 +215,32 @@ export function htmlToPlainText(html: string): string {
 	let out = "";
 	let i = 0;
 	while (i < html.length) {
-		const rest = html.slice(i);
-		if (rest[0] !== "<") {
-			out += rest[0];
+		if (html[i] !== "<") {
+			out += html[i];
 			i += 1;
 			continue;
 		}
 		// A comment emits nothing — HtmlAgilityPack keeps it as an inert node.
-		if (rest.startsWith("<!--")) {
+		if (html.startsWith("<!--", i)) {
 			const end = html.indexOf("-->", i + 4);
 			i = end === -1 ? html.length : end + 3;
 			continue;
 		}
 		// A script/style block drops through its close tag (or end of input).
-		const skip = SCRIPT_STYLE.exec(rest);
+		SCRIPT_STYLE.lastIndex = i;
+		const skip = SCRIPT_STYLE.exec(html);
 		if (skip) {
-			const close = (
-				skip[1].toLowerCase() === "script" ? SCRIPT_CLOSE : STYLE_CLOSE
-			).exec(rest.slice(skip[0].length));
-			i =
-				close === null
-					? html.length
-					: i + skip[0].length + close.index + close[0].length;
+			const closeRe =
+				skip[1].toLowerCase() === "script" ? SCRIPT_CLOSE : STYLE_CLOSE;
+			closeRe.lastIndex = i + skip[0].length;
+			const close = closeRe.exec(html);
+			i = close === null ? html.length : close.index + close[0].length;
 			continue;
 		}
 		// `<` opens a tag only before a letter, '/', '!' or '?' — anything
 		// else (including end of input) stays literal text.
-		if (!/^<[a-zA-Z/!?]/.test(rest)) {
+		const next = html[i + 1];
+		if (next === undefined || !TAG_START.test(next)) {
 			out += "<";
 			i += 1;
 			continue;
@@ -245,10 +248,11 @@ export function htmlToPlainText(html: string): string {
 		const end = html.indexOf(">", i + 1);
 		if (end === -1) {
 			// An unterminated `<tag` at end of input stays literal text.
-			out += rest;
+			out += html.slice(i);
 			break;
 		}
-		const name = /^<\/?([a-zA-Z0-9]+)/.exec(rest)?.[1]?.toLowerCase() ?? "";
+		TAG_NAME.lastIndex = i;
+		const name = TAG_NAME.exec(html)?.[1]?.toLowerCase() ?? "";
 		// A boundary emits one space only when the output doesn't already end
 		// in one — the same dedup the other three ports apply.
 		if (BLOCK_TAGS.has(name) && !out.endsWith(" ")) {
