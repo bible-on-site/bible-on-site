@@ -1,14 +1,13 @@
 # Admin ARM64 release delivery
 
-Status: repository-only preparation; no production architecture, registry
-policy, publication flag or service change has been applied. The live admin
-service still runs x86 on FARGATE_SPOT. Merge is permitted because this change
-only prepares the delivery path, but every AWS-side step below requires Dorad's
-approval of that specific change under the root `AGENTS.md`.
+Production admin runs ARM64 on Fargate Spot. The following rollout guide
+records the x86 baseline and the original migration safeguards.
+See the [AWS architecture guide](architecture/aws-architecture.md) for the
+running service configuration.
 
 ## Baseline and intended scope
 
-The admin service `bible-on-site-admin` on cluster `bible-on-site-cluster` runs
+The admin service `bible-on-site-admin` on cluster `bible-on-site-cluster` ran
 one x86 task at 0.25 vCPU / 0.5 GB on FARGATE_SPOT, deployed by the admin ECR
 EventBridge rule following `bible-on-site-admin:latest`. Cognito-backed editing
 is production data; the anonymous bulletin-document endpoint serves published
@@ -58,7 +57,7 @@ single-platform overwrite of an immutable version, and `latest` downgrade.
 
 ## AWS prerequisites before the first dual-platform release
 
-The `bible-on-site-admin` ECR repository is currently `MUTABLE`. The publisher
+The `bible-on-site-admin` ECR repository was initially `MUTABLE`. The publisher
 refuses the dual path until it uses `IMMUTABLE_WITH_EXCLUSION` with exactly
 `latest` mutable, matching the API contract; the reference template in
 `cloudformation/ecr-repositories.yaml` documents that target only. Record the

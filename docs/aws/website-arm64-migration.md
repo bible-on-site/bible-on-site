@@ -1,15 +1,15 @@
 # Website ARM64 migration
 
-Status: prepared migration; no production architecture, registry policy or
-publication flag change has been applied. Dorad requested the website migration
-on November 1, 2026. Merge and live writes require approval of this specific PR's
-current AWS impact under the root `AGENTS.md`.
+Production website tasks run ARM64 on Fargate. The following rollout guide
+records the x86 baseline and the original migration safeguards.
+See the [AWS architecture guide](architecture/aws-architecture.md) for the
+running service configuration.
 
 ## Baseline and intended scope
 
 Read-only inspection at 2026-11-01 13:01 UTC verified account 250598594267,
 region il-central-1, cluster `bible-on-site-cluster`, service
-`bible-on-site-website`, task definition revision 16. The website runs one healthy
+`bible-on-site-website`, task definition revision 16. The website then ran one healthy
 x86 task with 256 CPU units and 2048 MiB. The image follows
 `bible-on-site:latest`; the website EventBridge rule owns ordinary deployments.
 

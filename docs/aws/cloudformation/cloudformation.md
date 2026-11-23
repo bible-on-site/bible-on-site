@@ -1,19 +1,13 @@
 # AWS CloudFormation Templates
 
-This directory contains CloudFormation templates that document the AWS infrastructure for the Bible On Site project.
-
-> **⚠️ IMPORTANT DISCLAIMER**
->
-> **These templates have NEVER been tested or deployed.** They are maintained purely as **Infrastructure as Code documentation** to reflect the de-facto AWS configuration that was created manually or via CLI.
->
-> While these templates are updated regularly to document infrastructure changes, they should NOT be assumed to work without thorough testing. Use them as reference documentation only.
+This directory includes templates for deployed stacks, reference templates for
+manually managed resources, and rollout proposals. Check the linked runbook
+and live resource ownership before applying a template.
 
 ## Architecture Overview
 
-For a detailed visual representation of the infrastructure, please refer to the [Architecture Documentation](../architecture/aws-architecture.md).
-
-The system consists of an Nginx reverse proxy on EC2 routing traffic to ECS Fargate containers, using Cloud Map for service discovery.
-
+The [AWS architecture guide](../architecture/aws-architecture.md) describes
+the production request paths, services, and rollout ownership.
 
 ## Sensitive Information
 
@@ -76,7 +70,9 @@ ECS cluster, task definitions, services, and Cloud Map service discovery.
 **Components:**
 - ECS Cluster: `bible-on-site-cluster` (Fargate)
 - Cloud Map Namespace: `bible-on-site.local` (private DNS)
-- Service: `bible-on-site-website` → `website.bible-on-site.local:3000`
+- Website service at `website.bible-on-site.local:3000`
+- API service at `api.bible-on-site.local:3003`
+- Admin service at `admin.bible-on-site.local:3101`
 - Task Execution Role: `ecsTaskExecutionRole`
 - Website Task Role: `bible-on-site-website-task-role` (allows `lambda:InvokeFunction` on bulletin Lambda)
 
@@ -109,7 +105,7 @@ EC2 instance running nginx as reverse proxy.
 
 **Features:**
 - SSL termination (Let's Encrypt)
-- Routes to ECS via Cloud Map DNS (`website.bible-on-site.local`)
+- Routes website, API, and admin traffic to ECS via Cloud Map DNS
 - VPC DNS resolver (`172.31.0.2`) for service discovery
 
 Replacement sizing/architecture (t4g Graviton candidates, validation harness,
@@ -138,16 +134,12 @@ IAM Identity Center (SSO) configuration including permission sets.
 > **Note**: IAM Identity Center resources are **not fully supported** by CloudFormation. This template documents the configuration but resources must be created via Console or CLI.
 
 ### 7. `ecr-ecs-auto-deploy.yaml`
-Automatic ECS deployment when ECR images are pushed.
-
-**Components:**
-- EventBridge Rules: Listen for ECR push events (tag: `latest`)
-  - `ecr-push-bible-on-site-website` → triggers on `bible-on-site` repo
-  - `ecr-push-bible-on-site-api` → triggers on `bible-on-site-api` repo
-- Lambda Function: `ecr-to-ecs-deploy` (Python 3.14)
-- IAM Roles: `ECRDeployLambdaRole`, `EventBridgeECSDeployRole`
-
-**Flow:** ECR Push → EventBridge → Lambda → ECS UpdateService (forceNewDeployment)
+Reference for the EventBridge rules and the `ecr-to-ecs-deploy` Lambda
+(Python 3.14). In production, successful website and admin `latest` pushes
+invoke the Lambda, which forces a new ECS deployment with the current task
+definition. The API rule is disabled while GitHub Actions owns the protected
+API handover. [Deployed Lambda details](./ecr-ecs-auto-deploy/README.md) ·
+[API rollout ownership](../api-arm64-cutover.md#one-api-deployment-owner)
 
 ### 8. `cloudwatch.yaml`
 CloudWatch Log Groups and Application Auto Scaling.
@@ -194,7 +186,7 @@ RDS MySQL instance for the tanah database.
 **Features:**
 - Encrypted storage (AWS-managed KMS key)
 - 7-day backup retention
-- Not publicly accessible (VPC only)
+- Public addressing for authorized GitHub Actions access with security-group restricted ingress
 - Password stored in SSM Parameter Store (SecureString)
 
 **Deploy:**
@@ -227,10 +219,10 @@ Bulletin PDF Generator Lambda function.
 - CloudWatch Log Group: `/aws/lambda/bible-on-site-bulletin`
 
 **Notes:**
-- Lambda Function URLs are not available in `il-central-1`. The website invokes this Lambda directly via AWS SDK.
+- The website and admin invoke this Lambda directly via the AWS SDK.
 - Deployed via ZIP package containing the `bootstrap` Rust binary.
 
-### 13. `data-deploy-lambda.yaml`
+### 13. `data-deploy/data-deploy.yaml`
 Lambda function for deploying SQL data to RDS MySQL.
 
 **Components:**
@@ -267,13 +259,12 @@ validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/
 > [edge-research-2026-10-27.md](../edge-research-2026-10-27.md) are preconditions
 > for any later rollout, including explicit API/admin DNS isolation.
 
-### Asset-only candidate: `cloudfront-assets.yaml`
+### Asset-only CDN: `cloudfront-assets.yaml`
 
-Reference-only proposal for an additive CloudFront pay-as-you-go endpoint in
-front of the existing public assets bucket. It has no aliases, OAC, bucket/IAM
-changes or automatic ECS/URL activation. Success caching is disabled and error
-TTLs are explicitly zero. A custom origin policy forwards CORS inputs and all
-query parameters. This is separate from the full-website edge candidate above.
+Reference template for the additive CloudFront endpoint in front of the public
+assets bucket. The production distribution was provisioned separately. The
+reference uses the public S3 origin, disables caching, and sets error TTLs to
+zero. Its custom origin policy forwards CORS inputs and query parameters.
 See the [S3 bill reassessment and approval-gated runbook](../s3-delivery-cost-2026-11-01.md)
 for costs, compatibility checks, CLI request generation and rollback. Never
 deploy this reference file as a CloudFormation stack.
@@ -291,34 +282,10 @@ rollback. The recurring read-only baseline check lives in
 `devops/cost-audit.mjs`. Never deploy this reference file as a CloudFormation
 stack.
 
-## Data Flow: ECR → ECS → nginx → Internet
-
-1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)
-2. **ECS Fargate** pulls images from **ECR** (via task execution role)
-3. **ECS tasks** register with **Cloud Map** (`website.bible-on-site.local`)
-4. **nginx** resolves Cloud Map DNS to get ECS task private IPs
-5. **nginx** proxies HTTPS traffic to ECS tasks on port 3000
-6. **Internet users** access via תנך.co.il / תנך.com
-
 ## Current Infrastructure State
 
-As of the last export (see git history for date):
-
-| Resource | Value |
-|----------|-------|
-| **Region** | `il-central-1` (Israel) |
-| **VPC** | `<VPC_ID>` (default, `172.31.0.0/16`) |
-| **ECS Cluster** | `bible-on-site-cluster` |
-| **ECS Service** | `bible-on-site-website` (1 task, Fargate) |
-| **Cloud Map** | `bible-on-site.local` → `website.bible-on-site.local` |
-| **ECR** | `bible-on-site` (website), `bible-on-site-api` (future) |
-| **EC2** | `<INSTANCE_ID>` (t3.small, nginx, `<EC2_PUBLIC_IP>`) |
-| **Route53** | `xn--febl3a.com`, `xn--febl3a.co.il` → `<EC2_PUBLIC_IP>` |
-| **RDS** | `tanah-mysql` (MySQL 8.4, db.t3.micro, encrypted) |
-| **OIDC Provider** | `token.actions.githubusercontent.com` |
-| **IAM Roles** | `GitHubActionsECRDeployRole`, `ecsTaskExecutionRole` |
-| **SSO Users** | `dorad` (admin), `bible-on-site-github-ci-bot` (CI) |
-| **Permission Sets** | `AdministratorAccess`, `ECRDeployer` |
+See the [AWS architecture guide](../architecture/aws-architecture.md) for the
+production inventory and request and deployment paths.
 
 ## Importing Existing Resources
 
