@@ -111,7 +111,7 @@ describe("htmlToPlainText", () => {
 		).toBe("טקסט עוד");
 	});
 
-	it("strips tags nested inside other tag fragments until stable", () => {
+	it("consumes nested tag openers in a single pass", () => {
 		// The nested opener is consumed as a plain tag, so no "<script>"
 		// survives and the text between the tags stays, like the Rust ports.
 		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).toBe(
