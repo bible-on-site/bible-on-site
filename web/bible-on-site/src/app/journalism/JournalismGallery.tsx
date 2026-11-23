@@ -15,8 +15,9 @@ interface JournalismItem {
 
 export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+	const [opener, setOpener] = useState<HTMLElement | null>(null);
 	const dialogRef = useRef<HTMLDivElement>(null);
-	useModalDialogFocus(selectedIndex !== null, dialogRef);
+	useModalDialogFocus(selectedIndex !== null, dialogRef, opener);
 
 	const close = useCallback(() => setSelectedIndex(null), []);
 
@@ -62,7 +63,10 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 						key={item.id}
 						type="button"
 						className={styles.masonryItem}
-						onClick={() => setSelectedIndex(index)}
+						onClick={(e) => {
+							setOpener(e.currentTarget);
+							setSelectedIndex(index);
+						}}
 					>
 						<Image
 							src={item.imageUrl}

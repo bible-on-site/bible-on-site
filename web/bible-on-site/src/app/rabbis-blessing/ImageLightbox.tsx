@@ -15,8 +15,9 @@ interface ImageLightboxProps {
 
 export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 	const [open, setOpen] = useState(false);
+	const [opener, setOpener] = useState<HTMLElement | null>(null);
 	const dialogRef = useRef<HTMLDivElement>(null);
-	useModalDialogFocus(open, dialogRef);
+	useModalDialogFocus(open, dialogRef, opener);
 
 	const close = useCallback(() => setOpen(false), []);
 
@@ -40,7 +41,10 @@ export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 			<button
 				type="button"
 				className={styles.posterButton}
-				onClick={() => setOpen(true)}
+				onClick={(e) => {
+					setOpener(e.currentTarget);
+					setOpen(true);
+				}}
 			>
 				<Image
 					src={src}

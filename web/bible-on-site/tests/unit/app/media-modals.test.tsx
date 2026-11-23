@@ -179,6 +179,19 @@ describe("JournalismGallery", () => {
 			expect(screen.getByRole("button", { name: "הקודם" })).toHaveFocus();
 		});
 
+		it("restores focus to the clicked opener even when it was never focused", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const opener = screen.getAllByRole("button")[0];
+			// Safari and Firefox do not focus buttons on click.
+			fireEvent.click(opener);
+			expect(opener).not.toHaveFocus();
+
+			fireEvent.keyDown(document, { key: "Escape" });
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+		});
+
 		it("keeps Enter and Space on the nav buttons inside the dialog", () => {
 			render(<JournalismGallery items={ITEMS} />);
 			const dialog = openModal();

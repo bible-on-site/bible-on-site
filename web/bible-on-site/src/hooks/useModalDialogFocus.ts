@@ -9,15 +9,23 @@ const FOCUSABLE_SELECTOR =
  * cannot reach the page behind it, Tab/Shift+Tab cycle within the dialog,
  * focus lands on the dialog's close control, and on unmount focus returns
  * to the element that opened it.
+ *
+ * `opener` is the element whose click opened the dialog. Safari and Firefox
+ * do not focus buttons on click, so document.activeElement alone cannot
+ * name the opener there — callers record it from onClick and it is the
+ * preferred restore target.
  */
 export function useModalDialogFocus(
 	open: boolean,
 	dialogRef: React.RefObject<HTMLElement | null>,
+	opener: Element | null,
 ): void {
 	const openerRef = useRef<Element | null>(null);
 	useEffect(() => {
 		if (!open) return;
-		openerRef.current = document.activeElement;
+		openerRef.current =
+			/* istanbul ignore next -- callers always pass the click target; fallback covers programmatic opens */
+			opener ?? document.activeElement;
 		const dialog = dialogRef.current;
 		/* istanbul ignore if -- the portal mounts in the same commit */
 		if (!dialog) return;
@@ -66,12 +74,12 @@ export function useModalDialogFocus(
 		return () => {
 			dialog.removeEventListener("keydown", onKeyDown);
 			for (const el of inerted) el.removeAttribute("inert");
-			const opener = openerRef.current;
+			const restoreTo = openerRef.current;
 			openerRef.current = null;
 			/* istanbul ignore if -- activeElement is always an element */
-			if (opener instanceof HTMLElement) {
-				opener.focus({ preventScroll: true });
+			if (restoreTo instanceof HTMLElement) {
+				restoreTo.focus({ preventScroll: true });
 			}
 		};
-	}, [open, dialogRef]);
+	}, [open, dialogRef, opener]);
 }
