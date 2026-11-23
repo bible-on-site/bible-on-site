@@ -52,8 +52,9 @@ describe("UndoToastProvider", () => {
 			<UndoToastProvider durationMs={1000}>{children}</UndoToastProvider>,
 		);
 		const host = document.createElement("div");
-		for (const node of new DOMParser().parseFromString(markup, "text/html").body
-			.childNodes)
+		for (const node of Array.from(
+			new DOMParser().parseFromString(markup, "text/html").body.childNodes,
+		))
 			host.appendChild(node);
 		document.body.appendChild(host);
 
