@@ -108,14 +108,19 @@ describe("ConfirmDialog", () => {
 		const alreadyInert = document.createElement("div");
 		alreadyInert.setAttribute("inert", "");
 		document.body.appendChild(alreadyInert);
+		// Transient UI (the undo toast) is exempted from the inert sweep.
+		const keepActive = document.createElement("div");
+		keepActive.setAttribute("data-modal-keep-active", "");
+		document.body.appendChild(keepActive);
 
 		const props = renderDialog();
 		const dialog = screen.getByRole("dialog");
 		for (const sibling of document.body.children) {
-			if (sibling === dialog) continue;
+			if (sibling === dialog || sibling === keepActive) continue;
 			expect(sibling).toHaveAttribute("inert");
 		}
 		expect(dialog).not.toHaveAttribute("inert");
+		expect(keepActive).not.toHaveAttribute("inert");
 
 		props.rerender(<ConfirmDialog {...props} open={false} />);
 		for (const sibling of document.body.children) {
@@ -125,6 +130,7 @@ describe("ConfirmDialog", () => {
 		// A sibling that was already inert keeps its own attribute.
 		expect(alreadyInert).toHaveAttribute("inert");
 		alreadyInert.remove();
+		keepActive.remove();
 	});
 
 	it("restores focus to the recorded opener element", () => {

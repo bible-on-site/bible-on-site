@@ -31,7 +31,14 @@ export function useModalDialogFocus(
 		if (!dialog) return;
 		const inerted: Element[] = [];
 		for (const sibling of document.body.children) {
-			if (sibling === dialog || sibling.hasAttribute("inert")) continue;
+			if (
+				sibling === dialog ||
+				sibling.hasAttribute("inert") ||
+				// Transient UI that must stay reachable during a modal — e.g. the
+				// undo toast, whose destructive commit timer keeps running.
+				sibling.hasAttribute("data-modal-keep-active")
+			)
+				continue;
 			sibling.setAttribute("inert", "");
 			inerted.push(sibling);
 		}
