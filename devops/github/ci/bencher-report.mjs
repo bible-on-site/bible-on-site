@@ -5,38 +5,55 @@ import { fileURLToPath } from "node:url";
 
 const pending = (check) => check.status !== "completed" && check.conclusion == null;
 
+async function verifyReport(context, io, result) {
+	const urls = [...result.stdout.matchAll(/View report:\s+(https:\/\/[^\s]+)/gu)];
+	if (urls.length !== 1) throw new Error("Bencher did not print exactly one report URL");
+	const url = new URL(urls[0][1]);
+	const match = /^\/console\/projects\/([^/]+)\/reports\/([a-f\d-]{36})$/iu.exec(url.pathname);
+	if (url.origin !== "https://bencher.dev" || !match || match[1] !== context.project) {
+		throw new Error("Bencher report URL does not identify the expected project");
+	}
+	const report = await io.fetchReport(match[2]);
+	if (report.uuid !== match[2] || report.project?.slug !== context.project
+		|| report.branch?.name !== context.branch
+		|| report.branch?.head?.version?.hash !== context.testedSha
+		|| !Array.isArray(report.alerts)
+		|| report.counts?.alerts?.total !== report.alerts.length
+		|| !report.counts?.results?.some((iteration) => iteration.lines > 0)) {
+		throw new Error("Bencher report/check identity or benchmark evidence does not match this run");
+	}
+	return { url, report };
+}
+
 /** Bencher can exit zero after failing to complete its GitHub check (#3276). */
 export async function runBencherReport(context, io) {
 	const before = new Set((await io.listChecks()).map((check) => check.id));
 	const result = io.run();
 	const runError = result.error || result.status !== 0
 		? new Error(`Bencher command failed (${result.error?.message ?? result.status})`) : null;
-	const created = (await io.listChecks()).filter((check) =>
+	const created = async () => (await io.listChecks()).filter((check) =>
 		!before.has(check.id) && check.head_sha === context.checkSha
 		&& check.app?.slug === "github-actions"
 		&& check.name === `Bencher Report (${context.project})`);
-	if (created.length !== 1) {
-		throw runError ?? new Error(`Expected one new Bencher check for this invocation; found ${created.length}`);
+	let verified = null;
+	let found = await created();
+	// The commits check-runs listing is not atomic with check creation: a check
+	// born seconds earlier can be absent (#3739). Once this invocation's report
+	// has verified, read the listing again before declaring the check missing.
+	if (found.length === 0 && !runError) {
+		verified = await verifyReport(context, io, result);
+		found = await created();
 	}
-	const check = created[0];
+	if (found.length !== 1) {
+		throw runError ?? new Error(`Expected one new Bencher check for this invocation; found ${found.length}`);
+	}
+	const check = found[0];
 	let mutationAttempted = false;
 	try {
 		if (runError) throw runError;
-		const urls = [...result.stdout.matchAll(/View report:\s+(https:\/\/[^\s]+)/gu)];
-		if (urls.length !== 1) throw new Error("Bencher did not print exactly one report URL");
-		const url = new URL(urls[0][1]);
-		const match = /^\/console\/projects\/([^/]+)\/reports\/([a-f\d-]{36})$/iu.exec(url.pathname);
-		if (url.origin !== "https://bencher.dev" || !match || match[1] !== context.project) {
-			throw new Error("Bencher report URL does not identify the expected project");
-		}
-		const report = await io.fetchReport(match[2]);
-		if (report.uuid !== match[2] || report.project?.slug !== context.project
-			|| report.branch?.name !== context.branch
-			|| report.branch?.head?.version?.hash !== context.testedSha
-			|| !Array.isArray(report.alerts)
-			|| report.counts?.alerts?.total !== report.alerts.length
-			|| !report.counts?.results?.some((iteration) => iteration.lines > 0)
-			|| !check.external_id?.startsWith(`bencher:${report.project?.uuid}:`)) {
+		verified ??= await verifyReport(context, io, result);
+		const { url, report } = verified;
+		if (!check.external_id?.startsWith(`bencher:${report.project.uuid}:`)) {
 			throw new Error("Bencher report/check identity or benchmark evidence does not match this run");
 		}
 		// Match Bencher's has_alert(): every alert in this report affects the check.
