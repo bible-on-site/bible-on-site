@@ -6,6 +6,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
@@ -23,6 +24,10 @@ const server = vi.hoisted(() => ({
 	params: { id: "7" },
 	links: [] as Record<string, unknown>[],
 	panelProps: [] as Record<string, unknown>[],
+	// Content the editor still owes the page while its debounce is pending.
+	pendingContent: null as string | null,
+	flushCalls: 0,
+	editorOnChange: null as ((content: string) => void) | null,
 }));
 
 vi.mock("~/server/articles", () => ({
@@ -35,7 +40,32 @@ vi.mock("~/server/authors", () => ({ getAuthors: server.getAuthors }));
 vi.mock("~/server/moadim", () => ({ listMoadim: server.listMoadim }));
 vi.mock("~/server/perakim", () => ({ getPerakim: server.getPerakim }));
 vi.mock("~/components/WysiwygEditor", () => ({
-	WysiwygEditor: () => <div data-testid="wysiwyg" />,
+	WysiwygEditor: (props: {
+		onChange: (content: string) => void;
+		ref?: { current: { flush?: () => void } | null };
+	}) => {
+		server.editorOnChange = props.onChange;
+		if (props.ref) {
+			props.ref.current = {
+				flush: () => {
+					server.flushCalls += 1;
+					if (server.pendingContent !== null && server.editorOnChange) {
+						server.editorOnChange(server.pendingContent);
+					}
+				},
+			};
+		}
+		// The real editor delivers its pending debounced edit from its own
+		// unmount cleanup, which runs after the route's cleanup.
+		useEffect(() => {
+			return () => {
+				if (server.pendingContent !== null && server.editorOnChange) {
+					server.editorOnChange(server.pendingContent);
+				}
+			};
+		}, []);
+		return <div data-testid="wysiwyg" />;
+	},
 }));
 vi.mock("~/components/HebrewDatesEditor", () => ({
 	HebrewDatesEditor: (props: { dates: unknown; onChange: unknown }) =>
@@ -97,7 +127,7 @@ function renderPage() {
 	const { component: Page } = Route as unknown as {
 		component: () => React.ReactElement;
 	};
-	render(
+	return render(
 		<QueryClientProvider client={client}>
 			<Page />
 		</QueryClientProvider>,
@@ -109,6 +139,9 @@ describe("ArticleEditPage", () => {
 		server.params.id = "7";
 		server.links.length = 0;
 		server.panelProps.length = 0;
+		server.pendingContent = null;
+		server.flushCalls = 0;
+		server.editorOnChange = null;
 		for (const mock of Object.values(server)) {
 			if (typeof mock === "function" && "mockReset" in mock) mock.mockReset();
 		}
@@ -222,6 +255,62 @@ describe("ArticleEditPage", () => {
 				expect.objectContaining({ to: "/articles/perek/$perekId" }),
 			),
 		);
+	});
+
+	it("flushes the editor's pending debounce into a manual save", async () => {
+		server.updateArticle.mockResolvedValue(article);
+		server.pendingContent = "<p>עריכה חדשה</p>";
+		renderPage();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור עכשיו" }),
+			).toBeEnabled(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+		expect(server.flushCalls).toBe(1);
+		await waitFor(() =>
+			expect(server.updateArticle).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					id: 7,
+					content: "<p>עריכה חדשה</p>",
+				}),
+			}),
+		);
+	});
+
+	it("saves pending editor edits when the page unmounts", async () => {
+		server.updateArticle.mockResolvedValue(article);
+		server.pendingContent = "<p>עריכה חדשה</p>";
+		const utils = renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+
+		utils.unmount();
+
+		await waitFor(() =>
+			expect(server.updateArticle).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					id: 7,
+					content: "<p>עריכה חדשה</p>",
+				}),
+			}),
+		);
+	});
+
+	it("does not save on unmount when nothing changed", async () => {
+		const utils = renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+
+		utils.unmount();
+
+		// The deferred unmount save fires on a 0ms timeout after teardown.
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.updateArticle).not.toHaveBeenCalled();
 	});
 });
 

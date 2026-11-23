@@ -7,8 +7,12 @@ import {
 	within,
 } from "@testing-library/react";
 import { useEditor } from "@tiptap/react";
+import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	WysiwygEditor,
+	type WysiwygEditorHandle,
+} from "~/components/WysiwygEditor";
 
 const editorState = vi.hoisted(() => {
 	let html = "<p>Initial</p>";
@@ -291,6 +295,59 @@ describe("WysiwygEditor", () => {
 		await waitFor(() =>
 			expect(onChange).toHaveBeenCalledWith("<p>Changed</p>"),
 		);
+	});
+
+	it("flushes a pending debounced edit on unmount", () => {
+		const onChange = vi.fn();
+		const { unmount } = render(
+			<WysiwygEditor
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Changed</p>");
+
+		unmount();
+
+		expect(onChange).toHaveBeenCalledWith("<p>Changed</p>");
+	});
+
+	it("delivers pending edits on demand through its ref handle", () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Changed</p>");
+
+		act(() => ref.current?.flush());
+
+		expect(onChange).toHaveBeenCalledWith("<p>Changed</p>");
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
 	it("syncs changed content props back into TipTap", () => {

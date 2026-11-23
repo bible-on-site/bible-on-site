@@ -9,6 +9,7 @@ import {
 	type MouseEvent as ReactMouseEvent,
 	useCallback,
 	useEffect,
+	useRef,
 	useState,
 } from "react";
 import {
@@ -32,7 +33,10 @@ import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { HebrewDatesEditor } from "~/components/HebrewDatesEditor";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	type WysiwygEditorHandle,
+	WysiwygEditor,
+} from "~/components/WysiwygEditor";
 import {
 	coverageFieldsForSave,
 	perekSourceLabel,
@@ -98,6 +102,21 @@ function ArticleEditPage() {
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
+	const editorRef = useRef<WysiwygEditorHandle>(null);
+	/* The editor debounces onChange, so formData.content can lag the editor by
+	   up to autoSaveDelay; contentRef always holds the newest content. */
+	const contentRef = useRef("");
+	const latestRef = useRef({ formData, hasChanges });
+	const mountedRef = useRef(true);
+
+	useEffect(() => {
+		latestRef.current = { formData, hasChanges };
+	});
+	useEffect(() => {
+		return () => {
+			mountedRef.current = false;
+		};
+	}, []);
 
 	const { data: article, isLoading: articleLoading } = useQuery({
 		queryKey: ["article", articleId],
@@ -146,6 +165,7 @@ function ArticleEditPage() {
 	// Initialize form with article data
 	useEffect(() => {
 		if (article) {
+			contentRef.current = article.content ?? "";
 			setFormData({
 				perek_id: article.perek_id,
 				author_id: article.author_id,
@@ -184,7 +204,9 @@ function ArticleEditPage() {
 			setLastSaved(new Date());
 			setHasChanges(false);
 
-			if (isNew) {
+			/* A save fired while unmounting (leaving the page inside the
+			   debounce window) must not hijack the user's navigation. */
+			if (isNew && mountedRef.current) {
 				navigate({
 					to: "/articles/$id",
 					params: { id: String(savedArticle.id) },
@@ -217,6 +239,7 @@ function ArticleEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
+		contentRef.current = content;
 		setFormData((prev) => ({ ...prev, content }));
 		setHasChanges(true);
 	}, []);
@@ -226,13 +249,38 @@ function ArticleEditPage() {
 		if (!hasChanges || saveMutation.isPending) return;
 
 		const timer = setTimeout(() => {
-			if (formData.name.trim()) {
-				saveMutation.mutate(formData);
+			editorRef.current?.flush();
+			const data = { ...formData, content: contentRef.current };
+			if (data.name.trim()) {
+				saveMutation.mutate(data);
 			}
 		}, 2000);
 
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
+
+	/* Leaving the page inside the editor's debounce window used to drop the
+	   last edit. React detaches the editor's imperative handle before this
+	   cleanup and runs it before the editor's own unmount flush, so the
+	   final-save decision is deferred until teardown delivers any pending
+	   content to contentRef. mountedRef skips the deferred save on
+	   StrictMode's dev remount. */
+	const { mutate: saveNow } = saveMutation;
+	useEffect(() => {
+		return () => {
+			setTimeout(() => {
+				if (mountedRef.current) return;
+				const { formData: fd, hasChanges: dirty } = latestRef.current;
+				if (
+					(dirty || contentRef.current !== fd.content) &&
+					fd.name.trim()
+				) {
+					saveNow({ ...fd, content: contentRef.current });
+				}
+			}, 0);
+		};
+	}, [saveNow]);
+
 
 	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
 		setDeleteOpener(event.currentTarget);
@@ -509,6 +557,7 @@ function ArticleEditPage() {
 							תוכן המאמר
 						</label>
 						<WysiwygEditor
+							ref={editorRef}
 							content={formData.content}
 							onChange={handleContentChange}
 							placeholder="הכנס את תוכן המאמר..."
@@ -534,7 +583,13 @@ function ArticleEditPage() {
 					</Link>
 					<button
 						type="button"
-						onClick={() => saveMutation.mutate(formData)}
+						onClick={() => {
+							editorRef.current?.flush();
+							saveMutation.mutate({
+								...formData,
+								content: contentRef.current,
+							});
+						}}
 						disabled={saveMutation.isPending || !formData.name.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
