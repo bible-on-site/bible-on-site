@@ -55,59 +55,6 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
     }
 
-    /// <summary>
-    /// Waits until at least one element matching the automation id is attached
-    /// to the accessibility tree — unlike <see cref="WaitFor(string)"/>, no
-    /// displayed or viewport requirement applies. An exposed commentary
-    /// section can be taller than the collection's visible slice (or be
-    /// covered while the perushim sheet is still animating away), so
-    /// <c>visible == 1</c> never holds for it even though the element is
-    /// mounted with a real frame — which is all callers that read its label
-    /// or geometry from the tree need (#3737).
-    /// </summary>
-    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId) =>
-        WaitForAttached(automationId, TimeSpan.FromSeconds(45));
-
-    /// <inheritdoc cref="WaitForAttached(string)"/>
-    public IReadOnlyList<AppiumElement> WaitForAttached(string automationId, TimeSpan timeout)
-    {
-        var locator = platform.AutomationId(automationId);
-        var deadline = DateTime.UtcNow.Add(timeout);
-        while (DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                if (driver is IosSnapshotDriver snapshots)
-                {
-                    var attached = snapshots.FindSnapshots(locator)
-                        .Select(match => match.Element).ToArray();
-                    if (attached.Length > 0)
-                    {
-                        return attached;
-                    }
-                }
-                else
-                {
-                    var attached = driver.FindElements(locator).OfType<AppiumElement>().ToArray();
-                    if (attached.Length > 0)
-                    {
-                        return attached;
-                    }
-                }
-            }
-            catch (StaleElementReferenceException)
-            {
-                // The carousel can replace its native views between lookup and inspection.
-            }
-            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
-            {
-                // An observation timeout can retry within this deadline.
-            }
-            Thread.Sleep(200);
-        }
-        throw new WebDriverTimeoutException($"No element matching {locator} attached within {timeout.TotalSeconds} seconds.");
-    }
-
     public string Source => WaitForText("PerekSource");
     public string FirstPasuk => WaitForText("PasukText");
 
@@ -134,26 +81,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         WaitForHidden(automationId, TimeSpan.FromSeconds(30));
 
     /// <inheritdoc cref="WaitForHidden(string)"/>
-    public void WaitForHidden(string automationId, TimeSpan timeout) =>
-        WaitForHidden([platform.AutomationId(automationId)], timeout);
-
-    /// <inheritdoc cref="WaitForHidden(IReadOnlyList{By}, TimeSpan)"/>
-    public void WaitForHidden(TimeSpan timeout, params string[] automationIds) =>
-        WaitForHidden(automationIds.Select(platform.AutomationId).ToArray(), timeout);
-
-    /// <summary>
-    /// One deadline shared by every locator: each poll cycle checks all of
-    /// them, so a marker that never appears costs a single lookup per cycle
-    /// and one still-visible marker holds the whole window.
-    /// </summary>
-    private void WaitForHidden(IReadOnlyList<By> locators, TimeSpan timeout)
+    public void WaitForHidden(string automationId, TimeSpan timeout)
     {
+        var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                var visible = locators.Any(locator => FindVisible(locator).Any());
+                var visible = FindVisible(locator).Any();
                 if (!visible)
                 {
                     return;
@@ -169,50 +105,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             }
             Thread.Sleep(200);
         }
-        throw new WebDriverTimeoutException($"Element matching {string.Join(", ", locators)} stayed visible for {timeout.TotalSeconds} seconds.");
-    }
-
-    /// <summary>
-    /// Taps a toggle control to dismiss a surface, then proves the surface's
-    /// content left the tree before returning. A coordinate tap can land while
-    /// the app is mid-relayout and never reach the control — or a double-
-    /// delivered touch can toggle the surface back open — leaving it presented
-    /// to cover the elements a later visible==1 wait expects (#3737). A
-    /// still-visible content marker retries the tap; the dead-session
-    /// classifier keeps a crashed driver from being retapped. Every marker is
-    /// checked because a surface can render different content in different
-    /// states — an open perushim sheet always shows the checkbox rows or the
-    /// empty state, and either one visible means the tap missed.
-    /// </summary>
-    public void TapToDismiss(string toggleAutomationId, params string[] contentAutomationIds) =>
-        TapToDismiss(toggleAutomationId, TimeSpan.FromSeconds(5), contentAutomationIds);
-
-    /// <inheritdoc cref="TapToDismiss(string, string[])"/>
-    /// <param name="hiddenTimeout">Per-attempt window for every content marker
-    /// to disappear — a single deadline shared across the markers, not a
-    /// fresh window each. Short on purpose: a tap that reached the toggle
-    /// hides the surface inside its own ~250ms animation, so seconds of
-    /// still-visible content already prove the gesture missed and bound the
-    /// retry.</param>
-    public void TapToDismiss(string toggleAutomationId, TimeSpan hiddenTimeout, params string[] contentAutomationIds)
-    {
-        // WaitForHidden only times out after a full window of still-visible
-        // polls, so a retap cannot reopen a surface that already closed.
-        var locators = contentAutomationIds.Select(platform.AutomationId).ToArray();
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            Tap(toggleAutomationId);
-            try
-            {
-                WaitForHidden(locators, hiddenTimeout);
-                return;
-            }
-            catch (WebDriverTimeoutException exception)
-                when (!DeviceSessionDeath.Matches(exception) && attempt < 3)
-            {
-                // A marker still renders — the toggle gesture never landed.
-            }
-        }
+        throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
     }
 
     /// <summary>
@@ -268,6 +161,81 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public void Tap(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
         Tap(platform.AutomationId(automationId), element => condition(element) && platform.CanTap(element), timeout);
 
+    public void DismissPerushimSheet() => DismissPerushimSheet(TimeSpan.FromSeconds(5));
+
+    internal void DismissPerushimSheet(TimeSpan hiddenTimeout)
+    {
+        By[] markers =
+        [
+            platform.AutomationId("PerushimContentViewport"),
+            platform.AutomationId("PerushCheckBox"),
+            platform.AutomationId("PerushimEmptyState")
+        ];
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        // A row tap may have hit the chevron. Allow the 250ms closing
+        // animation to finish before deciding that the sheet needs a tap.
+        if (WaitForDetached(markers, RemainingTime(TimeSpan.FromMilliseconds(350))))
+        {
+            return;
+        }
+        for (var taps = 0; taps < 3 && DateTime.UtcNow < deadline; taps++)
+        {
+            Tap("PerushimChevronButton", _ => true, RemainingTime(TimeSpan.FromSeconds(10)));
+            if (WaitForDetached(markers, RemainingTime(hiddenTimeout)))
+            {
+                return;
+            }
+        }
+        throw new WebDriverTimeoutException("The perushim sheet remained attached after dismissal.");
+
+        TimeSpan RemainingTime(TimeSpan maximum)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            return remaining < maximum ? remaining : maximum;
+        }
+    }
+
+    private bool WaitForDetached(IReadOnlyList<By> locators, TimeSpan timeout)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return false;
+        }
+        var deadline = DateTime.UtcNow.Add(timeout);
+        Exception? observationError = null;
+        while (true)
+        {
+            try
+            {
+                if (!locators.Any(IsPresent))
+                {
+                    return true;
+                }
+                observationError = null;
+            }
+            catch (StaleElementReferenceException exception)
+            {
+                observationError = exception;
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                observationError = exception;
+            }
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+            Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(200, remaining.TotalMilliseconds)));
+        }
+        if (observationError != null)
+        {
+            // An inconclusive poll cannot authorize another toggle.
+            throw new InvalidOperationException("Could not verify that the perushim sheet was dismissed.", observationError);
+        }
+        return false;
+    }
+
     public void Tap(By locator) => Tap(locator, platform.CanTap, TimeSpan.FromSeconds(45));
 
     private void Tap(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
@@ -322,11 +290,38 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// report it not visible for the same reason (#3735).
     /// </summary>
     public void WaitForPresent(string automationId) =>
-        WaitForAttached(automationId);
+        WaitForPresent(automationId, TimeSpan.FromSeconds(45));
 
     /// <inheritdoc cref="WaitForPresent(string)"/>
-    public void WaitForPresent(string automationId, TimeSpan timeout) =>
-        WaitForAttached(automationId, timeout);
+    public void WaitForPresent(string automationId, TimeSpan timeout)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                if (IsPresent(locator))
+                {
+                    return;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // A snapshot can reference a node the page just recycled.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout can retry within this deadline.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"No element matching {locator} appeared in the accessibility tree within {timeout.TotalSeconds} seconds.");
+    }
+
+    private bool IsPresent(By locator) => driver is IosSnapshotDriver snapshots
+        ? snapshots.FindSnapshots(locator).Count != 0
+        : driver.FindElements(locator).Count != 0;
 
     /// <summary>
     /// Scrolls the page's own scroll surface down until the element's center is

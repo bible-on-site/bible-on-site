@@ -43,9 +43,9 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // accessible element for its whole laid-out height, so the first block's
         // center can sit a few points below the viewport — invisible to every
         // center-in-viewport wait while its top edge is already on screen, and
-        // the still-closing perushim sheet can cover it — so visible == 1
-        // starves while every label the asserts below read is already mounted
-        // in the tree (#3735, #3737).
+        // taller-than-viewport elements can never satisfy that wait at all.
+        // The assertions below only need the sections present in the tree
+        // (#3735).
         Page.WaitForPresent("CommentaryTextSection");
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
@@ -167,30 +167,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         }
         Output.WriteLine($"Checked {tapped.Count} synthetic perushim.");
 
-        // A row tap that landed inside the bottom chrome may already have
-        // toggled the sheet closed — a second blind tap would reopen it and
-        // the reader scroll below would pan the open sheet instead of the
-        // page (#3735). An open sheet always renders one of the markers —
-        // the content viewport, the checkbox rows or the empty state — so
-        // tap only while a marker still reports the panel open, and prove
-        // every marker left the accessibility tree instead of trusting the
-        // gesture (#3737).
-        for (var attempt = 0; attempt < 4; attempt++)
-        {
-            try
-            {
-                Page.WaitForHidden(TimeSpan.FromSeconds(5),
-                    "PerushimContentViewport", "PerushCheckBox", "PerushimEmptyState");
-                break;
-            }
-            catch (OpenQA.Selenium.WebDriverTimeoutException exception)
-                when (attempt < 3 && !DeviceSessionDeath.Matches(exception))
-            {
-                // The chevron is static bottom chrome — cap each tap's own
-                // wait instead of spending the default 45-second budget.
-                Page.Tap("PerushimChevronButton", _ => true, TimeSpan.FromSeconds(10));
-            }
-        }
+        Page.DismissPerushimSheet();
         return tapped.Count;
     }
 }

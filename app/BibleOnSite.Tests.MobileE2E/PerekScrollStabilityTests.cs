@@ -105,22 +105,7 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
                 Output.WriteLine("The rendered perush checkbox never became tappable; scrolling without it.");
             }
         }
-        // A checkbox tap that landed inside the bottom chrome may already
-        // have toggled the sheet closed — a blind close tap would reopen it
-        // (#3735). An open sheet always renders one of the markers — its
-        // content viewport, checkboxes when the perek has perushim, or the
-        // empty state when it does not — so prove every marker left the tree
-        // first; a still-open panel closes through TapToDismiss's retap and
-        // verification (#3737).
-        try
-        {
-            Page.WaitForHidden(TimeSpan.FromSeconds(5),
-                "PerushimContentViewport", "PerushCheckBox", "PerushimEmptyState");
-        }
-        catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
-        {
-            Page.TapToDismiss("PerushimChevronButton", "PerushCheckBox", "PerushimEmptyState");
-        }
+        Page.DismissPerushimSheet();
     }
 
     internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)
