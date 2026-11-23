@@ -224,7 +224,9 @@ public class RecitationPacksProgressTests : IAsyncDisposable
     public async Task ApplyBookProgress_WithoutSizedPacks_LeavesTheRowsAlone()
     {
         // A report whose scope matches no catalogued pack has a zero total —
-        // the guard returns instead of dividing by nothing (#3705).
+        // the guard returns instead of dividing by nothing (#3705). Catalog
+        // validation rejects non-positive sizes, so an unsized total can only
+        // come from an empty match.
         PublishRecitation((1, 1, "genesis"u8.ToArray()));
         await _recitation.InitializeAsync();
         var active = AddRow("בראשית", 1);
