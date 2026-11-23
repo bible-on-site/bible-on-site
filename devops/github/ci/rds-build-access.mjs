@@ -263,8 +263,14 @@ function buildRepository(env) {
 	return repository;
 }
 
+const positiveId = (value) =>
+	typeof value === "string" &&
+	value.length > 0 &&
+	value[0] !== "0" &&
+	[...value].every((char) => char >= "0" && char <= "9");
+
 function buildAttempt(run, attempt) {
-	if (!/^[1-9]\d*$/.test(run ?? "") || !/^[1-9]\d*$/.test(attempt ?? ""))
+	if (!positiveId(run) || !positiveId(attempt))
 		throw new Error("Invalid completed build identity");
 	return { run, attempt };
 }
