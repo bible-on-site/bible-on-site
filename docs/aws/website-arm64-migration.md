@@ -74,9 +74,11 @@ index.
    until the replacement is ready and Cloud Map discovery has propagated.
 4. Preserve CPU, memory, health checks, stop timeout, roles, secret mappings,
    and networking. For each task definition deployed during the handover,
-   verify the replacement's digest, architecture, readiness, Cloud Map
-   registration, and public routes. After the replacement passes, release only
-   the outgoing task protection owned by this handover so ECS can retire it.
+   verify the replacement's digest, architecture, readiness, and Cloud Map
+   registration. Use the nginx release-probe log's upstream address to
+   attribute passing public health, readiness, and recitation probes to the
+   replacement task. After the replacement passes, release only outgoing
+   task protection owned by this handover so ECS can retire the old task.
    Wait for steady state and verify the running digest, discovery, and public
    routes again.
 5. Before releasing the queue lock, verify that `bible-on-site:latest` selects
