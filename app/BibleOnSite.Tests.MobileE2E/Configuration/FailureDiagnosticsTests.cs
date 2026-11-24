@@ -193,6 +193,31 @@ public sealed class FailureDiagnosticsTests : IDisposable
         Assert.Contains(_log, line => line.Contains("handshake failed"));
     }
 
+    [Fact]
+    public void SkippedScenarioCompletesAsPassedWithoutAFailureRequest()
+    {
+        var artifacts = Path.Join(_directory, "artifacts");
+        Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, _directory);
+        Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, "1");
+        var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(artifacts));
+        // Assert.Throws cannot intercept a skip — it propagates to the
+        // runner — so catch it directly.
+        var skipped = false;
+        try
+        {
+            scenario.Execute(() => Assert.Skip("density cannot overshoot"));
+        }
+        catch (Xunit.Sdk.SkipException)
+        {
+            skipped = true;
+        }
+        Assert.True(skipped);
+        Assert.Empty(Directory.GetFiles(_directory, "*.request.json"));
+        Assert.Single(Directory.GetFiles(Path.Join(artifacts, "coverage-evidence"), "*-passed.json"));
+        Assert.Single(Directory.GetFiles(artifacts, "*-passed-diagnostics-error.txt"));
+        Assert.DoesNotContain(_log, line => line.Contains("handshake"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
