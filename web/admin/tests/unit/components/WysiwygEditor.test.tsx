@@ -444,6 +444,17 @@ describe("WysiwygEditor", () => {
 		// The baseline is now the saved content: a later flush is a no-op.
 		act(() => ref.current?.flush());
 		expect(onChange).not.toHaveBeenCalled();
+
+		// Flushing an edit that matches the baseline stays silent.
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		act(() => ref.current?.flush());
+		expect(onChange).not.toHaveBeenCalled();
+
+		// A reset with no armed timer just re-anchors on the same baseline.
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+		expect(onChange).not.toHaveBeenCalled();
 	});
 
 	it("syncs changed content props back into TipTap", () => {

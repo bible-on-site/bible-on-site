@@ -7,7 +7,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
-import { useEffect } from "react";
+import { StrictMode, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
@@ -339,6 +339,86 @@ describe("ArticleEditPage", () => {
 				data: expect.objectContaining({ name: "שם חדש" }),
 			}),
 		);
+	});
+
+	it("skips the auto-save when the name is blank", async () => {
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+		fireEvent.change(screen.getByLabelText(/שם המאמר/), {
+			target: { value: "" },
+		});
+
+		act(() => server.editorOnChange?.("<p>עריכה</p>"));
+
+		// Past the debounce: a blank name must not reach the server.
+		await new Promise((resolve) => setTimeout(resolve, 2500));
+		expect(server.updateArticle).not.toHaveBeenCalled();
+	});
+
+	it("creates a new article then routes follow-up saves to its id", async () => {
+		server.params.id = "new";
+		server.createArticle.mockResolvedValue({ ...article, id: 42 });
+		server.updateArticle.mockResolvedValue({ ...article, id: 42 });
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+		fireEvent.change(screen.getByLabelText(/שם המאמר/), {
+			target: { value: "מאמר חדש" },
+		});
+
+		act(() => server.editorOnChange?.("<p>גרסה ראשונה</p>"));
+		await waitFor(
+			() => expect(server.createArticle).toHaveBeenCalled(),
+			{ timeout: 4000 },
+		);
+		expect(server.navigate).toHaveBeenCalled();
+
+		// The next auto-save must update the persisted article, not re-create.
+		act(() => server.editorOnChange?.("<p>גרסה שנייה</p>"));
+		await waitFor(
+			() =>
+				expect(server.updateArticle).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						id: 42,
+						content: "<p>גרסה שנייה</p>",
+					}),
+				}),
+			{ timeout: 4000 },
+		);
+	});
+
+	it("renders an article with no stored content", async () => {
+		server.getArticle.mockResolvedValue({ ...article, content: null });
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+	});
+
+	it("skips the deferred save while a StrictMode remount is in flight", async () => {
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const { component: Page } = Route as unknown as {
+			component: () => React.ReactElement;
+		};
+		render(
+			<StrictMode>
+				<QueryClientProvider client={client}>
+					<Page />
+				</QueryClientProvider>
+			</StrictMode>,
+		);
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+
+		// The deferred teardown save fires while mountedRef is true again.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(server.updateArticle).not.toHaveBeenCalled();
 	});
 
 	it("does not save on unmount when nothing changed", async () => {
