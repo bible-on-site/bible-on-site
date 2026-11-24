@@ -1,7 +1,14 @@
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import DOMPurify from "dompurify";
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent, Ref } from "react";
+import {
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { createAdminEditorExtensions } from "./editor/adminEditorExtensions";
 import { ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY } from "./editor/adminEditorShortcuts";
 import {
@@ -60,6 +67,15 @@ interface WysiwygEditorProps {
 	autoSaveDelay?: number;
 	/** Enables the searchable entry list for internal links. */
 	searchEntries?: EntrySearch;
+	/** Imperative handle for callers that need the latest content immediately. */
+	ref?: Ref<WysiwygEditorHandle>;
+}
+
+export interface WysiwygEditorHandle {
+	/** Delivers any debounce-pending editor content to onChange now. */
+	flush: () => void;
+	/** Drops every pending edit and re-anchors on html, without onChange. */
+	reset: (html: string) => void;
 }
 
 export function WysiwygEditor({
@@ -68,9 +84,11 @@ export function WysiwygEditor({
 	placeholder = "הכנס תוכן...",
 	autoSaveDelay = 2000,
 	searchEntries,
+	ref,
 }: WysiwygEditorProps) {
 	const lastSavedContent = useRef(content);
 	const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const pendingEditorRef = useRef<Editor | null>(null);
 	const [mode, setMode] = useState<EditorMode>("visual");
 	const [previewHtml, setPreviewHtml] = useState(content);
 	const [sourceDraft, setSourceDraft] = useState(content);
@@ -95,18 +113,62 @@ export function WysiwygEditor({
 		[placeholder],
 	);
 
+	const flushEditorHtml = useCallback(
+		(ed: Editor) => {
+			const html = toStoredFootnoteHtml(ed.getHTML());
+			if (html !== lastSavedContent.current) {
+				lastSavedContent.current = html;
+				onChange(html);
+			}
+		},
+		[onChange],
+	);
+
+	const flushPendingChanges = useCallback(() => {
+		const ed = pendingEditorRef.current;
+		pendingEditorRef.current = null;
+		if (saveTimeoutRef.current) {
+			clearTimeout(saveTimeoutRef.current);
+			saveTimeoutRef.current = null;
+		}
+		/* Source-mode edits sit in sourceDraft and only reach the editor on a
+		   mode switch — deliver the draft itself. */
+		if (mode === "source") {
+			const stored = toStoredFootnoteHtml(sourceDraft);
+			if (stored !== lastSavedContent.current) {
+				lastSavedContent.current = stored;
+				onChange(stored);
+			}
+			return;
+		}
+		if (!ed) return;
+		flushEditorHtml(ed);
+	}, [flushEditorHtml, mode, onChange, sourceDraft]);
+
+	/* Declared before useEditor: unmount cleanups run in declaration order, so
+	   this flush still sees the editor before Tiptap destroys it — navigating
+	   away inside the debounce window no longer drops the last edit. Kept
+	   dependency-free via a ref: sourceDraft changes recreate
+	   flushPendingChanges on every source-mode keystroke, and a deps array
+	   would re-run this cleanup mid-life, flushing stale drafts back into
+	   the form on each keystroke. */
+	const flushRef = useRef(flushPendingChanges);
+	flushRef.current = flushPendingChanges;
+	useEffect(() => {
+		return () => flushRef.current();
+	}, []);
+
 	const editor = useEditor(
 		{
 			extensions,
 			content: toEditorFootnoteHtml(content),
 			onUpdate: ({ editor: ed }: { editor: Editor }) => {
 				if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+				pendingEditorRef.current = ed;
 				saveTimeoutRef.current = setTimeout(() => {
-					const html = toStoredFootnoteHtml(ed.getHTML());
-					if (html !== lastSavedContent.current) {
-						lastSavedContent.current = html;
-						onChange(html);
-					}
+					saveTimeoutRef.current = null;
+					pendingEditorRef.current = null;
+					flushEditorHtml(ed);
 				}, autoSaveDelay);
 			},
 			editorProps: {
@@ -117,6 +179,29 @@ export function WysiwygEditor({
 			},
 		},
 		[extensions, shortcutReloadKey],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			flush: flushPendingChanges,
+			reset: (html: string) => {
+				/* Covers a revert that leaves the content prop unchanged
+				   (e.g. title-only): pending visual edits would otherwise
+				   stay visible and never be delivered or dropped. */
+				if (editor) editor.commands.setContent(toEditorFootnoteHtml(html));
+				pendingEditorRef.current = null;
+				if (saveTimeoutRef.current) {
+					clearTimeout(saveTimeoutRef.current);
+					saveTimeoutRef.current = null;
+				}
+				const stored = toStoredFootnoteHtml(html);
+				lastSavedContent.current = stored;
+				setPreviewHtml(stored);
+				setSourceDraft(stored);
+			},
+		}),
+		[editor, flushPendingChanges],
 	);
 
 	const syncLinkPanelFromEditor = useCallback(() => {
@@ -159,12 +244,6 @@ export function WysiwygEditor({
 		setPreviewHtml(normalized);
 	}, [content, editor]);
 
-	useEffect(() => {
-		return () => {
-			if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-		};
-	}, []);
-
 	const flushSourceToEditor = useCallback(() => {
 		if (!editor) return;
 		editor.commands.setContent(toEditorFootnoteHtml(sourceDraft));
@@ -181,6 +260,14 @@ export function WysiwygEditor({
 				flushSourceToEditor();
 			}
 			if (next === "source" && editor) {
+				/* The editor's current HTML already carries the pending debounced
+				   edits — seed the draft with it and cancel the visual timer so
+				   it cannot later flush a stale snapshot over newer HTML edits. */
+				if (saveTimeoutRef.current) {
+					clearTimeout(saveTimeoutRef.current);
+					saveTimeoutRef.current = null;
+				}
+				pendingEditorRef.current = null;
 				setSourceDraft(editor.getHTML());
 			}
 			if (next === "preview" && editor) {
