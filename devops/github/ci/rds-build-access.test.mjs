@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
 	cleanupAccess,
 	cleanupCompletedBuild,
+	cleanupCompletedBuilds,
 	completedBuildRun,
 	databaseHost,
 	grantAccess,
@@ -1006,4 +1007,264 @@ test("privileged completion cleanup checks trusted default-branch code before AW
 	assert.doesNotMatch(workflow, /download-artifact|workflow_run\.head_sha/);
 	assert.match(workflow, /actions: read/);
 	assert.match(workflow, /cancel-in-progress: false/);
+	// Every completion shares one serialized sweep, never a per-run backlog.
+	assert.match(
+		workflow,
+		/group: \$\{\{ github\.repository \}\}-rds-cleanup\b/,
+	);
+	assert.doesNotMatch(workflow, /queue: max/);
+	assert.match(workflow, /rds-build-access\.mjs cleanup-all/);
+	// A lone run_id or run_attempt is rejected instead of guessed at.
+	assert.match(
+		workflow,
+		/\(inputs\.run_id == ''\) != \(inputs\.run_attempt == ''\)/,
+	);
+});
+
+async function sweepFixture(t, builds = {}) {
+	const f = await fixture(t);
+	f.env.GITHUB_REPOSITORY = "example/project";
+	const source = "a".repeat(40);
+	const database = {
+		DBInstances: [
+			{
+				DBInstanceIdentifier: "tanah-mysql",
+				DBInstanceArn:
+					"arn:aws:rds:il-central-1:123456789012:db:tanah-mysql",
+				VpcSecurityGroups: [
+					{ Status: "active", VpcSecurityGroupId: "sg-12345678" },
+				],
+			},
+		],
+	};
+	const rules = [];
+	const githubCalls = [];
+	for (const [key, build] of Object.entries(builds)) {
+		const [run, attempt] = key.split("/");
+		for (let i = 0; i < (build.ruleCount ?? 1); i++) {
+			const rule = f.rule();
+			rule.GroupId = "sg-12345678";
+			rule.SecurityGroupRuleId = `sgr-${String(rules.length).padStart(17, "0")}`;
+			rule.Tags = [
+				...rule.Tags.filter(
+					({ Key }) =>
+						!["RunId", "RunAttempt", "BuildLease"].includes(Key),
+				),
+				{ Key: "RunId", Value: run },
+				{ Key: "RunAttempt", Value: attempt },
+				{ Key: "BuildLease", Value: `${nonce.slice(0, -1)}${i}` },
+			];
+			rules.push(rule);
+		}
+		build.metadata ??= {
+			id: Number(run),
+			run_attempt: Number(attempt),
+			head_sha: source,
+			name: "Continuous Integration",
+			path: ".github/workflows/ci.yml",
+			repository: { full_name: "example/project" },
+			head_repository: { full_name: "example/project" },
+			status: "completed",
+			conclusion: "failure",
+		};
+		build.jobs ??= [
+			{
+				id: 11,
+				run_id: Number(run),
+				run_attempt: Number(attempt),
+				head_sha: source,
+				name: "Package Website / Package",
+				status: "completed",
+				conclusion: "success",
+			},
+		];
+	}
+	const awsCalls = [];
+	const aws = async (args) => {
+		awsCalls.push(args.join(" "));
+		switch (args[1]) {
+			case "get-caller-identity":
+				return { Account: "123456789012" };
+			case "describe-db-instances":
+				return database;
+			case "revoke-security-group-ingress": {
+				const index = rules.findIndex(
+					(rule) => rule.SecurityGroupRuleId === args.at(-1),
+				);
+				assert.notStrictEqual(index, -1);
+				rules.splice(index, 1);
+				return { Return: true };
+			}
+			case "describe-security-group-rules": {
+				const joined = args.join(" ");
+				if (joined.includes("security-group-rule-id"))
+					return {
+						SecurityGroupRules: rules.filter(
+							(rule) =>
+								rule.SecurityGroupRuleId ===
+								args.at(-1).split("Values=")[1],
+						),
+					};
+				const token = args.indexOf("--next-token");
+				const page = token === -1 ? 0 : Number(args[token + 1]);
+				return {
+					SecurityGroupRules: rules.slice(page, page + 1),
+					NextToken: page + 1 < rules.length ? String(page + 1) : undefined,
+				};
+			}
+			default:
+				throw new Error(`Unexpected AWS command ${args[1]}`);
+		}
+	};
+	const github = async (path) => {
+		githubCalls.push(path);
+		const match = path.match(/actions\/runs\/(\d+)\/attempts\/(\d+)/);
+		assert.ok(match);
+		const build = builds[`${match[1]}/${match[2]}`];
+		assert.ok(build);
+		if (path.endsWith("/jobs?per_page=100&page=1"))
+			return { total_count: build.jobs.length, jobs: build.jobs };
+		return build.metadata;
+	};
+	return { env: f.env, rules, githubCalls, awsCalls, deps: { aws, github } };
+}
+
+test("sweep revokes every completed build's leases and skips an active attempt", async (t) => {
+	const { env, rules, githubCalls, deps } = await sweepFixture(t, {
+		"1234/2": {},
+		"5678/1": {
+			metadata: {
+				id: 5678,
+				run_attempt: 1,
+				head_sha: "a".repeat(40),
+				name: "Continuous Integration",
+				path: ".github/workflows/ci.yml",
+				repository: { full_name: "example/project" },
+				head_repository: { full_name: "example/project" },
+				status: "in_progress",
+				conclusion: null,
+			},
+		},
+	});
+	const result = await cleanupCompletedBuilds(env, deps);
+	assert.deepStrictEqual(result.removed, ["sgr-00000000000000000"]);
+	assert.strictEqual(result.skipped.length, 1);
+	assert.match(result.skipped[0], /^5678\/1:/);
+	assert.deepStrictEqual(result.orphaned, []);
+	assert.strictEqual(rules.length, 1);
+	assert.strictEqual(rules[0].SecurityGroupRuleId, "sgr-00000000000000001");
+	// Both builds were inspected; only the completed one's lease was revoked.
+	assert.deepStrictEqual(githubCalls.sort(), [
+		"repos/example/project/actions/runs/1234/attempts/2",
+		"repos/example/project/actions/runs/1234/attempts/2/jobs?per_page=100&page=1",
+		"repos/example/project/actions/runs/5678/attempts/1",
+	]);
+});
+
+test("sweep removes nothing and calls no APIs when no leases exist", async (t) => {
+	const { env, githubCalls, deps } = await sweepFixture(t);
+	assert.deepStrictEqual(await cleanupCompletedBuilds(env, deps), {
+		removed: [],
+		skipped: [],
+		orphaned: [],
+	});
+	assert.deepStrictEqual(githubCalls, []);
+});
+
+test("sweep reports rules it cannot attribute to a build", async (t) => {
+	const foreign = {
+		SecurityGroupRuleId: "sgr-foreign",
+		GroupId: "sg-12345678",
+		CidrIpv4: "9.9.9.9/32",
+		Tags: [
+			{ Key: "Source", Value: "github-actions-build" },
+			{ Key: "RunId", Value: "not-a-number" },
+			{ Key: "RunAttempt", Value: "1" },
+		],
+		IsEgress: false,
+		IpProtocol: "tcp",
+		FromPort: 3306,
+		ToPort: 3306,
+	};
+	const { env, rules, deps } = await sweepFixture(t, { "1234/2": {} });
+	rules.push(foreign);
+	const result = await cleanupCompletedBuilds(env, deps);
+	assert.deepStrictEqual(result.removed, ["sgr-00000000000000000"]);
+	assert.deepStrictEqual(result.orphaned, ["sgr-foreign"]);
+	assert.ok(rules.includes(foreign));
+});
+
+test("sweep fails closed on an ambiguous build's ownership", async (t) => {
+	const { env, rules, deps } = await sweepFixture(t, {
+		"1234/2": { ruleCount: 3 },
+		"9999/1": {},
+	});
+	// Three leases for one attempt exceed the website build bound; unlike a
+	// still-active attempt this is a verification failure, so the run fails
+	// instead of silently retrying forever.
+	await assert.rejects(
+		cleanupCompletedBuilds(env, deps),
+		/Ambiguous website build access ownership/,
+	);
+	assert.strictEqual(rules.length, 4);
+});
+
+test("sweep fails the run on a revoke error, like cleanup-run", async (t) => {
+	const { env, rules, deps } = await sweepFixture(t, { "1234/2": {} });
+	const aws = async (args) => {
+		if (args[1] === "revoke-security-group-ingress")
+			return { Return: false };
+		return deps.aws(args);
+	};
+	await assert.rejects(
+		cleanupCompletedBuilds(env, { ...deps, aws }),
+		/AWS did not confirm build access removal/,
+	);
+	assert.strictEqual(rules.length, 1);
+});
+
+test("sweep keeps a deleted run's access reported without aborting others", async (t) => {
+	const { env, rules, deps } = await sweepFixture(t, {
+		"1234/2": {},
+		"9999/1": {},
+	});
+	const github = async (path) => {
+		if (path.includes("/9999/")) throw new Error("gh: Not Found (HTTP 404)");
+		return deps.github(path);
+	};
+	const result = await cleanupCompletedBuilds(env, { ...deps, github });
+	assert.deepStrictEqual(result.removed, ["sgr-00000000000000000"]);
+	assert.strictEqual(result.skipped.length, 1);
+	assert.match(result.skipped[0], /9999\/1: .*no longer recorded/);
+	assert.strictEqual(rules.length, 1);
+	assert.strictEqual(rules[0].SecurityGroupRuleId, "sgr-00000000000000001");
+});
+
+test("sweep keeps cleaning other builds when a lease's run was deleted", async (t) => {
+	const { env, rules, deps } = await sweepFixture(t, {
+		// Deleted attempt first, so the test proves builds listed after it
+		// are still revoked.
+		"9999/1": {},
+		"1234/2": {},
+	});
+	const github = async (path) => {
+		if (path.includes("/9999/")) throw new Error("gh: Not Found (HTTP 404)");
+		return deps.github(path);
+	};
+	const result = await cleanupCompletedBuilds(env, { ...deps, github });
+	assert.deepStrictEqual(result.removed, ["sgr-00000000000000001"]);
+	assert.deepStrictEqual(result.skipped.length, 1);
+	assert.match(result.skipped[0], /^9999\/1:/);
+	assert.strictEqual(rules.length, 1);
+	assert.strictEqual(rules[0].SecurityGroupRuleId, "sgr-00000000000000000");
+});
+
+test("sweep paginates the tagged rule inventory", async (t) => {
+	const { env, awsCalls, deps } = await sweepFixture(t, {
+		"1234/2": {},
+		"9999/1": {},
+	});
+	const result = await cleanupCompletedBuilds(env, deps);
+	assert.strictEqual(result.removed.length, 2);
+	assert.ok(awsCalls.some((args) => args.includes("--next-token")));
 });

@@ -252,19 +252,22 @@ The shared package job normally removes its temporary database ingress in an
 `always()` step. If its hosted runner disappears, that step cannot run.
 [`rds-build-access-cleanup.yml`](../../../../.github/workflows/rds-build-access-cleanup.yml)
 therefore also cleans access after CI completes, using trusted default-branch
-code and the existing deployment role. It verifies the exact repository,
-workflow, attempt and every completed job before using AWS credentials. It
-reads the actual `tanah-mysql` security groups, validates all matching leases,
-then rechecks each rule's ownership before revoking its exact ID and confirming
-absence. Only tagged website build leases for that completed attempt qualify;
-active attempts and other rules are preserved. No new IAM permission, database
-credential, service setting or public URL is needed.
+code and the existing deployment role. One serialized cleanup sweeps every
+tagged build lease on the `tanah-mysql` security groups: a newer completion
+supersedes the queued run without losing coverage, because each sweep revokes
+the leases of **all** completed attempts, not only its trigger's. It verifies
+the exact repository, workflow, attempt and every completed job of each owning
+build before using AWS credentials on its rules, then rechecks each rule's
+ownership before revoking its exact ID and confirming absence. Active attempts
+and foreign rules are preserved. No new IAM permission, database credential,
+service setting or public URL is needed.
 
 For an older completed run, manually dispatch **Clean completed CI database
-access** with its exact `run_id` and `run_attempt`. Repeating a completed cleanup
-is harmless. Incomplete metadata or changed ownership fails the job without
-guessing. Reverting the cleanup workflow disables independent recovery while
-retaining the package job's ordinary cleanup.
+access** with its exact `run_id` and `run_attempt` — or leave both empty to
+sweep every stale lease. Repeating a completed cleanup is harmless. Incomplete
+metadata or changed ownership fails the job without guessing. Reverting the
+cleanup workflow disables independent recovery while retaining the package
+job's ordinary cleanup.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
