@@ -161,11 +161,16 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         try
         {
             body();
-            WriteDriverTelemetry();
-            CoverageEvidence.RecordSession(Driver?.SessionId);
-            CoverageEvidence.Finish("passed");
-            CollectAppCoverage(test, "passed");
-            SaveDiagnostics(test, "passed");
+            CompletePassed(test);
+        }
+        catch (Xunit.Sdk.SkipException)
+        {
+            // A skip is a completed attempt, not a failure: its coverage
+            // evidence still counts toward the planned shard union, and there
+            // is no failed app for the supervisor to sample — the failure
+            // handshake does not run.
+            CompletePassed(test);
+            throw;
         }
         catch
         {
@@ -180,6 +185,15 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(test, "failed"), Output.WriteLine);
             throw;
         }
+    }
+
+    private void CompletePassed(string test)
+    {
+        WriteDriverTelemetry();
+        CoverageEvidence.RecordSession(Driver?.SessionId);
+        CoverageEvidence.Finish("passed");
+        CollectAppCoverage(test, "passed");
+        SaveDiagnostics(test, "passed");
     }
 
     private void WriteDriverTelemetry()

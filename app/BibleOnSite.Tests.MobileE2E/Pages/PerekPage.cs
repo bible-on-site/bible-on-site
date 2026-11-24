@@ -335,40 +335,74 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         : driver.FindElements(locator).Count != 0;
 
     /// <summary>
-    /// Scrolls the page's own scroll surface down until the element's center is
+    /// Scrolls the page's own scroll surface until the element's center is
     /// inside the viewport. Deep settings sections (e.g. הסתר שם השם under
     /// תצוגה preferences) never render on a short viewport, so a plain WaitFor
     /// cannot reach them.
     /// </summary>
     public AppiumElement ScrollToVisible(string automationId)
-        => ScrollToVisible(automationId, () => platform.ScrollPageDown(driver));
+        => ScrollToVisible(automationId, down =>
+        {
+            if (down)
+            {
+                platform.ScrollPageDown(driver);
+            }
+            else
+            {
+                platform.ScrollPageUp(driver);
+            }
+        });
 
     public AppiumElement ScrollFlyoutTo(string automationId)
     {
-        var drawer = WaitForObservation("FlyoutScrollView",
-            element => new Rectangle(element.Location, element.Size));
-        var viewport = Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
-        return ScrollToVisible(automationId, () =>
-        {
-            // Start inside the RTL drawer so the underlying reader cannot receive the drag.
-            var x = viewport.Left + viewport.Width / 2;
-            var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
-            var gesture = new ActionSequence(finger, 0);
-            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
-                x, viewport.Top + viewport.Height * 4 / 5, TimeSpan.Zero));
-            gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
-            gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
-                x, viewport.Top + viewport.Height / 5, TimeSpan.FromMilliseconds(350)));
-            gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
-            driver.PerformActions([gesture]);
-        }, element => viewport.Contains(element.Location.X + element.Size.Width / 2,
-            element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
+        var viewport = FlyoutViewport();
+        return ScrollToVisible(automationId, down => DragFlyout(viewport, down),
+            element => viewport.Contains(element.Location.X + element.Size.Width / 2,
+                element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
     }
 
-    private AppiumElement ScrollToVisible(string automationId, Action scrollDown, Func<AppiumElement, bool>? condition = null)
+    /// <summary>
+    /// One drawer drag on <see cref="ScrollFlyoutTo"/>'s surface. Tests drive
+    /// it to force an overshot drawer item.
+    /// </summary>
+    public void DragFlyoutSurface(bool down) => DragFlyout(FlyoutViewport(), down);
+
+    private Rectangle FlyoutViewport()
+    {
+        Rectangle drawer = default;
+        // Read the frame inside the poll: a replaced drawer view throws
+        // StaleElementReference on the read, which WaitFor retries.
+        WaitFor(platform.FlyoutScroller, element =>
+        {
+            drawer = new Rectangle(element.Location, element.Size);
+            return true;
+        });
+        return Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
+    }
+
+    private void DragFlyout(Rectangle viewport, bool down)
+    {
+        // Start inside the RTL drawer so the underlying reader cannot receive the drag.
+        var x = viewport.Left + viewport.Width / 2;
+        var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
+        var gesture = new ActionSequence(finger, 0);
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height * 4 / 5 : viewport.Top + viewport.Height / 5,
+            TimeSpan.Zero));
+        gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height / 5 : viewport.Top + viewport.Height * 4 / 5,
+            TimeSpan.FromMilliseconds(350)));
+        gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([gesture]);
+    }
+
+    private AppiumElement ScrollToVisible(string automationId, Action<bool> scroll, Func<AppiumElement, bool>? condition = null)
     {
         var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.AddSeconds(45);
+        var scrollingDown = true;
+        string? lastSurface = null;
         for (var attempt = 0; attempt < 12 && DateTime.UtcNow < deadline; attempt++)
         {
             try
@@ -378,7 +412,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 {
                     return visible.Element;
                 }
-                scrollDown();
+                var surface = driver.PageSource;
+                scrollingDown = SeekScrollsDown(scrollingDown, lastSurface, surface);
+                lastSurface = surface;
+                scroll(scrollingDown);
             }
             catch (StaleElementReferenceException)
             {
@@ -394,8 +431,17 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             return found.Element;
         }
-        throw new WebDriverTimeoutException($"Scrolling the page down never revealed a visible element matching {locator} within 45 seconds.");
+        throw new WebDriverTimeoutException($"Scrolling the page never revealed a visible element matching {locator} within 45 seconds.");
     }
+
+    // A single scroll step can carry the target across the viewport — the
+    // injected drag releases with fling inertia — and a fully offscreen node
+    // is absent from the source tree, so a downward-only seek never recovers
+    // an overshot element (#3746's merge-queue ejection). A scroll that
+    // leaves the page untouched reached its edge, so the sweep reverses
+    // there.
+    internal static bool SeekScrollsDown(bool scrollingDown, string? previousSurface, string surface) =>
+        surface == previousSurface ? !scrollingDown : scrollingDown;
 
     /// <summary>
     /// A long commentary hit can land several screens below its heading. Scroll
