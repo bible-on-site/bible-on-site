@@ -691,26 +691,41 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void ScrollPageUp(AppiumDriver driver) => ScrollPage(driver, "up");
 
     /// <summary>
-    /// A direction-scroll on the Application element never reaches an inner
-    /// MauiScrollView — WDA scrolls the app's top container, which does not
-    /// move, so the gesture is a silent no-op on pages like display
-    /// preferences. Scrolling the page's tallest scrollable itself moves the
-    /// content reliably; the reader's pasuk list is a CollectionView, so
-    /// scroll, collection and table surfaces all qualify, and the tallest
-    /// wins over horizontal chip strips.
+    /// `mobile: scroll` is a silent no-op on this app's surfaces: unscoped it
+    /// acts on the Application container, and scoped to the ScrollView itself
+    /// WDA's accessibility scroll still never moves a MauiScrollView (the
+    /// target's rect is byte-identical before and after). A real pointer drag
+    /// through PerformActions reaches it reliably — the same mechanism the
+    /// edge swipe and flyout drags use. The page's tallest scrollable owns the
+    /// gesture: the reader's pasuk list is a CollectionView, so scroll,
+    /// collection and table surfaces all qualify, and the tallest wins over
+    /// horizontal chip strips. The pointer pauses at rest before release so
+    /// the drop reads as a stop, not a fling that keeps the surface drifting.
     /// </summary>
     private static void ScrollPage(AppiumDriver driver, string direction)
     {
-        var scroll = new Dictionary<string, object> { ["direction"] = direction };
+        var down = direction == "down";
         var surface = driver.FindElements(By.XPath(
             "//XCUIElementTypeScrollView | //XCUIElementTypeCollectionView | //XCUIElementTypeTable"))
             .OrderByDescending(e => e.Rect.Height)
             .FirstOrDefault();
-        if (surface != null)
-        {
-            scroll["elementId"] = surface.Id;
-        }
-        driver.ExecuteScript("mobile: scroll", scroll);
+        var band = PageGestureBand(DriverTelemetry.WindowSize(driver));
+        var bounds = surface == null
+            ? band
+            : System.Drawing.Rectangle.Intersect(band, surface.Rect);
+        var x = bounds.Left + bounds.Width / 2;
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? bounds.Bottom - bounds.Height / 5 : bounds.Top + bounds.Height / 5,
+            TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? bounds.Top + bounds.Height / 5 : bounds.Bottom - bounds.Height / 5,
+            TimeSpan.FromMilliseconds(350)));
+        sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(300)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([sequence]);
     }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
