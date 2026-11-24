@@ -1438,6 +1438,27 @@ describe("EntryEditPage", () => {
 			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
+		it("reverts a new entry's uncommitted edits on בטל שינויים", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "כותרת זמנית" },
+			});
+
+			fireEvent.click(screen.getByRole("button", { name: "בטל שינויים" }));
+			fireEvent.click(
+				within(await screen.findByRole("dialog")).getByRole("button", {
+					name: "בטל שינויים",
+				}),
+			);
+
+			// A new entry has no server content — reset re-anchors on blank.
+			expect(resetCalls).toEqual([""]);
+			expect(updateEntryMock).not.toHaveBeenCalled();
+		});
+
 		it("keeps the edits when the revert dialog is cancelled", async () => {
 			renderPage();
 			await screen.findByTestId("wysiwyg-editor");

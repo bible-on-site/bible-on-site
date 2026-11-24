@@ -457,6 +457,24 @@ describe("WysiwygEditor", () => {
 		expect(onChange).not.toHaveBeenCalled();
 	});
 
+	it("resets state when the TipTap editor is gone", () => {
+		editorState.setUseEditorResult(null);
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+			/>,
+		);
+
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+		expect(onChange).not.toHaveBeenCalled();
+		expect(editorState.editor.commands.setContent).not.toHaveBeenCalled();
+	});
+
 	it("syncs changed content props back into TipTap", () => {
 		const onChange = vi.fn();
 		const { rerender } = renderEditor(onChange);
