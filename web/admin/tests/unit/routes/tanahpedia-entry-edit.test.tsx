@@ -1456,7 +1456,9 @@ describe("EntryEditPage", () => {
 
 			// A new entry has no server content — reset re-anchors on blank.
 			expect(resetCalls).toEqual([""]);
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("");
 			expect(updateEntryMock).not.toHaveBeenCalled();
+			expect(createEntryMock).not.toHaveBeenCalled();
 		});
 
 		it("keeps the edits when the revert dialog is cancelled", async () => {
