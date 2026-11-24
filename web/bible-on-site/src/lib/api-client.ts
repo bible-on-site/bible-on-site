@@ -4,33 +4,7 @@
  */
 
 import mysql, { type RowDataPacket } from "mysql2/promise";
-
-function decodeDbComponent(value: string): string {
-	try {
-		return decodeURIComponent(value);
-	} catch {
-		// Legacy connection strings can contain literal, malformed percent
-		// escapes. Keep those values intact instead of rejecting the config.
-		console.warn(
-			"Malformed database URL component; preserving its original value",
-		);
-		return value;
-	}
-}
-
-/**
- * Parse database URL in format: mysql://user:password@host:port/database
- */
-function parseDbUrl(url: string): mysql.PoolOptions {
-	const parsed = new URL(url);
-	return {
-		host: parsed.hostname,
-		port: Number.parseInt(parsed.port || "3306", 10),
-		user: decodeDbComponent(parsed.username),
-		password: decodeDbComponent(parsed.password),
-		database: decodeDbComponent(parsed.pathname.slice(1)), // Remove leading /
-	};
-}
+import { databaseTls, parseDbUrl } from "./db-config";
 
 // Database configuration from environment variables
 // Supports both DB_URL (connection string) and individual env vars.
@@ -42,12 +16,14 @@ function getDbConfig(): mysql.PoolOptions {
 	}
 	const defaultDb =
 		process.env.NODE_ENV === "development" ? "tanah-dev" : "tanah";
+	const host = process.env.DB_HOST || "127.0.0.1";
 	return {
-		host: process.env.DB_HOST || "127.0.0.1",
+		host,
 		port: Number.parseInt(process.env.DB_PORT || "3306", 10),
 		user: process.env.DB_USER || "root",
 		password: process.env.DB_PASSWORD || "",
 		database: process.env.DB_NAME || defaultDb,
+		ssl: databaseTls(host),
 	};
 }
 

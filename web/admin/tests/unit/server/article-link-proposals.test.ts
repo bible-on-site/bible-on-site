@@ -95,17 +95,16 @@ import {
 	reviewLinkProposal,
 } from "~/server/article-link-proposals";
 
-const HASH = "abcdef0123456789abcdef0123456789";
+const HASH = "1449cfc42f48d66ef7ba673d68555305";
 
 const articleRow = {
 	id: 7,
-	perek_id: 1,
-	author_id: 2,
+	perekId: 1,
+	authorId: 2,
 	name: "מאמר בדיקה",
 	abstract: null,
 	content: "<p>המאמר דן בבראשית יח, ב ובשמואל ב ה, ז.</p>",
 	coverage_verified: 1,
-	content_hash: HASH,
 };
 
 const perakimRows = [
@@ -147,12 +146,13 @@ function dispatchQuery(sql: string): unknown[] {
 				: []
 			: proposalRows;
 	if (sql.includes("tanah_article_link_checkpoint")) return [];
+	if (sql.includes("FROM tanah_article") && sql.includes("JSON_TABLE"))
+		return [articleRow];
 	if (sql.includes("FROM tanah_article WHERE id")) return [];
 	return [];
 }
 
 function dispatchQueryOne(sql: string): unknown {
-	if (sql.includes("AS h FROM tanah_article")) return { h: HASH };
 	if (sql.includes("FROM tanah_article WHERE id")) return articleRow;
 	if (sql.includes("tanah_article_link_checkpoint")) return null;
 	if (sql.includes("tanah_article_link_proposal")) return proposalRow;
@@ -216,7 +216,6 @@ function makeProposalRow(overrides: Record<string, unknown> = {}) {
 		applied_snapshot_json: null,
 		created_at: "2026-01-01 00:00:00",
 		updated_at: "2026-01-01 00:00:00",
-		live_hash: HASH,
 		...overrides,
 	};
 }
@@ -782,13 +781,14 @@ describe("article link proposals server", () => {
 	describe("listLinkProposals", () => {
 		it("maps rows and flags stale proposals", async () => {
 			proposalRows = [
-				makeProposalRow({ live_hash: "0".repeat(32) }),
+				makeProposalRow({ base_content_hash: "0".repeat(32) }),
 				makeProposalRow({ id: "prop-2", status: "pending" }),
 			];
 			const rows = await listLinkProposals({ data: {} });
 			expect(rows).toHaveLength(2);
 			expect(rows[0].staleNow).toBe(true);
 			expect(rows[1].staleNow).toBe(false);
+			expect(mocks.query.mock.calls[1][1]).toEqual(["[7]"]);
 		});
 
 		it("applies status/article/run filters and a bounded limit", async () => {
@@ -964,8 +964,8 @@ describe("article link proposals server", () => {
 				code: "ER_BAD_FIELD_ERROR",
 			});
 			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("HEX(content_hash)")) throw schemaErr;
 				if (sql.includes("0 AS coverage_verified")) return articleRow;
+				if (sql.includes("coverage_verified")) throw schemaErr;
 				return dispatchQueryOne(sql);
 			});
 			mocks.query.mockImplementation(async (sql: string) => {
@@ -987,43 +987,12 @@ describe("article link proposals server", () => {
 			expect(rows[0].target).toEqual({});
 		});
 
-		it("lists proposals when the article content-hash column is undeployed", async () => {
-			const schemaErr = Object.assign(
-				new Error("Unknown column 'a.content_hash'"),
-				{ code: "ER_BAD_FIELD_ERROR" },
-			);
-			proposalRows = [makeProposalRow({ live_hash: undefined })];
-			mocks.query.mockImplementation(async (sql: string) => {
-				if (sql.includes("HEX(a.content_hash)")) throw schemaErr;
-				return dispatchQuery(sql);
-			});
+		it("lists proposals that predate the review token", async () => {
+			proposalRows = [makeProposalRow({ base_content_hash: "" })];
 			const rows = await listLinkProposals({ data: {} });
 			expect(rows).toHaveLength(1);
 			expect(rows[0].staleNow).toBe(false);
-			expect(
-				mocks.query.mock.calls.some((c) =>
-					String(c[0]).includes("NULL AS live_hash"),
-				),
-			).toBe(true);
-		});
-
-		it("returns the detail view when the article content-hash column is undeployed", async () => {
-			const schemaErr = Object.assign(
-				new Error("Unknown column 'a.content_hash'"),
-				{ code: "ER_BAD_FIELD_ERROR" },
-			);
-			proposalRow = makeProposalRow();
-			mocks.query.mockImplementation(async (sql: string) => {
-				if (sql.includes("HEX(a.content_hash)")) throw schemaErr;
-				return dispatchQuery(sql);
-			});
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("AS h FROM tanah_article")) throw schemaErr;
-				return dispatchQueryOne(sql);
-			});
-			const detail = await getLinkProposal({ data: "prop-1" });
-			expect(detail?.proposal.id).toBe("prop-1");
-			expect(detail?.liveContentHash).toBe("");
+			expect(mocks.query).toHaveBeenCalledTimes(1);
 		});
 
 		it("rethrows non-schema errors from the proposal listing query", async () => {
@@ -1048,7 +1017,7 @@ describe("article link proposals server", () => {
 			}));
 			mocks.queryOne.mockImplementation(async (sql: string) => {
 				if (sql.includes("FROM tanah_article WHERE id"))
-					return { ...articleRow, perek_id: 999 };
+					return { ...articleRow, perekId: 999 };
 				return dispatchQueryOne(sql);
 			});
 			mocks.query.mockImplementation(async (sql: string) => {
@@ -1081,7 +1050,7 @@ describe("article link proposals server", () => {
 		it("maps nullable row fields to their empty defaults", async () => {
 			proposalRows = [
 				makeProposalRow({
-					live_hash: undefined,
+					base_content_hash: "",
 					confidence: "0.750",
 					reviewed_at: new Date("2026-02-02T10:00:00Z"),
 					created_at: null,
@@ -1130,40 +1099,6 @@ describe("article link proposals server", () => {
 			expect(result.outcomes[0].error).toBe("covering boom");
 		});
 
-		it("fails the article when its row vanishes between reads", async () => {
-			let articleReads = 0;
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (
-					sql.includes("coverage_verified") &&
-					sql.includes("FROM tanah_article")
-				) {
-					articleReads += 1;
-					return articleReads === 1 ? articleRow : null;
-				}
-				return dispatchQueryOne(sql);
-			});
-			const result = await generateLinkProposals({
-				data: { articleIds: [7] },
-			});
-			expect(result.outcomes[0].outcome).toBe("error");
-			expect(result.outcomes[0].error).toContain("לא נמצא");
-		});
-
-		it("treats a missing stored content hash as empty", async () => {
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (
-					sql.includes("coverage_verified") &&
-					sql.includes("FROM tanah_article")
-				)
-					return { ...articleRow, content_hash: null };
-				return dispatchQueryOne(sql);
-			});
-			const result = await generateLinkProposals({
-				data: { articleIds: [7] },
-			});
-			expect(result.outcomes[0].outcome).toBe("generated");
-		});
-
 		it("generates for an article without content", async () => {
 			mocks.queryOne.mockImplementation(async (sql: string) => {
 				if (
@@ -1179,33 +1114,10 @@ describe("article link proposals server", () => {
 			expect(result.outcomes[0].outcome).toBe("generated");
 		});
 
-		it("returns an empty live hash when the hash row is gone", async () => {
+		it("surfaces errors reading the current article", async () => {
 			proposalRow = makeProposalRow();
 			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("AS h FROM tanah_article")) return null;
-				return dispatchQueryOne(sql);
-			});
-			const detail = await getLinkProposal({ data: "prop-1" });
-			expect(detail?.liveContentHash).toBe("");
-		});
-
-		it("falls back to an empty live hash when the column is undeployed", async () => {
-			const schemaErr = Object.assign(new Error("bad column"), {
-				code: "ER_BAD_FIELD_ERROR",
-			});
-			proposalRow = makeProposalRow();
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("AS h FROM tanah_article")) throw schemaErr;
-				return dispatchQueryOne(sql);
-			});
-			const detail = await getLinkProposal({ data: "prop-1" });
-			expect(detail?.liveContentHash).toBe("");
-		});
-
-		it("surfaces a live-hash read failure", async () => {
-			proposalRow = makeProposalRow();
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("AS h FROM tanah_article"))
+				if (sql.includes("FROM tanah_article WHERE id"))
 					throw new Error("hash boom");
 				return dispatchQueryOne(sql);
 			});
@@ -1214,14 +1126,15 @@ describe("article link proposals server", () => {
 			);
 		});
 
-		it("falls back to the numeric article id when the name row is gone", async () => {
+		it("reports that the article was deleted before reading proposal detail", async () => {
 			proposalRow = makeProposalRow();
 			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("SELECT name FROM tanah_article")) return null;
+				if (sql.includes("FROM tanah_article WHERE id")) return null;
 				return dispatchQueryOne(sql);
 			});
-			const detail = await getLinkProposal({ data: "prop-1" });
-			expect(detail?.articleName).toBe("#7");
+			await expect(getLinkProposal({ data: "prop-1" })).rejects.toThrow(
+				"מאמר 7 לא נמצא",
+			);
 		});
 
 		it("maps a run with a null start timestamp", async () => {
@@ -1261,7 +1174,7 @@ describe("article link proposals server", () => {
 					sql.includes("coverage_verified") &&
 					sql.includes("FROM tanah_article")
 				)
-					return { ...articleRow, perek_id: 999, author_id: 99 };
+					return { ...articleRow, perekId: 999, authorId: 99 };
 				return dispatchQueryOne(sql);
 			});
 			mocks.query.mockImplementation(async (sql: string) => {

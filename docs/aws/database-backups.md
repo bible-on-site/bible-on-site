@@ -62,10 +62,13 @@ The worker streams `mysqldump` through gzip without writing an uncompressed
 production dump. It uses the regional RDS CA bundle and verifies the hostname.
 Routines, triggers, events, views, binary values and all tables are included;
 GTID state and tablespace administration are excluded.
+The MySQL 9.7 client skips Oracle Enterprise masking-policy definitions.
+The catalog check stops the export if an application column uses a masking policy.
 
 Before upload, it imports the compressed archive into a fresh, disposable
-MySQL 8.4 server on `127.0.0.1`, with the event scheduler and local infile
-disabled. The setup action launches that server bound to all interfaces
+MySQL server on `127.0.0.1`, with the event scheduler and local infile
+disabled. The preflight selects MySQL 8.4 or 9.7 tools and a scratch server
+from the source's release family. The setup action launches that server bound to all interfaces
 (`--bind-address=*` overrides the loopback `my-cnf` setting), so the workflow
 constrains port 3306 to the runner's loopback at the host firewall before the
 server starts and then proves non-loopback connections are refused. The
@@ -95,7 +98,7 @@ Perform this section only after Dorad approves the specific PR and these live
 changes. Use existing SSO profile `AdministratorAccess-250598594267` and verify
 `aws sts get-caller-identity` reports the target account before each application.
 
-1. Confirm RDS is available, MySQL 8.4 and its current security group is
+1. Confirm RDS is available, runs MySQL 8.4 or 9.7, and its current security group is
    `sg-09268677e2b65f448`. Verify the existing GitHub OIDC provider and resolve
    `alias/aws/ssm` to its key ARN with `aws kms describe-key`. Validate the
    CloudFormation template, then deploy **a new stack** named
@@ -165,14 +168,16 @@ backup freshness SLA.
 
 ## Independent restoration drill
 
-Use an isolated host with MySQL 8.4 CLI tools, Python 3.14, the pinned
+Use an isolated host with MySQL CLI tools, Python 3.14, the pinned
 [backup requirements](../../devops/backups/requirements.txt), and the recovery
 operator's SSO session. The backup writer deliberately has no object-read grant.
 Obtain the manifest's **version ID** with `aws s3api list-object-versions`,
 using the expected bucket owner. Do not use an unversioned latest object.
 
-Start an empty, disposable MySQL 8.4 server bound only to loopback; set
-`event_scheduler=OFF` and `local_infile=OFF`. The `tanah` database must not exist.
+Read `serverVersion` from the versioned manifest and use CLI tools and an empty,
+disposable scratch server from the same MySQL release family (8.4 or 9.7).
+Bind it only to loopback and set `event_scheduler=OFF` and `local_infile=OFF`.
+The `tanah` database must not exist.
 Set `BACKUP_SCRATCH_URL` through the environment with its local root credential,
 and set `AWS_PROFILE=AdministratorAccess-250598594267`, `AWS_REGION=il-central-1`.
 
@@ -218,7 +223,7 @@ coverage report --rcfile=devops/backups/.coveragerc
 
 The integration test creates its own internal Docker network and disposable
 source/scratch/client containers, with a test-only TLS certificate. It exercises
-the actual MySQL 8.4 client, full export/import and a second version-pinned
+the actual MySQL 8.4 and 9.7 clients, full export/import and a second version-pinned
 recovery. Its S3 transport is an in-memory test double; a successful test is not
 a claim of a production S3 upload, IAM authorization or production-data restore.
 

@@ -19,6 +19,7 @@ import {
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
+	isDataDeployCiChange,
 	isSchemaOnlyDataChange,
 	listChangedFiles,
 	main,
@@ -915,6 +916,63 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the MySQL 9.7 preparation keeps the fingerprint change manual", () => {
+		const migration =
+			"devops/deploy/data-deploy/manual/mysql-97-article-fingerprint.sql";
+		const bootstrap = "data/mysql/tanah_article_content_hash_upgrade.sql";
+		const files = [
+			migration,
+			bootstrap,
+			"data/Cargo.lock",
+			"data/mysql/db-populator/Cargo.toml",
+			"data/mysql/db-populator/src/main.rs",
+			"data/mysql/tanah_dynamic_structure.sql",
+			"data/mysql/tanah_mention_test_data.sql",
+			"data/sefaria/pipelines/perushim-view/README.md",
+			"devops/deploy/data-deploy/mysql-fingerprint-regression.mjs",
+			"devops/deploy/data-deploy/lambda_mysql_package_test.py",
+			"web/admin/src/server/article-relationships.ts",
+		];
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isDataDeployCiChange(files), true);
+		assert.equal(detectChanges(files).data.module_changed, true);
+		assert.equal(detectChanges(files).perushim_pipeline.module_changed, true);
+
+		assert.equal(
+			isSchemaOnlyDataChange([...files, "data/mysql/private_archive_upgrade.sql"]),
+			true,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange(files.filter((file) => file !== migration)),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange(files.filter((file) => file !== bootstrap)),
+			false,
+		);
+		for (const delivery of [
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			"devops/deploy/data-deploy/sql-files.json",
+		]) {
+			assert.equal(
+				isSchemaOnlyDataChange([...files, delivery]),
+				false,
+				delivery,
+			);
+		}
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/private_archive_upgrade.sql",
+				"devops/deploy/data-deploy/sql-files.json",
+			]),
+			false,
+		);
+	});
+
 	test("the contribution upgrade retains checks without full data delivery", () => {
 		const migration = "data/mysql/tanahpedia_contribution_upgrade.sql";
 		for (const files of [
@@ -1252,12 +1310,46 @@ test("bulletin infrastructure changes select data checks without releasing conte
 
 describe("isDataDeployChange", () => {
 	test("data-deploy tooling changes signal delivery intent", () => {
+		for (const file of [
+			"index.mts",
+			"deploy-payload.mts",
+			"lambda-invocation.mts",
+			"sql-files.json",
+			"validate_lambda_parser.py",
+		])
+			assert.equal(
+				isDataDeployChange([`devops/deploy/data-deploy/${file}`]),
+				true,
+				file,
+			);
+	});
+
+	test("manual migrations and their validation run data checks without requesting delivery", () => {
+		const migration =
+			"devops/deploy/data-deploy/manual/mysql-97-article-fingerprint.sql";
+		const tests = [
+			"deploy-payload.test.mts",
+			"lambda_mysql_package_test.py",
+			"mysql-fingerprint-regression.mjs",
+			"mysql_import_regression.py",
+			"test_lambda_credentials.py",
+			"test_lambda_parser.py",
+		].map((file) => `devops/deploy/data-deploy/${file}`);
+		for (const file of [migration, ...tests]) {
+			assert.deepEqual(detectChanges([file]).data, {
+				module_changed: false,
+				ci_changed: true,
+			});
+			assert.equal(isDataDeployChange([file]), false, file);
+			assert.equal(isDataDeployCiChange([file]), true, file);
+		}
+		assert.equal(isDataDeployChange([migration, ...tests]), false);
 		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/index.mts"]),
-			true,
-		);
-		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]),
+			isDataDeployChange([
+				migration,
+				...tests,
+				"devops/deploy/data-deploy/sql-files.json",
+			]),
 			true,
 		);
 	});
@@ -1274,6 +1366,26 @@ describe("isDataDeployChange", () => {
 		])
 			assert.equal(isDataDeployChange(files), false, JSON.stringify(files));
 	});
+});
+
+test("deployment rehearsal inputs request CI without expressing release intent", () => {
+	for (const file of [
+		".github/workflows/ci-data-deploy.yml",
+		".github/workflows/ci.yml",
+		"devops/package.json",
+		"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+		"docs/aws/cloudformation/data-deploy/requirements.txt",
+	]) {
+		assert.equal(isDataDeployCiChange([file]), true, file);
+		assert.equal(isDataDeployChange([file]), false, file);
+	}
+	for (const file of [
+		"docs/guide.md",
+		"web/bible-on-site/src/page.tsx",
+		"devops/deploy/data-deploy-old.mts",
+		"docs/aws/cloudformation/data-deploy/requirements-dev.txt",
+	])
+		assert.equal(isDataDeployCiChange([file]), false, file);
 });
 
 describe("baseRevision", () => {
@@ -1446,7 +1558,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 5,
+				Object.keys(MODULES).length * 2 + 6,
 			);
 			return { changes, output };
 		} finally {
@@ -1605,6 +1717,20 @@ describe("main", () => {
 		}
 		assert.match(output, /^data_schema_only_changed=false$/m);
 		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=false$/m);
+	});
+
+	test("a merge-group tail rehearses data deployment inputs in an earlier entry", () => {
+		const { output } = run(
+			"merge_group",
+			({ base }) => ({ merge_group: { base_sha: base } }),
+			"docs/guide.md",
+			"write",
+			"docs/aws/cloudformation/data-deploy/requirements.txt",
+		);
+		assert.match(output, /^docs_only=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=true$/m);
 	});
 
 	for (const path of [

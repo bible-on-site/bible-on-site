@@ -1,8 +1,8 @@
 /**
  * Determines, in one job, which CI modules changed between the event's base
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
- * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
- * data deployment routing decision and `docs_only` — true only when every
+ * to GITHUB_OUTPUT for every module in MODULES, plus the data deployment
+ * and validation routing decisions and `docs_only` — true only when every
  * touched path is inert documentation and no module's checks fired,
  * letting required checks resolve without heavy validation.
  *
@@ -248,7 +248,7 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		ciOnlyPattern: DATA_CI_ONLY_PATTERN,
-		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// Data deployment tooling and manual migrations require checks.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
 		ciPaths: [
@@ -305,7 +305,35 @@ const isAt = (file: string, path: string) =>
 // CI plumbing (ci.yml, composite actions, this detector), which must never
 // enter Release Data: the perushim producer correctly skips those runs, so no
 // current-run SQL artifact exists to bind (#2730).
-const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+const DATA_DEPLOY_PATH = "devops/deploy/data-deploy";
+// Manual migrations and their test harnesses take the validation route.
+const MANUAL_DATA_MIGRATION_PATH = `${DATA_DEPLOY_PATH}/manual`;
+const MYSQL_97_FINGERPRINT_MIGRATION =
+	`${MANUAL_DATA_MIGRATION_PATH}/mysql-97-article-fingerprint.sql`;
+const ARTICLE_FINGERPRINT_BOOTSTRAP =
+	"data/mysql/tanah_article_content_hash_upgrade.sql";
+const MYSQL_97_DATA_FILES = new Set([
+	ARTICLE_FINGERPRINT_BOOTSTRAP,
+	"data/Cargo.lock",
+	"data/mysql/db-populator/Cargo.toml",
+	"data/mysql/db-populator/src/main.rs",
+	"data/mysql/tanah_dynamic_structure.sql",
+	"data/mysql/tanah_mention_test_data.sql",
+	"data/sefaria/pipelines/perushim-view/README.md",
+]);
+const DATA_DEPLOY_TEST_PATTERN =
+	/(?:^|\/)test_[^/]+\.py$|_test\.py$|\.test\.mts$/;
+const DATA_DEPLOY_REGRESSION_SCRIPTS = new Set([
+	`${DATA_DEPLOY_PATH}/mysql-fingerprint-regression.mjs`,
+	`${DATA_DEPLOY_PATH}/mysql_import_regression.py`,
+]);
+const DATA_DEPLOY_CI_FILES = new Set([
+	".github/workflows/ci-data-deploy.yml",
+	".github/workflows/ci.yml",
+	"devops/package.json",
+	"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+	"docs/aws/cloudformation/data-deploy/requirements.txt",
+]);
 
 // Root docs/ counts as documentation only for inert prose, media and data
 // formats. Source, script, manifest and config extensions never qualify —
@@ -348,8 +376,18 @@ function isModuleEvidenceDocumentation(file: string): boolean {
 
 /** Release intent for data delivery tooling, separate from generic CI checks. */
 export function isDataDeployChange(changedFiles: string[]): boolean {
-	return changedFiles.some((file) =>
-		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	return changedFiles.some(
+		(file) =>
+			isAt(file, DATA_DEPLOY_PATH) &&
+			!isAt(file, MANUAL_DATA_MIGRATION_PATH) &&
+			!DATA_DEPLOY_TEST_PATTERN.test(file) &&
+			!DATA_DEPLOY_REGRESSION_SCRIPTS.has(file),
+	);
+}
+
+export function isDataDeployCiChange(changedFiles: string[]): boolean {
+	return changedFiles.some(
+		(file) => isAt(file, DATA_DEPLOY_PATH) || DATA_DEPLOY_CI_FILES.has(file),
 	);
 }
 
@@ -363,16 +401,31 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		(file) =>
 			!DATA_CI_ONLY_PATTERN.test(file) && !isModuleEvidenceDocumentation(file),
 	);
-	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	if (
+		changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		)
+	)
+		return false;
+
+	// Switch the existing production fingerprint after the API and admin are
+	// deployed. The bootstrap, client pins and fixtures still run their checks.
+	const allDataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	const hasFingerprintMigration =
+		files.includes(MYSQL_97_FINGERPRINT_MIGRATION) &&
+		allDataFiles.includes(ARTICLE_FINGERPRINT_BOOTSTRAP);
+	if (hasFingerprintMigration && isDataDeployChange(files)) return false;
+	const dataFiles = hasFingerprintMigration
+		? allDataFiles.filter((file) => !MYSQL_97_DATA_FILES.has(file))
+		: allDataFiles;
+	if (hasFingerprintMigration && dataFiles.length === 0) return true;
+
 	// Calendar exports are repaired through a guarded date-only database operation.
 	// Converter/fixture changes must not launch a replacement production bootstrap.
 	const calendarConverter =
 		"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs";
 	if (
 		dataFiles.includes(calendarConverter) &&
-		!changedFiles.some((file) =>
-			MODULES.perushim_pipeline.extraModulePaths.includes(file),
-		) &&
 		dataFiles.every(
 			(file) =>
 				file === calendarConverter ||
@@ -391,9 +444,6 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 	);
 	return (
 		dataFiles.length > 0 &&
-		!changedFiles.some((file) =>
-			MODULES.perushim_pipeline.extraModulePaths.includes(file),
-		) &&
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
@@ -628,6 +678,15 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	// The queue event base can already contain an earlier unmerged entry.
+	// The required rehearsals must cover deployment inputs from that entry too.
+	const dataDeployCiChanged =
+		isDataDeployCiChange(files) ||
+		(mergeGroup &&
+			isDataDeployCiChange(
+				listChangedFiles({ kind: "branch", branch: "master" }, cwd),
+			));
+	lines.push(`data_deploy_ci_changed=${dataDeployCiChanged}`);
 	lines.push(`docs_only=${docsOnly}`);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(

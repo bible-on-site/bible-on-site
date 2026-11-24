@@ -67,6 +67,40 @@ describe("api-client with DB_URL", () => {
 	});
 
 	it.each([
+		"mysql://user:pass@tanah-mysql.test.il-central-1.rds.amazonaws.com/tanah",
+		"mysql://user:pass@db.example.com/tanah?ssl-mode=REQUIRED",
+		"mysql://user:pass@db.example.com/tanah?ssl-mode=VERIFY_CA",
+		"mysql://user:pass@db.example.com/tanah?ssl-mode=VERIFY_IDENTITY",
+	])("verifies the MySQL certificate and endpoint for %s", async (url) => {
+		process.env.DB_URL = url;
+		const mysql = require("mysql2/promise");
+		const { query } = require("../../../src/lib/api-client");
+		await query("SELECT 1");
+
+		expect(mysql.createPool).toHaveBeenCalledWith(
+			expect.objectContaining({
+				ssl: {
+					ca: expect.stringContaining("-----BEGIN CERTIFICATE-----"),
+					rejectUnauthorized: true,
+					verifyIdentity: true,
+				},
+			}),
+		);
+	});
+
+	it("supports the local MySQL fixture without configuring RDS TLS", async () => {
+		process.env.DB_URL =
+			"mysql://user:pass@127.0.0.1:3306/tanah?ssl-mode=DISABLED";
+		const mysql = require("mysql2/promise");
+		const { query } = require("../../../src/lib/api-client");
+		await query("SELECT 1");
+
+		expect(mysql.createPool).toHaveBeenCalledWith(
+			expect.objectContaining({ host: "127.0.0.1", ssl: undefined }),
+		);
+	});
+
+	it.each([
 		{
 			description: "percent-encoded punctuation",
 			url: "mysql://reader%40example:pa%3Ass%2Fword%3F%23%25@db.example.com/bible%20notes%2B2026",

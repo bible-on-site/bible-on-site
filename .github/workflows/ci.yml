@@ -395,6 +395,7 @@ jobs:
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
       data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
       data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
+      data_deploy_ci_changed: ${{ steps.determine.outputs.data_deploy_ci_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
       # Every touched path is inert documentation and no module check fired:
@@ -791,7 +792,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -882,7 +883,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -1112,7 +1113,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1452,7 +1453,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1871,7 +1872,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -2175,10 +2176,12 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+          my-cnf: |
+            require_secure_transport=ON
 
       # Mock connections cannot prove session-scoped MySQL advisory locks.
       # Run the ignored regression explicitly and add its production-code hits
@@ -2683,7 +2686,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -3088,7 +3091,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -3469,6 +3472,12 @@ jobs:
     if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     uses: ./.github/workflows/ci-db-backup.yml
 
+  data_deploy_ci:
+    name: Data deployment validation
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.data_deploy_ci_changed == 'true' }}
+    uses: ./.github/workflows/ci-data-deploy.yml
+
   transcription_ci:
     name: Local transcription
     needs: determine_changes
@@ -3507,6 +3516,7 @@ jobs:
         recitation_ci,
         deploy_verifier,
         database_backups,
+        data_deploy_ci,
         transcription_ci,
         perushim_data,
         determine_baseline_availability,
@@ -3558,6 +3568,13 @@ jobs:
             echo "Could not determine module changes."
             echo "Overall status: failure"
             exit 1
+          fi
+
+          if [ "${{ needs.determine_changes.outputs.data_deploy_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.data_deploy_ci.result }}" != "success" ]; then
+              echo "Data deployment validation and MySQL rehearsals did not pass."
+              exit 1
+            fi
           fi
 
           # Module jobs skip silently when these prerequisite lookups fail.

@@ -15,17 +15,15 @@ import type {
 	ChangeState,
 	ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
+import {
+	type ArticleReviewSource,
+	articleReviewToken,
+} from "../article-review-token.server";
 import { txQuery, txQueryOne } from "../db";
 
-interface ArticleRow {
+interface ArticleRow extends ArticleReviewSource {
 	id: number;
-	name: string;
-	abstract: string | null;
-	content: string | null;
-	perekId: number;
-	authorId: number;
 	coverageVerified: number;
-	contentHash: string;
 }
 
 async function readArticle(
@@ -38,7 +36,7 @@ async function readArticle(
 	// it here while awaiting that API would deadlock our own merge request.
 	const row = await txQueryOne<ArticleRow>(
 		conn,
-		`SELECT id,name,abstract,content,perek_id AS perekId,author_id AS authorId,coverage_verified AS coverageVerified,LOWER(HEX(content_hash)) AS contentHash FROM tanah_article WHERE id=?${current ? " FOR SHARE" : ""}`,
+		`SELECT id,name,abstract,content,perek_id AS perekId,author_id AS authorId,coverage_verified AS coverageVerified FROM tanah_article WHERE id=?${current ? " FOR SHARE" : ""}`,
 		[id],
 	);
 	if (!row) throw new Error("Article not found");
@@ -95,7 +93,7 @@ async function articleState(
 		),
 	]);
 	return validateArticleLinkState({
-		contentHash: row.contentHash,
+		contentHash: articleReviewToken(row),
 		sourceHash: articleSourceHash(row),
 		perekId: Number(row.perekId),
 		authorId: Number(row.authorId),

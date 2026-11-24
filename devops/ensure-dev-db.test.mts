@@ -4,9 +4,24 @@ import {
 	isCheckpointCurrent,
 	parseTableTimes,
 } from "./dev-db-checkpoint.mts";
+import { parseDbUrl } from "./website-mysql.mts";
 
 const T = "2026-10-24 10:00:00";
 const T2 = "2026-10-24 11:00:00";
+
+test("dev tools use verified TLS for RDS and preserve local defaults", () => {
+	const remote = parseDbUrl(
+		"mysql://user:p%40ss@db.test.rds.amazonaws.com/tanah",
+	);
+	assert.equal(remote.password, "p@ss");
+	assert.equal(remote.ssl?.verifyIdentity, true);
+	assert.equal(remote.ssl?.rejectUnauthorized, true);
+	const local = parseDbUrl("mysql://localhost:3307");
+	assert.equal(local.port, 3307);
+	assert.equal(local.user, "root");
+	assert.equal(local.database, "tanah-dev");
+	assert.equal(local.ssl, undefined);
+});
 
 test("isCheckpointCurrent", async (t) => {
 	await t.test("returns true when prod matches the recorded checkpoint", () => {

@@ -700,6 +700,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac",
+ "md-5",
  "percent-encoding",
  "reqwest",
  "sea-orm",

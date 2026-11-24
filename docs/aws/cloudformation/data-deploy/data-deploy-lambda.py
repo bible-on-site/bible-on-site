@@ -5,10 +5,13 @@ Runtime: Python 3.14
 Handler: index.handler
 
 Deployment:
-    mkdir lambda-package && cd lambda-package
-    pip install pymysql -t .
-    cp data-deploy-lambda.py index.py
-    zip -r ../lambda.zip .
+    mkdir lambda-package
+    python -m pip install --requirement requirements.txt --target lambda-package
+    cp data-deploy-lambda.py lambda-package/index.py
+    curl --fail --silent --show-error \
+        https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
+        --output lambda-package/rds-ca.pem
+    (cd lambda-package && zip -r ../lambda.zip .)
     aws lambda update-function-code \
         --function-name bible-on-site-db-populator \
         --zip-file fileb://lambda.zip \
@@ -18,6 +21,8 @@ Deployment:
 import json
 import os
 import re
+import ssl
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 import boto3
 import pymysql
@@ -100,6 +105,13 @@ def db_credentials(event):
     }
 
 
+def database_tls(host):
+    """Verify the RDS certificate and hostname for every non-loopback connection."""
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return None
+    return ssl.create_default_context(cafile=Path(__file__).with_name("rds-ca.pem"))
+
+
 def handler(event, context):
     """Lambda handler for database population.
 
@@ -128,6 +140,7 @@ def handler(event, context):
         **credentials,
         connect_timeout=30,
         autocommit=True,
+        ssl=database_tls(credentials["host"]),
     )
 
     try:

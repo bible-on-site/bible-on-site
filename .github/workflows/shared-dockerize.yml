@@ -210,14 +210,23 @@ jobs:
         if: ${{ env.IS_NPM == 'true' && steps.aws_creds.outcome == 'success' }}
         id: rds_creds
         run: |
+          set -euo pipefail
           # Fetch DB_URL from SSM Parameter Store (SecureString)
           DB_URL=$(aws ssm get-parameter --name "/bible-on-site-tanah-db-url" --with-decryption --query 'Parameter.Value' --output text)
           echo "::add-mask::$DB_URL"
-          echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
+          echo "db_url=$DB_URL" >> "$GITHUB_OUTPUT"
 
-          # Fetch RDS security group ID dynamically from the RDS instance
-          RDS_SG=$(aws rds describe-db-instances --db-instance-identifier tanah-mysql --query 'DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' --output text)
-          echo "rds_sg=$RDS_SG" >> $GITHUB_OUTPUT
+          RDS_DETAILS=$(aws rds describe-db-instances --db-instance-identifier tanah-mysql \
+            --query 'DBInstances[0].[VpcSecurityGroups[0].VpcSecurityGroupId,EngineVersion]' --output text)
+          read -r RDS_SG RDS_ENGINE_VERSION <<<"$RDS_DETAILS"
+          echo "rds_sg=$RDS_SG" >> "$GITHUB_OUTPUT"
+          # The production dump is restored before deploy SQL is replayed and
+          # can still contain MySQL 8.4 definitions unsupported by 9.7.
+          case "$RDS_ENGINE_VERSION" in
+            8.4.*) echo "mysql_version=8.4.13" >> "$GITHUB_OUTPUT" ;;
+            9.7.*) echo "mysql_version=9.7.4" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unsupported production MySQL release family"; exit 1 ;;
+          esac
 
           echo "✓ Fetched DB_URL from SSM and security group $RDS_SG from RDS"
 
@@ -254,7 +263,7 @@ jobs:
         if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' }}
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: ${{ steps.rds_creds.outputs.mysql_version }}
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -298,11 +307,19 @@ jobs:
           curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
             https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
             --output "$RDS_CA_BUNDLE"
+          MASKED_COLUMNS=$(mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
+            --batch --skip-column-names --database="$DB_NAME" \
+            --execute="SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND UPPER(EXTRA) LIKE '%MASKING POLICY%'")
+          if [[ "$MASKED_COLUMNS" != 0 ]]; then
+            echo "::error::The SSG database snapshot does not support column masking policies"
+            exit 1
+          fi
           # Commentary catalogs and notes must be cloned before the additive
           # replay, so SSG uses the same IDs and retained chapters as RDS.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
             --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
-            --single-transaction --quick --no-tablespaces --column-statistics=0 \
+            --single-transaction --quick --no-tablespaces --loose-skip-masking-policies --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
             | sed -e 's/DEFINER[ ]*=[ ]*[^ ]* / /g' \
@@ -316,7 +333,7 @@ jobs:
           LOCAL_DB_URL: ${{ steps.dump_prod.outputs.local_db_url }}
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet pymysql
+          python3 -m pip install --quiet 'PyMySQL[rsa]==1.2.4'
           python3 devops/deploy/data-deploy/validate_lambda_parser.py \
             --db "$LOCAL_DB_URL"
       # --- End Local SSG database ---
@@ -434,7 +451,7 @@ jobs:
 
       - name: Pull the isolated API fixture image
         if: ${{ env.IS_CARGO == 'true' }}
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Verify the packaged API against its own disposable database
         if: ${{ env.IS_CARGO == 'true' }}

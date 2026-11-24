@@ -301,12 +301,8 @@ Outputs:
 #
 # 5. Create IAM role for Lambda with S3 read permission
 #
-# 6. Create Lambda function with pymysql bundled:
-#    a. Create deployment package:
-#       mkdir lambda-package && cd lambda-package
-#       pip install pymysql -t .
-#       cp data-deploy-lambda.py index.py
-#       zip -r ../lambda.zip .
+# 6. Create Lambda function with PyMySQL and the RDS CA bundle.
+#    Follow the packaging instructions in data-deploy-lambda.py.
 #    b. Deploy:
 #       aws lambda create-function \
 #         --function-name bible-on-site-db-populator \

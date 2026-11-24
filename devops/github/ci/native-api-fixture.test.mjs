@@ -25,7 +25,7 @@ test("database owns an internal bridge and server, uses production TIMESTAMP sch
 		return "";
 	}, clock());
 	const run = commands.find((args) => args[0] === "run");
-	assert.equal(run.at(-1), "mysql:8.4");
+	assert.equal(run.at(-1), "mysql:9.7.4");
 	assert.ok(
 		commands.some(
 			(args) => args[0] === "network" && args.includes("--internal"),

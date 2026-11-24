@@ -27,6 +27,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::sync::LazyLock;
 
+use md5::{Digest, Md5};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter,
@@ -136,8 +137,8 @@ struct MentionRow {
 #[derive(Debug)]
 pub struct ArticleRelationshipsAggregate {
     pub article: article::Model,
-    /// Lowercase hex of the row's generated `content_hash` — the freshness
-    /// token clients echo back as `expectedContentHash`.
+    /// Lowercase hex of the editorial freshness token clients echo back as
+    /// `expectedContentHash`.
     pub content_hash: String,
     pub covering_sources: Vec<article_covering_source::Model>,
     pub dedications: Vec<ArticleDedicationLink>,
@@ -146,25 +147,27 @@ pub struct ArticleRelationshipsAggregate {
     pub moadim: Vec<ArticleMoedLink>,
 }
 
-/// Loads the article's generated `content_hash` as lowercase hex — the
-/// column is a stored generated expression so it is not on the entity.
-async fn load_content_hash(
+/// Computes the existing editorial token over the original MySQL-encoded
+/// bytes. RDS MySQL 9.7 removes SQL MD5, and the stored digest serves search.
+async fn load_review_token(
     conn: &impl ConnectionTrait,
     article_id: i32,
 ) -> Result<String, ServiceError> {
     #[derive(FromQueryResult)]
-    struct HashRow {
-        h: Option<String>,
+    struct TokenInput {
+        token_input: Vec<u8>,
     }
-    let row = HashRow::find_by_statement(Statement::from_sql_and_values(
+    let row = TokenInput::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
-        "SELECT HEX(content_hash) AS h FROM tanah_article WHERE id = ?",
+        "SELECT CAST(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id) AS BINARY) AS token_input FROM tanah_article WHERE id = ?",
         [article_id.into()],
     ))
     .one(conn)
     .await
     .map_err(db_error)?;
-    Ok(row.and_then(|r| r.h).unwrap_or_default().to_lowercase())
+    Ok(row
+        .map(|row| hex::encode(Md5::digest(row.token_input)))
+        .unwrap_or_default())
 }
 
 /// Loads the article's dedication assignments joined to their dedication
@@ -274,7 +277,7 @@ pub async fn load_relationships(
         .map_err(db_error)?
         .ok_or_else(|| ServiceError::not_found(ARTICLE_NOT_FOUND, None::<sea_orm::DbErr>))?;
     Ok(ArticleRelationshipsAggregate {
-        content_hash: load_content_hash(conn, article_id).await?,
+        content_hash: load_review_token(conn, article_id).await?,
         covering_sources: load_covering_sources(conn, article_id).await?,
         dedications: load_article_dedications(conn, article_id).await?,
         mention_annotations: load_mention_annotations(conn, article_id).await?,
@@ -680,7 +683,7 @@ pub async fn update_relationships(
         .ok_or_else(|| ServiceError::not_found(ARTICLE_NOT_FOUND, None::<sea_orm::DbErr>))?;
 
     if let Some(expected) = expected_hash {
-        let actual = load_content_hash(&txn, article_id).await?;
+        let actual = load_review_token(&txn, article_id).await?;
         if actual != expected {
             return Err(ServiceError::bad_request(
                 "the article was changed since this edit loaded - reload its relationships and submit again",
@@ -861,7 +864,7 @@ pub async fn update_relationships(
     let previous = ArticleRelationshipsAggregate {
         // Loaded post-write on purpose: it is the freshness token the undo
         // write must present, since the generated hash covers the link fields.
-        content_hash: load_content_hash(&txn, article_id).await?,
+        content_hash: load_review_token(&txn, article_id).await?,
         article: current.clone(),
         covering_sources: previous_covering,
         dedications: load_article_dedications(&txn, article_id).await?,
@@ -1069,6 +1072,46 @@ mod tests {
         assert!(!is_hex("0123456789abcdef0123456789abcdeg", 32));
     }
 
+    #[tokio::test]
+    #[ignore = "requires the explicitly named disposable MySQL fixture"]
+    async fn mysql_preserves_existing_editorial_token() {
+        use sea_orm::{
+            SqlxMySqlConnector,
+            sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions},
+        };
+
+        let url = std::env::var("ARTICLE_SEARCH_LOCK_TEST_DB_URL")
+            .expect("isolated MySQL fixture URL is required");
+        let options: MySqlConnectOptions = url.parse().expect("valid fixture URL");
+        assert_eq!(options.get_database(), Some("article_search_lock_test"));
+        let pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("isolated MySQL fixture");
+        let db = SqlxMySqlConnector::from_sqlx_mysql_pool(pool);
+        db.execute_unprepared(
+            "CREATE TEMPORARY TABLE tanah_article (
+                id INT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL,
+                perek_id INT NOT NULL, author_id INT NOT NULL
+            ) CHARACTER SET utf8mb3",
+        )
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "INSERT INTO tanah_article VALUES (7, 'שָׁלוֹם', NULL, 'אברהם | יצחק', 123, 456)",
+        )
+        .await
+        .unwrap();
+
+        // MySQL 8.4's generated MD5 over the same persisted row.
+        assert_eq!(
+            load_review_token(&db, 7).await.unwrap(),
+            "efc113dd351bceed4506cec275f51086"
+        );
+        assert_eq!(load_review_token(&db, 8).await.unwrap(), "");
+    }
+
     #[test]
     fn normalize_query_strips_marks_and_collapses_whitespace() {
         assert_eq!(normalize_query("  בראשית   א  "), "בראשית א");
@@ -1170,8 +1213,8 @@ mod tests {
             }
         }
 
-        fn hash_row(hash: &str) -> BTreeMap<String, Value> {
-            [("h".to_string(), hash.to_string().into())]
+        fn token_row(input: &str) -> BTreeMap<String, Value> {
+            [("token_input".to_string(), input.as_bytes().to_vec().into())]
                 .into_iter()
                 .collect()
         }
@@ -1212,7 +1255,7 @@ mod tests {
             covering: Vec<article_covering_source::Model>,
         ) -> MockDatabase {
             mock.append_query_results::<article::Model, Vec<_>, _>([vec![article]])
-                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("a")]])
                 .append_query_results([covering])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]])
@@ -1254,11 +1297,11 @@ mod tests {
                     MockDatabase::new(DatabaseBackend::MySql)
                         .append_query_results([vec![current]])
                         // An unchanged contentHash cannot detect this flag-only race.
-                        .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                        .append_query_results([vec![token_row("a")]])
                         .into_connection(),
                 );
                 let mut edit = input();
-                edit.expected_content_hash = Some("a".repeat(32));
+                edit.expected_content_hash = Some("0cc175b9c0f1b6a831c399e269772661".to_string());
                 edit.expected_coverage_verified = Some(expected);
                 let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
                     .await
@@ -1284,7 +1327,7 @@ mod tests {
                     .append_query_results([vec![current.clone()]])
                     .append_query_results([vec![covering.clone()]])
                     .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
-                    .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                    .append_query_results([vec![token_row("a")]])
                     .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
                 let mock = reload_with_covering(mock, current, vec![covering]);
@@ -1307,11 +1350,11 @@ mod tests {
             let db = Database::from_connection(
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
-                    .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                    .append_query_results([vec![token_row("b")]])
                     .into_connection(),
             );
             let mut edit = input();
-            edit.expected_content_hash = Some("a".repeat(32));
+            edit.expected_content_hash = Some("0cc175b9c0f1b6a831c399e269772661".to_string());
             let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
                 .await
                 .unwrap_err();
@@ -1497,7 +1540,7 @@ mod tests {
                     rows_affected: 1,
                 }))
                 // `previous` snapshot reads: hash, dedications, mentions
-                .append_query_results([vec![hash_row("c".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("c")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, {
@@ -1558,7 +1601,7 @@ mod tests {
                 // previous moed link set (empty)
                 .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // previous snapshot reads
-                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("a")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, article_model(7));
@@ -1732,7 +1775,7 @@ mod tests {
                     moed_row(2, "סוכות"),
                 ]])
                 // previous snapshot reads: hash, dedications, mentions
-                .append_query_results([vec![hash_row("d".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("d")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]])
                 // search-index enqueue
@@ -1810,7 +1853,7 @@ mod tests {
                     rows_affected: 1,
                 }))
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("b")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, {
@@ -1877,7 +1920,7 @@ mod tests {
                     rows_affected: 1,
                 }))
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("b")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, {
@@ -1912,7 +1955,7 @@ mod tests {
                 // previous moed link set (empty)
                 .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("a")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, article_model(7));
@@ -1943,7 +1986,7 @@ mod tests {
                     rows_affected: 1,
                 }))
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("b")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, article_model(7));
@@ -2023,21 +2066,21 @@ mod tests {
             let mut mock = MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                 // expectedContentHash comparison read
-                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("a")]])
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 1),
                 ]])
                 // previous moed link set (empty)
                 .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("a")]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
             mock = reload_results(mock, article_model(7));
             let db = Database::from_connection(mock.into_connection());
 
             let mut edit = input();
-            edit.expected_content_hash = Some("a".repeat(32));
+            edit.expected_content_hash = Some("0cc175b9c0f1b6a831c399e269772661".to_string());
             // Order-insensitive: [{1:1}] matches the stored set.
             edit.expected_covering_sources = Some(vec![CoveringSourceInput {
                 perek_id: 1,

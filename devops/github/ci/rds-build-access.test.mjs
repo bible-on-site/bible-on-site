@@ -409,11 +409,62 @@ test("manifest replay passes the derived database URL as literal data", () => {
 		"pip",
 		"install",
 		"--quiet",
-		"pymysql",
+		"PyMySQL[rsa]==1.2.4",
 		"devops/deploy/data-deploy/validate_lambda_parser.py",
 		"--db",
 		url,
 	]);
+});
+
+test("the SSG restore server and tools follow the live RDS MySQL family", (t) => {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/shared-dockerize.yml", import.meta.url),
+		"utf8",
+	).replace(/\r\n/g, "\n");
+	const credentialScript = workflow
+		.split("      - name: Fetch RDS credentials from AWS\n")[1]
+		?.split("      - name: Grant owned runner access to RDS\n")[0]
+		?.split("        run: |\n")[1];
+	assert.ok(credentialScript, "The live-engine discovery step must exist");
+	assert.match(
+		workflow,
+		/mysql-version: \$\{\{ steps\.rds_creds\.outputs\.mysql_version \}\}/,
+	);
+	const dir = mkdtempSync(join(tmpdir(), "rds-engine-fixture "));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const shell =
+		process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+	const aws = String.raw`
+aws() {
+  case "$1" in
+    ssm) printf 'mysql://user:fixture-only@db.example.test/tanah\n' ;;
+    rds) printf 'sg-0123456789abcdef0\t%s\n' "$ENGINE_VERSION" ;;
+    *) return 2 ;;
+  esac
+}
+`;
+	for (const [engine, expected] of [
+		["8.4.9", "8.4.13"],
+		["9.7.4.R2.20261118", "9.7.4"],
+		["8.0.46", null],
+	]) {
+		const output = join(dir, engine).replace(/\\/g, "/");
+		const result = spawnSync(
+			shell,
+			["--noprofile", "--norc", "-e", "-c", aws + credentialScript],
+			{
+				encoding: "utf8",
+				timeout: 5000,
+				env: { ...process.env, ENGINE_VERSION: engine, GITHUB_OUTPUT: output },
+			},
+		);
+		assert.ifError(result.error);
+		assert.equal(result.status, expected ? 0 : 1, result.stderr);
+		const outputs = readFileSync(output, "utf8").split("\n");
+		assert.ok(outputs.includes("rds_sg=sg-0123456789abcdef0"));
+		if (expected) assert.ok(outputs.includes(`mysql_version=${expected}`));
+		else assert.ok(!outputs.some((line) => line.startsWith("mysql_version=")));
+	}
 });
 
 function productionDumpScript() {
@@ -440,11 +491,14 @@ function dumpFixture(t, failures = {}) {
 	const env = {
 		...process.env,
 		CURL_EXIT: "0",
+		MASK_CHECK_EXIT: "0",
+		MASKED_COLUMNS: "0",
 		DUMP_EXIT: "0",
 		IMPORT_EXIT: "0",
 		RUNNER_TEMP: dir.replace(/\\/g, "/"),
 		GITHUB_OUTPUT: join(dir, "output").replace(/\\/g, "/"),
 		CURL_ARGS: join(dir, "curl.args").replace(/\\/g, "/"),
+		MASK_CHECK_ARGS: join(dir, "mask-check.args").replace(/\\/g, "/"),
 		DUMP_ARGS: join(dir, "dump.args").replace(/\\/g, "/"),
 		IMPORT_ARGS: join(dir, "import.args").replace(/\\/g, "/"),
 		IMPORTED_SQL: join(dir, "import.sql").replace(/\\/g, "/"),
@@ -456,7 +510,18 @@ function dumpFixture(t, failures = {}) {
 python3() { case "$*" in *u.hostname*) printf 'db.fixture.example 3306 ci fixture\n';; *) printf 'fixture-password';; esac; }
 curl() { printf '%s\0' "$@" > "$CURL_ARGS"; return "$CURL_EXIT"; }
 mysqldump() { printf '%s\0' "$@" > "$DUMP_ARGS"; printf 'CREATE DATABASE fixture;\n'; return "$DUMP_EXIT"; }
-mysql() { printf '%s\0' "$@" > "$IMPORT_ARGS"; cat > "$IMPORTED_SQL"; return "$IMPORT_EXIT"; }
+mysql() {
+  case "$*" in
+    *information_schema.COLUMNS*)
+      printf '%s\0' "$@" > "$MASK_CHECK_ARGS"
+      printf '%s\n' "$MASKED_COLUMNS"
+      return "$MASK_CHECK_EXIT"
+      ;;
+  esac
+  printf '%s\0' "$@" > "$IMPORT_ARGS"
+  cat > "$IMPORTED_SQL"
+  return "$IMPORT_EXIT"
+}
 `;
 	const result = spawnSync(
 		shell,
@@ -490,6 +555,10 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(dump.includes("--single-transaction"));
+	assert.ok(dump.includes("--loose-skip-masking-policies"));
+	const maskCheck = f.args(f.env.MASK_CHECK_ARGS);
+	assert.ok(maskCheck.includes("--ssl-mode=VERIFY_IDENTITY"));
+	assert.ok(maskCheck.includes("--database=fixture"));
 	// SSG needs the catalogs and existing note chapters together to preserve
 	// production commentary IDs and chapters absent from the incoming pack.
 	assert.ok(dump.includes("--databases"));
@@ -518,6 +587,8 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 
 for (const [stage, failure] of [
 	["CA download", { CURL_EXIT: "22" }],
+	["masking policy check", { MASK_CHECK_EXIT: "1" }],
+	["unsupported masking policy", { MASKED_COLUMNS: "1" }],
 	["production dump", { DUMP_EXIT: "2" }],
 	["local import", { IMPORT_EXIT: "1" }],
 ]) {
@@ -525,7 +596,7 @@ for (const [stage, failure] of [
 		const f = dumpFixture(t, failure);
 		assert.notEqual(f.result.status, 0);
 		assert.throws(() => readFileSync(f.env.GITHUB_OUTPUT), { code: "ENOENT" });
-		if (failure.CURL_EXIT)
+		if (failure.CURL_EXIT || failure.MASK_CHECK_EXIT || failure.MASKED_COLUMNS)
 			assert.throws(() => readFileSync(f.env.DUMP_ARGS), { code: "ENOENT" });
 	});
 }
