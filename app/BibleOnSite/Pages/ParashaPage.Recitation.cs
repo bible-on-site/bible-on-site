@@ -228,7 +228,7 @@ public partial class ParashaPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _unitRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
         SelectionHaptics.Trigger();
     }
@@ -246,7 +246,7 @@ public partial class ParashaPage
         var unit = (sender as Label)?.BindingContext as ParashaUnit;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (unit != null && unit == _viewModel.Unit)
             {
                 EnterUnitRecitation();

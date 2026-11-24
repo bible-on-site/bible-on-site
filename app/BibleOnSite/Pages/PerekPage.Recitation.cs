@@ -262,7 +262,7 @@ public partial class PerekPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _chapterRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
         SelectionHaptics.Trigger();
     }
@@ -280,7 +280,7 @@ public partial class PerekPage
         var perek = (sender as Label)?.BindingContext as Perek;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (perek != null && perek == _viewModel.Perek)
             {
                 EnterChapterRecitation();

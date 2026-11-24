@@ -17,26 +17,21 @@ using BibleOnSite.Services;
 public partial class ParashaPage
 #pragma warning restore S2333
 {
-    private DateTime _lastLongPressTime = DateTime.MinValue;
     private (int PerekId, int PasukNum) _pressedPasuk = (-1, -1);
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 600;
-
-    // Scroll state tracking - used to prevent long-press during scroll
-    private DateTime _lastScrollTime = DateTime.MinValue;
-    private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
+    private readonly ReaderGestureTiming _gestureTiming = new();
 
     /// <summary>
     /// True while the user is scrolling or just finished — used by
     /// LongPressBehavior to prevent false triggers during scroll.
     /// </summary>
-    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => _gestureTiming.IsScrolling;
 
     /// <summary>Tracks scroll events to prevent long-press during scroll.</summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
         _doubleTap.Reset();
-        _lastScrollTime = DateTime.Now;
+        _gestureTiming.NoteScroll();
         _longPressTokenSource?.Cancel();
         _pressedPasuk = (-1, -1);
 #if !ANDROID
@@ -67,7 +62,7 @@ public partial class ParashaPage
         LongPressBehavior.CancelAllPending();
 
         // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -93,7 +88,7 @@ public partial class ParashaPage
             return;
         }
         // Skip tap if long press just happened
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -111,7 +106,7 @@ public partial class ParashaPage
 #if WINDOWS
         if (e.Parameter is ParashaDisplayItem row && row.Display != null)
         {
-            // Don't set _lastLongPressTime - right-click doesn't need debounce
+            // Don't note a long press - right-click doesn't need debounce
             ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukCount == 0;
             _viewModel.ToggleSelectedPasuk(row.PerekId, row.PasukNum);
@@ -163,13 +158,13 @@ public partial class ParashaPage
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, token);
 
             // If we get here, the press was held long enough
             // Double-check we're not scrolling and pasuk is still pressed
             if (!token.IsCancellationRequested && _pressedPasuk == pasuk && !IsScrolling)
             {
-                _lastLongPressTime = DateTime.Now;
+                _gestureTiming.NoteLongPress();
 
                 ResetRecitationContext();
                 var wasEmpty = _viewModel.SelectedPasukCount == 0;
@@ -197,7 +192,7 @@ public partial class ParashaPage
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
 #if ANDROID || IOS || MACCATALYST
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
 
         // The sender is the LongPressBehavior - get the row from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&
