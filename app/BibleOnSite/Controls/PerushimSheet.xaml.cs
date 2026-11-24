@@ -23,7 +23,7 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
     private double _expandedHeight;
     private double _panStartHeight;
     private double _lastPanY;
-    private DateTime _lastPanTime;
+    private readonly PanVelocityTracker _panVelocity = new();
 
     private bool _isTogglingPerush;
 
@@ -200,13 +200,13 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
             case GestureStatus.Started:
                 _panStartHeight = HeightRequest;
                 _lastPanY = 0;
-                _lastPanTime = DateTime.Now;
+                _panVelocity.Begin();
                 this.CancelAnimations();
                 break;
 
             case GestureStatus.Running:
                 _lastPanY = e.TotalY;
-                _lastPanTime = DateTime.Now;
+                _panVelocity.Add(e.TotalY, DateTime.Now);
 
                 if (e.TotalY > 0)
                 {
@@ -231,8 +231,7 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 
             case GestureStatus.Completed:
             case GestureStatus.Canceled:
-                var elapsedMs = (DateTime.Now - _lastPanTime).TotalMilliseconds;
-                var velocity = elapsedMs > 0 ? Math.Abs(_lastPanY) / (elapsedMs / 1000.0) : 0;
+                var velocity = _panVelocity.ReleaseVelocity(DateTime.Now);
 
                 var dragY = TranslationY;
                 var currentHeight = HeightRequest;
