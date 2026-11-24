@@ -64,30 +64,36 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
     private bool ScrolledOffscreen(string id, Action scrollDown)
     {
         var locator = Platform.AutomationId(id);
-        var wasDisplayed = Displayed(locator);
+        var wasDisplayed = Displayed(locator) is true;
         for (var step = 0; step < 8; step++)
         {
             scrollDown();
             var displayed = Displayed(locator);
-            if (wasDisplayed && !displayed)
+            // A stale mid-read is no observation; counting it as "not
+            // displayed" would pass the assert without a real overshoot.
+            if (displayed == null)
+            {
+                continue;
+            }
+            if (wasDisplayed && !displayed.Value)
             {
                 return true;
             }
-            wasDisplayed |= displayed;
+            wasDisplayed |= displayed.Value;
         }
         return false;
     }
 
-    private bool Displayed(OpenQA.Selenium.By locator) =>
-        Driver!.FindElements(locator).Any(element =>
+    // null when the tree churned mid-read: no observation either way.
+    private bool? Displayed(OpenQA.Selenium.By locator)
+    {
+        try
         {
-            try
-            {
-                return element.Displayed;
-            }
-            catch (OpenQA.Selenium.StaleElementReferenceException)
-            {
-                return false;
-            }
-        });
+            return Driver!.FindElements(locator).Any(element => element.Displayed);
+        }
+        catch (OpenQA.Selenium.StaleElementReferenceException)
+        {
+            return null;
+        }
+    }
 }
