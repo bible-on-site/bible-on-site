@@ -42,6 +42,7 @@ vi.mock("~/server/moadim", () => ({ listMoadim: server.listMoadim }));
 vi.mock("~/server/perakim", () => ({ getPerakim: server.getPerakim }));
 vi.mock("~/components/WysiwygEditor", () => ({
 	WysiwygEditor: (props: {
+		content: string;
 		onChange: (content: string) => void;
 		ref?: { current: { flush?: () => void } | null };
 	}) => {
@@ -65,7 +66,7 @@ vi.mock("~/components/WysiwygEditor", () => ({
 				}
 			};
 		}, []);
-		return <div data-testid="wysiwyg" />;
+		return <div data-testid="wysiwyg" data-value={props.content} />;
 	},
 }));
 vi.mock("~/components/HebrewDatesEditor", () => ({
@@ -396,16 +397,20 @@ describe("ArticleEditPage", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
 		);
+		expect(screen.getByTestId("wysiwyg")).toHaveAttribute("data-value", "");
 	});
 
 	it("skips the deferred save while a StrictMode remount is in flight", async () => {
+		// Content the editor still owes the page: during the replay its unmount
+		// cleanup delivers it while mountedRef is already true again.
+		server.pendingContent = "<p>עריכה ממתינה</p>";
 		const client = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
 		});
 		const { component: Page } = Route as unknown as {
 			component: () => React.ReactElement;
 		};
-		render(
+		const utils = render(
 			<StrictMode>
 				<QueryClientProvider client={client}>
 					<Page />
@@ -416,9 +421,17 @@ describe("ArticleEditPage", () => {
 			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
 		);
 
-		// The deferred teardown save fires while mountedRef is true again.
+		// Without the mountedRef guard the deferred save would persist the
+		// pending edit on a StrictMode replay; it must stay silent.
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		expect(server.updateArticle).not.toHaveBeenCalled();
+
+		// A real unmount still saves the pending edit.
+		utils.unmount();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(server.updateArticle).toHaveBeenCalledWith({
+			data: expect.objectContaining({ content: "<p>עריכה ממתינה</p>" }),
+		});
 	});
 
 	it("does not save on unmount when nothing changed", async () => {
