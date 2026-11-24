@@ -237,7 +237,7 @@ public partial class MasoraPage
         var unit = (sender as Label)?.BindingContext as MasoraUnit;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (unit != null && unit == _viewModel.Unit)
             {
                 EnterUnitRecitation();

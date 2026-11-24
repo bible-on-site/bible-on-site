@@ -275,7 +275,7 @@ public partial class MoedPage
         _headerPress = request;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (_viewModel.Unit != null)
             {
                 EnterUnitRecitation();
