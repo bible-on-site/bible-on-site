@@ -120,4 +120,23 @@ public sealed class PageGestureBandTests
     [Fact]
     public void SeekKeepsDirectionOnTheFirstObservation() =>
         Assert.True(PerekPage.SeekScrollsDown(true, null, "surface"));
+
+    [Fact]
+    public void ScrollBoundsClipsTheSurfaceToTheBand()
+    {
+        var band = MobilePlatformAdapter.PageGestureBand(new Size(540, 1200));
+        var surface = new Rectangle(0, 0, 540, 1200);
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, surface));
+    }
+
+    [Fact]
+    public void ScrollBoundsFallsBackToTheBandForAnOffBandSurface()
+    {
+        var band = MobilePlatformAdapter.PageGestureBand(new Size(540, 1200));
+        // Above the band entirely: Intersect yields an empty rectangle and the
+        // drag must not collapse to a press at one point.
+        var offBand = new Rectangle(0, 0, 540, 100);
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, offBand));
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, null));
+    }
 }

@@ -709,16 +709,8 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
             "//XCUIElementTypeScrollView | //XCUIElementTypeCollectionView | //XCUIElementTypeTable"))
             .OrderByDescending(e => e.Rect.Height)
             .FirstOrDefault();
-        var band = PageGestureBand(DriverTelemetry.WindowSize(driver));
-        var bounds = surface == null
-            ? band
-            : System.Drawing.Rectangle.Intersect(band, surface.Rect);
-        // An off-band surface intersects to an empty rectangle, which would
-        // send both pointer moves to the same point — a press, not a scroll.
-        if (bounds.Height <= 0)
-        {
-            bounds = band;
-        }
+        var bounds = ChooseScrollBounds(PageGestureBand(DriverTelemetry.WindowSize(driver)),
+            surface?.Rect);
         var x = bounds.Left + bounds.Width / 2;
         var finger = new PointerInputDevice(PointerKind.Touch, "finger");
         var sequence = new ActionSequence(finger, 0);
@@ -732,6 +724,23 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(300)));
         sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
         driver.PerformActions([sequence]);
+    }
+
+    /// <summary>
+    /// The rectangle a page-scroll drag is played inside: the surface clipped to
+    /// the gesture band. An off-band surface intersects to an empty rectangle —
+    /// both pointer moves would land on the same point (a press, not a scroll) —
+    /// so an empty or absent surface falls back to the band itself.
+    /// </summary>
+    internal static System.Drawing.Rectangle ChooseScrollBounds(
+        System.Drawing.Rectangle band, System.Drawing.Rectangle? surface)
+    {
+        if (surface == null)
+        {
+            return band;
+        }
+        var bounds = System.Drawing.Rectangle.Intersect(band, surface.Value);
+        return bounds.Height > 0 ? bounds : band;
     }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
