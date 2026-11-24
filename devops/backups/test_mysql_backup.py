@@ -454,7 +454,7 @@ class BackupTests(unittest.TestCase):
             ],
         }
 
-    def test_mysql97_backup_records_actual_restored_article_hash_catalog(self):
+    def test_backup_records_actual_restored_article_hash_catalog(self):
         source = self.article_hash_catalog("utf8mb4")
         restored = {
             **self.restoration,
@@ -472,25 +472,20 @@ class BackupTests(unittest.TestCase):
         self.assertNotEqual(restored["schemaSha256"], backup.fingerprint(source))
         self.assertEqual(source, self.article_hash_catalog("utf8mb4"))
 
-    def test_mysql97_catalog_equivalence_rejects_other_schema_changes(self):
+    def test_article_hash_catalog_equivalence_rejects_other_schema_changes(self):
         source = self.article_hash_catalog("utf8mb4")
         restored = self.article_hash_catalog("utf8mb3")
-        self.assertFalse(
-            backup.matches_restored_schema(
-                source, "8.4.13", backup.fingerprint(restored)
-            )
-        )
         changed = self.article_hash_catalog("utf8mb3")
         changed["COLUMNS"][0]["generation"] = changed["COLUMNS"][0][
             "generation"
         ].replace("0x01", "0x02")
         self.assertFalse(
-            backup.matches_restored_schema(source, "9.7.4", backup.fingerprint(changed))
+            backup.matches_restored_schema(source, backup.fingerprint(changed))
         )
         changed = self.article_hash_catalog("utf8mb3")
         changed["TABLES"][0]["collation"] = "utf8mb3_unicode_ci"
         self.assertFalse(
-            backup.matches_restored_schema(source, "9.7.4", backup.fingerprint(changed))
+            backup.matches_restored_schema(source, backup.fingerprint(changed))
         )
         for metadata_change in [
             {"table": "another_table"},
@@ -502,9 +497,7 @@ class BackupTests(unittest.TestCase):
                 for schema in (source, restored):
                     schema["COLUMNS"][0].update(metadata_change)
                 self.assertFalse(
-                    backup.matches_restored_schema(
-                        source, "9.7.4", backup.fingerprint(restored)
-                    )
+                    backup.matches_restored_schema(source, backup.fingerprint(restored))
                 )
                 source = self.article_hash_catalog("utf8mb4")
                 restored = self.article_hash_catalog("utf8mb3")
@@ -512,12 +505,10 @@ class BackupTests(unittest.TestCase):
             column = schema["COLUMNS"][0]
             column["generation"] = column["generation"].replace(r"\'\'", r"\'value\'")
         self.assertFalse(
-            backup.matches_restored_schema(
-                source, "9.7.4", backup.fingerprint(restored)
-            )
+            backup.matches_restored_schema(source, backup.fingerprint(restored))
         )
 
-    def test_mysql97_source_drift_stays_strict_even_for_the_restore_equivalence(self):
+    def test_source_drift_stays_strict_even_for_the_restore_equivalence(self):
         source = self.article_hash_catalog("utf8mb4")
         changed = self.article_hash_catalog("utf8mb3")
         self.mock_backup(server_identity={"uuid": "production", "version": "9.7.4"})

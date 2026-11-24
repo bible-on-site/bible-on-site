@@ -321,15 +321,13 @@ _RESTORED_ARTICLE_HASH = _UPGRADED_ARTICLE_HASH.replace(
 )
 
 
-def matches_restored_schema(source_schema, source_version, restored_sha256):
+def matches_restored_schema(source_schema, restored_sha256):
     if fingerprint(source_schema) == restored_sha256:
         return True
-    if mysql_family(source_version) != "9.7":
-        return False
-    # A physical upgrade can retain utf8mb4 introducers on these three empty
-    # strings in INFORMATION_SCHEMA. In MySQL 9.7 SHOW CREATE TABLE emits the
-    # utf8mb3 form, which restores the same fingerprint bytes. Accept only
-    # this exact transition on the known stored generated column.
+    # INFORMATION_SCHEMA can report utf8mb4 introducers on these three empty
+    # strings where SHOW CREATE TABLE emits utf8mb3. Both forms produce the
+    # same fingerprint bytes. Accept only this exact transition on the known
+    # stored generated column.
     columns = source_schema.get("COLUMNS", [])
     for index, column in enumerate(columns):
         if (
@@ -532,9 +530,7 @@ def backup(source, scratch, s3, kind, directory, *, now=None, run=None):
     restored = restore_archive(
         scratch, path, directory, identity["uuid"], identity["version"], sha256
     )
-    if not matches_restored_schema(
-        before, identity["version"], restored["schemaSha256"]
-    ):
+    if not matches_restored_schema(before, restored["schemaSha256"]):
         raise BackupError("Restored schema does not match the exported schema")
     until = now + timedelta(days=RETENTION[kind])
     key = f"{kind}/{now:%Y/%m/%d}/{uuid.uuid4().hex}/application.sql.gz"
