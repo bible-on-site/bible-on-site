@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { EventEmitter, once } from "node:events";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createServer, get as getHttp } from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -233,6 +237,75 @@ test("returns every verified mirror in preference order", async () => {
 		"/ubuntu/dists/noble/main/binary-amd64/Packages.gz",
 		"/ubuntu/pool/main/e/example/example_1.0_amd64.deb",
 	]);
+});
+
+test("preserves the range across redirects and releases the partial response socket", { timeout: 10_000 }, async (t) => {
+	const socketClosed = Promise.withResolvers();
+	let downloadSignal;
+	const server = createServer((request, response) => {
+		response.once("close", () => {
+			socketClosed.resolve({
+				range: request.headers.range,
+				ended: response.writableEnded,
+				aborted: downloadSignal.aborted,
+			});
+		});
+		response.writeHead(206, { "Content-Length": 8192 });
+		response.write(Buffer.alloc(4096));
+	});
+	t.after(() => {
+		server.closeAllConnections();
+		server.close();
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const loopback = `http://127.0.0.1:${server.address().port}`;
+	const redirects = [];
+	const requests = t.mock.method(https, "get", (url, options, onResponse) => {
+		const address = new URL(url);
+		let reply = healthyArchive(address.href);
+		if (address.href === `${kernel}dists/noble/InRelease`) {
+			reply = new Response(null, {
+				status: 302,
+				headers: { location: address.href },
+			});
+		} else if (address.href === `${security}dists/noble/InRelease`) {
+			reply = new Response(null, { status: 503 });
+		} else if (
+			address.host === new URL(archive).host &&
+			address.pathname.includes("/pool/")
+		) {
+			redirects.push(options.headers.Range);
+			if (address.pathname.startsWith("/redirected/")) {
+				// Exercise the real HTTP/1.1 IncomingMessage lifecycle over loopback.
+				downloadSignal = options.signal;
+				return getHttp(loopback, options, onResponse);
+			}
+			reply = new Response(null, {
+				status: 302,
+				headers: { location: `/redirected${address.pathname}` },
+			});
+		}
+		const response = reply.body
+			? Readable.fromWeb(reply.body)
+			: Readable.from([]);
+		response.statusCode = reply.status;
+		response.headers = Object.fromEntries(reply.headers);
+		queueMicrotask(() => onResponse(response));
+		return new EventEmitter();
+	});
+	assert.deepEqual(await selectUbuntuArchives("noble"), [archive, azure, umich]);
+	assert.deepEqual(redirects, ["bytes=0-4095", "bytes=0-4095"]);
+	assert.deepEqual(await socketClosed.promise, {
+		range: "bytes=0-4095",
+		ended: false,
+		aborted: false,
+	});
+	assert(
+		requests.mock.calls.every(
+			({ arguments: [, options] }) => options.agent === false,
+		),
+	);
 });
 
 test("rejects a mirror whose signed metadata works while package downloads fail", async () => {

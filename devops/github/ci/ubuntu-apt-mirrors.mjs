@@ -1,5 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
+import https from "node:https";
 import { resolve } from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
 
@@ -17,6 +19,7 @@ const signedMetadataHeader = "-----BEGIN PGP SIGNED MESSAGE-----";
 // field, and a bounded slice of the package proves the pool path serves bytes.
 const packageIndexCap = 256 * 1024;
 const packageDownloadCap = 4 * 1024;
+const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 const networkCodes = new Set([
 	"ENOTFOUND",
 	"EAI_AGAIN",
@@ -171,8 +174,30 @@ function packageFilename(index) {
 	return filename?.startsWith("pool/") ? filename : null;
 }
 
+// Use HTTPS over HTTP/1.1 for these short, cancellable probes. Node's built-in
+// fetch can crash after an HTTP/2 socket idles (nodejs/undici#5936).
+async function fetchMirror(url, options, redirects = 5) {
+	const response = await new Promise((resolve, reject) => {
+		https.get(url, { ...options, agent: false }, resolve).once("error", reject);
+	});
+	const { statusCode: status, headers } = response;
+	if (redirectStatuses.has(status) && headers.location) {
+		response.destroy();
+		if (redirects === 0) throw new Error("Too many Ubuntu mirror redirects");
+		return fetchMirror(new URL(headers.location, url), options, redirects - 1);
+	}
+	if (status < 200 || status >= 300 || status === 204 || status === 205) {
+		response.destroy();
+		return new Response(null, { status });
+	}
+	return new Response(Readable.toWeb(response), { status });
+}
+
 /** Probe every suite and a real package download before ranking a mirror. */
-export async function selectUbuntuArchives(codename, fetchMetadata = fetch) {
+export async function selectUbuntuArchives(
+	codename,
+	fetchMetadata = fetchMirror,
+) {
 	if (typeof codename !== "string" || !/^[a-z][a-z0-9]*$/.test(codename)) {
 		throw new Error("Cannot determine the runner's Ubuntu codename");
 	}
