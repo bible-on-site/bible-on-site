@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useModalDialogFocus } from "~/lib/use-modal-dialog-focus";
 
 interface ConfirmDialogProps {
 	open: boolean;
@@ -8,12 +10,15 @@ interface ConfirmDialogProps {
 	cancelLabel?: string;
 	onConfirm: () => void;
 	onCancel: () => void;
+	/** Element whose click opened the dialog; focus returns to it on close. */
+	opener?: HTMLElement | null;
 }
 
 /**
  * Styled replacement for the native confirm dialog on actions a toast cannot
  * honestly delay - deletes that navigate away and edits that overwrite live
- * content. Escape cancels; the previous focus is restored on close.
+ * content. Escape cancels, Tab/Shift+Tab stay inside the dialog, and the
+ * previous focus is restored on close.
  */
 export function ConfirmDialog({
 	open,
@@ -23,7 +28,9 @@ export function ConfirmDialog({
 	cancelLabel = "ביטול",
 	onConfirm,
 	onCancel,
+	opener,
 }: ConfirmDialogProps) {
+	const dialogRef = useRef<HTMLDivElement>(null);
 	const confirmRef = useRef<HTMLButtonElement>(null);
 	// Callers pass fresh closures each render — the open/focus effect must not
 	// restart on their identity changes or focus would jump back to confirm.
@@ -32,29 +39,30 @@ export function ConfirmDialog({
 		onCancelRef.current = onCancel;
 	});
 
+	useModalDialogFocus(open, dialogRef, opener ?? null, confirmRef);
+
 	useEffect(() => {
 		if (!open) return;
-		const previousFocus = document.activeElement as HTMLElement | null;
-		confirmRef.current?.focus();
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") onCancelRef.current();
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.removeEventListener("keydown", onKeyDown);
-			previousFocus?.focus();
 		};
 	}, [open]);
 
 	if (!open) return null;
 
-	return (
+	return createPortal(
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 p-4"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-dialog-title"
 			aria-describedby="confirm-dialog-message"
+			tabIndex={-1}
 		>
 			<div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
 				<h2
@@ -84,6 +92,7 @@ export function ConfirmDialog({
 					</button>
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }
