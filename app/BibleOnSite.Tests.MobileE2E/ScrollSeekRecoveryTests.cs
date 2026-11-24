@@ -57,22 +57,37 @@ public sealed class ScrollSeekRecoveryTests(ITestOutputHelper output, MobileDevi
         Assert.NotNull(Page.ScrollFlyoutTo(id));
     });
 
-    // Scrolls down until `id` was seen and then pruned from the source tree
-    // (a fully offscreen node is absent on Android), proving the seek must
-    // reverse to recover it — not merely that it never rendered.
+    // Scrolls down until `id` was displayed and then left the viewport,
+    // proving the seek must reverse to recover it — not merely that it never
+    // rendered. Android prunes an offscreen node from the source tree; iOS
+    // keeps it with visible=false, so the display flag is the shared signal.
     private bool ScrolledOffscreen(string id, Action scrollDown)
     {
-        var seen = Driver!.PageSource.Contains(id);
+        var locator = Platform.AutomationId(id);
+        var wasDisplayed = Displayed(locator);
         for (var step = 0; step < 8; step++)
         {
             scrollDown();
-            var surface = Driver!.PageSource;
-            seen |= surface.Contains(id);
-            if (seen && !surface.Contains(id))
+            var displayed = Displayed(locator);
+            if (wasDisplayed && !displayed)
             {
                 return true;
             }
+            wasDisplayed |= displayed;
         }
         return false;
     }
+
+    private bool Displayed(OpenQA.Selenium.By locator) =>
+        Driver!.FindElements(locator).Any(element =>
+        {
+            try
+            {
+                return element.Displayed;
+            }
+            catch (OpenQA.Selenium.StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
 }
