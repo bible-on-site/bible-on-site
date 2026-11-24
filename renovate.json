@@ -108,6 +108,19 @@
 			"allowedVersions": "<26"
 		},
 		{
+			"description": "Match the data deployment rehearsal to the Lambda runtime until the Python 3.15 rollout in https://github.com/bible-on-site/bible-on-site/issues/3800",
+			"matchManagers": [
+				"github-actions"
+			],
+			"matchFileNames": [
+				".github/workflows/ci-data-deploy.yml"
+			],
+			"matchPackageNames": [
+				"actions/python-versions"
+			],
+			"allowedVersions": "<3.15.0"
+		},
+		{
 			"description": "Hold SDK feature-band updates pending MAUI/Xcode runner availability — 11.0.1xx servicing stays allowed; see https://github.com/bible-on-site/bible-on-site/issues/2566",
 			"matchManagers": [
 				"nuget"
