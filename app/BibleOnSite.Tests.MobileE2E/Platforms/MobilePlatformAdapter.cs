@@ -465,9 +465,17 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
         var startY = DragStartClearOfControls(driver, x, window.Height, down);
         sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, startY, TimeSpan.Zero));
         sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
-        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, down
+        var endY = down
             ? Math.Max(startY - window.Height * 3 / 5, window.Height / 10)
-            : Math.Min(startY + window.Height * 3 / 5, window.Height * 9 / 10), TimeSpan.FromMilliseconds(350)));
+            : Math.Min(startY + window.Height * 3 / 5, window.Height * 9 / 10);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, endY, TimeSpan.FromMilliseconds(350)));
+        // Release at rest: lifting the pointer while it still moves flings the
+        // surface, which can carry the page several viewports past the gesture
+        // and keeps the source changing between polls, so a settled edge never
+        // reads identical twice and the seek keeps scrolling in one direction.
+        // Holding in place first lets the release velocity decay to zero and
+        // the page settles where the drag ended.
+        sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(300)));
         sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
         driver.PerformActions([sequence]);
     }
@@ -679,16 +687,28 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     }
     private static bool PageChanged(AppiumDriver driver, string before) =>
         !string.Equals(driver.PageSource, before, StringComparison.Ordinal);
-    public override void ScrollPageDown(AppiumDriver driver) =>
-        driver.ExecuteScript("mobile: scroll", new Dictionary<string, object>
+    public override void ScrollPageDown(AppiumDriver driver) => ScrollPage(driver, "down");
+    public override void ScrollPageUp(AppiumDriver driver) => ScrollPage(driver, "up");
+
+    /// <summary>
+    /// A direction-scroll on the Application element never reaches an inner
+    /// MauiScrollView — WDA scrolls the app's top container, which does not
+    /// move, so the gesture is a silent no-op on pages like display
+    /// preferences. Scrolling the innermost scrollable view itself moves the
+    /// content reliably.
+    /// </summary>
+    private static void ScrollPage(AppiumDriver driver, string direction)
+    {
+        var scroll = new Dictionary<string, object> { ["direction"] = direction };
+        // Pages with several scrollables take the first in tree order — the
+        // content surface, not a horizontal chip strip.
+        var surface = driver.FindElements(By.XPath("//XCUIElementTypeScrollView")).FirstOrDefault();
+        if (surface != null)
         {
-            ["direction"] = "down",
-        });
-    public override void ScrollPageUp(AppiumDriver driver) =>
-        driver.ExecuteScript("mobile: scroll", new Dictionary<string, object>
-        {
-            ["direction"] = "up",
-        });
+            scroll["elementId"] = surface.Id;
+        }
+        driver.ExecuteScript("mobile: scroll", scroll);
+    }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.
