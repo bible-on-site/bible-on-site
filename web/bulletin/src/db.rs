@@ -1,8 +1,10 @@
 //! MySQL connection for PDF requests that include articles.
 //!
-//! RDS connections verify the certificate and the endpoint in DB_URL. The
-//! embedded il-central-1 root covers rds-ca-rsa2048-g1. During a CA change,
-//! set the `ssl-ca` DB_URL query option to the trusted root PEM on disk.
+//! RDS connections verify the certificate and endpoint in DB_URL. Normal RDS
+//! server-certificate renewals keep the embedded rds-ca-rsa2048-g1 root.
+//! Changing the trust root requires a coordinated Bulletin package rollout
+//! because the Lambda ZIP contains only the executable and fonts. A local
+//! deployment can supply its own trust root through the `ssl-ca` URL option.
 
 use std::env;
 use std::sync::Arc;
@@ -86,6 +88,8 @@ mod tests {
     use super::*;
     use sea_orm::sqlx::{self, ConnectOptions as _};
 
+    const FIXTURE_RDS_HOST: &str = "bulletin-fixture.test.il-central-1.rds.amazonaws.com";
+
     fn mysql_options(database_url: &str) -> MySqlConnectOptions {
         configure_mysql_tls(
             database_url.parse().unwrap(),
@@ -155,18 +159,19 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a loopback MySQL 9.7 TLS fixture with BULLETIN_MYSQL_TLS_TEST_DB_URL"]
+    #[ignore = "requires a loopback MySQL 9.7 TLS fixture with BULLETIN_MYSQL_TLS_TEST_DB_URL and the fixture RDS DNS SAN"]
     async fn verifies_identity_end_to_end_on_mysql_97() {
-        let url = env::var("BULLETIN_MYSQL_TLS_TEST_DB_URL").expect("isolated fixture URL");
-        let options = mysql_options(&url);
+        let fixture_url = env::var("BULLETIN_MYSQL_TLS_TEST_DB_URL").expect("isolated fixture URL");
+        let options: MySqlConnectOptions = fixture_url.parse().unwrap();
         assert!(matches!(options.get_host(), "localhost" | "127.0.0.1"));
         assert_eq!(options.get_database(), Some("bulletin_mysql_tls_test"));
-        assert!(matches!(
-            options.get_ssl_mode(),
-            MySqlSslMode::VerifyIdentity
-        ));
-        let database = Database::connect(&url).await.unwrap();
-        let pool = database.get_connection().get_mysql_connection_pool();
+        let mut url = Url::parse(&fixture_url).unwrap();
+        assert!(explicit_ca_override(&url), "fixture needs its own CA file");
+        url.query_pairs_mut()
+            .append_pair("ssl-mode", "DISABLED")
+            .append_pair("tls-sni-servername", "ignored.invalid");
+        let database = connect_rds_fixture(&url, FIXTURE_RDS_HOST).await.unwrap();
+        let pool = database.get_mysql_connection_pool();
         let version: String = sqlx::query_scalar("SELECT VERSION()")
             .fetch_one(pool)
             .await
@@ -180,13 +185,26 @@ mod tests {
         .unwrap();
         assert!(!cipher.is_empty(), "expected a verified TLS connection");
 
-        let mut wrong_host = Url::parse(&url).unwrap();
-        wrong_host
-            .query_pairs_mut()
-            .append_pair("tls-sni-servername", "wrong.example.invalid");
         assert!(
-            Database::connect(wrong_host.as_str()).await.is_err(),
-            "an incorrect server name must fail the TLS handshake"
+            connect_rds_fixture(&url, "wrong.test.il-central-1.rds.amazonaws.com")
+                .await
+                .is_err(),
+            "the hostname from the RDS policy must match the certificate"
         );
+    }
+
+    async fn connect_rds_fixture(
+        url: &Url,
+        logical_host: &'static str,
+    ) -> Result<DatabaseConnection, sea_orm::DbErr> {
+        let mut options = ConnectOptions::new(url.as_str());
+        let explicit_ca = explicit_ca_override(url);
+        options.map_sqlx_mysql_opts(move |mysql| {
+            // Apply the production policy to the same logical hostname used
+            // by TLS. Route only TCP to the disposable local fixture.
+            let loopback = mysql.get_host().to_owned();
+            configure_mysql_tls(mysql.host(logical_host), explicit_ca).host(&loopback)
+        });
+        sea_orm::Database::connect(options).await
     }
 }
