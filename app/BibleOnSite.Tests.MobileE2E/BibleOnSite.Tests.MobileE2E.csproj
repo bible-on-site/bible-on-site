@@ -21,7 +21,7 @@
   <ItemGroup>
     <PackageReference Include="Appium.WebDriver" Version="9.0.0" />
     <!-- Direct pin lifts the transitive floor (Appium.WebDriver requires >= 4.46.0) to current stable. -->
-    <PackageReference Include="Selenium.WebDriver" Version="4.53.0" />
+    <PackageReference Include="Selenium.WebDriver" Version="4.54.0" />
     <!-- Same lift for Appium.WebDriver's System.Drawing.Common 10.0.12 floor to the .NET 11 servicing line. -->
     <PackageReference Include="System.Drawing.Common" Version="11.0.0" />
     <PackageReference Include="Microsoft.Testing.Extensions.HangDump" Version="2.5.3" />
