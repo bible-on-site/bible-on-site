@@ -422,6 +422,7 @@ dependencies = [
  "tracing-subscriber",
  "typst-as-lib",
  "typst-pdf",
+ "url",
 ]
 
 [[package]]
