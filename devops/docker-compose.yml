@@ -1,7 +1,7 @@
 services:
   mysql:
     profiles: ["mysql"]
-    image: mysql:9.7.4@sha256:df90258da46f6e7ff8574ff84f17618aba0765cac749928299c69fd4e7cb8ad8
+    image: mysql:26.7.0@sha256:625f74ddf93652d9d0f8d4ea7d741b9189554a5e96d27bb770abd0902d89c6e3
     ports:
       - "127.0.0.1:${LOCAL_MYSQL_PORT:-3306}:3306"
     environment:
