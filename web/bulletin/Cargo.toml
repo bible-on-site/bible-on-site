@@ -29,6 +29,7 @@ sea-orm = { version = "2.0.4", default-features = false, features = [
     "runtime-tokio-native-tls",
 ] }
 entities = { path = "../api/entities" }
+url = "2.5.8"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
