@@ -127,6 +127,11 @@ public sealed class PageGestureBandTests
         var band = MobilePlatformAdapter.PageGestureBand(new Size(540, 1200));
         var surface = new Rectangle(0, 0, 540, 1200);
         Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, surface));
+        // A surface spilling past the band's lower edge scrolls only the
+        // overlap: intersect, not the whole surface and not the whole band.
+        var spilling = new Rectangle(0, 600, 540, 900);
+        Assert.Equal(Rectangle.Intersect(band, spilling),
+            IosPlatformAdapter.ChooseScrollBounds(band, spilling));
     }
 
     [Fact]
