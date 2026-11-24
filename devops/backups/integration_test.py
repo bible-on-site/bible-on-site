@@ -167,6 +167,26 @@ GRANT SELECT,SHOW VIEW,TRIGGER,EVENT ON tanah.* TO 'bos_backup'@'%';
 GRANT SHOW_ROUTINE ON *.* TO 'bos_backup'@'%';
 """
 
+# The utf8mb3 article columns and utf8mb4 empty literals reproduce the real
+# difference between INFORMATION_SCHEMA and mysqldump's emitted definition.
+ARTICLE_HASH_FIXTURE = r"""
+CREATE TABLE tanah_article (
+    id MEDIUMINT PRIMARY KEY AUTO_INCREMENT,
+    perek_id SMALLINT NOT NULL,
+    author_id SMALLINT NOT NULL,
+    abstract VARCHAR(10000),
+    name VARCHAR(700) NOT NULL,
+    content MEDIUMTEXT,
+    content_hash BINARY(16) GENERATED ALWAYS AS (
+        UNHEX(LEFT(SHA2(CONCAT_WS(X'01', IFNULL(name, _utf8mb4''),
+            IFNULL(abstract, _utf8mb4''), IFNULL(content, _utf8mb4''),
+            perek_id, author_id), 256), 32))
+    ) STORED
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+INSERT INTO tanah_article(perek_id,author_id,name,abstract,content) VALUES
+    (1,2,'בדיקה',NULL,NULL),(2,3,'Title','Abstract','Content');
+"""
+
 
 def run(version):
     token = uuid.uuid4().hex[:12]
@@ -225,9 +245,10 @@ def run(version):
             if version.startswith("8.4.")
             else "UNHEX(LEFT(SHA2(title, 256), 32))"
         )
-        (initial / "fixture.sql").write_text(
-            FIXTURE.replace("__TITLE_HASH__", hash_expression), encoding="utf-8"
+        fixture = (
+            FIXTURE.replace("__TITLE_HASH__", hash_expression) + ARTICLE_HASH_FIXTURE
         )
+        (initial / "fixture.sql").write_text(fixture, encoding="utf-8")
         docker("network", "create", "--internal", network)
         try:
             for name in [source_name, scratch_name]:
@@ -338,6 +359,28 @@ def run(version):
                 work,
                 "Restored data check",
             ) == ["0001FF0A\t1\t16"]
+            article_definition = (
+                "SELECT GENERATION_EXPRESSION FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA='tanah' AND TABLE_NAME='tanah_article' "
+                "AND COLUMN_NAME='content_hash';"
+            )
+            (source_definition,) = source.query(
+                article_definition, work, "Source article hash definition"
+            )
+            (restored_definition,) = scratch.query(
+                article_definition, work, "Restored article hash definition"
+            )
+            assert source_definition.count(r"_utf8mb4\'\'") == 3
+            assert restored_definition == source_definition.replace(
+                r"_utf8mb4\'\'", r"_utf8mb3\'\'"
+            )
+            article_hashes = (
+                "SELECT HEX(content_hash) FROM tanah.tanah_article ORDER BY id;"
+            )
+            assert scratch.query(
+                article_hashes, work, "Restored article hashes"
+            ) == source.query(article_hashes, work, "Source article hashes")
+            assert manifest["restoration"]["tables"]["tanah_article"]["rows"] == 2
             # Only this process's disposable scratch instance is cleared to also
             # exercise the independent version-pinned download/restore command.
             scratch.query("DROP DATABASE tanah;", work, "Scratch reset")
@@ -370,6 +413,7 @@ def run(version):
                             "routine",
                             "trigger",
                             "event",
+                            "article hash catalog rewrite",
                             "version-pinned restore",
                         ],
                     }

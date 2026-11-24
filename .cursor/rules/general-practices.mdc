@@ -33,6 +33,10 @@ exception avoids reimplementing production SQL parsing in another language.
 Deployment orchestration remains Node.js/TypeScript and data ingestion remains
 Rust.
 
+The existing database backup and restore commands in `devops/backups/` use
+Python with boto3 and the MySQL CLI. Their validation and integration tests
+use the same runtime.
+
 ## Tool Learning (Agents/Copilot)
 
 1. Check `.github/tool-registry.md` for existing research.

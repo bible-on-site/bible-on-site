@@ -17,6 +17,10 @@
   Rust; durable application content uses the normal database editing/import
   path.
 
+The existing database backup and restore commands in `devops/backups/` use
+Python with boto3 and the MySQL CLI. Their validation and integration tests
+use the same runtime.
+
 This ensures consistency, type safety, and maintainability across the codebase.
 
 ## Tool Learning Protocol
