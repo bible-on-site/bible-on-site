@@ -28,7 +28,7 @@ public sealed class PanVelocityTracker
         _samples.Add((offset, time));
         // Keep a little more than the window so a ReleaseVelocity call can
         // still span the full window; bound memory on long drags.
-        var cutoff = time.AddMilliseconds(-2 * WindowMilliseconds);
+        var cutoff = time.AddMilliseconds(-2.0 * WindowMilliseconds);
         _samples.RemoveAll(sample => sample.Time < cutoff);
     }
 
