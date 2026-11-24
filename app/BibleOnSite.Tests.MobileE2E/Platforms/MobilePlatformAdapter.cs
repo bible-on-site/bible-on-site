@@ -713,6 +713,12 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         var bounds = surface == null
             ? band
             : System.Drawing.Rectangle.Intersect(band, surface.Rect);
+        // An off-band surface intersects to an empty rectangle, which would
+        // send both pointer moves to the same point — a press, not a scroll.
+        if (bounds.Height <= 0)
+        {
+            bounds = band;
+        }
         var x = bounds.Left + bounds.Width / 2;
         var finger = new PointerInputDevice(PointerKind.Touch, "finger");
         var sequence = new ActionSequence(finger, 0);
