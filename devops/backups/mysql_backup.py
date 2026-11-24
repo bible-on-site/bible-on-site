@@ -311,6 +311,41 @@ def catalog(database, directory, phase):
     return result
 
 
+_UPGRADED_ARTICLE_HASH = (
+    r"unhex(left(sha2(concat_ws(0x01,ifnull(`name`,_utf8mb4\'\'),"
+    r"ifnull(`abstract`,_utf8mb4\'\'),ifnull(`content`,_utf8mb4\'\'),"
+    r"`perek_id`,`author_id`),256),32))"
+)
+_RESTORED_ARTICLE_HASH = _UPGRADED_ARTICLE_HASH.replace(
+    r"_utf8mb4\'\'", r"_utf8mb3\'\'"
+)
+
+
+def matches_restored_schema(source_schema, source_version, restored_sha256):
+    if fingerprint(source_schema) == restored_sha256:
+        return True
+    if mysql_family(source_version) != "9.7":
+        return False
+    # A physical upgrade can retain utf8mb4 introducers on these three empty
+    # strings in INFORMATION_SCHEMA. In MySQL 9.7 SHOW CREATE TABLE emits the
+    # utf8mb3 form, which restores the same fingerprint bytes. Accept only
+    # this exact transition on the known stored generated column.
+    columns = source_schema.get("COLUMNS", [])
+    for index, column in enumerate(columns):
+        if (
+            column["table"] == "tanah_article"
+            and column["name"] == "content_hash"
+            and column["type"] == "binary(16)"
+            and column["extra"] == "STORED GENERATED"
+            and column["generation"] == _UPGRADED_ARTICLE_HASH
+        ):
+            expected_columns = columns.copy()
+            expected_columns[index] = {**column, "generation": _RESTORED_ARTICLE_HASH}
+            expected_schema = {**source_schema, "COLUMNS": expected_columns}
+            return fingerprint(expected_schema) == restored_sha256
+    return False
+
+
 def dump_archive(database, path, directory):
     identifier(database.name)
     config = database.defaults(directory)
@@ -497,7 +532,9 @@ def backup(source, scratch, s3, kind, directory, *, now=None, run=None):
     restored = restore_archive(
         scratch, path, directory, identity["uuid"], identity["version"], sha256
     )
-    if restored["schemaSha256"] != fingerprint(before):
+    if not matches_restored_schema(
+        before, identity["version"], restored["schemaSha256"]
+    ):
         raise BackupError("Restored schema does not match the exported schema")
     until = now + timedelta(days=RETENTION[kind])
     key = f"{kind}/{now:%Y/%m/%d}/{uuid.uuid4().hex}/application.sql.gz"

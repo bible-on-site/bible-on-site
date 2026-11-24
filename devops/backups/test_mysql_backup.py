@@ -423,6 +423,110 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError):
             backup.backup(self.source, self.scratch, self.s3, "daily", self.directory)
 
+    @staticmethod
+    def article_hash_catalog(charset):
+        empty = rf"_{charset}\'\'"
+        return {
+            "TABLES": [
+                {
+                    "name": "tanah_article",
+                    "type": "BASE TABLE",
+                    "engine": "InnoDB",
+                    "collation": "utf8mb3_general_ci",
+                }
+            ],
+            "COLUMNS": [
+                {
+                    "table": "tanah_article",
+                    "name": "content_hash",
+                    "type": "binary(16)",
+                    "ordinal": 10,
+                    "nullable": "YES",
+                    "default": None,
+                    "extra": "STORED GENERATED",
+                    "collation": None,
+                    "generation": (
+                        f"unhex(left(sha2(concat_ws(0x01,ifnull(`name`,{empty}),"
+                        f"ifnull(`abstract`,{empty}),ifnull(`content`,{empty}),"
+                        "`perek_id`,`author_id`),256),32))"
+                    ),
+                }
+            ],
+        }
+
+    def test_mysql97_backup_records_actual_restored_article_hash_catalog(self):
+        source = self.article_hash_catalog("utf8mb4")
+        restored = {
+            **self.restoration,
+            "schemaSha256": backup.fingerprint(self.article_hash_catalog("utf8mb3")),
+        }
+        self.mock_backup(
+            server_identity={"uuid": "production", "version": "9.7.4"},
+            catalog=source,
+            restore_archive=restored,
+        )
+        manifest = backup.backup(
+            self.source, self.scratch, self.s3, "weekly", self.directory
+        )
+        self.assertEqual(manifest["restoration"], restored)
+        self.assertNotEqual(restored["schemaSha256"], backup.fingerprint(source))
+        self.assertEqual(source, self.article_hash_catalog("utf8mb4"))
+
+    def test_mysql97_catalog_equivalence_rejects_other_schema_changes(self):
+        source = self.article_hash_catalog("utf8mb4")
+        restored = self.article_hash_catalog("utf8mb3")
+        self.assertFalse(
+            backup.matches_restored_schema(
+                source, "8.4.13", backup.fingerprint(restored)
+            )
+        )
+        changed = self.article_hash_catalog("utf8mb3")
+        changed["COLUMNS"][0]["generation"] = changed["COLUMNS"][0][
+            "generation"
+        ].replace("0x01", "0x02")
+        self.assertFalse(
+            backup.matches_restored_schema(source, "9.7.4", backup.fingerprint(changed))
+        )
+        changed = self.article_hash_catalog("utf8mb3")
+        changed["TABLES"][0]["collation"] = "utf8mb3_unicode_ci"
+        self.assertFalse(
+            backup.matches_restored_schema(source, "9.7.4", backup.fingerprint(changed))
+        )
+        for metadata_change in [
+            {"table": "another_table"},
+            {"name": "another_hash"},
+            {"extra": "VIRTUAL GENERATED"},
+            {"type": "binary(32)"},
+        ]:
+            with self.subTest(metadata_change=metadata_change):
+                for schema in (source, restored):
+                    schema["COLUMNS"][0].update(metadata_change)
+                self.assertFalse(
+                    backup.matches_restored_schema(
+                        source, "9.7.4", backup.fingerprint(restored)
+                    )
+                )
+                source = self.article_hash_catalog("utf8mb4")
+                restored = self.article_hash_catalog("utf8mb3")
+        for schema in (source, restored):
+            column = schema["COLUMNS"][0]
+            column["generation"] = column["generation"].replace(r"\'\'", r"\'value\'")
+        self.assertFalse(
+            backup.matches_restored_schema(
+                source, "9.7.4", backup.fingerprint(restored)
+            )
+        )
+
+    def test_mysql97_source_drift_stays_strict_even_for_the_restore_equivalence(self):
+        source = self.article_hash_catalog("utf8mb4")
+        changed = self.article_hash_catalog("utf8mb3")
+        self.mock_backup(server_identity={"uuid": "production", "version": "9.7.4"})
+        backup.catalog.side_effect = [source, changed]
+        with self.assertRaisesRegex(backup.BackupError, "Schema changed during export"):
+            backup.backup(self.source, self.scratch, self.s3, "weekly", self.directory)
+        backup.restore_archive.assert_not_called()
+        self.assertEqual(self.s3.objects, {})
+
     def test_failed_manifest_is_not_reported_as_success(self):
         self.mock_backup()
         self.s3.put_object = MagicMock(return_value={})
