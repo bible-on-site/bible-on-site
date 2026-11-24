@@ -408,6 +408,38 @@ describe("WysiwygEditor", () => {
 		expect(onChange).toHaveBeenCalledWith("<p>HTML edit</p>");
 	});
 
+	it("drops pending edits on reset without delivering them", async () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={20}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Discarded</p>");
+
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+
+		// Past the debounce: the cancelled timer must not flush the discarded edit.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(onChange).not.toHaveBeenCalled();
+
+		// The baseline is now the saved content: a later flush is a no-op.
+		act(() => ref.current?.flush());
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
 	it("syncs changed content props back into TipTap", () => {
 		const onChange = vi.fn();
 		const { rerender } = renderEditor(onChange);

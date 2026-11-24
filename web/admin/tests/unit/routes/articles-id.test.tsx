@@ -301,6 +301,46 @@ describe("ArticleEditPage", () => {
 		);
 	});
 
+	it("auto-saves pending edits after the debounce delay", async () => {
+		server.updateArticle.mockResolvedValue(article);
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+
+		act(() => server.editorOnChange?.("<p>עריכה אוטומטית</p>"));
+
+		await waitFor(
+			() =>
+				expect(server.updateArticle).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						content: "<p>עריכה אוטומטית</p>",
+					}),
+				}),
+			{ timeout: 4000 },
+		);
+		expect(server.flushCalls).toBe(1);
+	});
+
+	it("saves a non-content edit on unmount", async () => {
+		server.updateArticle.mockResolvedValue(article);
+		const utils = renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("wysiwyg")).toBeInTheDocument(),
+		);
+		fireEvent.change(screen.getByLabelText(/שם המאמר/), {
+			target: { value: "שם חדש" },
+		});
+
+		utils.unmount();
+
+		await waitFor(() =>
+			expect(server.updateArticle).toHaveBeenCalledWith({
+				data: expect.objectContaining({ name: "שם חדש" }),
+			}),
+		);
+	});
+
 	it("does not save on unmount when nothing changed", async () => {
 		const utils = renderPage();
 		await waitFor(() =>

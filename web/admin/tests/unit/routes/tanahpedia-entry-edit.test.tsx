@@ -21,7 +21,9 @@ const {
 	paramsMock,
 	navigateMock,
 	aliasMocks,
+	resetCalls,
 } = vi.hoisted(() => ({
+	resetCalls: [] as string[],
 	getEntryMock: vi.fn(),
 	getLlmAssistantStatusMock: vi.fn(),
 	createEntryMock: vi.fn(),
@@ -77,19 +79,31 @@ vi.mock("~/components/WysiwygEditor", () => ({
 	WysiwygEditor: ({
 		content,
 		onChange,
+		ref,
 	}: {
 		content: string;
 		onChange: (html: string) => void;
-	}) => (
-		<button
-			data-testid="wysiwyg-editor"
-			data-value={content}
-			type="button"
-			onClick={() => onChange("<p>תוכן חדש</p>")}
-		>
-			editor
-		</button>
-	),
+		ref?: {
+			current: { flush?: () => void; reset?: (html: string) => void } | null;
+		};
+	}) => {
+		if (ref) {
+			ref.current = {
+				flush: () => {},
+				reset: (html: string) => resetCalls.push(html),
+			};
+		}
+		return (
+			<button
+				data-testid="wysiwyg-editor"
+				data-value={content}
+				type="button"
+				onClick={() => onChange("<p>תוכן חדש</p>")}
+			>
+				editor
+			</button>
+		);
+	},
 }));
 
 vi.mock("~/components/tanahpedia/EntryStructuralPanel", () => ({
@@ -207,6 +221,7 @@ describe("EntryEditPage", () => {
 		aliasMocks.saveEntryAlias.mockReset();
 		aliasMocks.removeEntryFromAlias.mockReset();
 		aliasMocks.deleteAliasName.mockReset();
+		resetCalls.length = 0;
 	});
 
 	describe("tabs", () => {
@@ -1417,6 +1432,9 @@ describe("EntryEditPage", () => {
 
 			expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("משה רבנו");
+			// The editor's pending debounce and source draft reset to the server
+			// baseline — a later save can never commit the discarded text.
+			expect(resetCalls).toEqual([existingEntry.content]);
 			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
