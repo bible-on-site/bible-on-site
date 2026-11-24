@@ -158,10 +158,11 @@ describe("Carousel", () => {
 		spy(scroller);
 		for (const card of Array.from(scroller.children)) spy(card);
 
+		scroller.scrollLeft = -CARD_WIDTH;
 		fireEvent.scroll(scroller);
 		expect(reads).toBe(0);
 		expect(screen.getByTestId("carousel-position")).toHaveTextContent(
-			"1-2 / 5",
+			"2-3 / 5",
 		);
 	});
 
@@ -552,9 +553,8 @@ describe("Carousel", () => {
 					</Carousel>
 				</div>,
 			);
-			const scroller = rendered.container.querySelector(
-				".track",
-			) as HTMLElement;
+			// biome-ignore lint/style/noNonNullAssertion: .track is the rendered scroller
+			const scroller = rendered.container.querySelector(".track")!;
 			scroller.scrollLeft = -CARD_WIDTH;
 			fireEvent.scroll(scroller);
 			rendered.unmount();
