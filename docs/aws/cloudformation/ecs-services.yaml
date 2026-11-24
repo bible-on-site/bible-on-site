@@ -565,6 +565,12 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: bible-on-site-admin
+      # Live on ARM64 Fargate Spot since the 2026-11-22 cutover; the pinned
+      # amd64 fallback tag is retained by the ECR lifecycle rule. See
+      # ../admin-arm64-migration.md.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
