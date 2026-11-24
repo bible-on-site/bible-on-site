@@ -265,11 +265,12 @@ describe("buildPartnerChildColumns", () => {
 	it("orders column children by birth order when chronology applies", () => {
 		const { columnChildren } = buildPartnerChildColumns(
 			[
-				childEdge({ id: "c2", name: "שמעון", coParentEntityId: "w1", birthOrder: 2 }),
-				childEdge({ id: "c1", name: "ראובן", coParentEntityId: "w1", birthOrder: 1 }),
+				childEdge({ id: "c2", name: "בנימין", coParentEntityId: "w1", birthOrder: 2 }),
+				childEdge({ id: "c1", name: "זבולון", coParentEntityId: "w1", birthOrder: 1 }),
 			],
 			units,
 		);
+		// זבולון sorts after בנימין alphabetically, so only birth order yields [c1, c2].
 		expect(columnChildren.get("w1")?.map((e) => e.related.entityId)).toEqual(["c1", "c2"]);
 	});
 });
@@ -414,6 +415,11 @@ describe("sortEdgesForOpinions", () => {
 			spouseEdge({ id: "b", name: "ב", unionType: "MARRIAGE", unionOrder: 1 }),
 		]);
 		expect(sorted.map((e) => e.related.entityId)).toEqual(["b", "a"]);
+		const byType = sortEdgesForOpinions([
+			spouseEdge({ id: "a", name: "א", unionType: "ZZZ", unionOrder: 1 }),
+			spouseEdge({ id: "b", name: "ב", unionType: "AAA", unionOrder: 1 }),
+		]);
+		expect(byType.map((e) => e.related.entityId)).toEqual(["b", "a"]);
 	});
 
 	it("does not mutate the input array", () => {
