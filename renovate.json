@@ -194,6 +194,22 @@
 			],
 			"groupName": "cargo-make CLI",
 			"automerge": false
+		},
+		{
+			"description": "Keep the local MySQL image aligned with the RDS engine version. Change this pin when upgrading RDS.",
+			"matchManagers": [
+				"docker-compose"
+			],
+			"matchDatasources": [
+				"docker"
+			],
+			"matchFileNames": [
+				"devops/docker-compose.yml"
+			],
+			"matchPackageNames": [
+				"mysql"
+			],
+			"allowedVersions": "/^9\\.7\\.4$/"
 		}
 	],
 	"vulnerabilityAlerts": {
