@@ -353,10 +353,14 @@ export function Carousel({
 				: new ResizeObserver(onResize);
 		observer?.observe(el);
 		window.addEventListener("resize", onResize);
+		// React cleanup runs on SPA navigation; pagehide also catches a hard
+		// reload or tab close inside the debounce window.
+		window.addEventListener("pagehide", flushStoredPosition);
 		return () => {
 			el.removeEventListener("scroll", onScroll);
 			observer?.disconnect();
 			window.removeEventListener("resize", onResize);
+			window.removeEventListener("pagehide", flushStoredPosition);
 			flushStoredPosition();
 		};
 	}, [update, flushStoredPosition]);
