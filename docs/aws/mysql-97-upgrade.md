@@ -41,6 +41,12 @@ and [RDS switchover procedure](https://docs.aws.amazon.com/AmazonRDS/latest/User
    their article relationships and proposal review paths return the same
    editorial token for unchanged articles, then drain all previous API and
    admin tasks. Complete this step before changing the generated column.
+7. Check the live application and backup accounts. On 8.4, switch any
+   application-managed `mysql_native_password` account to
+   `caching_sha2_password` with its existing password and grants. Verify cold
+   connections from the deployed clients over TLS. Retain the verified
+   operator session until the clients reconnect so it can restore the previous
+   plugin on 8.4 if a client fails.
 
 ## Migrate the article search fingerprint on 8.4
 
@@ -52,15 +58,18 @@ session with certificate and hostname verification and stop on the first SQL
 error. A normal data deployment uses the compatible expression for new schemas.
 
 Verify the current generation expression and available storage before the
-migration. Pause competing article writers and the search index worker, take
-baseline counts and record the expected stale documents. The table rebuild
-allows reads and blocks article writes. It retains the 16-byte column and sets
-the current search documents to the new fingerprint. Documents already behind
-the article remain eligible for the ordinary reconcile sweep.
+migration. Pause competing article writers. Acquire `article_search_retrain`
+on the migration session and verify the session owns it before taking the
+baseline counts and recording the expected stale documents. The lock pauses
+reconciliation, queue drains, and retrains while the API serves its published
+snapshot. The table rebuild allows reads and blocks article writes. It retains
+the 16-byte column and sets the current search documents to the new fingerprint.
+Documents already behind the article remain eligible for the ordinary reconcile
+sweep.
 
 Verify the generated expression uses truncated SHA-256 and the article count,
 IDs, current search documents and stale-document set agree with the baseline.
-Resume the worker and confirm that search returns the same public URLs. Admin
+Release the named lock and confirm that search returns the same public URLs. Admin
 and API code compute the legacy article-review token from the article fields.
 Existing approvals, evidence, deduplication keys and old 32-hex tokens retain
 their meaning. The updated schema supports both engine versions, so it can stay

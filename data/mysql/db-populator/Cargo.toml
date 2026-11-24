@@ -11,10 +11,9 @@ tokio.workspace = true
 anyhow.workspace = true
 clap = { version = "4", features = ["derive", "env"] }
 dotenvy.workspace = true
-sqlx-core = { version = "0.9.1", features = ["_rt-tokio"] }
-# sqlx-mysql 0.9 made the RSA auth backend a non-default feature (default = []).
-# MySQL's default caching_sha2_password auth needs RSA key exchange on
-# non-TLS connections (as used here), so enable the rsa feature explicitly.
+sqlx-core = { version = "0.9.1", features = ["_rt-tokio", "_tls-native-tls"] }
+# Local servers can still use RSA for a cold caching_sha2_password login
+# when TLS is unavailable.
 sqlx-mysql = { version = "0.9.1", features = ["rsa"] }
 
 [dev-dependencies]

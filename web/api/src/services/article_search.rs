@@ -13,8 +13,8 @@
 //!   re-indexed, and stale model epochs are folded back in;
 //! - full retrains — when drift crosses a threshold the whole basis is rebuilt
 //!   under a `GET_LOCK` advisory lock so concurrent API instances never train
-//!   in parallel. Queue drains take the same lock so replicas never duplicate
-//!   sync work or double-count attempts on the same rows.
+//!   in parallel. Reconcile sweeps and queue drains take the same lock so
+//!   replicas never duplicate sync work or double-count attempts.
 //!
 //! Ranking blends the semantic cosine score with a BM25-style lexical score so
 //! both meaning-level matches (synonyms via latent dimensions) and exact
@@ -562,7 +562,7 @@ async fn drain_queue<C: ConnectionTrait>(
 /// Diffs `tanah_article` against `article_search_doc` on the persisted
 /// `content_hash` generated column and enqueues anything missing, changed, or
 /// carrying a stale model epoch; deletes index rows whose articles vanished.
-async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
+async fn reconcile(conn: &RetrainLock<'_>) -> Result<usize, DbErr> {
     let indexed: HashMap<i32, [u8; 16]> = store::indexed_hashes(conn).await?.into_iter().collect();
     let mut dirty = 0usize;
     for (article_id, hash) in store::sweep_hashes(conn).await? {
@@ -610,9 +610,8 @@ async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
 struct RetainedSession<C>(Mutex<C>);
 
 /// The `article_search_retrain` named lock, held on its own session. It
-/// serializes retrains across API instances and gives the queue drain a
-/// single consumer per tick: every queue mutation issued through it lands
-/// on the lock-owning session.
+/// serializes retrains, reconcile sweeps, and queue drains across API
+/// instances. All of their index writes land on the lock-owning session.
 enum RetrainLock<'a> {
     MySql(RetainedSession<PoolConnection<MySql>>),
     Mock(&'a DatabaseConnection),
@@ -1061,22 +1060,19 @@ pub async fn run_worker(index: ArticleSearchIndex) {
 /// One worker iteration: periodic hash sweep, queue drain, then either a
 /// retrain (drift crossed the threshold) or a snapshot fold-in reload.
 async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
-    if tick.is_multiple_of(SWEEP_EVERY_TICKS) {
-        match reconcile(index.conn()).await {
-            Ok(dirty) if dirty > 0 => {
-                debug!(dirty, "article search reconcile enqueued drifted rows")
-            }
-            Ok(_) => {}
-            Err(err) => warn!(error = %err, "article search reconcile failed"),
-        }
-    }
-    // The drain runs under the retrain advisory lock so concurrent API
-    // instances claim disjoint ticks instead of syncing the same pending
-    // rows and double-incrementing `attempts` on shared failures. A
-    // contended acquisition just skips this tick — the holder drains the
-    // same queue.
+    // Keep both index writers on the lock-owning session. A maintenance
+    // session holding the same lock can safely update the stored fingerprint.
     let dirty = match RetrainLock::acquire(index.conn()).await {
         Ok(Some(lock)) => {
+            if tick.is_multiple_of(SWEEP_EVERY_TICKS) {
+                match reconcile(&lock).await {
+                    Ok(dirty) if dirty > 0 => {
+                        debug!(dirty, "article search reconcile enqueued drifted rows")
+                    }
+                    Ok(_) => {}
+                    Err(err) => warn!(error = %err, "article search reconcile failed"),
+                }
+            }
             let result = drain_queue(index, &lock).await;
             if let Err(err) = lock.release().await {
                 warn!(error = %err, "failed to release article-search queue lock");
@@ -1090,10 +1086,9 @@ async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
             }
         }
         Ok(None) => {
-            // The lock holder drains (or retrains) this tick — but its doc
-            // writes keep the same model epoch, so refresh_if_stale would
-            // never see them. Fold them into our snapshot before skipping.
-            debug!("another instance holds the article-search lock; skipping drain");
+            // A lock holder may write docs without changing the model epoch.
+            // Refresh the snapshot even when this tick cannot update the index.
+            debug!("another session holds the article-search lock; skipping index updates");
             if let Err(err) = index.load().await {
                 warn!(error = %err, "article search reload failed");
             }
@@ -1779,7 +1774,9 @@ mod tests {
             ])
             .into_connection();
 
-        let dirty = reconcile(&conn).await.expect("reconcile");
+        let dirty = reconcile(&RetrainLock::Mock(&conn))
+            .await
+            .expect("reconcile");
         assert_eq!(dirty, 3);
     }
 
@@ -2415,12 +2412,21 @@ mod tests {
         let publication_session = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 let session: Option<u64> = sqlx::query_scalar(
-                    "SELECT ID FROM information_schema.PROCESSLIST WHERE ID = IS_USED_LOCK('article_search_retrain') AND STATE = 'User sleep'",
-                ).fetch_optional(&pool).await.expect("observe second publication write");
-                if let Some(session) = session { break session; }
+                    "SELECT PROCESSLIST_ID FROM performance_schema.threads \
+                     WHERE PROCESSLIST_ID = IS_USED_LOCK('article_search_retrain') \
+                     AND PROCESSLIST_STATE = 'User sleep'",
+                )
+                .fetch_optional(&pool)
+                .await
+                .expect("observe second publication write");
+                if let Some(session) = session {
+                    break session;
+                }
                 tokio::task::yield_now().await;
             }
-        }).await.expect("second write is actually in flight");
+        })
+        .await
+        .expect("second write is actually in flight");
         assert_eq!(
             publication_bytes(&pool).await,
             prior,
@@ -2443,7 +2449,8 @@ mod tests {
             .expect("next publication acquire")
             .expect("next publication lock");
         let active: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID = ? AND INFO IS NOT NULL",
+            "SELECT COUNT(*) FROM performance_schema.threads \
+             WHERE PROCESSLIST_ID = ? AND PROCESSLIST_COMMAND IN ('Query', 'Execute')",
         )
         .bind(publication_session)
         .fetch_one(&pool)
@@ -2566,6 +2573,38 @@ mod tests {
             retrain(&small).await.expect("one-slot complete retrain"),
             Some(2)
         );
+
+        let index = index_on(small.clone());
+        index.load().await.expect("load the published snapshot");
+        pool.execute("UPDATE tanah_article SET content = 'alpha alpha' WHERE id = 1")
+            .await
+            .expect("create fingerprint drift");
+        pool.execute("DELETE FROM tanah_article WHERE id = 2")
+            .await
+            .expect("create an orphaned index row");
+        let before_sweep = publication_bytes(&pool).await;
+        let maintenance = RetrainLock::acquire(&conn)
+            .await
+            .expect("maintenance acquire")
+            .expect("maintenance owns lock");
+        worker_tick(&index, SWEEP_EVERY_TICKS).await;
+        assert_eq!(publication_bytes(&pool).await, before_sweep);
+        assert!(store::pending(&conn, DRAIN_BATCH).await.unwrap().is_empty());
+        assert_eq!(
+            index.doc_count().await,
+            2,
+            "published snapshot stays available"
+        );
+
+        maintenance.release().await.expect("maintenance release");
+        worker_tick(&index, 2 * SWEEP_EVERY_TICKS).await;
+        assert_eq!(
+            store::indexed_hashes(&conn).await.unwrap(),
+            store::sweep_hashes(&conn).await.unwrap(),
+            "the resumed sweep repairs drift and deletes the orphan"
+        );
+        assert_eq!(index.doc_count().await, 1);
+        assert_retrain_lock_free(&pool).await;
         small_pool.close().await;
         pool.close().await;
     }
@@ -2909,15 +2948,15 @@ mod tests {
         let index = index_on(conn);
         worker_tick(&index, 1).await;
 
-        // Sweep tick → reconcile queries, then the drain under its lock.
+        // A scheduled sweep and drain both run under the same lock.
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![],                                       // indexed hashes
-                vec![],                                       // sweep hashes
-                vec![],                                       // stale docs
-                vec![],                                       // orphans
-                vec![mock_row([("acquired", 1_i64.into())])], // drain lock
-                vec![],                                       // pending
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![], // indexed hashes
+                vec![], // sweep hashes
+                vec![], // stale docs
+                vec![], // orphans
+                vec![], // pending
             ])
             .append_exec_results([MockExecResult {
                 last_insert_id: 0,
@@ -2926,6 +2965,16 @@ mod tests {
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, SWEEP_EVERY_TICKS).await;
+        let log = index.conn().clone().into_transaction_log();
+        let sql: Vec<&str> = log
+            .iter()
+            .flat_map(|entry| entry.statements().iter().map(|s| s.sql.as_str()))
+            .collect();
+        assert_eq!(sql.len(), 7);
+        assert!(sql[0].contains("GET_LOCK"));
+        assert!(sql[1].contains("content_hash"));
+        assert!(sql[5].contains("article_search_queue"));
+        assert!(sql[6].contains("RELEASE_LOCK"));
 
         // Drain failure logs and returns without touching reload logic — the
         // lock is still released first.
@@ -3355,13 +3404,26 @@ mod tests {
         let work_conn = conn.clone();
         let work_docs = docs.clone();
         let work = tokio::spawn(async move { private_batch_publish(&work_conn, work_docs).await });
-        let old_session=tokio::time::timeout(Duration::from_secs(3),async{
+        // The legacy process list converts other sessions' SQL text to utf8mb3,
+        // even when the query only asks for state. This batch binds raw bytes.
+        let old_session = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
-                let id:Option<u64>=sqlx::query_scalar("SELECT ID FROM information_schema.PROCESSLIST WHERE ID=IS_USED_LOCK('article_search_retrain') AND STATE='User sleep'").fetch_optional(&pool).await.unwrap();
-                if let Some(id)=id {break id;}
+                let id: Option<u64> = sqlx::query_scalar(
+                    "SELECT PROCESSLIST_ID FROM performance_schema.threads \
+                     WHERE PROCESSLIST_ID = IS_USED_LOCK('article_search_retrain') \
+                     AND PROCESSLIST_STATE = 'User sleep'",
+                )
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+                if let Some(id) = id {
+                    break id;
+                }
                 tokio::task::yield_now().await;
             }
-        }).await.expect("second batch must actually be in flight");
+        })
+        .await
+        .expect("second batch must actually be in flight");
         assert_eq!(
             publication_bytes(&pool).await,
             prior,
@@ -3371,7 +3433,8 @@ mod tests {
         assert!(work.await.unwrap_err().is_cancelled());
         assert_retrain_lock_free(&pool).await;
         let active: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID=? AND INFO IS NOT NULL",
+            "SELECT COUNT(*) FROM performance_schema.threads \
+             WHERE PROCESSLIST_ID = ? AND PROCESSLIST_COMMAND IN ('Query', 'Execute')",
         )
         .bind(old_session)
         .fetch_one(&pool)

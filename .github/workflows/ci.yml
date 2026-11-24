@@ -2180,6 +2180,8 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+          my-cnf: |
+            require_secure_transport=ON
 
       # Mock connections cannot prove session-scoped MySQL advisory locks.
       # Run the ignored regression explicitly and add its production-code hits
