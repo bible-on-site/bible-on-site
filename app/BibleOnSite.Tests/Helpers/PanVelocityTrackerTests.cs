@@ -62,6 +62,30 @@ public class PanVelocityTrackerTests
     }
 
     [Fact]
+    public void FastDragThenBriefHold_IsNotAFlick()
+    {
+        // A fast 60px drag whose finger rests for the rest of the window
+        // before release is a pause — the pre-pause speed must not still
+        // count as flick speed and dismiss the sheet.
+        var tracker = Drag((0, 0), (30, 16), (60, 32));
+
+        tracker.ReleaseVelocity(EndAt(100))
+            .Should().BeLessThan(FlickThreshold,
+                "a drag held briefly before release is not a flick");
+    }
+
+    [Fact]
+    public void SlowDragEndingInAFlick_ExceedsTheDismissThreshold()
+    {
+        // A slow drag whose final motion is a fast flick still dismisses —
+        // the flick dominates the trailing window's displacement.
+        var tracker = Drag((0, 0), (10, 300), (15, 400), (140, 430));
+
+        tracker.ReleaseVelocity(EndAt(445))
+            .Should().BeGreaterThan(FlickThreshold);
+    }
+
+    [Fact]
     public void DragHeldStillThenReleased_IsNotAFlick()
     {
         // A drag that stops moving well before release has no motion inside

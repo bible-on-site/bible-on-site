@@ -56,7 +56,10 @@ public sealed class PanVelocityTracker
         }
 
         var displacement = Math.Abs(_samples[^1].Offset - _samples[first].Offset);
-        var elapsed = (_samples[^1].Time - _samples[first].Time).TotalMilliseconds;
+        // Measure against the release instant, not the last move: stillness
+        // between the final move and release dilutes the reading toward 0,
+        // so a drag held briefly before lifting the finger is not a flick.
+        var elapsed = (now - _samples[first].Time).TotalMilliseconds;
         return elapsed > 0 ? displacement / (elapsed / 1000.0) : 0;
     }
 }
