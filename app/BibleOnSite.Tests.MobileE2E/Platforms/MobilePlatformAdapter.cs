@@ -694,15 +694,18 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     /// A direction-scroll on the Application element never reaches an inner
     /// MauiScrollView — WDA scrolls the app's top container, which does not
     /// move, so the gesture is a silent no-op on pages like display
-    /// preferences. Scrolling the innermost scrollable view itself moves the
-    /// content reliably.
+    /// preferences. Scrolling the page's tallest scrollable itself moves the
+    /// content reliably; the reader's pasuk list is a CollectionView, so
+    /// scroll, collection and table surfaces all qualify, and the tallest
+    /// wins over horizontal chip strips.
     /// </summary>
     private static void ScrollPage(AppiumDriver driver, string direction)
     {
         var scroll = new Dictionary<string, object> { ["direction"] = direction };
-        // Pages with several scrollables take the first in tree order — the
-        // content surface, not a horizontal chip strip.
-        var surface = driver.FindElements(By.XPath("//XCUIElementTypeScrollView")).FirstOrDefault();
+        var surface = driver.FindElements(By.XPath(
+            "//XCUIElementTypeScrollView | //XCUIElementTypeCollectionView | //XCUIElementTypeTable"))
+            .OrderByDescending(e => e.Rect.Height)
+            .FirstOrDefault();
         if (surface != null)
         {
             scroll["elementId"] = surface.Id;
