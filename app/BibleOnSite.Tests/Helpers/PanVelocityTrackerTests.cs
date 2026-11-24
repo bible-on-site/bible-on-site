@@ -97,6 +97,17 @@ public class PanVelocityTrackerTests
     }
 
     [Fact]
+    public void SameTimestampMoves_ReportZeroVelocity()
+    {
+        // Release stamped at the same instant as the first in-window move
+        // divides by zero elapsed — the guard must report 0, not
+        // NaN/Infinity.
+        var tracker = Drag((0, 50), (120, 50));
+
+        tracker.ReleaseVelocity(EndAt(50)).Should().Be(0);
+    }
+
+    [Fact]
     public void ReleaseWithoutEnoughRecentMoves_IsZero()
     {
         var tracker = new PanVelocityTracker();
