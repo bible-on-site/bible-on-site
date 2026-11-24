@@ -428,8 +428,14 @@ describe("WysiwygEditor", () => {
 			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
 		});
 		editorState.setHtml("<p>Discarded</p>");
+		const clearSpy = vi.spyOn(globalThis, "clearTimeout");
 
 		act(() => ref.current?.reset("<p>Baseline</p>"));
+
+		// The armed debounce timer must be cancelled outright — otherwise its
+		// firing is masked by the baseline suppressing onChange.
+		expect(clearSpy).toHaveBeenCalled();
+		clearSpy.mockRestore();
 
 		// Past the debounce: the cancelled timer must not flush the discarded edit.
 		await new Promise((resolve) => setTimeout(resolve, 100));
