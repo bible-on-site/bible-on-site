@@ -228,7 +228,7 @@ public partial class ParashaPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _unitRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
         SelectionHaptics.Trigger();
     }

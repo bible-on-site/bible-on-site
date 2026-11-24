@@ -262,7 +262,7 @@ public partial class PerekPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _chapterRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
         SelectionHaptics.Trigger();
     }
