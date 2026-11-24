@@ -26,10 +26,10 @@ Sensitive values are masked with placeholders. To retrieve actual values:
 ## Lambda Python Runtimes
 
 The Python Lambdas (`bible-on-site-db-populator`, `ecr-to-ecs-deploy`) target
-`python3.14`, the latest generally available Lambda Python runtime (Amazon Linux
-2023, deprecation scheduled for 2029-06-30). `python3.15` is still in public
-preview and is not covered by the Lambda SLA, so do not use it for production.
-The data-deploy recovery tests in `ci-data-deploy.yml` run on Python 3.14.
+`python3.14` (Amazon Linux 2023, deprecation scheduled for 2029-06-30).
+[Python 3.15 is generally available for Lambda Event Functions](https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-python-315/).
+The data deployment rehearsal in `ci-data-deploy.yml` uses Python 3.14 to match
+the db-populator runtime pending [the Python 3.15 rollout](https://github.com/bible-on-site/bible-on-site/issues/3800).
 
 The live functions are created outside CloudFormation. After explicit approval
 of the AWS change, upgrade each one in `il-central-1`, recording the previous
