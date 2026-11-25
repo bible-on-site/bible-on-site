@@ -278,6 +278,21 @@ public abstract class MobilePlatformAdapter
             // restarts whose adb activateApp calls drop extras.
             options.AddAdditionalAppiumOption("optionalIntentArguments",
                 $"--ez BIBLE_E2E true --es BIBLE_E2E_COVERAGE_TOKEN {AppCoverage.Token}");
+            // UiAutomator2 resets its accessibility cache before every element
+            // lookup, and that reset opens with UiDevice.waitForIdle: a ~500ms
+            // accessibility quiet window (10s cap) paid per lookup whether the
+            // UI ever settles or not. The master run that hit the 15-minute
+            // pilot deadline spent 517s in 789 findElements calls (655ms
+            // average on hits, 952ms on misses — elements are absent precisely
+            // while the UI churns, so misses idle longer) plus the same wait
+            // after every click. The page objects already poll explicit element
+            // state instead of relying on implicit synchronization — the same
+            // argument as the iOS settings below — so the idle gate is dead
+            // time and the quiet window never gates a lookup again.
+            options.AddAdditionalAppiumOption("settings", new Dictionary<string, object>
+            {
+                ["waitForIdleTimeout"] = 0
+            });
         }
         else
         {
