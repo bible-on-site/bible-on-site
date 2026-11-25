@@ -28,7 +28,9 @@ the listing text is an accepted ASO exception (#2124) — do not "correct" it to
 the internal Tanah/Perek/Pasuk terms.
 
 To sync the listing without shipping a build, run the `Store Listing` workflow
-(`.github/workflows/store-listing.yml`, `workflow_dispatch`), or locally:
+(`.github/workflows/store-listing.yml`, `workflow_dispatch` — always publishes
+the current `master` copy, whichever branch is picked in the dispatch dialog),
+or locally:
 
 ```
 dotnet run --project app/devops -- SyncGooglePlayListing --google-play-key-file <service-account.json>
