@@ -67,9 +67,18 @@ export interface UpdateFamilyPersonInput {
 	deathCause?: string | null;
 	birthPlaceId?: string | null;
 	birthPlaceText?: string | null;
+	/** The canonical birth-place row the editor loaded (null = none loaded).
+	 * The save fails when the locked row no longer matches it, so a
+	 * contribution merge cannot be overwritten silently. */
+	birthPlaceOriginal?: FamilyPersonPlace | null;
 	deathPlaceId?: string | null;
 	deathPlaceText?: string | null;
+	deathPlaceOriginal?: FamilyPersonPlace | null;
 	activityPlaces?: FamilyPersonPlace[] | null;
+	/** Canonical activity-place row ids the editor explicitly removed — only
+	 * these may be deleted; a locked row outside kept + removed ids means the
+	 * list changed under the editor and the save is rejected. */
+	removedActivityPlaceIds?: string[];
 	isProphet?: boolean;
 	isKing?: boolean;
 }

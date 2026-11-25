@@ -26,6 +26,7 @@ import {
 	FAMILY_PARENT_ROLES,
 	FAMILY_UNION_END_REASONS,
 	FAMILY_UNION_TYPES,
+	type FamilyPersonPlace,
 	type UpdateFamilyPersonInput,
 	type UpdateParentChildLinkInput,
 	type UpdatePersonNameInput,
@@ -119,6 +120,12 @@ function personPlaceValue(
  * single-row-per-person place fact (birth_place, death_place), each holding
  * either a linked place entity or a free-text alternative. Alternative-opinion
  * rows belong to other opinion groups and are never touched here.
+ *
+ * `original` is the canonical row the editor loaded (null = none loaded) and
+ * acts as a compare-and-swap token: the FOR UPDATE read sees rows committed
+ * after the editor's snapshot, so a row that no longer matches `original` —
+ * including a field that was empty and no longer is — means a contribution
+ * review intervened and the save must fail instead of overwriting it.
  */
 async function upsertPersonPlace(
 	conn: PoolConnection,
@@ -126,9 +133,36 @@ async function upsertPersonPlace(
 		table: "tanahpedia_person_birth_place" | "tanahpedia_person_death_place";
 		personId: string;
 		value: PersonPlaceValue | null;
+		original?: FamilyPersonPlace | null;
 	},
 ): Promise<void> {
-	const { table, personId, value } = params;
+	const { table, personId, value, original } = params;
+	// FOR UPDATE + the canonical predicate on the write keep a concurrent
+	// contribution merge from moving the row into an opinion group between the
+	// read and the update (same race replacePersonActivityPlaces guards).
+	const existing = await txQueryOne<{
+		id: string;
+		place_id: string | null;
+		place_text: string | null;
+	}>(
+		conn,
+		`SELECT id, place_id, place_text FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1 FOR UPDATE`,
+		[personId],
+	);
+	if (original !== undefined) {
+		const changed =
+			original === null
+				? existing !== null
+				: existing === null ||
+					existing.id !== original.id ||
+					existing.place_id !== (original.placeId ?? null) ||
+					existing.place_text !== (original.placeText ?? null);
+		if (changed) {
+			throw new Error(
+				"the canonical place fact changed since the editor loaded it (a contribution review may have intervened); reload and retry",
+			);
+		}
+	}
 	if (value === null) {
 		await txExecute(
 			conn,
@@ -137,14 +171,6 @@ async function upsertPersonPlace(
 		);
 		return;
 	}
-	// FOR UPDATE + the canonical predicate on the write keep a concurrent
-	// contribution merge from moving the row into an opinion group between the
-	// read and the update (same race replacePersonActivityPlaces guards).
-	const existing = await txQueryOne<{ id: string }>(
-		conn,
-		`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1 FOR UPDATE`,
-		[personId],
-	);
 	if (existing) {
 		await txExecute(
 			conn,
@@ -173,12 +199,22 @@ async function upsertPersonPlace(
  * keep the person + canonical predicates so a stale row id can never touch a
  * reviewed row. A payload id missing from the locked set means the row stopped
  * being canonical — fail loudly rather than overwrite the reviewed change.
+ *
+ * `removedIds` is the editor's explicit removal list (the ids it loaded and
+ * deleted). The locking read sees rows committed after the editor's snapshot,
+ * so a locked row that is neither kept nor explicitly removed was added by a
+ * concurrent review — reject the save instead of deleting an unseen row.
  */
 async function replacePersonActivityPlaces(
 	conn: PoolConnection,
-	params: { personId: string; places: PersonPlaceValue[] },
+	params: {
+		personId: string;
+		places: PersonPlaceValue[];
+		removedIds?: string[];
+	},
 ): Promise<void> {
-	const { personId, places } = params;
+	const { personId, places, removedIds } = params;
+	const removed = removedIds ? new Set(removedIds) : null;
 	const existing = await txQuery<{
 		id: string;
 		place_id: string | null;
@@ -221,6 +257,11 @@ async function replacePersonActivityPlaces(
 	}
 	for (const row of existing) {
 		if (kept.has(row.id)) continue;
+		if (removed && !removed.has(row.id)) {
+			throw new Error(
+				`activityPlaces: the canonical list changed since the editor loaded it (a contribution review may have added row ${row.id}); reload and retry`,
+			);
+		}
 		await assertNoContributionDependents(
 			conn,
 			"tanahpedia_person_activity_place",
@@ -622,6 +663,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 							data.birthPlaceText,
 							"birthPlace",
 						),
+						original: data.birthPlaceOriginal,
 					});
 				}
 				if (
@@ -636,6 +678,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 							data.deathPlaceText,
 							"deathPlace",
 						),
+						original: data.deathPlaceOriginal,
 					});
 				}
 				if (data.activityPlaces !== undefined) {
@@ -653,6 +696,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								);
 							return { ...value, id: place.id ?? null };
 						}),
+						removedIds: data.removedActivityPlaceIds,
 					});
 				}
 				if (data.isProphet !== undefined) {

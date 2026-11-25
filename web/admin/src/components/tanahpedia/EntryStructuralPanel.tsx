@@ -236,6 +236,11 @@ function PersonCard({
 			assertPlaceDraft(birthPlace);
 			assertPlaceDraft(deathPlace);
 			for (const draft of activityPlaces) assertPlaceDraft(draft);
+			// CAS tokens: the facts the editor loaded, so a concurrent
+			// contribution merge is detected rather than overwritten.
+			const keptIds = new Set(
+				activityPlaces.map((draft) => draft.id).filter(Boolean),
+			);
 			return updateFamilyPersonNode({
 				data: {
 					entityId: row.entityId,
@@ -243,15 +248,32 @@ function PersonCard({
 						birthPlace?.mode === "place" ? birthPlace.placeId : null,
 					birthPlaceText:
 						birthPlace?.mode === "text" ? birthPlace.placeText.trim() : null,
+					birthPlaceOriginal: p.birthPlace
+						? {
+								id: p.birthPlace.id,
+								placeId: p.birthPlace.placeId,
+								placeText: p.birthPlace.placeText,
+							}
+						: null,
 					deathPlaceId:
 						deathPlace?.mode === "place" ? deathPlace.placeId : null,
 					deathPlaceText:
 						deathPlace?.mode === "text" ? deathPlace.placeText.trim() : null,
+					deathPlaceOriginal: p.deathPlace
+						? {
+								id: p.deathPlace.id,
+								placeId: p.deathPlace.placeId,
+								placeText: p.deathPlace.placeText,
+							}
+						: null,
 					activityPlaces: activityPlaces.map((draft) => ({
 						id: draft.id ?? null,
 						placeId: draft.mode === "place" ? draft.placeId : null,
 						placeText: draft.mode === "text" ? draft.placeText.trim() : null,
 					})),
+					removedActivityPlaceIds: p.activityPlaces
+						.map((fact) => fact.id)
+						.filter((id) => id !== "" && !keptIds.has(id)),
 				},
 			});
 		},

@@ -336,9 +336,12 @@ describe("EntryStructuralPanel", () => {
 						entityId: "person-entity",
 						birthPlaceId: null,
 						birthPlaceText: "דבינסק",
+						birthPlaceOriginal: null,
 						deathPlaceId: "place-1",
 						deathPlaceText: null,
+						deathPlaceOriginal: null,
 						activityPlaces: [{ id: null, placeId: "place-1", placeText: null }],
+						removedActivityPlaceIds: [],
 					},
 				}),
 			);
@@ -477,12 +480,25 @@ describe("EntryStructuralPanel", () => {
 						entityId: "person-entity",
 						birthPlaceId: "place-9",
 						birthPlaceText: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-9",
+							placeText: null,
+						},
 						deathPlaceId: null,
 						deathPlaceText: "מצרים",
+						deathPlaceOriginal: {
+							id: "d1",
+							placeId: null,
+							placeText: "מצרים",
+						},
 						activityPlaces: [
 							{ id: "a1", placeId: "place-1", placeText: null },
 							{ id: "a2", placeId: null, placeText: "חרן" },
 						],
+						// The loaded "" and "a4" rows were deleted; only persisted ids
+						// are sent back, so the server deletes just "a4".
+						removedActivityPlaceIds: ["a4"],
 					},
 				}),
 			);
@@ -499,12 +515,23 @@ describe("EntryStructuralPanel", () => {
 						entityId: "person-entity",
 						birthPlaceId: null,
 						birthPlaceText: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-9",
+							placeText: null,
+						},
 						deathPlaceId: null,
 						deathPlaceText: null,
+						deathPlaceOriginal: {
+							id: "d1",
+							placeId: null,
+							placeText: "מצרים",
+						},
 						activityPlaces: [
 							{ id: "a1", placeId: "place-1", placeText: null },
 							{ id: "a2", placeId: null, placeText: "חרן" },
 						],
+						removedActivityPlaceIds: ["a4"],
 					},
 				}),
 			);
