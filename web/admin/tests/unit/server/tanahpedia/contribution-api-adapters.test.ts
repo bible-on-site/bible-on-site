@@ -140,17 +140,47 @@ it("fills the v6 place-text alternative into legacy birthplace states", async ()
 	]);
 	expect(mocks.read).not.toHaveBeenCalled();
 });
+it("fills the v6 place-text alternative into a legacy birthplace sourceTarget", async () => {
+	const contract = currentContributionApiContract({} as never);
+	const operation = {
+		kind: "metadata",
+		targetId: id,
+		before: { displayName: "Old" },
+		after: { displayName: "New" },
+		sourceTarget: {
+			kind: "person_birth_place",
+			state: { personId: id, placeId: nameId, altGroupId: null },
+		},
+		labels: {},
+	};
+	const result = await convertApiVersionAsync(
+		[structuredClone(operation)] as unknown,
+		5,
+		contract.version,
+		contract.adapters,
+	);
+	expect(result.payload).toEqual([
+		{
+			...operation,
+			sourceTarget: {
+				kind: "person_birth_place",
+				state: {
+					personId: id,
+					placeId: nameId,
+					altGroupId: null,
+					placeText: null,
+				},
+			},
+		},
+	]);
+	expect(mocks.read).not.toHaveBeenCalled();
+});
 it.each([null, Array(41).fill({ kind: "person_birth_place" })])(
 	"rejects invalid v5 sequence bounds before the place-text fill",
 	async (payload) => {
 		const contract = currentContributionApiContract({} as never);
 		await expect(
-			convertApiVersionAsync(
-				payload,
-				5,
-				contract.version,
-				contract.adapters,
-			),
+			convertApiVersionAsync(payload, 5, contract.version, contract.adapters),
 		).rejects.toThrow("Unsupported API v5 sequence");
 	},
 );

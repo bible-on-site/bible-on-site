@@ -866,6 +866,35 @@ describe("tanahpedia family api", () => {
 			);
 		});
 
+		it("accepts a kept activity row compared by free text alone", async () => {
+			// The editor loaded a free-text row (no linked place), so only
+			// originalPlaceText is set — the CAS compares the text side.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: null, place_text: "שושן" }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [
+						{ id: "a1", placeId: "place-2", originalPlaceText: "שושן" },
+					],
+					removedActivityPlaceIds: [],
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "a1", "person-1"],
+			);
+		});
+
 		it("deletes only the explicitly removed activity place rows", async () => {
 			queryOneMock
 				.mockResolvedValueOnce({ id: "person-1" })
@@ -984,6 +1013,59 @@ describe("tanahpedia family api", () => {
 				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
 				["place-2", null, "b1", "person-1"],
 			);
+		});
+
+		it("updates the birth place when the loaded original held free text", async () => {
+			// A free-text row has placeId null — the CAS still matches the locked
+			// row field-for-field before overwriting it.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: null,
+					place_text: "שושן",
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthPlaceId: "place-2",
+					birthPlaceOriginal: {
+						id: "b1",
+						placeId: null,
+						placeText: "שושן",
+					},
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "b1", "person-1"],
+			);
+		});
+
+		it("ignores a birth place clear when no canonical row exists", async () => {
+			// Nothing was loaded and nothing exists — the clear is a no-op and
+			// must not emit a delete against a row it never checked.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce(null);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthPlaceId: null,
+					birthPlaceOriginal: null,
+				},
+			});
+
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).includes("tanahpedia_person_birth_place"),
+				),
+			).toBe(false);
 		});
 
 		it("refuses to remove a cited activity place", async () => {
