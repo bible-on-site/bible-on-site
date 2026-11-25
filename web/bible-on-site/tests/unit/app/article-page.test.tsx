@@ -779,8 +779,10 @@ describe("[slug] page", () => {
 			const header = articleView?.querySelector("header");
 			expect(
 				header != null &&
-					!!(header.compareDocumentPosition(group) &
-						Node.DOCUMENT_POSITION_FOLLOWING),
+					!!(
+						header.compareDocumentPosition(group) &
+						Node.DOCUMENT_POSITION_FOLLOWING
+					),
 			).toBe(true);
 			expect(
 				within(group)
@@ -876,6 +878,40 @@ describe("[slug] page", () => {
 
 			expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+		});
+
+		it("renders the לקריאה נוספת section inside the perush view too (#3752)", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+			mockGetFurtherReading.mockResolvedValue([
+				{
+					...sampleArticleSummary,
+					id: 99,
+					perekId: 8,
+					authorName: "הרב מפרק אחר",
+				},
+			]);
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			const heading = screen.getByRole("heading", {
+				name: "לקריאה נוספת",
+			});
+			const section = heading.closest("section") as HTMLElement;
+			expect(
+				within(section).getByRole("link", { name: /הרב מפרק אחר/ }),
+			).toBeTruthy();
 		});
 
 		it("renders the expanded perush above the sefer composite with an h1", async () => {

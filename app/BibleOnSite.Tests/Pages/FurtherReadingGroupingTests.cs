@@ -94,16 +94,21 @@ public class FurtherReadingGroupingTests
     [Fact]
     public void Group_header_policy_clears_the_template_when_the_source_empties()
     {
-        BibleOnSite.Controls.ReaderArticlesView
+        BibleOnSite.Controls.ReaderArticlesViewGrouping
             .ServesGroupHeaders(true, ArticleListGroup.Build([Article(1)], []))
             .Should().BeTrue("a grouped, populated source serves section headers");
 
-        BibleOnSite.Controls.ReaderArticlesView
+        BibleOnSite.Controls.ReaderArticlesViewGrouping
             .ServesGroupHeaders(true, ArticleListGroup.Build([], []))
             .Should().BeFalse(
                 "an empty source must drop the template — iOS resolves a supplementary view whenever the property is set and EmptySource.Group throws");
 
-        BibleOnSite.Controls.ReaderArticlesView
+        BibleOnSite.Controls.ReaderArticlesViewGrouping
+            .ServesGroupHeaders(true, null)
+            .Should().BeFalse(
+                "a missing source must drop the template — the view's ItemsSource starts null before binding applies it");
+
+        BibleOnSite.Controls.ReaderArticlesViewGrouping
             .ServesGroupHeaders(false, ArticleListGroup.Build([Article(1)], []))
             .Should().BeFalse("a flat source never serves section headers");
     }

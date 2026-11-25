@@ -71,7 +71,7 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
 
     private void ApplyGroupHeaderTemplate()
     {
-        GroupHeaderTemplate = ServesGroupHeaders(IsGrouped, ItemsSource)
+        GroupHeaderTemplate = ReaderArticlesViewGrouping.ServesGroupHeaders(IsGrouped, ItemsSource)
             ? (DataTemplate)Resources["ArticleGroupHeaderTemplate"]
             : null;
     }

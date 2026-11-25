@@ -354,9 +354,7 @@ describe("articles service", () => {
 
 		it("returns empty when the covering-source schema is not deployed yet", async () => {
 			const missingTableError = Object.assign(
-				new Error(
-					"Table 'tanah.tanah_article_covering_source' doesn't exist",
-				),
+				new Error("Table 'tanah.tanah_article_covering_source' doesn't exist"),
 				{ code: "ER_NO_SUCH_TABLE", errno: 1146 },
 			);
 			mockQuery.mockRejectedValue(missingTableError);
@@ -380,13 +378,24 @@ describe("articles service", () => {
 				"connection lost",
 			);
 		});
+
+		it("logs and rejects non-Error rejections verbatim", async () => {
+			mockQuery.mockRejectedValue("driver exploded");
+
+			await expect(getFurtherReadingSummariesByPerekId(1)).rejects.toBe(
+				"driver exploded",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch further-reading summaries for perek %d:",
+				1,
+				"driver exploded",
+			);
+		});
 	});
 
 	describe("getFurtherReadingSummariesByPerekIds (#3752)", () => {
 		it("returns an empty map without querying for no viewed perakim", async () => {
-			expect(await getFurtherReadingSummariesByPerekIds([])).toEqual(
-				new Map(),
-			);
+			expect(await getFurtherReadingSummariesByPerekIds([])).toEqual(new Map());
 			expect(mockQuery).not.toHaveBeenCalled();
 		});
 
@@ -498,13 +507,26 @@ describe("articles service", () => {
 			const mockError = new Error("timeout");
 			mockQuery.mockRejectedValue(mockError);
 
-			await expect(
-				getFurtherReadingSummariesByPerekIds([1]),
-			).rejects.toBe(mockError);
+			await expect(getFurtherReadingSummariesByPerekIds([1])).rejects.toBe(
+				mockError,
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch further-reading summaries for %d perakim:",
 				1,
 				"timeout",
+			);
+		});
+
+		it("logs and rejects non-Error rejections verbatim", async () => {
+			mockQuery.mockRejectedValue("driver exploded");
+
+			await expect(getFurtherReadingSummariesByPerekIds([1])).rejects.toBe(
+				"driver exploded",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch further-reading summaries for %d perakim:",
+				1,
+				"driver exploded",
 			);
 		});
 	});
@@ -1038,10 +1060,7 @@ describe("batched article summary variants", () => {
 					{ article_id: 8, word_count: 12, estimated_seconds: 4 },
 				]);
 
-			const result = await getArticleSummariesForRangeGroups([
-				groupA,
-				groupB,
-			]);
+			const result = await getArticleSummariesForRangeGroups([groupA, groupB]);
 
 			const [sql, params] = mockQuery.mock.calls[0];
 			expect(sql).toContain("unit_order");
@@ -1112,18 +1131,18 @@ describe("batched article summary variants", () => {
 		it("rejects real database failures instead of caching empties", async () => {
 			const mockError = new Error("DB error");
 			mockQuery.mockRejectedValue(mockError);
-			await expect(
-				getArticleSummariesForRangeGroups([groupA]),
-			).rejects.toBe(mockError);
+			await expect(getArticleSummariesForRangeGroups([groupA])).rejects.toBe(
+				mockError,
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for range groups:",
 				"DB error",
 			);
 
 			mockQuery.mockRejectedValue("string error");
-			await expect(
-				getArticleSummariesForRangeGroups([groupA]),
-			).rejects.toBe("string error");
+			await expect(getArticleSummariesForRangeGroups([groupA])).rejects.toBe(
+				"string error",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for range groups:",
 				"string error",

@@ -182,6 +182,30 @@ describe("resolveEntityChanges", () => {
 		expect(out.tags.filter((t) => t === "perek:9:articles")).toHaveLength(1);
 	});
 
+	it("skips further-reading deps for spans on the article's own primary perek (#3752)", async () => {
+		// A covering row can cite a pasuk of the article's primary perek —
+		// that perek's invalidation already comes from the primary loop, so
+		// addFurtherReadingDeps must not re-add it.
+		stubDb({
+			articleCovering: [
+				{ perek_id: 5, pasuk: 3 },
+				{ perek_id: 9, pasuk: 3 },
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		expect(out.tags.filter((t) => t === "perek:5:articles")).toHaveLength(1);
+		expect(out.paths.filter((p) => p === "/929/5")).toHaveLength(1);
+		expect(out.tags).toContain("perek:9:articles");
+	});
+
 	it("expires covered pereks from destroyed covering rows the live rows no longer show", async () => {
 		// Coverage removed pre-commit: the live lookup returns nothing, the
 		// event's destroyed spans still expire perek 9's recommendations.
@@ -221,11 +245,7 @@ describe("resolveEntityChanges", () => {
 			expect.arrayContaining(["moadim", "moed:חנוכה", "moed:חנוכה-ישן"]),
 		);
 		expect(out.paths).toEqual(
-			expect.arrayContaining([
-				"/מועדים",
-				"/מועדים/חנוכה",
-				"/מועדים/חנוכה-ישן",
-			]),
+			expect.arrayContaining(["/מועדים", "/מועדים/חנוכה", "/מועדים/חנוכה-ישן"]),
 		);
 	});
 
@@ -394,9 +414,7 @@ describe("resolveEntityChanges", () => {
 		]);
 		expect(out.tags).toContain("author:3:articles");
 		expect(
-			mockQuery.mock.calls.some(([sql]) =>
-				/FROM tanah_article_moed/.test(sql),
-			),
+			mockQuery.mock.calls.some(([sql]) => /FROM tanah_article_moed/.test(sql)),
 		).toBe(false);
 	});
 
@@ -530,11 +548,7 @@ describe("resolveEntityChanges", () => {
 			{ kind: "author", id: 3, name: "רשי" },
 		]);
 		expect(out.tags).toEqual(
-			expect.arrayContaining([
-				"authors",
-				"author:רשי",
-				"author:3:articles",
-			]),
+			expect.arrayContaining(["authors", "author:רשי", "author:3:articles"]),
 		);
 		// Author pages are addressed by name only: no numeric-id page tag.
 		expect(out.tags).not.toContain("author:3");
