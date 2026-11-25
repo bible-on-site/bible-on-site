@@ -16,6 +16,13 @@ on:
 permissions:
   contents: read
 
+# Listing pushes are last-writer-wins: two quick merges must not overlap, or an
+# older run finishing last would revert newer Google Play copy. Runs queue on
+# one shared group instead of cancelling the in-progress sync.
+concurrency:
+  group: ${{ github.repository }}-store-listing
+  cancel-in-progress: false
+
 jobs:
   sync_google_play:
     name: Sync Google Play listing
@@ -23,6 +30,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Publish the current tip, not the triggering commit: a queued or
+          # replaced run still pushes the newest listing copy.
+          ref: master
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
