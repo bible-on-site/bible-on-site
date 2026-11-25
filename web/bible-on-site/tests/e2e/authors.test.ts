@@ -106,6 +106,7 @@ test.describe("/929/authors page", () => {
 				position: style.position,
 				visibility: style.visibility,
 				zIndex: style.zIndex,
+				viewportHeight: window.innerHeight,
 			};
 		});
 
@@ -118,7 +119,12 @@ test.describe("/929/authors page", () => {
 		expect(backdrop.display).not.toBe("none");
 		expect(backdrop.visibility).toBe("visible");
 		expect(backdrop.opacity).toBe("1");
-		expect(Number.parseFloat(backdrop.height)).toBeGreaterThan(0);
+		// inset: 0 stretches the box to the full viewport — a backdrop strip
+		// (e.g. height: 1px) fails this.
+		expect(Number.parseFloat(backdrop.height)).toBeCloseTo(
+			backdrop.viewportHeight,
+			0,
+		);
 		expect(backdrop.zIndex).toBe("-1");
 		expect(backdrop.backgroundImage).toContain("rabbis-blue-sketch.webp");
 	});
