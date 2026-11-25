@@ -501,7 +501,8 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 						(isAt(file, rule.directory) &&
 							!isModuleEvidenceDocumentation(file) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
-						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
+						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)) ||
+						(rule.extraModulePattern?.test(file) ?? false),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>
