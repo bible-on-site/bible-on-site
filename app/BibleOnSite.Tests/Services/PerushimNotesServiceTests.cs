@@ -240,16 +240,27 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    public async Task TryDownloadNotesAsync_WithStaleSearchIndex_FailsWithoutAFetchedIndex(bool fetchSucceeds, bool packHasIndex)
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(true, "v4:1700000000:n1")]
+    [InlineData(true, "v4:1800000000:n2")]
+    public async Task TryDownloadNotesAsync_WithStaleSearchIndex_FailsWithoutAnIndexForTheInstalledNotes(
+        bool fetchSucceeds, string? packIndexFingerprint)
     {
-        var dataDir = Path.Join(_tempRoot, $"stale-index-{fetchSucceeds}-{packHasIndex}");
-        var padDir = Path.Join(_tempRoot, $"stale-index-pad-{fetchSucceeds}");
-        Directory.CreateDirectory(dataDir);
+        var dataDir = Path.Join(_tempRoot, $"stale-index-{fetchSucceeds}-{packIndexFingerprint?.Replace(':', '-')}");
+        var padDir = Path.Join(dataDir, "pad");
         Directory.CreateDirectory(padDir);
         await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
-        await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "pack note"));
+        // A newer notes generation must not replace the readable notes during an index refresh.
+        await CreateNotesDatabaseAsync(padDir, 1800000000, (9, 4, 1, 0, "pack note"));
+        if (packIndexFingerprint != null)
+        {
+            var index = new SQLiteAsyncConnection(Path.Join(padDir, PerushimNotesService.SearchIndexDbName));
+            await index.ExecuteAsync("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+            await index.ExecuteAsync("INSERT INTO search_metadata VALUES ('notes', ?)", packIndexFingerprint);
+            await index.CloseAsync();
+        }
+        var localNotes = File.ReadAllBytes(Path.Join(dataDir, NotesDbFileName));
         var pad = new FakePadDeliveryService { AssetPathAfterFetch = padDir, FetchResult = fetchSucceeds };
         var service = PerushimNotesService.CreateForTesting(pad, dataDir);
         await service.InitializeAsync();
@@ -261,6 +272,8 @@ public sealed class PerushimNotesServiceTests : IDisposable
         pad.FetchCalls.Should().Be(1);
         service.IsAvailable.Should().BeTrue("the readable notes survive a failed index refresh");
         service.IsSearchIndexStale.Should().BeTrue();
+        File.Exists(Path.Join(dataDir, PerushimNotesService.SearchIndexDbName)).Should().BeFalse();
+        File.ReadAllBytes(Path.Join(dataDir, NotesDbFileName)).Should().Equal(localNotes);
     }
 
     [Fact]

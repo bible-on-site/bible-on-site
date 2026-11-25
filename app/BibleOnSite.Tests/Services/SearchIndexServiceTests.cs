@@ -882,6 +882,29 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task PackSettings_AfterNormalizationBump_OfferRefreshBeforeAnySearch()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var fileSystem = new Mock<IFileSystem>();
+        var settings = new ExtensionPacksViewModel(notes,
+            new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(fileSystem.Object)), new Mock<IAppNavigator>().Object, () => index);
+
+        await settings.LoadAsync();
+
+        settings.IsPerushimInstalled.Should().BeTrue();
+        settings.ShowPerushimDownloadButton.Should().BeTrue("the n1 index cannot serve the installed notes");
+    }
+
+    [Fact]
     public async Task SearchAsync_ReportsProgressDuringCommentaryInitialization()
     {
         await using var storage = new TestStorage();

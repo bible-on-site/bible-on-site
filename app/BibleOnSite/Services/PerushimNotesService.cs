@@ -408,7 +408,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             await InitializeCoreAsync();
             if (IsAvailable)
             {
-                if (IsSearchIndexStale && !await TryRefreshSearchIndexAsync(dbPath, progress, cancellationToken))
+                if (IsSearchIndexStale && !await TryRefreshSearchIndexAsync(progress, cancellationToken))
                 {
                     return false;
                 }
@@ -468,31 +468,44 @@ public class PerushimNotesService : IReaderNotesAvailability
     }
 
     /// <summary>
-    /// Refetches the pack for readable notes whose search index went stale. The notes are
-    /// upgraded alongside so the delivered index is staged against the generation it was
-    /// built from; the search index adopts the staged copy on its next commentary query.
+    /// Refetches the pack for readable notes whose search index went stale and stages its
+    /// index only when it was built for the installed notes, which stay untouched. A pack of
+    /// a newer notes generation is left to the launch-time upgrade, which swaps both together.
     /// </summary>
-    private async Task<bool> TryRefreshSearchIndexAsync(string dbPath, IProgress<double>? progress, CancellationToken cancellationToken)
+    private async Task<bool> TryRefreshSearchIndexAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
         if (!await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
         {
             return false;
         }
         var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
-        if (padPath == null || PadIndexSourcePath(padPath) == null)
+        var sourcePath = padPath == null ? null : PadIndexSourcePath(padPath);
+        if (sourcePath == null || await ReadIndexNotesFingerprintAsync(sourcePath)
+            != await SearchIndexService.FingerprintAsync(_connection!, "build_timestamp"))
         {
             return false;
         }
-        await _connection!.CloseAsync();
-        _connection = null;
-        await TryUpgradeFromPadAsync(dbPath);
-        _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        if (!File.Exists(Path.Join(DataDirectory, SearchIndexDbName)))
+        await TryCopyPadIndexAsync(padPath!);
+        var staged = File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
+        IsSearchIndexStale = !staged;
+        return staged;
+    }
+
+    private static async Task<string?> ReadIndexNotesFingerprintAsync(string indexPath)
+    {
+        var index = new SQLiteAsyncConnection(indexPath, SQLiteOpenFlags.ReadOnly);
+        try
         {
-            await TryCopyPadIndexAsync(padPath);
+            return await index.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
         }
-        IsSearchIndexStale = false;
-        return await ValidateLocalNotesAsync() && File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
+        catch (SQLiteException)
+        {
+            return null;
+        }
+        finally
+        {
+            await index.CloseAsync();
+        }
     }
 
     /// <summary>

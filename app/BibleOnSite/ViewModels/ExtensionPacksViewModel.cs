@@ -15,6 +15,7 @@ public partial class ExtensionPacksViewModel : ObservableObject
 {
     private readonly PerushimNotesService _perushimNotesService;
     private readonly RecitationService _recitationService;
+    private readonly Func<SearchIndexService>? _searchIndex;
     private readonly IAppNavigator _navigator;
     private CancellationTokenSource? _perushimDownload;
 
@@ -22,14 +23,23 @@ public partial class ExtensionPacksViewModel : ObservableObject
     public RecitationPacksViewModel Packs { get; }
 
     public ExtensionPacksViewModel()
-        : this(PerushimNotesService.Instance, RecitationService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance)
+        : this(PerushimNotesService.Instance, RecitationService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance,
+            () => SearchIndexService.Instance)
     {
     }
 
     public ExtensionPacksViewModel(PerushimNotesService perushimNotesService,
         RecitationService recitationService, PerekDataService perekDataService, IAppNavigator navigator)
+        : this(perushimNotesService, recitationService, perekDataService, navigator, null)
+    {
+    }
+
+    public ExtensionPacksViewModel(PerushimNotesService perushimNotesService,
+        RecitationService recitationService, PerekDataService perekDataService, IAppNavigator navigator,
+        Func<SearchIndexService>? searchIndex)
     {
         _perushimNotesService = perushimNotesService;
+        _searchIndex = searchIndex;
         _recitationService = recitationService;
         _navigator = navigator;
         Packs = new RecitationPacksViewModel(recitationService, perekDataService, navigator);
@@ -95,6 +105,14 @@ public partial class ExtensionPacksViewModel : ObservableObject
         await Packs.LoadAsync();
         NotifyPerushimState();
         OnPropertyChanged(nameof(RecitationStateText));
+        if (_searchIndex != null && _perushimNotesService.IsAvailable)
+        {
+            try { await _searchIndex().CheckCommentaryIndexAsync(); }
+            #pragma warning disable S2221 // Deliberate failure boundary: the check only refines the shown state
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Commentary index check: {ex.Message}"); } //NOSONAR
+            #pragma warning restore S2221
+            NotifyPerushimState();
+        }
     }
 
     /// <summary>
