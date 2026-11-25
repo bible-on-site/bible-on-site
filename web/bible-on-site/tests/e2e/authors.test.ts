@@ -100,13 +100,26 @@ test.describe("/929/authors page", () => {
 			return {
 				backgroundImage: style.backgroundImage,
 				content: style.content,
+				display: style.display,
+				height: style.height,
+				opacity: style.opacity,
 				position: style.position,
+				visibility: style.visibility,
+				zIndex: style.zIndex,
 			};
 		});
 
 		// Fixed keeps the congregation scene recognizable while the grid scrolls.
 		expect(backdrop.position).toBe("fixed");
+		// Painted and on-screen: the box generates (content), shows (display /
+		// visibility / opacity), covers the viewport (height) and stays behind
+		// the content (z-index) rather than over it.
 		expect(backdrop.content).not.toBe("none");
+		expect(backdrop.display).not.toBe("none");
+		expect(backdrop.visibility).toBe("visible");
+		expect(backdrop.opacity).toBe("1");
+		expect(Number.parseFloat(backdrop.height)).toBeGreaterThan(0);
+		expect(backdrop.zIndex).toBe("-1");
 		expect(backdrop.backgroundImage).toContain("rabbis-blue-sketch.webp");
 	});
 
