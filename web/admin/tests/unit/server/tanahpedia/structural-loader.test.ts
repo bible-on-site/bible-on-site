@@ -22,6 +22,7 @@ const PLACE_IDENT_SQL = /tanahpedia_place_identification/;
 const PLACE_SQL = /FROM tanahpedia_place\s/;
 const SAYING_SQL = /tanahpedia_saying/;
 const EXTERNAL_REF_SQL = /FROM external_reference/;
+const PLACE_FACT_SQL = /person_(birth|death|activity)_place/;
 
 function linkRow(entityType: string, entityId = "e1", linkId = "l1") {
 	return { linkId, entityId, entityType, displayName: `name-${entityId}` };
@@ -74,9 +75,12 @@ describe("loadEntryStructuralContext", () => {
 			mainNameRowId: "n1",
 			sex: "MALE",
 			sexRowId: "s1",
+			birthPlace: null,
+			deathPlace: null,
+			activityPlaces: [],
 		});
-		// links + external refs + persons + main names + sexes.
-		expect(queryMock).toHaveBeenCalledTimes(5);
+		// links + external refs + persons + main names + sexes + place facts.
+		expect(queryMock).toHaveBeenCalledTimes(6);
 	});
 
 	it("batches several linked persons into one query per lookup", async () => {
@@ -113,12 +117,18 @@ describe("loadEntryStructuralContext", () => {
 			],
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
-		// links + external refs + persons + main names + sexes: no per-entity fan-out.
-		expect(queryMock).toHaveBeenCalledTimes(5);
+		// links + external refs + persons + main names + sexes + place facts:
+		// no per-entity fan-out.
+		expect(queryMock).toHaveBeenCalledTimes(6);
 		expect(queryMock).toHaveBeenCalledWith(
 			expect.stringContaining("entity_id IN (?, ?, ?)"),
 			["e1", "e2", "e3"],
 		);
+		const noPlaces = {
+			birthPlace: null,
+			deathPlace: null,
+			activityPlaces: [],
+		};
 		expect(ctx.linkedEntities.map((e) => e.person)).toEqual([
 			{
 				personId: "p1",
@@ -126,6 +136,7 @@ describe("loadEntryStructuralContext", () => {
 				mainNameRowId: "n1",
 				sex: "MALE",
 				sexRowId: "s1",
+				...noPlaces,
 			},
 			{
 				personId: "p2",
@@ -133,6 +144,7 @@ describe("loadEntryStructuralContext", () => {
 				mainNameRowId: null,
 				sex: "FEMALE",
 				sexRowId: "s2",
+				...noPlaces,
 			},
 			{
 				personId: "p3",
@@ -140,6 +152,7 @@ describe("loadEntryStructuralContext", () => {
 				mainNameRowId: "n3",
 				sex: null,
 				sexRowId: null,
+				...noPlaces,
 			},
 		]);
 	});
@@ -185,6 +198,87 @@ describe("loadEntryStructuralContext", () => {
 			mainNameRowId: null,
 			sex: null,
 			sexRowId: null,
+			birthPlace: null,
+			deathPlace: null,
+			activityPlaces: [],
+		});
+	});
+
+	it("loads linked and free-text place facts per kind", async () => {
+		mockQueries([
+			[LINKS_SQL, [linkRow("PERSON")]],
+			[PERSON_SQL, [{ entity_id: "e1", id: "p1" }]],
+			[PERSON_NAME_SQL, []],
+			[PERSON_SEX_SQL, []],
+			[
+				PLACE_FACT_SQL,
+				[
+					{
+						person_id: "p1",
+						fact: "birth",
+						id: "f1",
+						place_id: "pl1",
+						place_text: null,
+						place_name: "ירושלים",
+					},
+					{
+						person_id: "p1",
+						fact: "activity",
+						id: "f2",
+						place_id: "pl2",
+						place_text: null,
+						place_name: "שושן",
+					},
+					{
+						person_id: "p1",
+						fact: "activity",
+						id: "f3",
+						place_id: null,
+						place_text: "דבינסק",
+						place_name: null,
+					},
+					{
+						person_id: "p1",
+						fact: "death",
+						id: "f4",
+						place_id: null,
+						place_text: "טבריה",
+						place_name: null,
+					},
+				],
+			],
+		]);
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(ctx.linkedEntities[0].person).toMatchObject({
+			birthPlace: { id: "f1", placeId: "pl1", placeName: "ירושלים" },
+			deathPlace: { id: "f4", placeId: null, placeText: "טבריה" },
+			activityPlaces: [
+				{ id: "f2", placeId: "pl2", placeName: "שושן" },
+				{ id: "f3", placeId: null, placeText: "דבינסק" },
+			],
+		});
+	});
+
+	it("reads place facts as empty while the column upgrade is not deployed", async () => {
+		queryMock.mockImplementation((sql: unknown) => {
+			const text = String(sql);
+			if (PLACE_FACT_SQL.test(text)) {
+				const error = new Error("Unknown column 'f.place_text'") as Error & {
+					code: string;
+				};
+				error.code = "ER_BAD_FIELD_ERROR";
+				return Promise.reject(error);
+			}
+			if (LINKS_SQL.test(text)) return Promise.resolve([linkRow("PERSON")]);
+			if (PERSON_SQL.test(text))
+				return Promise.resolve([{ entity_id: "e1", id: "p1" }]);
+			return Promise.resolve([]);
+		});
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(ctx.linkedEntities[0].person).toMatchObject({
+			birthPlace: null,
+			deathPlace: null,
+			activityPlaces: [],
 		});
 	});
 
@@ -324,9 +418,9 @@ describe("loadEntryStructuralContext", () => {
 			[SAYING_SQL, [{ entity_id: "e3", id: "sy1", saying_date: 57800000 }]],
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
-		// links + external refs + persons + names + sexes + places +
-		// identifications + sayings.
-		expect(queryMock).toHaveBeenCalledTimes(8);
+		// links + external refs + persons + names + sexes + place facts +
+		// places + identifications + sayings.
+		expect(queryMock).toHaveBeenCalledTimes(9);
 		expect(ctx.linkedEntities).toHaveLength(4);
 		expect(ctx.linkedEntities[3]).toEqual({
 			linkId: "l4",

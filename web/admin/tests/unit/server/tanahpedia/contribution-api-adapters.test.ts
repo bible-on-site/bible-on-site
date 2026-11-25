@@ -90,6 +90,56 @@ it("adds API5 through an explicit identity4→5 adapter without content reads", 
 	]);
 	expect(mocks.read).not.toHaveBeenCalled();
 });
+it("fills the v6 place-text alternative into legacy birthplace states", async () => {
+	const contract = currentContributionApiContract({} as never);
+	const operation = {
+		kind: "person_birth_place",
+		targetId: id,
+		before: { personId: id, placeId: nameId, altGroupId: null },
+		after: {
+			personId: id,
+			placeId: null,
+			placeText: "דבינסק",
+			altGroupId: null,
+		},
+		labels: {},
+	};
+	const legacyOperation = {
+		...operation,
+		after: { personId: id, placeId: nameId, altGroupId: null },
+	};
+	const result = await convertApiVersionAsync(
+		[structuredClone(legacyOperation)] as unknown,
+		5,
+		contract.version,
+		contract.adapters,
+	);
+	expect(result.steps).toEqual([
+		{ from: 5, to: 6, id: "person-place-text-alternatives" },
+	]);
+	expect(result.payload).toEqual([
+		{
+			...legacyOperation,
+			before: { ...legacyOperation.before, placeText: null },
+			after: { ...legacyOperation.after, placeText: null },
+		},
+	]);
+	expect(() => validateApiSequence(result.payload)).not.toThrow();
+	// Already-v6 states keep their explicit placeText and stay untouched.
+	const current = await convertApiVersionAsync(
+		[structuredClone(operation)] as unknown,
+		5,
+		contract.version,
+		contract.adapters,
+	);
+	expect(current.payload).toEqual([
+		{
+			...operation,
+			before: { ...operation.before, placeText: null },
+		},
+	]);
+	expect(mocks.read).not.toHaveBeenCalled();
+});
 const legacy = {
 	kind: "metadata",
 	targetId: id,

@@ -9,8 +9,9 @@ use crate::{
         PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
         TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
         TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonName,
-        TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSex,
-        TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
+        TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary,
+        TanahpediaPersonPlace, TanahpediaPersonSex, TanahpediaPersonSummary,
+        TanahpediaPersonUnionSummary,
     },
     providers::Database,
 };
@@ -18,8 +19,8 @@ use entities::perek;
 use entities::tanahpedia::{
     entity, entity_tanah_source, entry, entry_entity, lookup_name_type, lookup_parent_child_type,
     lookup_parent_role, lookup_union_end_reason, lookup_union_type, person, person_birth_date,
-    person_birth_place, person_death_cause, person_death_date, person_name, person_parent_child,
-    person_sex, person_union,
+    person_activity_place, person_birth_place, person_death_cause, person_death_date,
+    person_death_place, person_name, person_parent_child, person_sex, person_union,
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
@@ -44,6 +45,8 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_place WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_activity_place WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
@@ -55,7 +58,7 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
 ) AS dependency_count"#;
-const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 17;
+const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 19;
 
 const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
@@ -1256,13 +1259,51 @@ pub async fn get_person_details(
         .map(|row| row.death_cause)
         .collect();
 
-    let birth_place_ids = person_birth_place::Entity::find()
+    let birth_place_rows = person_birth_place::Entity::find()
         .filter(person_birth_place::Column::PersonId.eq(person_id.clone()))
+        .all(conn)
+        .await
+        .map_err(db_error)?;
+    let birth_place_ids = birth_place_rows
+        .iter()
+        .filter_map(|row| row.place_id.clone())
+        .collect();
+    let birth_places = birth_place_rows
+        .into_iter()
+        .map(|row| TanahpediaPersonPlace {
+            id: row.id,
+            place_id: row.place_id,
+            place_text: row.place_text,
+            alt_group_id: row.alt_group_id,
+        })
+        .collect();
+
+    let death_places = person_death_place::Entity::find()
+        .filter(person_death_place::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
         .map_err(db_error)?
         .into_iter()
-        .map(|row| row.place_id)
+        .map(|row| TanahpediaPersonPlace {
+            id: row.id,
+            place_id: row.place_id,
+            place_text: row.place_text,
+            alt_group_id: row.alt_group_id,
+        })
+        .collect();
+
+    let activity_places = person_activity_place::Entity::find()
+        .filter(person_activity_place::Column::PersonId.eq(person_id.clone()))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| TanahpediaPersonPlace {
+            id: row.id,
+            place_id: row.place_id,
+            place_text: row.place_text,
+            alt_group_id: row.alt_group_id,
+        })
         .collect();
 
     let tanah_sources = get_entity_tanah_sources(db, entity_row.id.clone()).await?;
@@ -1278,6 +1319,9 @@ pub async fn get_person_details(
         death_dates,
         death_causes,
         birth_place_ids,
+        birth_places,
+        death_places,
+        activity_places,
         tanah_sources,
     })
 }
@@ -1355,7 +1399,7 @@ mod tests {
             }
         }
 
-        assert_eq!(reference_tables.len(), 16);
+        assert_eq!(reference_tables.len(), 18);
         assert!(reference_tables.remove("tanahpedia_person_sex"));
         for table in reference_tables {
             assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");
@@ -2871,8 +2915,32 @@ mod tests {
                 vec![],
             ])
             .append_query_results::<person_birth_place::Model, Vec<person_birth_place::Model>, _>([
-                vec![],
+                vec![person_birth_place::Model {
+                    id: "bp-1".to_string(),
+                    person_id: "bilhah".to_string(),
+                    place_id: None,
+                    place_text: Some("דבינסק".to_string()),
+                    alt_group_id: None,
+                }],
             ])
+            .append_query_results::<person_death_place::Model, Vec<person_death_place::Model>, _>([
+                vec![person_death_place::Model {
+                    id: "dp-1".to_string(),
+                    person_id: "bilhah".to_string(),
+                    place_id: Some("place-shushan".to_string()),
+                    place_text: None,
+                    alt_group_id: None,
+                }],
+            ])
+            .append_query_results::<person_activity_place::Model, Vec<person_activity_place::Model>, _>(
+                [vec![person_activity_place::Model {
+                    id: "ap-1".to_string(),
+                    person_id: "bilhah".to_string(),
+                    place_id: Some("place-jerusalem".to_string()),
+                    place_text: None,
+                    alt_group_id: None,
+                }]],
+            )
             .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
                 [vec![entity_tanah_source_model(
                     "s-1",
@@ -2902,6 +2970,22 @@ mod tests {
         assert_eq!(detail.sex_rows.len(), 1);
         assert_eq!(detail.sex_rows[0].id, "sex-1");
         assert!(detail.birth_dates.is_empty());
+        assert!(detail.birth_place_ids.is_empty());
+        assert_eq!(detail.birth_places.len(), 1);
+        assert_eq!(
+            detail.birth_places[0].place_text.as_deref(),
+            Some("דבינסק")
+        );
+        assert_eq!(detail.death_places.len(), 1);
+        assert_eq!(
+            detail.death_places[0].place_id.as_deref(),
+            Some("place-shushan")
+        );
+        assert_eq!(detail.activity_places.len(), 1);
+        assert_eq!(
+            detail.activity_places[0].place_id.as_deref(),
+            Some("place-jerusalem")
+        );
         assert_eq!(detail.tanah_sources.len(), 1);
         assert_eq!(detail.tanah_sources[0].citation, "בראשית ל' ד'");
     }
@@ -3005,6 +3089,12 @@ mod tests {
             .append_query_results::<person_birth_place::Model, Vec<person_birth_place::Model>, _>([
                 vec![],
             ])
+            .append_query_results::<person_death_place::Model, Vec<person_death_place::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_activity_place::Model, Vec<person_activity_place::Model>, _>(
+                [vec![]],
+            )
             .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
                 [vec![]],
             )
@@ -3017,6 +3107,9 @@ mod tests {
 
         assert!(detail.names.is_empty());
         assert!(detail.sexes.is_empty());
+        assert!(detail.birth_places.is_empty());
+        assert!(detail.death_places.is_empty());
+        assert!(detail.activity_places.is_empty());
         assert!(detail.tanah_sources.is_empty());
     }
 }

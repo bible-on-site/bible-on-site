@@ -14,9 +14,11 @@ const {
 	createEntityMock,
 	deleteEntityExternalReferenceMock,
 	getEntryStructuralContextMock,
+	getPlacesMock,
 	removeEntityMock,
 	replacePlaceIdentificationsMock,
 	updateEntityDisplayNameMock,
+	updateFamilyPersonNodeMock,
 	updatePersonMainNameMock,
 	updatePersonSexMock,
 	updateSayingDateMock,
@@ -25,9 +27,11 @@ const {
 	createEntityMock: vi.fn(),
 	deleteEntityExternalReferenceMock: vi.fn(),
 	getEntryStructuralContextMock: vi.fn(),
+	getPlacesMock: vi.fn(),
 	removeEntityMock: vi.fn(),
 	replacePlaceIdentificationsMock: vi.fn(),
 	updateEntityDisplayNameMock: vi.fn(),
+	updateFamilyPersonNodeMock: vi.fn(),
 	updatePersonMainNameMock: vi.fn(),
 	updatePersonSexMock: vi.fn(),
 	updateSayingDateMock: vi.fn(),
@@ -48,6 +52,14 @@ vi.mock("~/server/tanahpedia/structural", () => ({
 
 vi.mock("~/server/tanahpedia/entries", () => ({
 	removeEntity: removeEntityMock,
+}));
+
+vi.mock("~/server/tanahpedia/family", () => ({
+	updateFamilyPersonNode: updateFamilyPersonNodeMock,
+}));
+
+vi.mock("~/server/tanahpedia/places", () => ({
+	getPlaces: getPlacesMock,
 }));
 
 vi.mock("~/server/tanahpedia/external-references", () => ({
@@ -78,12 +90,14 @@ describe("EntryStructuralPanel", () => {
 			entryId: "entry-1",
 			linkedEntities: [],
 		});
+		getPlacesMock.mockReset().mockResolvedValue([]);
 		for (const mock of [
 			createEntityMock,
 			deleteEntityExternalReferenceMock,
 			removeEntityMock,
 			replacePlaceIdentificationsMock,
 			updateEntityDisplayNameMock,
+			updateFamilyPersonNodeMock,
 			updatePersonMainNameMock,
 			updatePersonSexMock,
 			updateSayingDateMock,
@@ -193,6 +207,9 @@ describe("EntryStructuralPanel", () => {
 							mainNameRowId: "main-name-row",
 							sex: "MALE",
 							sexRowId: "sex-row",
+							birthPlace: null,
+							deathPlace: null,
+							activityPlaces: [],
 						},
 						place: null,
 						externalReferences: [
@@ -283,6 +300,68 @@ describe("EntryStructuralPanel", () => {
 			});
 		});
 
+		it("saves linked and free-text person place facts", async () => {
+			getPlacesMock.mockResolvedValue([
+				{ id: "place-1", entity_id: "place-entity", name: "ירושלים" },
+			]);
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+			const controls = within(card as HTMLElement);
+
+			// Free-text birth place: pick the text option then type the name.
+			fireEvent.change(await controls.findByLabelText("מקום לידה"), {
+				target: { value: "__free_text__" },
+			});
+			fireEvent.change(controls.getByPlaceholderText("שם המקום"), {
+				target: { value: " דבינסק " },
+			});
+			// Linked death place from the catalogue.
+			fireEvent.change(controls.getByLabelText("מקום פטירה"), {
+				target: { value: "place-1" },
+			});
+			// One activity place, linked.
+			fireEvent.click(controls.getByRole("button", { name: "+ מקום" }));
+			const activitySelect = card.querySelector(
+				'select[id^="ap-person-entity-"]',
+			);
+			if (!activitySelect) throw new Error("Expected activity place select");
+			fireEvent.change(activitySelect, { target: { value: "place-1" } });
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+
+			await waitFor(() =>
+				expect(updateFamilyPersonNodeMock).toHaveBeenCalledWith({
+					data: {
+						entityId: "person-entity",
+						birthPlaceId: null,
+						birthPlaceText: "דבינסק",
+						deathPlaceId: "place-1",
+						deathPlaceText: null,
+						activityPlaces: [{ placeId: "place-1", placeText: null }],
+					},
+				}),
+			);
+		});
+
+		it("rejects saving an empty free-text place fact", async () => {
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+			const controls = within(card as HTMLElement);
+
+			fireEvent.change(await controls.findByLabelText("מקום לידה"), {
+				target: { value: "__free_text__" },
+			});
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+
+			expect(await controls.findByRole("alert")).toHaveTextContent(
+				"הזן טקסט חופשי או בחר מקום מקושר",
+			);
+			expect(updateFamilyPersonNodeMock).not.toHaveBeenCalled();
+		});
+
 		it("edits place identifications including a newly added row", async () => {
 			renderPanel();
 			const id = await screen.findByText("place-entity");
@@ -352,6 +431,9 @@ describe("EntryStructuralPanel", () => {
 							mainNameRowId: null,
 							sex: null,
 							sexRowId: null,
+							birthPlace: null,
+							deathPlace: null,
+							activityPlaces: [],
 						},
 						place: null,
 						externalReferences: [],

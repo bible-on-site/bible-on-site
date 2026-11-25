@@ -17,6 +17,33 @@ import {
 export function currentContributionApiContract(conn: PoolConnection) {
 	const adapters: AsyncApiVersionAdapter<unknown>[] = [
 		{
+			from: 5,
+			to: 6,
+			id: "person-place-text-alternatives",
+			// v5 person_birth_place states predate place_text: fill the field
+			// with null so the stored sequence matches the v6 vocabulary. The
+			// two new operation kinds carry their own complete states.
+			convert: (payload) => {
+				if (!Array.isArray(payload) || payload.length > 40)
+					throw new Error("Unsupported API v5 sequence");
+				const changes = payload.map((raw) => record(raw, "operation"));
+				for (const change of changes) {
+					if (change.kind !== "person_birth_place") continue;
+					for (const side of ["before", "after"] as const) {
+						const state = change[side];
+						if (
+							state &&
+							typeof state === "object" &&
+							!Array.isArray(state) &&
+							!("placeText" in state)
+						)
+							(state as Record<string, unknown>).placeText = null;
+					}
+				}
+				return changes;
+			},
+		},
+		{
 			from: 4,
 			to: 5,
 			id: "article-link-operations",

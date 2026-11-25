@@ -17,7 +17,7 @@ import {
 
 // Bump for a change to the typed operation contract, alongside an adapter from
 // the preceding version. Package/release versions do not change this contract.
-export const CONTRIBUTION_API_VERSION = 5;
+export const CONTRIBUTION_API_VERSION = 6;
 
 export interface ContributionApiMigration {
 	id: string;

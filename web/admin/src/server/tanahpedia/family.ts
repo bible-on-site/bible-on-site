@@ -83,9 +83,98 @@ async function getGodId(conn: PoolConnection): Promise<string> {
 	return row.id;
 }
 
+/** Normalized person place fact: exactly one side is set. */
+interface PersonPlaceValue {
+	placeId: string | null;
+	placeText: string | null;
+}
+
+/**
+ * Validates the linked-or-text pair of a person place fact. Returns `null`
+ * when both sides are empty (the fact is deleted), throws when both sides
+ * are provided (the fact has exactly one form).
+ */
+function personPlaceValue(
+	placeId: string | null | undefined,
+	placeText: string | null | undefined,
+	field: string,
+): PersonPlaceValue | null {
+	const id = placeId?.trim() ? placeId.trim() : null;
+	const text = placeText?.trim() ? placeText.trim() : null;
+	if (id && text)
+		throw new Error(
+			`${field}: provide either a linked place or free text, not both`,
+		);
+	if (!id && !text) return null;
+	return { placeId: id, placeText: text };
+}
+
+/**
+ * Upserts or deletes a person's single-row-per-person place fact
+ * (birth_place, death_place), each holding either a linked place entity
+ * or a free-text alternative.
+ */
+async function upsertPersonPlace(
+	conn: PoolConnection,
+	params: {
+		table: "tanahpedia_person_birth_place" | "tanahpedia_person_death_place";
+		personId: string;
+		value: PersonPlaceValue | null;
+	},
+): Promise<void> {
+	const { table, personId, value } = params;
+	if (value === null) {
+		await txExecute(conn, `DELETE FROM ${table} WHERE person_id = ?`, [
+			personId,
+		]);
+		return;
+	}
+	const existing = await txQueryOne<{ id: string }>(
+		conn,
+		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
+		[personId],
+	);
+	if (existing) {
+		await txExecute(
+			conn,
+			`UPDATE ${table} SET place_id = ?, place_text = ? WHERE id = ?`,
+			[value.placeId, value.placeText, existing.id],
+		);
+	} else {
+		await txExecute(
+			conn,
+			`INSERT INTO ${table} (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
+			[randomUUID(), personId, value.placeId, value.placeText],
+		);
+	}
+}
+
+/**
+ * Replaces the person's canonical (alt_group_id IS NULL) activity places;
+ * alternative-opinion rows are preserved.
+ */
+async function replacePersonActivityPlaces(
+	conn: PoolConnection,
+	params: { personId: string; places: PersonPlaceValue[] },
+): Promise<void> {
+	const { personId, places } = params;
+	await txExecute(
+		conn,
+		`DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL`,
+		[personId],
+	);
+	for (const place of places) {
+		await txExecute(
+			conn,
+			`INSERT INTO tanahpedia_person_activity_place (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
+			[randomUUID(), personId, place.placeId, place.placeText],
+		);
+	}
+}
+
 /**
  * Upserts or deletes a person's single-row-per-person biographical fact
- * (birth_date, death_date, death_cause, birth_place). Passing `null`
+ * (birth_date, death_date, death_cause). Passing `null`
  * deletes the existing row (if any); passing a value inserts or updates it.
  */
 async function upsertPersonSingleton(
@@ -94,9 +183,8 @@ async function upsertPersonSingleton(
 		table:
 			| "tanahpedia_person_birth_date"
 			| "tanahpedia_person_death_date"
-			| "tanahpedia_person_death_cause"
-			| "tanahpedia_person_birth_place";
-		valueColumn: "birth_date" | "death_date" | "death_cause" | "place_id";
+			| "tanahpedia_person_death_cause";
+		valueColumn: "birth_date" | "death_date" | "death_cause";
 		personId: string;
 		value: string | number | null;
 	},
@@ -252,12 +340,45 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 					value: requiredNonEmpty(data.deathCause, "deathCause"),
 				});
 			}
-			if (data.birthPlaceId != null) {
-				await upsertPersonSingleton(conn, {
+			const birthPlace = personPlaceValue(
+				data.birthPlaceId,
+				data.birthPlaceText,
+				"birthPlace",
+			);
+			if (birthPlace) {
+				await upsertPersonPlace(conn, {
 					table: "tanahpedia_person_birth_place",
-					valueColumn: "place_id",
 					personId,
-					value: requiredNonEmpty(data.birthPlaceId, "birthPlaceId"),
+					value: birthPlace,
+				});
+			}
+			const deathPlace = personPlaceValue(
+				data.deathPlaceId,
+				data.deathPlaceText,
+				"deathPlace",
+			);
+			if (deathPlace) {
+				await upsertPersonPlace(conn, {
+					table: "tanahpedia_person_death_place",
+					personId,
+					value: deathPlace,
+				});
+			}
+			if (data.activityPlaces?.length) {
+				await replacePersonActivityPlaces(conn, {
+					personId,
+					places: data.activityPlaces.map((place, index) => {
+						const value = personPlaceValue(
+							place.placeId,
+							place.placeText,
+							`activityPlaces[${index}]`,
+						);
+						if (!value)
+							throw new Error(
+								`activityPlaces[${index}]: a linked place or free text is required`,
+							);
+						return value;
+					}),
 				});
 			}
 			if (data.isProphet) {
@@ -306,6 +427,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			data.deathDate === undefined &&
 			data.deathCause === undefined &&
 			data.birthPlaceId === undefined &&
+			data.birthPlaceText === undefined &&
+			data.deathPlaceId === undefined &&
+			data.deathPlaceText === undefined &&
+			data.activityPlaces === undefined &&
 			data.isProphet === undefined &&
 			data.isKing === undefined
 		) {
@@ -381,6 +506,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 				data.deathDate !== undefined ||
 				data.deathCause !== undefined ||
 				data.birthPlaceId !== undefined ||
+				data.birthPlaceText !== undefined ||
+				data.deathPlaceId !== undefined ||
+				data.deathPlaceText !== undefined ||
+				data.activityPlaces !== undefined ||
 				data.isProphet !== undefined ||
 				data.isKing !== undefined
 			) {
@@ -419,15 +548,49 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								: null,
 					});
 				}
-				if (data.birthPlaceId !== undefined) {
-					await upsertPersonSingleton(conn, {
+				if (
+					data.birthPlaceId !== undefined ||
+					data.birthPlaceText !== undefined
+				) {
+					await upsertPersonPlace(conn, {
 						table: "tanahpedia_person_birth_place",
-						valueColumn: "place_id",
 						personId: person.id,
-						value:
-							data.birthPlaceId !== null
-								? requiredNonEmpty(data.birthPlaceId, "birthPlaceId")
-								: null,
+						value: personPlaceValue(
+							data.birthPlaceId,
+							data.birthPlaceText,
+							"birthPlace",
+						),
+					});
+				}
+				if (
+					data.deathPlaceId !== undefined ||
+					data.deathPlaceText !== undefined
+				) {
+					await upsertPersonPlace(conn, {
+						table: "tanahpedia_person_death_place",
+						personId: person.id,
+						value: personPlaceValue(
+							data.deathPlaceId,
+							data.deathPlaceText,
+							"deathPlace",
+						),
+					});
+				}
+				if (data.activityPlaces !== undefined) {
+					await replacePersonActivityPlaces(conn, {
+						personId: person.id,
+						places: (data.activityPlaces ?? []).map((place, index) => {
+							const value = personPlaceValue(
+								place.placeId,
+								place.placeText,
+								`activityPlaces[${index}]`,
+							);
+							if (!value)
+								throw new Error(
+									`activityPlaces[${index}]: a linked place or free text is required`,
+								);
+							return value;
+						}),
 					});
 				}
 				if (data.isProphet !== undefined) {

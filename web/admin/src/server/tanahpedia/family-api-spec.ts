@@ -30,6 +30,15 @@ export type FamilyUnionEndReason = (typeof FAMILY_UNION_END_REASONS)[number];
 
 export type FamilyNameType = (typeof FAMILY_NAME_TYPES)[number];
 
+/**
+ * A person place fact is either a linked place entity (placeId) or a
+ * free-text alternative (placeText) — exactly one of the two, never both.
+ */
+export interface FamilyPersonPlace {
+	placeId?: string | null;
+	placeText?: string | null;
+}
+
 export interface CreateFamilyPersonInput {
 	displayName: string;
 	sex?: "MALE" | "FEMALE" | "UNKNOWN" | null;
@@ -38,6 +47,10 @@ export interface CreateFamilyPersonInput {
 	deathDate?: number | null;
 	deathCause?: string | null;
 	birthPlaceId?: string | null;
+	birthPlaceText?: string | null;
+	deathPlaceId?: string | null;
+	deathPlaceText?: string | null;
+	activityPlaces?: FamilyPersonPlace[] | null;
 	isProphet?: boolean;
 	isKing?: boolean;
 }
@@ -50,6 +63,10 @@ export interface UpdateFamilyPersonInput {
 	deathDate?: number | null;
 	deathCause?: string | null;
 	birthPlaceId?: string | null;
+	birthPlaceText?: string | null;
+	deathPlaceId?: string | null;
+	deathPlaceText?: string | null;
+	activityPlaces?: FamilyPersonPlace[] | null;
 	isProphet?: boolean;
 	isKing?: boolean;
 }
@@ -133,7 +150,7 @@ export interface DeleteUnionLinkInput {
  * This file is the source of truth for request shapes used by admin RPC endpoints.
  */
 export const FAMILY_API_SPEC = {
-	version: 1,
+	version: 2,
 	operations: {
 		createFamilyPersonNode: {
 			input: "CreateFamilyPersonInput",

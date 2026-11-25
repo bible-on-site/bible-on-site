@@ -151,6 +151,17 @@ pub struct TanahpediaPersonSex {
     pub alt_group_id: Option<String>,
 }
 
+/// A person's place fact (birth, activity or death place). Each row is
+/// either a linked place entity (`place_id`) or a free-text alternative
+/// (`place_text`) — exactly one of the two.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaPersonPlace {
+    pub id: String,
+    pub place_id: Option<String>,
+    pub place_text: Option<String>,
+    pub alt_group_id: Option<String>,
+}
+
 /// A direct Tanah citation (perek + pasuk) attached to any Tanahpedia entity —
 /// the "source for the entity itself", as opposed to a specific relationship's
 /// `sourceCitation` free-text field.
@@ -179,7 +190,12 @@ pub struct TanahpediaPersonDetail {
     pub birth_dates: Vec<i32>,
     pub death_dates: Vec<i32>,
     pub death_causes: Vec<String>,
+    /// Linked birth-place ids only (kept for compatibility); see
+    /// `birth_places` for the full linked-or-text rows.
     pub birth_place_ids: Vec<String>,
+    pub birth_places: Vec<TanahpediaPersonPlace>,
+    pub death_places: Vec<TanahpediaPersonPlace>,
+    pub activity_places: Vec<TanahpediaPersonPlace>,
     pub tanah_sources: Vec<TanahpediaEntityTanahSource>,
 }
 

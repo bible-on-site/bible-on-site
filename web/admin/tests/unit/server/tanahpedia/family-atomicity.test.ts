@@ -78,6 +78,8 @@ function initialTables(): Tables {
 		tanahpedia_person_death_date: [],
 		tanahpedia_person_death_cause: [],
 		tanahpedia_person_birth_place: [],
+		tanahpedia_person_death_place: [],
+		tanahpedia_person_activity_place: [],
 		tanahpedia_person_role_prophet: [],
 		tanahpedia_person_role_king: [],
 		tanahpedia_entry_entity: [

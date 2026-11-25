@@ -9,6 +9,7 @@ import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { query } from "../db";
 import {
 	isMissingMysqlSchema,
+	isMissingMysqlSchemaOrColumn,
 	placeholders,
 	toNum,
 } from "./sql-helpers";
@@ -20,6 +21,14 @@ export interface PlaceIdentificationRow {
 	modern_name: string | null;
 	latitude: number | null;
 	longitude: number | null;
+}
+
+/** A person place fact is either a linked place entity or free text. */
+export interface PersonPlaceFactRow {
+	id: string;
+	placeId: string | null;
+	placeText: string | null;
+	placeName: string | null;
 }
 
 export interface LinkedEntityStructural {
@@ -34,6 +43,9 @@ export interface LinkedEntityStructural {
 		mainNameRowId: string | null;
 		sex: PersonSex | null;
 		sexRowId: string | null;
+		birthPlace: PersonPlaceFactRow | null;
+		deathPlace: PersonPlaceFactRow | null;
+		activityPlaces: PersonPlaceFactRow[];
 	};
 	place?: {
 		placeId: string;
@@ -118,6 +130,70 @@ async function externalReferencesByEntity(
 	return map;
 }
 
+type PersonPlaceFactKind = "birth" | "death" | "activity";
+
+/**
+ * Canonical (alt_group_id IS NULL) birth/death/activity place facts for the
+ * person ids — one UNION across the three sibling tables, each fact either
+ * a linked place or a free-text alternative. Reads as "no facts" until the
+ * person-places migration lands, matching externalReferencesByEntity.
+ */
+async function personPlaceFactsByPerson(
+	personIds: string[],
+): Promise<Map<string, Map<PersonPlaceFactKind, PersonPlaceFactRow[]>>> {
+	const map = new Map<string, Map<PersonPlaceFactKind, PersonPlaceFactRow[]>>();
+	if (personIds.length === 0) return map;
+	try {
+		const rows = await query<{
+			person_id: string;
+			fact: PersonPlaceFactKind;
+			id: string;
+			place_id: string | null;
+			place_text: string | null;
+			place_name: string | null;
+		}>(
+			`SELECT f.person_id, f.fact, f.id, f.place_id, f.place_text,
+				 e.name AS place_name
+			 FROM (
+				 SELECT person_id, 'birth' AS fact, id, place_id, place_text
+				 FROM tanahpedia_person_birth_place
+				 WHERE alt_group_id IS NULL AND person_id IN (${placeholders(personIds.length)})
+				 UNION ALL
+				 SELECT person_id, 'death' AS fact, id, place_id, place_text
+				 FROM tanahpedia_person_death_place
+				 WHERE alt_group_id IS NULL AND person_id IN (${placeholders(personIds.length)})
+				 UNION ALL
+				 SELECT person_id, 'activity' AS fact, id, place_id, place_text
+				 FROM tanahpedia_person_activity_place
+				 WHERE alt_group_id IS NULL AND person_id IN (${placeholders(personIds.length)})
+			 ) f
+			 LEFT JOIN tanahpedia_place p ON p.id = f.place_id
+			 LEFT JOIN tanahpedia_entity e ON e.id = p.entity_id
+			 ORDER BY f.person_id, f.id`,
+			[...personIds, ...personIds, ...personIds],
+		);
+		for (const row of rows) {
+			let byKind = map.get(row.person_id);
+			if (!byKind) {
+				byKind = new Map();
+				map.set(row.person_id, byKind);
+			}
+			const bucket = byKind.get(row.fact) ?? [];
+			bucket.push({
+				id: row.id,
+				placeId: row.place_id,
+				placeText: row.place_text,
+				placeName: row.place_name,
+			});
+			byKind.set(row.fact, bucket);
+		}
+	} catch (error) {
+		if (isMissingMysqlSchemaOrColumn(error)) return map;
+		throw error;
+	}
+	return map;
+}
+
 export async function loadEntryStructuralContext(
 	entryId: string,
 ): Promise<EntryStructuralContext> {
@@ -181,7 +257,7 @@ export async function loadEntryStructuralContext(
 	const personIds = persons.map((p) => p.id);
 	const placeIds = places.map((p) => p.id);
 
-	const [mainNames, sexRows, identifications] = await Promise.all([
+	const [mainNames, sexRows, identifications, placeFacts] = await Promise.all([
 		whenAny(personIds, () =>
 			query<{ person_id: string; id: string; name: string }>(
 				`SELECT pn.person_id, pn.id, pn.name
@@ -215,6 +291,7 @@ export async function loadEntryStructuralContext(
 				placeIds,
 			),
 		),
+		personPlaceFactsByPerson(personIds),
 	]);
 
 	const personByEntity = firstPerKey(persons, (p) => p.entity_id);
@@ -242,12 +319,16 @@ export async function loadEntryStructuralContext(
 			if (person) {
 				const mainName = mainNameByPerson.get(person.id);
 				const sexRow = sexByPerson.get(person.id);
+				const facts = placeFacts.get(person.id);
 				base.person = {
 					personId: person.id,
 					mainName: mainName?.name ?? null,
 					mainNameRowId: mainName?.id ?? null,
 					sex: sexRow?.sex ?? null,
 					sexRowId: sexRow?.id ?? null,
+					birthPlace: facts?.get("birth")?.[0] ?? null,
+					deathPlace: facts?.get("death")?.[0] ?? null,
+					activityPlaces: facts?.get("activity") ?? [],
 				};
 			}
 		}

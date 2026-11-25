@@ -78,6 +78,14 @@ const spec = (
 ): ContributionRecordSpec => ({ category, label, table, fields, ...extra });
 const person = () => ref("person_id", "איש", "person");
 const place = () => ref("place_id", "מקום", "place");
+/** A person place fact is either a linked place entity or a free-text
+ * alternative, never both and never neither (enforced below). */
+const placeFactFields = (): Record<string, ContributionField> => ({
+	personId: person(),
+	placeId: ref("place_id", "מקום מקושר", "place", true),
+	placeText: text("place_text", "מקום (טקסט חופשי)", 255, true),
+	altGroupId: alt(),
+});
 const nation = () => ref("nation_id", "עם", "nation");
 const saying = () => ref("saying_id", "אמרה", "saying");
 const prophecy = () => ref("prophecy_id", "נבואה", "prophecy");
@@ -172,7 +180,19 @@ export const CONTRIBUTION_RECORDS = {
 		"אישים",
 		"מקום לידה",
 		"tanahpedia_person_birth_place",
-		{ personId: person(), placeId: place(), altGroupId: alt() },
+		placeFactFields(),
+	),
+	person_death_place: spec(
+		"אישים",
+		"מקום פטירה",
+		"tanahpedia_person_death_place",
+		placeFactFields(),
+	),
+	person_activity_place: spec(
+		"אישים",
+		"מקום פעילות",
+		"tanahpedia_person_activity_place",
+		placeFactFields(),
 	),
 	prophet_role: spec(
 		"תפקידים ומלוכה",
@@ -596,5 +616,14 @@ export function validateContributionRecord(
 				after.segmentEnd < after.segmentStart))
 	)
 		throw new Error("Invalid passage segment range");
+	if (
+		(raw.kind === "person_birth_place" ||
+			raw.kind === "person_death_place" ||
+			raw.kind === "person_activity_place") &&
+		(after.placeId === null) === (after.placeText === null)
+	)
+		throw new Error(
+			"מקום: choose either a linked place or a free-text alternative",
+		);
 	return { kind: raw.kind, targetId, after };
 }

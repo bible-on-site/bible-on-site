@@ -4,6 +4,7 @@ import {
 	ENTITY_TYPES,
 } from "../../../../shared/tanahpedia/index";
 import { query } from "../api-client";
+import { isMissingMysqlSchema } from "../mysql-errors";
 import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
 	CategoryHomepage,
@@ -18,6 +19,8 @@ import type {
 	PersonFamilyRelatedPerson,
 	PersonFamilySpouseEdge,
 	PersonFamilySummary,
+	PersonPlaceFact,
+	PersonPlaceFacts,
 	PlaceIdentification,
 	PlaceMapMarker,
 	SynonymTarget,
@@ -657,6 +660,85 @@ export async function getPersonFamilySummary(
 		spouses,
 		siblings,
 	};
+}
+
+/**
+ * מקום לידה / מקומות פעילות / מקום פטירה של איש — שורה קנונית אחת ללידה
+ * ולפטירה, מספר שורות לפעילות. כל עובדה היא מקום מקושר (place_id) או טקסט
+ * חופשי (place_text) שנשמר כלשונו. Returns null while the person-places
+ * migration is not deployed yet — missing tables/columns degrade to "no
+ * section", other query failures reject the render like the other loaders.
+ */
+export async function getPersonPlaceFacts(
+	entityId: string,
+): Promise<PersonPlaceFacts | null> {
+	try {
+		const personRows = await query<{ personId: string }>(
+			"SELECT id AS personId FROM tanahpedia_person WHERE entity_id = ? LIMIT 1",
+			[entityId],
+		);
+		if (personRows.length === 0) return null;
+		const personId = personRows[0].personId;
+		const uq = sqlFirstEntryUniqueNameForEntity("e");
+		const rows = await query<{
+			fact: "birth" | "death" | "activity";
+			placeName: string | null;
+			placeText: string | null;
+			entryUniqueName: string | null;
+		}>(
+			`SELECT f.fact, e.name AS placeName, f.place_text AS placeText,
+			        ${uq} AS entryUniqueName
+			 FROM (
+			   SELECT 'birth' AS fact, id, place_id, place_text
+			     FROM tanahpedia_person_birth_place
+			    WHERE person_id = ? AND alt_group_id IS NULL
+			   UNION ALL
+			   SELECT 'death', id, place_id, place_text
+			     FROM tanahpedia_person_death_place
+			    WHERE person_id = ? AND alt_group_id IS NULL
+			   UNION ALL
+			   SELECT 'activity', id, place_id, place_text
+			     FROM tanahpedia_person_activity_place
+			    WHERE person_id = ? AND alt_group_id IS NULL
+			 ) f
+			 LEFT JOIN tanahpedia_place p ON p.id = f.place_id
+			 LEFT JOIN tanahpedia_entity e ON e.id = p.entity_id
+			 ORDER BY f.fact, f.id`,
+			[personId, personId, personId],
+		);
+		const toFact = (row: (typeof rows)[number]): PersonPlaceFact | null => {
+			// Linked form wins; the text form keeps the editor's wording.
+			if (row.placeName)
+				return {
+					label: row.placeName,
+					entryUniqueName: row.entryUniqueName,
+				};
+			const text = row.placeText?.trim();
+			return text ? { label: text, entryUniqueName: null } : null;
+		};
+		const facts: PersonPlaceFacts = {
+			birth: null,
+			activity: [],
+			death: null,
+		};
+		for (const row of rows) {
+			const fact = toFact(row);
+			if (!fact) continue;
+			if (row.fact === "birth") {
+				if (!facts.birth) facts.birth = fact;
+			} else if (row.fact === "death") {
+				if (!facts.death) facts.death = fact;
+			} else {
+				facts.activity.push(fact);
+			}
+		}
+		if (!facts.birth && !facts.death && facts.activity.length === 0)
+			return null;
+		return facts;
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) return null;
+		throw error;
+	}
 }
 
 export async function getCategoryCounts(): Promise<
