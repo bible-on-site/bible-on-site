@@ -394,6 +394,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             }
             File.Delete(Path.Join(DataDirectory, NotesDbName));
             _notesMissing = true;
+            IsSearchIndexStale = false;
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
@@ -621,6 +622,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             _connection = null;
         }
         _notesMissing = true;
+        IsSearchIndexStale = false;
         // Never leave an unusable generation on the device: the ~285 MB legacy
         // DB, its paired search index, journal sidecars, and interrupted
         // replacement leftovers are all app-owned and must go.

@@ -239,6 +239,21 @@ public sealed class PerushimNotesServiceTests : IDisposable
         ids.Should().Equal(9);
     }
 
+    [Fact]
+    public async Task RemoveNotesAsync_ClearsAStaleSearchIndexForTheReinstall()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(RemoveNotesAsync_ClearsAStaleSearchIndexForTheReinstall));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        await service.InitializeAsync();
+        service.IsSearchIndexStale = true;
+
+        await service.RemoveNotesAsync();
+
+        service.IsSearchIndexStale.Should().BeFalse("a reinstall ships its own index, checked on the next search");
+    }
+
     [Theory]
     [InlineData(false, null)]
     [InlineData(true, null)]
