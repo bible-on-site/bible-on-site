@@ -108,8 +108,8 @@ public partial class ExtensionPacksViewModel : ObservableObject
         if (_searchIndex != null && _perushimNotesService.IsAvailable)
         {
             try { await _searchIndex().CheckCommentaryIndexAsync(); }
-            #pragma warning disable S2221 // Deliberate failure boundary: the check only refines the shown state
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Commentary index check: {ex.Message}"); } //NOSONAR
+            #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Commentary index check: {ex.Message}"); } //NOSONAR — the check only refines the shown pack state; settings must still load
             #pragma warning restore S2221
             NotifyPerushimState();
         }
