@@ -113,6 +113,14 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
+          # The merge queue deletes its gh-readonly-queue ref the moment the
+          # group resolves (merge, ejection, or re-creation), so a still-running
+          # analysis can no longer upload: the SARIF POST fails with
+          # "ref 'refs/heads/gh-readonly-queue/...' not found". Results for the
+          # same commits are already uploaded by the pull_request analysis, so
+          # queue runs analyze without uploading (keeps the check honest
+          # instead of flaking).
+          upload: ${{ github.event_name == 'merge_group' && 'never' || 'always' }}
 
       # A diff that cannot alter a language still owes the code-scanning
       # ruleset a result for the merge ref, or the merge queue stays
