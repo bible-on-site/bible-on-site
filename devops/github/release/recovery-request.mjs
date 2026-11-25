@@ -103,6 +103,18 @@ export function recoveryReleaseFilename(moduleName, version) {
 		: `bulletin-lambda-v${version}.zip`;
 }
 
+/**
+ * Canonical deployed-package name plus historical-era spellings a published
+ * receipt may still carry: paired-era admin recoveries name the unsuffixed
+ * archive, and those receipts stay redeployable (#3794).
+ */
+function recoveryReleaseFilenames(moduleName, version) {
+	const names = [recoveryReleaseFilename(moduleName, version)];
+	if (moduleName === "admin")
+		names.push(`bible-on-site-admin-v${version}.tar.gz`);
+	return names;
+}
+
 async function hashFile(filename) {
 	const checksum = createHash("sha256");
 	let size = 0;
@@ -121,9 +133,7 @@ export async function verifyRecoveryPackageFile({
 }) {
 	// New receipts name the ARM64-only admin archive; a paired-era recovery
 	// release can still be redeployed through its canonical amd64 name (#3794).
-	const names = [recoveryReleaseFilename(moduleName, version)];
-	if (moduleName === "admin")
-		names.push(`bible-on-site-admin-v${version}.tar.gz`);
+	const names = recoveryReleaseFilenames(moduleName, version);
 	requireThat(
 		file(expected) &&
 			names.includes(expected.name) &&
@@ -342,9 +352,10 @@ export function buildRecoveryReceipt(input) {
 		"Recovery receipt CI or artifact proof is invalid",
 	);
 	requireThat(
-		input.releaseFile.name ===
-			recoveryReleaseFilename(input.moduleName, input.moduleVersion),
-		"Recovery receipt must name the canonical deployed package",
+		recoveryReleaseFilenames(input.moduleName, input.moduleVersion).includes(
+			input.releaseFile.name,
+		),
+		"Recovery receipt must name a canonical deployed package",
 	);
 	return {
 		schemaVersion: 1,

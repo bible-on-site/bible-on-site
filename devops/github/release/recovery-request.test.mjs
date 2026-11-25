@@ -463,6 +463,28 @@ for (const [name, change] of [
 		assert.throws(() => buildRecoveryReceipt(v));
 	});
 
+test("paired-era admin receipts keep validating for redeploy (#3794)", () => {
+	// Receipts published while admin shipped amd64+arm64 name the unsuffixed
+	// archive; those recoveries must still pass receipt validation so the
+	// pinned rollback image stays usable.
+	const v = input("admin");
+	v.releaseFile.name = "bible-on-site-admin-v1.0.10.tar.gz";
+	const receipt = buildRecoveryReceipt(v);
+	assert.doesNotThrow(() =>
+		validateRecoveryReceipt(receipt, {
+			repo,
+			sha,
+			moduleName: "admin",
+			moduleDirectory: "web/admin",
+			moduleVersion: "1.0.10",
+			runId: 20,
+			runAttempt: 1,
+			workflowId: 7,
+			artifact: v.artifact,
+		}),
+	);
+});
+
 for (const moduleName of ["admin", "bulletin"])
 	test(`CD verifies ${moduleName} manual recovery only through fixed release-asset API`, () => {
 		const f = fixture({ moduleName });

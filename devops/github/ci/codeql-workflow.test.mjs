@@ -69,8 +69,8 @@ test("scans the default checked-out synthetic commit in each language", () => {
 	const job = workflow.jobs.analyze;
 	assert.equal(
 		job.if,
-		undefined,
-		"no PR-only job guard may exclude merge groups",
+		"${{ !cancelled() && (github.event_name != 'pull_request' || needs.detect.result == 'success') }}",
+		"merge groups and pushes must override the skipped detect need",
 	);
 	const checkout = job.steps.find((step) =>
 		step.uses?.startsWith("actions/checkout@"),

@@ -20,10 +20,29 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** `/pattern/` is Renovate's inline-regex spelling in match fields. */
 const REGEX_SPELLING = /^\/(.+)\/[a-z]*$/;
+
+/**
+ * Renovate config locations recognized by the change router
+ * (RENOVATE_CONFIG_PATTERN in determine-changes.ts). Every existing candidate
+ * is validated so a diff touching any of them is covered (#3795).
+ */
+export const RENOVATE_CONFIG_PATHS = [
+	"renovate.json",
+	"renovate.json5",
+	".renovaterc",
+	".renovaterc.json",
+	".renovaterc.json5",
+	".github/renovate.json",
+	".github/renovate.json5",
+];
+
+/** Repository root — the CLI runs from `devops`, so cwd is not it. */
+export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
 /**
  * Compile-check one config-supplied pattern. The whole point of the validator
@@ -72,42 +91,54 @@ function checkMatchFields(container, where, findings) {
 	}
 }
 
-export function validateRenovateConfig(root = process.cwd()) {
+export function validateRenovateConfig(root) {
 	const findings = [];
-	const path = join(root, "renovate.json");
-	if (!existsSync(path)) {
-		findings.push("renovate.json is missing");
-		return findings;
+	const configs = RENOVATE_CONFIG_PATHS.filter((name) =>
+		existsSync(join(root, name)),
+	);
+	if (!configs.length)
+		return [
+			`Renovate configuration is missing — expected one of ${RENOVATE_CONFIG_PATHS.join(", ")}`,
+		];
+	for (const name of configs) {
+		let config;
+		try {
+			config = JSON.parse(readFileSync(join(root, name), "utf8"));
+		} catch (err) {
+			findings.push(`${name} is not valid JSON: ${err.message}`);
+			continue;
+		}
+		if (typeof config !== "object" || config === null || Array.isArray(config)) {
+			findings.push(`${name} must be a JSON object`);
+			continue;
+		}
+		checkConfig(config, name, findings);
 	}
-	let config;
-	try {
-		config = JSON.parse(readFileSync(path, "utf8"));
-	} catch (err) {
-		return [`renovate.json is not valid JSON: ${err.message}`];
-	}
-	if (typeof config !== "object" || config === null || Array.isArray(config))
-		return ["renovate.json must be a JSON object"];
+	return findings;
+}
 
+/** Shape-checks for one parsed config file; findings are prefixed with its name. */
+function checkConfig(config, name, findings) {
 	if (config.extends !== undefined) {
 		if (
 			!Array.isArray(config.extends) ||
 			config.extends.some((entry) => typeof entry !== "string")
 		)
-			findings.push("extends must be a list of preset strings");
+			findings.push(`${name}.extends must be a list of preset strings`);
 	}
 	if (config.labels !== undefined) {
 		if (
 			!Array.isArray(config.labels) ||
 			config.labels.some((entry) => typeof entry !== "string")
 		)
-			findings.push("labels must be a list of strings");
+			findings.push(`${name}.labels must be a list of strings`);
 	}
 	if (config.packageRules !== undefined) {
 		if (!Array.isArray(config.packageRules))
-			findings.push("packageRules must be a list");
+			findings.push(`${name}.packageRules must be a list`);
 		else
 			config.packageRules.forEach((rule, index) => {
-				const where = `packageRules[${index}]`;
+				const where = `${name}.packageRules[${index}]`;
 				if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {
 					findings.push(`${where} must be an object`);
 					return;
@@ -121,15 +152,15 @@ export function validateRenovateConfig(root = process.cwd()) {
 			config.vulnerabilityAlerts === null ||
 			Array.isArray(config.vulnerabilityAlerts)
 		)
-			findings.push("vulnerabilityAlerts must be an object");
-		else checkMatchFields(config.vulnerabilityAlerts, "vulnerabilityAlerts", findings);
+			findings.push(`${name}.vulnerabilityAlerts must be an object`);
+		else checkMatchFields(config.vulnerabilityAlerts, `${name}.vulnerabilityAlerts`, findings);
 	}
 	if (config.customManagers !== undefined) {
 		if (!Array.isArray(config.customManagers))
-			findings.push("customManagers must be a list");
+			findings.push(`${name}.customManagers must be a list`);
 		else
 			config.customManagers.forEach((manager, index) => {
-				const where = `customManagers[${index}]`;
+				const where = `${name}.customManagers[${index}]`;
 				if (
 					typeof manager !== "object" ||
 					manager === null ||
@@ -141,6 +172,12 @@ export function validateRenovateConfig(root = process.cwd()) {
 				if (manager.customType !== "regex") {
 					findings.push(`${where}.customType must be "regex"`);
 					return;
+				}
+				if (
+					!Array.isArray(manager.managerFilePatterns) ||
+					manager.managerFilePatterns.length === 0
+				) {
+					findings.push(`${where}.managerFilePatterns must be a nonempty list`);
 				}
 				for (const pattern of manager.managerFilePatterns ?? []) {
 					const regex =
@@ -182,17 +219,17 @@ export function validateRenovateConfig(root = process.cwd()) {
 			});
 	}
 	// The same match-field shapes are legal at the top level.
-	checkMatchFields(config, "renovate.json", findings);
-	return findings;
+	checkMatchFields(config, name, findings);
 }
 
-export function main(root = process.cwd()) {
+export function main(root = REPO_ROOT) {
 	const findings = validateRenovateConfig(root);
 	if (findings.length) {
 		for (const finding of findings) console.error(`::error::${finding}`);
 		process.exit(1);
 	}
-	console.log("renovate.json passes the structural config validation");
+	console.log("Renovate configuration passes the structural validation");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+	main();

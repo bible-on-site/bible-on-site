@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       # workflow_call supplies arch_matrix; the dispatch form maps its single
       # arch choice onto the same matrix shape.
-      matrix: ${{ inputs.arch_matrix || fromJSON(format('{{"include":[{{"arch":"{0}","runner":"{1}","machine":"{2}"}}]}}', inputs.arch, inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04', inputs.arch == 'arm64' && 'aarch64' || 'x86_64')) }}
+      matrix: ${{ fromJSON(inputs.arch_matrix || format('{{"include":[{{"arch":"{0}","runner":"{1}","machine":"{2}"}}]}}', inputs.arch, inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04', inputs.arch == 'arm64' && 'aarch64' || 'x86_64')) }}
     runs-on: ${{ matrix.runner }}
     env:
       SERVICE: ${{ inputs.service }}

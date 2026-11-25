@@ -128,9 +128,13 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 
 Use the [protected deployment and release-tag checks](#architecture-handover)
 in steps 3 through 5 with the captured task configuration and verified
-immutable fallback. Keep the same queue lock through both the fallback
-deployment and restoration of the release-tag definition. Ordinary CD resumes
-when the lock exits.
+immutable fallback. An x86 fallback deploys by its pinned image reference —
+the immutable `v<version>-amd64` tag or the recorded digest — never by
+resolving `latest` or the canonical `v<version>` index, which now select
+Linux/ARM64 only (#3794). Keep the same queue lock through both the fallback
+deployment and restoration of the release-tag definition; the restored
+definition must carry the same pinned x86 reference so the rollout Lambda
+resumes on it. Ordinary CD resumes when the lock exits.
 
 If the hold expires during rollback, retain the verified fallback and treat
 the interrupted rollback as an incident. Reconcile the actual task definition,

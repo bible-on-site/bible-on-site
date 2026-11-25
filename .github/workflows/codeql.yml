@@ -75,6 +75,12 @@ jobs:
     timeout-minutes: 60
     name: Analyze (${{ matrix.language }})
     needs: detect
+    # detect only runs on pull requests, so on merge groups, master pushes and
+    # scheduled scans its result is `skipped` — a bare `needs:` would then
+    # skip this job before the fallback matrix is even evaluated. The status
+    # check keeps the full scan on those events while failing closed when
+    # detection fails or is cancelled on a PR (#3795).
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.detect.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write

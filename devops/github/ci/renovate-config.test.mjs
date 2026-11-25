@@ -1,15 +1,32 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { validateRenovateConfig } from "./renovate-config.mjs";
+import {
+	REPO_ROOT,
+	RENOVATE_CONFIG_PATHS,
+	validateRenovateConfig,
+} from "./renovate-config.mjs";
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+test("the repository Renovate configuration passes the structural validation", () => {
+	assert.deepEqual(validateRenovateConfig(REPO_ROOT), []);
+});
 
-test("the repository renovate.json passes the structural validation", () => {
-	assert.deepEqual(validateRenovateConfig(repoRoot), []);
+test("the CLI entrypoint validates the repo regardless of cwd", () => {
+	const cwd = mkdtempSync(join(tmpdir(), "renovate-config-"));
+	try {
+		const output = execFileSync(
+			process.execPath,
+			[fileURLToPath(new URL("./renovate-config.mjs", import.meta.url))],
+			{ cwd, encoding: "utf8" },
+		);
+		assert.match(output, /passes the structural validation/);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
 });
 
 function fixture(config) {
@@ -39,6 +56,28 @@ test("missing and unparsable configs fail closed", () => {
 	}
 	assert.match(findingsOf("{ not json")[0], /not valid JSON/);
 	assert.match(findingsOf("[1]")[0], /must be a JSON object/);
+});
+
+test("alternate config locations are validated by file name", () => {
+	for (const name of RENOVATE_CONFIG_PATHS.filter((n) => n !== "renovate.json")) {
+		const root = mkdtempSync(join(tmpdir(), "renovate-config-"));
+		try {
+			mkdirSync(dirname(join(root, name)), { recursive: true });
+			writeFileSync(
+				join(root, name),
+				JSON.stringify({ packageRules: [{ matchPackageNames: ["/(broken/"] }] }),
+			);
+			const findings = validateRenovateConfig(root);
+			assert.match(
+				findings[0],
+				Reflect.construct(RegExp, [`^${name.replace(/\./g, "\\.")}\\.`]),
+				name,
+			);
+			assert.match(findings[0], /does not compile/);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
 });
 
 test("a broken match-field regex is reported", () => {
@@ -86,6 +125,30 @@ test("regex custom managers must compile and capture currentValue", () => {
 		})[0],
 		/does not compile/,
 	);
+});
+
+test("regex custom managers must declare nonempty managerFilePatterns", () => {
+	const manager = (extra) => ({
+		customManagers: [
+			{
+				customType: "regex",
+				matchStrings: ["dep@(?<currentValue>[0-9]+)"],
+				...extra,
+			},
+		],
+	});
+	for (const extra of [
+		{},
+		{ managerFilePatterns: [] },
+		{ managerFilePatterns: "x" },
+		{ managerFilePatterns: ["glob/*"] },
+	]) {
+		assert.match(
+			findingsOf(manager(extra))[0],
+			/managerFilePatterns/,
+			JSON.stringify(extra),
+		);
+	}
 });
 
 test("container fields keep their expected shapes", () => {
