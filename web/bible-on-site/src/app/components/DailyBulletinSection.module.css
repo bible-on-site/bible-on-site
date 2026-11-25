@@ -42,11 +42,14 @@
 }
 
 /* Cards: a single vertical stack on small screens (review on #3083 — no
-   carousel), three columns on wide screens. */
+   carousel), side by side on wide screens. auto-fit keeps three provider
+   cards in three columns and four cards (with the browser-reminder card,
+   #3732) in four without leaving an empty track when push is off. */
 .cards {
 	display: grid;
 	gap: 1.25rem;
-	grid-template-columns: 1fr;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+	justify-content: center;
 	margin: 0 auto;
 	max-width: 72rem;
 	min-width: 0;
@@ -93,6 +96,7 @@
 
 .cardAction {
 	background-color: var(--accent-600, #1552ac);
+	border: 0;
 	border-radius: var(--radius-sm, 4px);
 	color: #fff;
 	display: inline-block;
@@ -105,7 +109,7 @@
 }
 
 @media (hover: hover) {
-	.cardAction:hover {
+	.cardAction:hover:not(:disabled) {
 		background-color: var(--accent-700, #11469c);
 	}
 }
@@ -166,11 +170,22 @@
 		);
 }
 
-/* Wide screens: all three cards side by side. */
-@media screen and (min-width: 960px) {
-	.cards {
-		grid-template-columns: repeat(3, 1fr);
-	}
+/* Browser reminders (#3732): a soft navy wash — the card's channel is the
+   site itself, so it keeps the site accent rather than a provider brand. */
+.cardPush {
+	background-color: #e7edfb;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.85) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #f0f4fd 0%, #dbe5f8 55%, #e9effb 100%);
+}
+
+.cardPush:focus-visible {
+	outline: 2px solid var(--accent-600, #1552ac);
+	outline-offset: 2px;
 }
 
 /* Dark mode: this band stays light by design — the cards and signup form

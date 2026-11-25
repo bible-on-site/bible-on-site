@@ -133,6 +133,16 @@ describe("TosSection", () => {
 		expect(policyText()).toContain("נבחן כל בקשה בהתאם לדין");
 	});
 
+	it("links to the accessibility statement the nav subtitle advertises", () => {
+		render(<TosSection />);
+		expect(
+			screen.getByRole("heading", { level: 3, name: "הצהרת נגישות" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "הצהרת הנגישות" }),
+		).toHaveAttribute("href", "/accessibility");
+	});
+
 	it("states the qualified content provenance and copyright best-efforts", () => {
 		render(<TosSection />);
 		expect(

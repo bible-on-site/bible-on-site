@@ -30,7 +30,10 @@ test.describe("/לוח learning calendar", () => {
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 		await page
 			.locator("#main-menu")
-			.getByRole("link", { name: "לוח לימוד יומי", exact: true })
+			.getByRole("link", {
+				name: "לוח לימוד יומי לוח עזר פרקים לפי תאריך",
+				exact: true,
+			})
 			.click();
 		await page.waitForURL((url) => decodeURIComponent(url.pathname) === "/לוח");
 		await expect(
