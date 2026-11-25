@@ -90,6 +90,14 @@ const card = () => document.getElementById(PUSH_SECTION_ID);
 const enableButton = () => screen.getByRole("button", { name: "הפעלת התראות" });
 const disableButton = () =>
 	screen.getByRole("button", { name: "ביטול התראות" });
+const noDisableButton = () =>
+	expect(
+		screen.queryByRole("button", { name: "ביטול התראות" }),
+	).not.toBeInTheDocument();
+const noEnableButton = () =>
+	expect(
+		screen.queryByRole("button", { name: "הפעלת התראות" }),
+	).not.toBeInTheDocument();
 
 async function renderToggle() {
 	await act(async () => {
@@ -105,8 +113,7 @@ async function click(name: string) {
 
 describe("PushNotificationsToggle", () => {
 	afterEach(() => {
-		for (const key of ["serviceWorker"])
-			Reflect.deleteProperty(navigator, key);
+		Reflect.deleteProperty(navigator, "serviceWorker");
 		Reflect.deleteProperty(window, "PushManager");
 		Reflect.deleteProperty(window, "Notification");
 		window.location.hash = "";
@@ -187,11 +194,11 @@ describe("PushNotificationsToggle", () => {
 	});
 
 	describe("when not subscribed", () => {
-		it("shows the off state with enable available and disable inert", async () => {
+		it("shows the off state through a single enable control", async () => {
 			setup();
 			await renderToggle();
 			expect(enableButton()).toBeEnabled();
-			expect(disableButton()).toBeDisabled();
+			noDisableButton();
 		});
 
 		it("requests permission once from the enable click and subscribes", async () => {
@@ -213,8 +220,8 @@ describe("PushNotificationsToggle", () => {
 				expect.objectContaining({ method: "POST" }),
 			);
 			expect(screen.getByRole("status")).toHaveTextContent("פעילה");
-			expect(enableButton()).toBeDisabled();
 			expect(disableButton()).toBeEnabled();
+			noEnableButton();
 		});
 
 		it.each([
@@ -241,9 +248,9 @@ describe("PushNotificationsToggle", () => {
 			await click("הפעלת התראות");
 			expect(created.unsubscribe).toHaveBeenCalled();
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
-			// Nothing was stored — opt-in stays retryable, opt-out inert.
+			// Nothing was stored — the toggle keeps offering opt-in.
 			expect(enableButton()).toBeEnabled();
-			expect(disableButton()).toBeDisabled();
+			noDisableButton();
 		});
 
 		it("reports an error when subscribing throws", async () => {
@@ -259,12 +266,12 @@ describe("PushNotificationsToggle", () => {
 	});
 
 	describe("when subscribed", () => {
-		it("shows the on state with disable available and enable inert", async () => {
+		it("shows the on state through a single disable control", async () => {
 			setup({ subscribed: true });
 			await renderToggle();
 			expect(screen.getByRole("status")).toHaveTextContent("פעילה");
 			expect(disableButton()).toBeEnabled();
-			expect(enableButton()).toBeDisabled();
+			noEnableButton();
 		});
 
 		it("deletes and unsubscribes on opt-out without a permission call", async () => {
@@ -308,7 +315,7 @@ describe("PushNotificationsToggle", () => {
 			// The subscription is still live: opt-out stays retryable and the
 			// broadcast keeps reporting "on" rather than a bogus "off".
 			expect(disableButton()).toBeEnabled();
-			expect(enableButton()).toBeDisabled();
+			noEnableButton();
 			expect(events).toEqual([{ status: "on", failed: true }]);
 
 			fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>

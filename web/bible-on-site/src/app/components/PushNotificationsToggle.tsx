@@ -167,31 +167,21 @@ export function PushNotificationsToggle() {
 				התראה יומית בדפדפן - הפרק היומי ישירות אליכם.
 			</p>
 			{interactive && (
-				<div className={styles.actions}>
-					<button
-						type="button"
-						className={cardStyles.cardAction}
-						disabled={push.busy || push.status === "on"}
-						onClick={push.requestEnable}
-					>
-						הפעלת התראות
-					</button>
-					<button
-						type="button"
-						className={styles.disableAction}
-						// A failed opt-out keeps status "on" — the subscription is
-						// still live — so this stays enabled and retries the DELETE.
-						disabled={push.busy || push.status !== "on"}
-						onClick={push.disable}
-					>
-						ביטול התראות
-					</button>
-				</div>
+				// One toggle at the same slot as the other cards' actions
+				// (review on #3732): its label carries the state. A failed
+				// opt-out keeps status "on" — the subscription is still live —
+				// so the same control simply retries.
+				<button
+					type="button"
+					className={`${cardStyles.cardAction} ${styles.action}`}
+					disabled={push.busy}
+					onClick={push.status === "on" ? push.disable : push.requestEnable}
+				>
+					{push.status === "on" ? "ביטול התראות" : "הפעלת התראות"}
+				</button>
 			)}
 			<p className={styles.status} role="status">
-				{push.failed
-					? PUSH_MESSAGES.error
-					: (PUSH_MESSAGES[push.status] ?? "")}
+				{push.failed ? PUSH_MESSAGES.error : (PUSH_MESSAGES[push.status] ?? "")}
 			</p>
 		</article>
 	);

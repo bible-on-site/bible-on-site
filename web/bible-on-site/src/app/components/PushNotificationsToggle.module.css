@@ -1,40 +1,11 @@
-.actions {
-	display: flex;
-	gap: 0.5rem;
-	justify-content: center;
-	margin-top: auto;
-}
-
-/* Secondary counterpart to the card's primary action button. */
-.disableAction {
-	background-color: transparent;
-	border: 1px solid var(--accent-600, #1552ac);
-	border-radius: var(--radius-sm, 4px);
-	color: var(--accent-600, #1552ac);
-	cursor: pointer;
-	display: inline-block;
-	font-weight: bold;
-	letter-spacing: 0.05em;
-	padding: 0.6em 1em;
-	transition: background-color 0.2s;
-}
-
-@media (hover: hover) {
-	.disableAction:hover:not(:disabled) {
-		background-color: rgba(21, 82, 172, 0.08);
-	}
-}
-
-.disableAction:focus-visible {
-	outline: 2px solid var(--accent-600, #1552ac);
-	outline-offset: 2px;
-}
-
-.actions button {
+/* The single opt-in/opt-out toggle sits in the shared cardAction slot
+   (review on #3732) — this only adds button affordances the anchor-style
+   class doesn't carry. */
+.action {
 	cursor: pointer;
 }
 
-.actions button:disabled {
+.action:disabled {
 	cursor: default;
 	opacity: 0.6;
 }

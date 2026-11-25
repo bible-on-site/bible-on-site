@@ -121,8 +121,8 @@ function installPushStub() {
 const permissionCalls = (page: Page) =>
 	page.evaluate(
 		() =>
-			(window as unknown as { __permissionCalls?: number })
-				.__permissionCalls ?? 0,
+			(window as unknown as { __permissionCalls?: number }).__permissionCalls ??
+			0,
 	);
 
 interface ShownNotification {
@@ -198,8 +198,9 @@ async function dispatchNotificationClick(worker: Worker, url: string) {
 				return { url: openUrl, focused: false };
 			};
 			const focusable = (
-				(self as unknown as Record<string, unknown>)
-					.WindowClient as { prototype: Record<string, unknown> }
+				(self as unknown as Record<string, unknown>).WindowClient as {
+					prototype: Record<string, unknown>;
+				}
 			).prototype;
 			focusable.focus = async function focus(this: { url: string }) {
 				scope.__clicks?.push({ action: "focus", url: this.url });
@@ -271,9 +272,11 @@ test.describe("daily perek push notifications (#1096)", () => {
 		const section = pushSection(page);
 		const enable = section.getByRole("button", { name: "הפעלת התראות" });
 		const disable = section.getByRole("button", { name: "ביטול התראות" });
+		// One toggle in the shared cardAction slot — its label carries the
+		// state (review on #3732): off offers הפעלה, on offers ביטול.
 		await expect(enable).toBeVisible();
 		await expect(enable).toBeEnabled();
-		await expect(disable).toBeDisabled();
+		await expect(disable).toHaveCount(0);
 		expect(await permissionCalls(page)).toBe(0);
 
 		// Opt in through the real UI: one permission prompt from the section's
@@ -293,7 +296,7 @@ test.describe("daily perek push notifications (#1096)", () => {
 			keys: { p256dh: sub.p256dh, auth: sub.auth },
 		});
 		await expect(disable).toBeEnabled();
-		await expect(enable).toBeDisabled();
+		await expect(enable).toHaveCount(0);
 		await expect(section).toContainText("ההתראה היומית פעילה");
 
 		const worker = await workerRegistered;
@@ -326,9 +329,7 @@ test.describe("daily perek push notifications (#1096)", () => {
 		// matchAll/find comparison runs for real against the live client list.
 		const focusClick = await dispatchNotificationClick(worker, `${origin}/`);
 		expect(focusClick.errors).toEqual([]);
-		expect(focusClick.clicks).toEqual([
-			{ action: "focus", url: `${origin}/` },
-		]);
+		expect(focusClick.clicks).toEqual([{ action: "focus", url: `${origin}/` }]);
 
 		// Clicking the daily notification asks the platform to open the perek
 		// when no matching window is open.
