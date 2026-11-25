@@ -15,12 +15,17 @@ const post = (body: unknown) =>
 		}),
 	);
 
+// NODE_ENV is typed read-only; assign through a mutable view of process.env.
+function setNodeEnv(value: string): void {
+	(process.env as Record<string, string | undefined>).NODE_ENV = value;
+}
+
 describe("/api/dev/mock-date", () => {
 	const originalNodeEnv = process.env.NODE_ENV;
 	const originalMockDate = process.env.MOCK_DATE;
 
 	beforeEach(() => {
-		process.env.NODE_ENV = "development";
+		setNodeEnv("development");
 		delete process.env.MOCK_DATE;
 	});
 
@@ -29,7 +34,7 @@ describe("/api/dev/mock-date", () => {
 	});
 
 	afterAll(() => {
-		process.env.NODE_ENV = originalNodeEnv;
+		setNodeEnv(originalNodeEnv ?? "test");
 		if (originalMockDate === undefined) {
 			delete process.env.MOCK_DATE;
 		} else {
@@ -38,7 +43,7 @@ describe("/api/dev/mock-date", () => {
 	});
 
 	it("rejects requests outside development mode", async () => {
-		process.env.NODE_ENV = "test";
+		setNodeEnv("test");
 
 		const response = await post({ date: "2025-07-13T12:00:00+03:00" });
 
