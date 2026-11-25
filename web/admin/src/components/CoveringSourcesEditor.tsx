@@ -1,5 +1,6 @@
 import { Target, Trash2 } from "lucide-react";
 import {
+	coveringSourceError,
 	coveringSourceKey,
 	duplicateCoveringSourceKeys,
 	perekSourceLabel,
@@ -62,6 +63,7 @@ export function CoveringSourcesEditor({
 	const sourceRows = sources.map((source, index) => {
 		const perek = perekById.get(source.perek_id);
 		const isDuplicate = duplicates.has(coveringSourceKey(source));
+		const rowError = coveringSourceError(source);
 		return (
 			<div
 				key={
@@ -69,7 +71,7 @@ export function CoveringSourcesEditor({
 					index
 				}
 				className={`flex items-center gap-3 rounded-lg border p-3 ${
-					isDuplicate
+					isDuplicate || rowError !== null
 						? "border-red-300 bg-red-50"
 						: "border-gray-200 bg-gray-50"
 				}`}
@@ -97,10 +99,13 @@ export function CoveringSourcesEditor({
 						min={1}
 						max={perek?.pasuk_count ?? undefined}
 						aria-label={`פסוק למקור ${index + 1}`}
-						value={source.pasuk}
+						/* A cleared field stays in draft state as NaN (rendered
+						   empty) — never coerced to pasuk 0; the save guard in
+						   coverageFieldsForSave rejects it until fixed. */
+						value={Number.isNaN(source.pasuk) ? "" : source.pasuk}
 						onChange={(e) =>
 							updateRow(index, {
-								pasuk: Number.parseInt(e.target.value, 10) || 0,
+								pasuk: Number.parseInt(e.target.value, 10),
 							})
 						}
 						className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -108,6 +113,9 @@ export function CoveringSourcesEditor({
 				</label>
 				{perek?.pasuk_count != null && (
 					<span className="text-xs text-gray-400">1-{perek.pasuk_count}</span>
+				)}
+				{rowError !== null && (
+					<span className="text-xs text-red-600">{rowError}</span>
 				)}
 				<button
 					type="button"
