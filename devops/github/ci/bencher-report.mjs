@@ -7,7 +7,7 @@ const pending = (check) => check.status !== "completed" && check.conclusion == n
 
 /** Bounded rereads while a verified check's listing replicates (~4s spacing). */
 export const CHECK_LISTING_REREADS = 15;
-const CHECK_LISTING_REREAD_MS = 4_000;
+export const CHECK_LISTING_REREAD_MS = 4_000;
 
 async function verifyReport(context, io, result) {
 	const urls = [...result.stdout.matchAll(/View report:\s+(https:\/\/[^\s]+)/gu)];
