@@ -168,6 +168,15 @@ test("apply is scoped to trusted metadata events and never checks out candidate 
  const text=await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml",import.meta.url),"utf8");assert.match(text,/inspect:[\s\S]*permissions:[\s\S]*contents: read\s+actions: write/);assert.doesNotMatch(text,/BOT_PAT|force-cancel|workflow_run\.head_sha/);assert.match(text,/ref: \$\{\{ github.sha \}\}/);assert.match(text,/--apply/);assert.match(text,/workflow_run\.event == 'merge_group'/);assert.match(text,/cancel-in-progress: false/);
 });
 
+test("workflow_run passes stay bounded: only CI starts and re-runs trigger",async()=>{
+ // Every pass reconciles the whole queue, so one trigger per upstream start
+ // suffices; completed adds a third redundant run per upstream run.
+ const text=await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml",import.meta.url),"utf8");
+ assert.match(text,/workflow_run:\s*([\s\S]*?)workflows: \[Continuous Integration\]/);
+ assert.match(text,/workflow_run:[\s\S]*?types: \[requested, in_progress\]/);
+ assert.doesNotMatch(text,/workflow_run:[\s\S]*?completed/);
+});
+
 test("repository identity uses GitHub's canonical endpoint without a trailing slash",async()=>{
  const paths=[];const api=new GitHubApi("test-token",async url=>{paths.push(url.pathname);return Response.json(repo());});
  assert.equal((await api.getRepository()).id,POLICY.repositoryId);assert.deepEqual(paths,["/repos/"+POLICY.repository]);
