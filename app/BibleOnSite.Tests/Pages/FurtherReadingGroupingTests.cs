@@ -91,6 +91,23 @@ public class FurtherReadingGroupingTests
             .Should().BeTrue("the section label binds ArticleListGroup.Title — the untitled group collapses it");
     }
 
+    [Fact]
+    public void Group_header_policy_clears_the_template_when_the_source_empties()
+    {
+        BibleOnSite.Controls.ReaderArticlesView
+            .ServesGroupHeaders(true, ArticleListGroup.Build([Article(1)], []))
+            .Should().BeTrue("a grouped, populated source serves section headers");
+
+        BibleOnSite.Controls.ReaderArticlesView
+            .ServesGroupHeaders(true, ArticleListGroup.Build([], []))
+            .Should().BeFalse(
+                "an empty source must drop the template — iOS resolves a supplementary view whenever the property is set and EmptySource.Group throws");
+
+        BibleOnSite.Controls.ReaderArticlesView
+            .ServesGroupHeaders(false, ArticleListGroup.Build([Article(1)], []))
+            .Should().BeFalse("a flat source never serves section headers");
+    }
+
     private static string FindAppRoot()
     {
         var dir = AppContext.BaseDirectory;
