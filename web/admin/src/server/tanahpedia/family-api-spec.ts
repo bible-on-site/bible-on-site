@@ -80,10 +80,13 @@ export interface UpdateFamilyPersonInput {
 	deathPlaceText?: string | null;
 	deathPlaceOriginal?: FamilyPersonPlace | null;
 	activityPlaces?: FamilyPersonPlace[] | null;
-	/** Canonical activity-place row ids the editor explicitly removed — only
+	/** Canonical activity-place rows the editor explicitly removed — only
 	 * these may be deleted; a locked row outside kept + removed ids means the
-	 * list changed under the editor and the save is rejected. */
-	removedActivityPlaceIds?: string[];
+	 * list changed under the editor and the save is rejected. Each entry
+	 * carries the loaded values (`originalPlaceId`/`originalPlaceText`) as a
+	 * CAS token so a contribution merge editing the row in place is detected
+	 * instead of deleted unseen. */
+	removedActivityPlaces?: FamilyPersonPlace[];
 	isProphet?: boolean;
 	isKing?: boolean;
 }

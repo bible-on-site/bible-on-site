@@ -772,7 +772,7 @@ describe("tanahpedia family api", () => {
 		it("rejects when the locked activity list gained a row the editor never saw", async () => {
 			// The editor loaded one activity row; a contribution merge committed
 			// another canonical row before the FOR UPDATE read. The unseen row
-			// is neither kept nor in removedActivityPlaceIds — reject rather than
+			// is neither kept nor in removedActivityPlaces — reject rather than
 			// delete a row the editor never saw.
 			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
 			queryMock.mockImplementation((sql) =>
@@ -792,7 +792,7 @@ describe("tanahpedia family api", () => {
 					data: {
 						entityId: "entity-1",
 						activityPlaces: [{ id: "a1", placeId: "place-1" }],
-						removedActivityPlaceIds: [],
+						removedActivityPlaces: [],
 					},
 				}),
 			).rejects.toThrow("canonical list changed since the editor loaded it");
@@ -825,7 +825,7 @@ describe("tanahpedia family api", () => {
 								originalPlaceText: null,
 							},
 						],
-						removedActivityPlaceIds: [],
+						removedActivityPlaces: [],
 					},
 				}),
 			).rejects.toThrow(
@@ -856,7 +856,7 @@ describe("tanahpedia family api", () => {
 							originalPlaceText: null,
 						},
 					],
-					removedActivityPlaceIds: [],
+					removedActivityPlaces: [],
 				},
 			});
 
@@ -885,7 +885,7 @@ describe("tanahpedia family api", () => {
 					activityPlaces: [
 						{ id: "a1", placeId: "place-2", originalPlaceText: "שושן" },
 					],
-					removedActivityPlaceIds: [],
+					removedActivityPlaces: [],
 				},
 			});
 
@@ -915,7 +915,15 @@ describe("tanahpedia family api", () => {
 				data: {
 					entityId: "entity-1",
 					activityPlaces: [{ id: "a1", placeId: "place-1" }],
-					removedActivityPlaceIds: ["a2"],
+					removedActivityPlaces: [
+						{
+							id: "a2",
+							originalPlaceId: "place-2",
+							originalPlaceText: null,
+						},
+						// Id-less drafts never reached the database — dropped.
+						{ originalPlaceText: "unsaved" },
+					],
 				},
 			});
 
@@ -930,6 +938,33 @@ describe("tanahpedia family api", () => {
 					),
 				),
 			).toBe(false);
+		});
+
+		it("rejects removing an activity row whose locked content changed", async () => {
+			// A contribution merge edited the row the editor asked to remove —
+			// deleting it would silently discard the merged content.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a2", place_id: null, place_text: "דבינסק" }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [],
+						removedActivityPlaces: [{ id: "a2", originalPlaceText: "שושן" }],
+					},
+				}),
+			).rejects.toThrow(
+				"activityPlaces: row a2 changed since the editor loaded it",
+			);
+			expect(executeMock).not.toHaveBeenCalled();
 		});
 
 		it("rejects a birth place write when the canonical row appeared since the editor loaded it", async () => {
@@ -1066,6 +1101,36 @@ describe("tanahpedia family api", () => {
 					String(sql).includes("tanahpedia_person_birth_place"),
 				),
 			).toBe(false);
+		});
+
+		it("rejects a birth place clear when another canonical row exists", async () => {
+			// A contribution merge can leave a second canonical row the editor
+			// never saw — clearing the loaded one must fail rather than delete
+			// it and let the unseen row surface as "the" fact on reload.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: "place-1",
+					place_text: null,
+				})
+				.mockResolvedValueOnce({ id: "b2" });
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						birthPlaceId: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-1",
+							placeText: null,
+						},
+					},
+				}),
+			).rejects.toThrow("another canonical place fact exists");
+			expect(executeMock).not.toHaveBeenCalled();
 		});
 
 		it("refuses to remove a cited activity place", async () => {

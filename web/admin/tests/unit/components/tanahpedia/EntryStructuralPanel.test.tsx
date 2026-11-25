@@ -341,7 +341,7 @@ describe("EntryStructuralPanel", () => {
 						deathPlaceText: null,
 						deathPlaceOriginal: null,
 						activityPlaces: [{ id: null, placeId: "place-1", placeText: null }],
-						removedActivityPlaceIds: [],
+						removedActivityPlaces: [],
 					},
 				}),
 			);
@@ -509,8 +509,15 @@ describe("EntryStructuralPanel", () => {
 							},
 						],
 						// The loaded "" and "a4" rows were deleted; only persisted ids
-						// are sent back, so the server deletes just "a4".
-						removedActivityPlaceIds: ["a4"],
+						// are sent back (with their loaded values as the CAS token),
+						// so the server deletes just "a4".
+						removedActivityPlaces: [
+							{
+								id: "a4",
+								originalPlaceId: null,
+								originalPlaceText: null,
+							},
+						],
 					},
 				}),
 			);
@@ -555,7 +562,13 @@ describe("EntryStructuralPanel", () => {
 								originalPlaceText: "חרן",
 							},
 						],
-						removedActivityPlaceIds: ["a4"],
+						removedActivityPlaces: [
+							{
+								id: "a4",
+								originalPlaceId: null,
+								originalPlaceText: null,
+							},
+						],
 					},
 				}),
 			);

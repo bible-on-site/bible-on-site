@@ -282,9 +282,13 @@ function PersonCard({
 								: {}),
 						};
 					}),
-					removedActivityPlaceIds: p.activityPlaces
-						.map((fact) => fact.id)
-						.filter((id) => id !== "" && !keptIds.has(id)),
+					removedActivityPlaces: p.activityPlaces
+						.filter((fact) => fact.id !== "" && !keptIds.has(fact.id))
+						.map((fact) => ({
+							id: fact.id,
+							originalPlaceId: fact.placeId,
+							originalPlaceText: fact.placeText,
+						})),
 				},
 			});
 		},

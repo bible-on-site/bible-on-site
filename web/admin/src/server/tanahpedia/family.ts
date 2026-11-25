@@ -168,10 +168,20 @@ async function upsertPersonPlace(
 		}
 	}
 	if (value === null) {
-		// Delete only the row that was checked — a second canonical row (if
-		// one somehow exists) is never touched by a clear the editor did not
-		// see.
 		if (existing) {
+			// The editor cleared the one canonical fact it loaded. A second
+			// canonical row (a contribution merge can add one) must not be
+			// left behind to surface as "the" fact on reload, and deleting it
+			// would discard a row the editor never saw — fail instead.
+			const other = await txQueryOne<{ id: string }>(
+				conn,
+				`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL AND id <> ? LIMIT 1 FOR UPDATE`,
+				[personId, existing.id],
+			);
+			if (other)
+				throw new Error(
+					"another canonical place fact exists for this person (a contribution review may have added it); reconcile the extra fact before clearing",
+				);
 			await txExecute(
 				conn,
 				`DELETE FROM ${table} WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
@@ -209,9 +219,11 @@ async function upsertPersonPlace(
  * reviewed row. A payload id missing from the locked set means the row stopped
  * being canonical — fail loudly rather than overwrite the reviewed change.
  *
- * `removedIds` is the editor's explicit removal list (the ids it loaded and
- * deleted). The locking read sees rows committed after the editor's snapshot,
- * so a locked row that is neither kept nor explicitly removed was added by a
+ * `removed` is the editor's explicit removal list — each entry carries the
+ * values it loaded for that row, so a contribution merge editing a removed
+ * row in place is detected instead of silently discarded. The locking read
+ * sees rows committed after the editor's snapshot, so a locked row that is
+ * neither kept nor explicitly removed was added by a
  * concurrent review — reject the save instead of deleting an unseen row.
  */
 async function replacePersonActivityPlaces(
@@ -219,11 +231,17 @@ async function replacePersonActivityPlaces(
 	params: {
 		personId: string;
 		places: PersonPlaceValue[];
-		removedIds?: string[];
+		removed?: {
+			id: string;
+			originalPlaceId?: string | null;
+			originalPlaceText?: string | null;
+		}[];
 	},
 ): Promise<void> {
-	const { personId, places, removedIds } = params;
-	const removed = removedIds ? new Set(removedIds) : null;
+	const { personId, places, removed } = params;
+	const removals = removed
+		? new Map(removed.map((entry) => [entry.id, entry]))
+		: null;
 	const existing = await txQuery<{
 		id: string;
 		place_id: string | null;
@@ -279,9 +297,23 @@ async function replacePersonActivityPlaces(
 	}
 	for (const row of existing) {
 		if (kept.has(row.id)) continue;
-		if (removed && !removed.has(row.id)) {
+		const removal = removals?.get(row.id);
+		if (removals && !removal) {
 			throw new Error(
 				`activityPlaces: the canonical list changed since the editor loaded it (a contribution review may have added row ${row.id}); reload and retry`,
+			);
+		}
+		// CAS: the editor removed the row it loaded — a contribution merge
+		// that edited it in place since then is not silently discarded.
+		if (
+			removal &&
+			(removal.originalPlaceId !== undefined ||
+				removal.originalPlaceText !== undefined) &&
+			(row.place_id !== (removal.originalPlaceId ?? null) ||
+				row.place_text !== (removal.originalPlaceText ?? null))
+		) {
+			throw new Error(
+				`activityPlaces: row ${row.id} changed since the editor loaded it (a contribution review may have edited it); reload and retry`,
 			);
 		}
 		await assertNoContributionDependents(
@@ -723,7 +755,17 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								originalPlaceText: place.originalPlaceText,
 							};
 						}),
-						removedIds: data.removedActivityPlaceIds,
+						removed: data.removedActivityPlaces?.flatMap((place) =>
+							place.id
+								? [
+										{
+											id: place.id,
+											originalPlaceId: place.originalPlaceId,
+											originalPlaceText: place.originalPlaceText,
+										},
+									]
+								: [],
+						),
 					});
 				}
 				if (data.isProphet !== undefined) {
