@@ -16,6 +16,13 @@ on:
 permissions:
   contents: read
 
+# Listing pushes are last-writer-wins: two quick merges must not overlap, or an
+# older run finishing last would revert newer Google Play copy. Runs queue on
+# one shared group instead of cancelling the in-progress sync.
+concurrency:
+  group: ${{ github.repository }}-store-listing
+  cancel-in-progress: false
+
 jobs:
   sync_google_play:
     name: Sync Google Play listing
