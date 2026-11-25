@@ -7,9 +7,11 @@ import {
 	queryOne,
 	transaction,
 	txExecute,
+	txQuery,
 	txQueryOne,
 } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
+import { assertNoContributionDependents } from "./contribution-records.server";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
@@ -83,8 +85,11 @@ async function getGodId(conn: PoolConnection): Promise<string> {
 	return row.id;
 }
 
-/** Normalized person place fact: exactly one side is set. */
+/** Normalized person place fact: exactly one side is set. `id` is the
+ * existing row id when the editor kept a row, so activity places reconcile
+ * without re-creating (and orphaning citations). */
 interface PersonPlaceValue {
+	id?: string | null;
 	placeId: string | null;
 	placeText: string | null;
 }
@@ -110,9 +115,10 @@ function personPlaceValue(
 }
 
 /**
- * Upserts or deletes a person's single-row-per-person place fact
- * (birth_place, death_place), each holding either a linked place entity
- * or a free-text alternative.
+ * Upserts or deletes a person's canonical (alt_group_id IS NULL)
+ * single-row-per-person place fact (birth_place, death_place), each holding
+ * either a linked place entity or a free-text alternative. Alternative-opinion
+ * rows belong to other opinion groups and are never touched here.
  */
 async function upsertPersonPlace(
 	conn: PoolConnection,
@@ -124,14 +130,16 @@ async function upsertPersonPlace(
 ): Promise<void> {
 	const { table, personId, value } = params;
 	if (value === null) {
-		await txExecute(conn, `DELETE FROM ${table} WHERE person_id = ?`, [
-			personId,
-		]);
+		await txExecute(
+			conn,
+			`DELETE FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL`,
+			[personId],
+		);
 		return;
 	}
 	const existing = await txQueryOne<{ id: string }>(
 		conn,
-		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
+		`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1`,
 		[personId],
 	);
 	if (existing) {
@@ -150,24 +158,64 @@ async function upsertPersonPlace(
 }
 
 /**
- * Replaces the person's canonical (alt_group_id IS NULL) activity places;
- * alternative-opinion rows are preserved.
+ * Reconciles the person's canonical (alt_group_id IS NULL) activity places
+ * against the editor's list. Existing rows keep their ids so source-group
+ * citations stay attached; rows the editor removed are deleted only after the
+ * same dependent/source guard the contribution apply path enforces.
+ * Alternative-opinion rows belong to other opinion groups and are never
+ * touched here.
  */
 async function replacePersonActivityPlaces(
 	conn: PoolConnection,
 	params: { personId: string; places: PersonPlaceValue[] },
 ): Promise<void> {
 	const { personId, places } = params;
-	await txExecute(
+	const existing = await txQuery<{
+		id: string;
+		place_id: string | null;
+		place_text: string | null;
+	}>(
 		conn,
-		`DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL`,
+		`SELECT id, place_id, place_text FROM tanahpedia_person_activity_place
+		 WHERE person_id = ? AND alt_group_id IS NULL`,
 		[personId],
 	);
+	const kept = new Set<string>();
 	for (const place of places) {
+		const retained = place.id
+			? existing.find((row) => row.id === place.id)
+			: undefined;
+		if (!retained) {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_person_activity_place (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
+				[randomUUID(), personId, place.placeId, place.placeText],
+			);
+			continue;
+		}
+		kept.add(retained.id);
+		if (
+			retained.place_id === place.placeId &&
+			retained.place_text === place.placeText
+		)
+			continue;
 		await txExecute(
 			conn,
-			`INSERT INTO tanahpedia_person_activity_place (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
-			[randomUUID(), personId, place.placeId, place.placeText],
+			`UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ?`,
+			[place.placeId, place.placeText, retained.id],
+		);
+	}
+	for (const row of existing) {
+		if (kept.has(row.id)) continue;
+		await assertNoContributionDependents(
+			conn,
+			"tanahpedia_person_activity_place",
+			row.id,
+		);
+		await txExecute(
+			conn,
+			`DELETE FROM tanahpedia_person_activity_place WHERE id = ?`,
+			[row.id],
 		);
 	}
 }
@@ -589,7 +637,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								throw new Error(
 									`activityPlaces[${index}]: a linked place or free text is required`,
 								);
-							return value;
+							return { ...value, id: place.id ?? null };
 						}),
 					});
 				}

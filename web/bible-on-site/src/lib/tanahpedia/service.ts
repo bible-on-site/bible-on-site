@@ -736,7 +736,13 @@ export async function getPersonPlaceFacts(
 			return null;
 		return facts;
 	} catch (error) {
-		if (isMissingMysqlSchema(error)) return null;
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"tanahpedia person place facts are not deployed yet; hiding the places section",
+				error,
+			);
+			return null;
+		}
 		throw error;
 	}
 }

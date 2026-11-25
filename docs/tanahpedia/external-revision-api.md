@@ -356,9 +356,9 @@ the stable row id and `altGroupId` needed for read-after-write comparison. Each 
 have more than one entry because the schema allows multiple alternate-opinion rows per person
 (`altGroupId`). `birthPlaceIds` keeps the legacy linked-place-ids-only view; `birthPlaces`,
 `deathPlaces` and `activityPlaces` are the lossless place facts — each row carries exactly
-one of `placeId` (a linked place entity) or `placeText` (a free-text place stored verbatim
-when no place entity exists). Errors with `NOT_FOUND` when the person (or its linked
-entity) doesn't exist.
+one of `placeId` (a linked place entity) or `placeText` (a free-text place name kept
+when no place entity exists; surrounding whitespace is trimmed on write). Errors with
+`NOT_FOUND` when the person (or its linked entity) doesn't exist.
 
 These queries only read `tanahpedia_entity`, `tanahpedia_person`, `tanahpedia_person_name`,
 `tanahpedia_person_sex`, `tanahpedia_person_birth_date`, `tanahpedia_person_death_date`,

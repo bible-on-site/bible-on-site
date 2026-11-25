@@ -33,8 +33,11 @@ export type FamilyNameType = (typeof FAMILY_NAME_TYPES)[number];
 /**
  * A person place fact is either a linked place entity (placeId) or a
  * free-text alternative (placeText) — exactly one of the two, never both.
+ * `id` keeps the existing row identity so retained rows are updated in
+ * place rather than re-created under new ids.
  */
 export interface FamilyPersonPlace {
+	id?: string | null;
 	placeId?: string | null;
 	placeText?: string | null;
 }

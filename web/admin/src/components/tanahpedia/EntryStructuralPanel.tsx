@@ -49,6 +49,8 @@ interface PlaceFactDraft {
 
 interface ActivityFactDraft extends PlaceFactDraft {
 	key: string;
+	/** Existing row id; new drafts have none and insert a fresh row. */
+	id?: string;
 }
 
 function factToDraft(fact: PersonPlaceFactRow): PlaceFactDraft;
@@ -68,7 +70,11 @@ function activityToDraft(
 	fact: PersonPlaceFactRow,
 	index: number,
 ): ActivityFactDraft {
-	return { key: fact.id || `new-${index}`, ...factToDraft(fact) };
+	return {
+		key: fact.id || `new-${index}`,
+		id: fact.id || undefined,
+		...factToDraft(fact),
+	};
 }
 
 /**
@@ -242,6 +248,7 @@ function PersonCard({
 					deathPlaceText:
 						deathPlace?.mode === "text" ? deathPlace.placeText.trim() : null,
 					activityPlaces: activityPlaces.map((draft) => ({
+						id: draft.id ?? null,
 						placeId: draft.mode === "place" ? draft.placeId : null,
 						placeText: draft.mode === "text" ? draft.placeText.trim() : null,
 					})),

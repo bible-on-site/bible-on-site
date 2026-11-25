@@ -9,17 +9,16 @@ use crate::{
         PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
         TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
         TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonName,
-        TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary,
-        TanahpediaPersonPlace, TanahpediaPersonSex, TanahpediaPersonSummary,
-        TanahpediaPersonUnionSummary,
+        TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonPlace,
+        TanahpediaPersonSex, TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
     },
     providers::Database,
 };
 use entities::perek;
 use entities::tanahpedia::{
     entity, entity_tanah_source, entry, entry_entity, lookup_name_type, lookup_parent_child_type,
-    lookup_parent_role, lookup_union_end_reason, lookup_union_type, person, person_birth_date,
-    person_activity_place, person_birth_place, person_death_cause, person_death_date,
+    lookup_parent_role, lookup_union_end_reason, lookup_union_type, person, person_activity_place,
+    person_birth_date, person_birth_place, person_death_cause, person_death_date,
     person_death_place, person_name, person_parent_child, person_sex, person_union,
 };
 use sea_orm::sea_query::OnConflict;
@@ -60,6 +59,27 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
 ) AS dependency_count"#;
 const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 19;
 
+/// Same guard without the person-places tables, retried when the pre-migration
+/// database rejects them (see `is_missing_person_places_schema`).
+const PERSON_DEPENDENCY_SQL_PRE_PLACES: &str = r#"SELECT (
+    EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_war_side_participant_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_speaker_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_audience_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_recipient_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
+) AS dependency_count"#;
+const PERSON_DEPENDENCY_PRE_PLACES_BIND_COUNT: usize = 16;
+
 const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
@@ -90,12 +110,33 @@ fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
         .collect()
 }
 
+fn person_dependency_values_pre_places(entity_id: &str, person_id: &str) -> Vec<Value> {
+    std::iter::once(entity_id.to_string().into())
+        .chain(std::iter::repeat_n(
+            person_id.to_string().into(),
+            PERSON_DEPENDENCY_PRE_PLACES_BIND_COUNT,
+        ))
+        .collect()
+}
+
 fn entity_dependency_values(entity_id: &str) -> Vec<Value> {
     std::iter::repeat_n(entity_id.to_string().into(), ENTITY_DEPENDENCY_BIND_COUNT).collect()
 }
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+}
+
+/// The person-places tables ship in their own data release, so a staggered
+/// rollout can reach an API that predates them. Surface ER_NO_SUCH_TABLE /
+/// ER_BAD_FIELD_ERROR as "no place facts", matching the website and admin
+/// loaders; any other failure keeps failing the request.
+fn is_missing_person_places_schema(err: &sea_orm::DbErr) -> bool {
+    let message = err.to_string();
+    message.contains("1146")
+        || message.contains("1054")
+        || message.contains("doesn't exist")
+        || message.contains("Unknown table")
 }
 
 fn required(value: String, field: &str, max_len: usize) -> Result<String, ServiceError> {
@@ -504,9 +545,30 @@ pub async fn delete_orphan_person_node(
         person_dependency_values(&entity_id, &person_id),
     ))
     .one(&transaction)
-    .await
-    .map_err(db_error)?
-    .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))?;
+    .await;
+    let dependencies = match dependencies {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return Err(ServiceError::internal_server_error(
+                INTERNAL_SERVER_ERROR,
+                None::<&str>,
+            ));
+        }
+        Err(err) if is_missing_person_places_schema(&err) => {
+            PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
+                DatabaseBackend::MySql,
+                PERSON_DEPENDENCY_SQL_PRE_PLACES,
+                person_dependency_values_pre_places(&entity_id, &person_id),
+            ))
+            .one(&transaction)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| {
+                ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>)
+            })?
+        }
+        Err(err) => return Err(db_error(err)),
+    };
     if dependencies.dependency_count != 0 {
         return Err(ServiceError::bad_request(
             "person node still has linked data",
@@ -1259,11 +1321,15 @@ pub async fn get_person_details(
         .map(|row| row.death_cause)
         .collect();
 
-    let birth_place_rows = person_birth_place::Entity::find()
+    let birth_place_rows = match person_birth_place::Entity::find()
         .filter(person_birth_place::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
-        .map_err(db_error)?;
+    {
+        Ok(rows) => rows,
+        Err(err) if is_missing_person_places_schema(&err) => vec![],
+        Err(err) => return Err(db_error(err)),
+    };
     let birth_place_ids = birth_place_rows
         .iter()
         .filter_map(|row| row.place_id.clone())
@@ -1278,33 +1344,41 @@ pub async fn get_person_details(
         })
         .collect();
 
-    let death_places = person_death_place::Entity::find()
+    let death_places = match person_death_place::Entity::find()
         .filter(person_death_place::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
-        .map_err(db_error)?
-        .into_iter()
-        .map(|row| TanahpediaPersonPlace {
-            id: row.id,
-            place_id: row.place_id,
-            place_text: row.place_text,
-            alt_group_id: row.alt_group_id,
-        })
-        .collect();
+    {
+        Ok(rows) => rows,
+        Err(err) if is_missing_person_places_schema(&err) => vec![],
+        Err(err) => return Err(db_error(err)),
+    }
+    .into_iter()
+    .map(|row| TanahpediaPersonPlace {
+        id: row.id,
+        place_id: row.place_id,
+        place_text: row.place_text,
+        alt_group_id: row.alt_group_id,
+    })
+    .collect();
 
-    let activity_places = person_activity_place::Entity::find()
+    let activity_places = match person_activity_place::Entity::find()
         .filter(person_activity_place::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
-        .map_err(db_error)?
-        .into_iter()
-        .map(|row| TanahpediaPersonPlace {
-            id: row.id,
-            place_id: row.place_id,
-            place_text: row.place_text,
-            alt_group_id: row.alt_group_id,
-        })
-        .collect();
+    {
+        Ok(rows) => rows,
+        Err(err) if is_missing_person_places_schema(&err) => vec![],
+        Err(err) => return Err(db_error(err)),
+    }
+    .into_iter()
+    .map(|row| TanahpediaPersonPlace {
+        id: row.id,
+        place_id: row.place_id,
+        place_text: row.place_text,
+        alt_group_id: row.alt_group_id,
+    })
+    .collect();
 
     let tanah_sources = get_entity_tanah_sources(db, entity_row.id.clone()).await?;
 
@@ -2972,10 +3046,7 @@ mod tests {
         assert!(detail.birth_dates.is_empty());
         assert!(detail.birth_place_ids.is_empty());
         assert_eq!(detail.birth_places.len(), 1);
-        assert_eq!(
-            detail.birth_places[0].place_text.as_deref(),
-            Some("דבינסק")
-        );
+        assert_eq!(detail.birth_places[0].place_text.as_deref(), Some("דבינסק"));
         assert_eq!(detail.death_places.len(), 1);
         assert_eq!(
             detail.death_places[0].place_id.as_deref(),
@@ -2988,6 +3059,99 @@ mod tests {
         );
         assert_eq!(detail.tanah_sources.len(), 1);
         assert_eq!(detail.tanah_sources[0].citation, "בראשית ל' ד'");
+    }
+
+    #[tokio::test]
+    async fn get_person_details_degrades_when_place_tables_are_missing() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "bilhah",
+                "entity-bilhah",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-bilhah",
+                "בלהה",
+            )]])
+            .append_query_results::<person_name::Model, Vec<person_name::Model>, _>([vec![
+                name_model("name-1", "bilhah", "בלהה"),
+            ]])
+            .append_query_results::<lookup_name_type::Model, Vec<lookup_name_type::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_query_results::<person_birth_date::Model, Vec<person_birth_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_date::Model, Vec<person_death_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_cause::Model, Vec<person_death_cause::Model>, _>([
+                vec![],
+            ])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: Table 'tanah.tanahpedia_person_birth_place' doesn't exist"
+                    .to_string(),
+            )])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                    .to_string(),
+            )])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                    .to_string(),
+            )])
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let detail = get_person_details(&db, "bilhah".to_string())
+            .await
+            .expect("pre-migration schema should degrade to no place facts");
+
+        assert!(detail.birth_places.is_empty());
+        assert!(detail.birth_place_ids.is_empty());
+        assert!(detail.death_places.is_empty());
+        assert!(detail.activity_places.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_details_propagates_genuine_place_query_errors() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "bilhah",
+                "entity-bilhah",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-bilhah",
+                "בלהה",
+            )]])
+            .append_query_results::<person_name::Model, Vec<person_name::Model>, _>([vec![
+                name_model("name-1", "bilhah", "בלהה"),
+            ]])
+            .append_query_results::<lookup_name_type::Model, Vec<lookup_name_type::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_query_results::<person_birth_date::Model, Vec<person_birth_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_date::Model, Vec<person_death_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_cause::Model, Vec<person_death_cause::Model>, _>([
+                vec![],
+            ])
+            .append_query_errors([sea_orm::DbErr::Custom("Connection lost".to_string())])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let err = get_person_details(&db, "bilhah".to_string())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
     }
 
     #[tokio::test]

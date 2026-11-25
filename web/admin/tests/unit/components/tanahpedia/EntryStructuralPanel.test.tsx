@@ -338,7 +338,7 @@ describe("EntryStructuralPanel", () => {
 						birthPlaceText: "דבינסק",
 						deathPlaceId: "place-1",
 						deathPlaceText: null,
-						activityPlaces: [{ placeId: "place-1", placeText: null }],
+						activityPlaces: [{ id: null, placeId: "place-1", placeText: null }],
 					},
 				}),
 			);
@@ -480,8 +480,8 @@ describe("EntryStructuralPanel", () => {
 						deathPlaceId: null,
 						deathPlaceText: "מצרים",
 						activityPlaces: [
-							{ placeId: "place-1", placeText: null },
-							{ placeId: null, placeText: "חרן" },
+							{ id: "a1", placeId: "place-1", placeText: null },
+							{ id: "a2", placeId: null, placeText: "חרן" },
 						],
 					},
 				}),
@@ -502,8 +502,8 @@ describe("EntryStructuralPanel", () => {
 						deathPlaceId: null,
 						deathPlaceText: null,
 						activityPlaces: [
-							{ placeId: "place-1", placeText: null },
-							{ placeId: null, placeText: "חרן" },
+							{ id: "a1", placeId: "place-1", placeText: null },
+							{ id: "a2", placeId: null, placeText: "חרן" },
 						],
 					},
 				}),

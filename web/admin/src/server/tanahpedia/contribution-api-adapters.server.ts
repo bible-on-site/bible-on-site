@@ -22,23 +22,36 @@ export function currentContributionApiContract(conn: PoolConnection) {
 			id: "person-place-text-alternatives",
 			// v5 person_birth_place states predate place_text: fill the field
 			// with null so the stored sequence matches the v6 vocabulary. The
-			// two new operation kinds carry their own complete states.
+			// two new operation kinds carry their own complete states. The same
+			// normalization applies to a source_reference's saved sourceTarget
+			// snapshot so an unchanged cited birthplace does not diff as changed.
 			convert: (payload) => {
 				if (!Array.isArray(payload) || payload.length > 40)
 					throw new Error("Unsupported API v5 sequence");
 				const changes = payload.map((raw) => record(raw, "operation"));
+				const fillPlaceText = (state: unknown) => {
+					if (
+						state &&
+						typeof state === "object" &&
+						!Array.isArray(state) &&
+						!("placeText" in state)
+					)
+						(state as Record<string, unknown>).placeText = null;
+				};
 				for (const change of changes) {
-					if (change.kind !== "person_birth_place") continue;
-					for (const side of ["before", "after"] as const) {
-						const state = change[side];
-						if (
-							state &&
-							typeof state === "object" &&
-							!Array.isArray(state) &&
-							!("placeText" in state)
-						)
-							(state as Record<string, unknown>).placeText = null;
+					if (change.kind === "person_birth_place") {
+						fillPlaceText(change.before);
+						fillPlaceText(change.after);
 					}
+					const sourceTarget = change.sourceTarget;
+					if (
+						sourceTarget &&
+						typeof sourceTarget === "object" &&
+						!Array.isArray(sourceTarget) &&
+						(sourceTarget as Record<string, unknown>).kind ===
+							"person_birth_place"
+					)
+						fillPlaceText((sourceTarget as Record<string, unknown>).state);
 				}
 				return changes;
 			},

@@ -17,6 +17,7 @@ vi.mock("@tanstack/react-start", () => ({
 		}),
 		handler: (fn: unknown) => fn,
 	}),
+	createServerOnlyFn: (fn: unknown) => fn,
 }));
 
 vi.mock("~/server/db", () => ({
@@ -27,6 +28,7 @@ vi.mock("~/server/db", () => ({
 		fn({} as PoolConnection),
 	txExecute: (_conn: PoolConnection, ...args: unknown[]) =>
 		executeMock(...args),
+	txQuery: (_conn: PoolConnection, ...args: unknown[]) => queryMock(...args),
 	txQueryOne: (_conn: PoolConnection, ...args: unknown[]) =>
 		queryOneMock(...args),
 }));
@@ -226,10 +228,13 @@ describe("tanahpedia family api", () => {
 			expect.stringContaining("INSERT INTO tanahpedia_person_death_place"),
 			expect.arrayContaining(["place-9", null]),
 		);
-		expect(executeMock).toHaveBeenCalledWith(
-			"DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL",
-			[expect.any(String)],
-		);
+		// A fresh person has no existing activity rows, so nothing is deleted
+		// and every listed place inserts under a new id.
+		expect(
+			executeMock.mock.calls.some(([sql]) =>
+				String(sql).startsWith("DELETE FROM tanahpedia_person_activity_place"),
+			),
+		).toBe(false);
 		const activityInserts = executeMock.mock.calls.filter(([sql]) =>
 			String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
 		);
@@ -574,8 +579,10 @@ describe("tanahpedia family api", () => {
 				data: { entityId: "entity-1", birthPlaceId: "   " },
 			});
 
+			// Only the canonical row is cleared — hidden alternate-opinion
+			// rows belong to other opinion groups and must survive the save.
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ?",
+				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ? AND alt_group_id IS NULL",
 				["person-1"],
 			);
 		});
@@ -593,13 +600,11 @@ describe("tanahpedia family api", () => {
 			});
 
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_death_place WHERE person_id = ?",
+				"DELETE FROM tanahpedia_person_death_place WHERE person_id = ? AND alt_group_id IS NULL",
 				["person-1"],
 			);
-			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL",
-				["person-1"],
-			);
+			// With no existing canonical rows there is nothing to delete — the
+			// sent places all insert as new rows.
 			const activityInserts = executeMock.mock.calls.filter(([sql]) =>
 				String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
 			);
@@ -622,7 +627,19 @@ describe("tanahpedia family api", () => {
 		});
 
 		it("clears all activity places when null is sent", async () => {
-			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValue(null);
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a2", place_id: null, place_text: "חרן" },
+							]
+						: [],
+				),
+			);
 			executeMock.mockResolvedValue(undefined);
 
 			await updateFamilyPersonNode({
@@ -630,13 +647,107 @@ describe("tanahpedia family api", () => {
 			});
 
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL",
-				["person-1"],
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
+				["a1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
+				["a2"],
 			);
 			expect(
 				executeMock.mock.calls.some(([sql]) =>
 					String(sql).startsWith(
 						"INSERT INTO tanahpedia_person_activity_place",
+					),
+				),
+			).toBe(false);
+		});
+
+		it("reconciles activity places in place, keeping row ids stable", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValue(null);
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a2", place_id: "place-5", place_text: null },
+								{ id: "a3", place_id: "place-7", place_text: null },
+							]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [
+						{ id: "a1", placeId: "place-1" },
+						{ id: "a2", placeText: "חרן" },
+						{ placeId: "place-9" },
+					],
+				},
+			});
+
+			// a2 changed in place — its id stays so citations remain attached.
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ?",
+				[null, "חרן", "a2"],
+			);
+			// a3 was removed after the dependent/source guard ran.
+			expect(queryOneMock).toHaveBeenCalledWith(
+				"SELECT id FROM tanahpedia_source_group WHERE target_table=? AND target_id=? LIMIT 1 FOR SHARE NOWAIT",
+				["tanahpedia_person_activity_place", "a3"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
+				["a3"],
+			);
+			// a1 was unchanged — no UPDATE ran against it.
+			expect(
+				executeMock.mock.calls.some(
+					([sql, params]) =>
+						String(sql).startsWith("UPDATE tanahpedia_person_activity_place") &&
+						(params as unknown[])[2] === "a1",
+				),
+			).toBe(false);
+			// The new entry (no id) inserted exactly once.
+			const inserts = executeMock.mock.calls.filter(([sql]) =>
+				String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
+			);
+			expect(inserts).toHaveLength(1);
+			expect(inserts[0]?.[1]).toEqual([
+				expect.any(String),
+				"person-1",
+				"place-9",
+				null,
+			]);
+		});
+
+		it("refuses to remove a cited activity place", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({ id: "sg-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-1", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: { entityId: "entity-1", activityPlaces: [] },
+				}),
+			).rejects.toThrow("still has source references");
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).startsWith(
+						"DELETE FROM tanahpedia_person_activity_place",
 					),
 				),
 			).toBe(false);
@@ -772,7 +883,7 @@ describe("tanahpedia family api", () => {
 				["person-1"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ?",
+				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ? AND alt_group_id IS NULL",
 				["person-1"],
 			);
 		});

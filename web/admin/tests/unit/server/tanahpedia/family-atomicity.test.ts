@@ -42,6 +42,7 @@ vi.mock("@tanstack/react-start", () => ({
 		}),
 		handler: (fn: unknown) => fn,
 	}),
+	createServerOnlyFn: (fn: unknown) => fn,
 }));
 vi.mock("~/server/website-revalidate", () => ({
 	revalidateWebsite: driver.invalidate,
@@ -114,6 +115,8 @@ function predicate(where: string | undefined, params: unknown[]) {
 	let index = 0;
 	const alternatives = where.split(" OR ").map((alternative) =>
 		alternative.split(" AND ").map((part) => {
+			if (part.endsWith(" IS NULL"))
+				return { key: part.slice(0, -" IS NULL".length), value: null };
 			const [key, token] = splitOnce(part, " = ");
 			if (token !== "?" && !(token.startsWith("'") && token.endsWith("'"))) {
 				throw new Error(`Unsupported test predicate: ${part}`);
@@ -126,7 +129,7 @@ function predicate(where: string | undefined, params: unknown[]) {
 	);
 	return (row: Row) =>
 		alternatives.some((terms) =>
-			terms.every(({ key, value }) => row[key] === value),
+			terms.every(({ key, value }) => (row[key] ?? null) === value),
 		);
 }
 
