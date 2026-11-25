@@ -140,6 +140,20 @@ it("fills the v6 place-text alternative into legacy birthplace states", async ()
 	]);
 	expect(mocks.read).not.toHaveBeenCalled();
 });
+it.each([null, Array(41).fill({ kind: "person_birth_place" })])(
+	"rejects invalid v5 sequence bounds before the place-text fill",
+	async (payload) => {
+		const contract = currentContributionApiContract({} as never);
+		await expect(
+			convertApiVersionAsync(
+				payload,
+				5,
+				contract.version,
+				contract.adapters,
+			),
+		).rejects.toThrow("Unsupported API v5 sequence");
+	},
+);
 const legacy = {
 	kind: "metadata",
 	targetId: id,

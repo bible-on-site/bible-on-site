@@ -51,6 +51,10 @@ interface ActivityFactDraft extends PlaceFactDraft {
 	key: string;
 }
 
+function factToDraft(fact: PersonPlaceFactRow): PlaceFactDraft;
+function factToDraft(
+	fact: PersonPlaceFactRow | null | undefined,
+): PlaceFactDraft | null;
 function factToDraft(
 	fact: PersonPlaceFactRow | null | undefined,
 ): PlaceFactDraft | null {
@@ -58,6 +62,13 @@ function factToDraft(
 	if (fact.placeId)
 		return { mode: "place", placeId: fact.placeId, placeText: "" };
 	return { mode: "text", placeId: "", placeText: fact.placeText ?? "" };
+}
+
+function activityToDraft(
+	fact: PersonPlaceFactRow,
+	index: number,
+): ActivityFactDraft {
+	return { key: fact.id || `new-${index}`, ...factToDraft(fact) };
 }
 
 /**
@@ -131,6 +142,8 @@ function PlaceFactRow({
 }
 
 function assertPlaceDraft(draft: PlaceFactDraft | null): void {
+	/* v8 ignore next 2 -- a "place" draft only ever comes from a non-empty
+	   select option or a stored placeId, so the id is always set */
 	if (draft?.mode === "place" && !draft.placeId)
 		throw new Error("בחר מקום מקושר או עבור לטקסט חופשי");
 	if (draft?.mode === "text" && !draft.placeText.trim())
@@ -157,11 +170,7 @@ function PersonCard({
 		factToDraft(p.deathPlace),
 	);
 	const [activityPlaces, setActivityPlaces] = useState<ActivityFactDraft[]>(
-		() =>
-			p.activityPlaces.flatMap((fact, index) => {
-				const draft = factToDraft(fact);
-				return draft ? [{ key: fact.id || `new-${index}`, ...draft }] : [];
-			}),
+		() => p.activityPlaces.map(activityToDraft),
 	);
 
 	useEffect(() => {
@@ -176,12 +185,7 @@ function PersonCard({
 		setDeathPlace(factToDraft(p.deathPlace));
 	}, [p.deathPlace]);
 	useEffect(() => {
-		setActivityPlaces(
-			p.activityPlaces.flatMap((fact, index) => {
-				const draft = factToDraft(fact);
-				return draft ? [{ key: fact.id || `new-${index}`, ...draft }] : [];
-			}),
-		);
+		setActivityPlaces(p.activityPlaces.map(activityToDraft));
 	}, [p.activityPlaces]);
 
 	const { data: places = [] } = useQuery({
@@ -419,13 +423,15 @@ function PersonCard({
 								allowNone={false}
 								draft={draft}
 								onChange={(next) =>
-									setActivityPlaces((prev) =>
-										next === null
-											? prev.filter((_, i) => i !== index)
-											: prev.map((d, i) =>
-													i === index ? { ...d, ...next } : d,
-												),
-									)
+									setActivityPlaces((prev) => {
+										/* v8 ignore if -- allowNone is false here, so PlaceFactRow
+										   never emits null; the מחק button is the remove path */
+										if (next === null)
+											return prev.filter((_, i) => i !== index);
+										return prev.map((d, i) =>
+											i === index ? { ...d, ...next } : d,
+										);
+									})
 								}
 							/>
 							<button

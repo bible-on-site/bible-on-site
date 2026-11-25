@@ -94,6 +94,9 @@ exclude_paths:
   - "data/mysql/tanahpedia_alter_entry_entity_unique.sql"
   - "data/mysql/tanahpedia_alter_entry_synonym.sql"
   - "data/mysql/tanahpedia_alter_today_anniversary_month_day.sql"
+  # Same MySQL @-variable/PREPARE idiom plus COMMENT ''...'' DDL strings;
+  # exercised by test_lambda_parser.py and the MySQL rehearsal jobs.
+  - "data/mysql/tanahpedia_alter_person_places.sql"
   - "data/mysql/tanahpedia_place_jerusalem_data.sql"
   - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"

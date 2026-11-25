@@ -968,6 +968,43 @@ describe("tanahpedia service", () => {
 			await expect(getPersonPlaceFacts("entity-1")).resolves.toBeNull();
 		});
 
+		it("keeps the first birth/death fact when duplicate rows arrive", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ personId: "person-1" }])
+				.mockResolvedValueOnce([
+					{
+						fact: "birth",
+						placeName: "ארץ ישראל",
+						placeText: null,
+						entryUniqueName: "ארץ-ישראל",
+					},
+					{
+						fact: "birth",
+						placeName: "אור כשדים",
+						placeText: null,
+						entryUniqueName: "אור-כשדים",
+					},
+					{
+						fact: "death",
+						placeName: "חברון",
+						placeText: null,
+						entryUniqueName: "חברון",
+					},
+					{
+						fact: "death",
+						placeName: "מצרים",
+						placeText: null,
+						entryUniqueName: "מצרים",
+					},
+				]);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toEqual({
+				birth: { label: "ארץ ישראל", entryUniqueName: "ארץ-ישראל" },
+				activity: [],
+				death: { label: "חברון", entryUniqueName: "חברון" },
+			});
+		});
+
 		it("skips rows that have neither a linked name nor text", async () => {
 			mockQuery
 				.mockResolvedValueOnce([{ personId: "person-1" }])

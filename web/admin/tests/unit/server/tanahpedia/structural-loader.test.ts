@@ -282,6 +282,21 @@ describe("loadEntryStructuralContext", () => {
 		});
 	});
 
+	it("propagates place-fact failures that are not a missing table", async () => {
+		queryMock.mockImplementation((sql: unknown) => {
+			const text = String(sql);
+			if (PLACE_FACT_SQL.test(text))
+				return Promise.reject(new Error("connection lost"));
+			if (LINKS_SQL.test(text)) return Promise.resolve([linkRow("PERSON")]);
+			if (PERSON_SQL.test(text))
+				return Promise.resolve([{ entity_id: "e1", id: "p1" }]);
+			return Promise.resolve([]);
+		});
+		await expect(loadEntryStructuralContext("entry-1")).rejects.toThrow(
+			"connection lost",
+		);
+	});
+
 	it("leaves place undefined when there is no place row", async () => {
 		mockQueries([
 			[LINKS_SQL, [linkRow("PLACE")]],

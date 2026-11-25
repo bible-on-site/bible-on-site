@@ -187,6 +187,21 @@ describe("tanahpedia family api", () => {
 		).rejects.toThrow("provide either a linked place or free text");
 	});
 
+	it("rejects an empty activity place entry on create", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
+
+		await expect(
+			createFamilyPersonNode({
+				data: {
+					displayName: "Moses",
+					activityPlaces: [{ placeId: null, placeText: "  " }],
+				},
+			}),
+		).rejects.toThrow(
+			"activityPlaces[0]: a linked place or free text is required",
+		);
+	});
+
 	it("creates free-text and linked place facts and activity places", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: "name-type-main" })
@@ -604,6 +619,27 @@ describe("tanahpedia family api", () => {
 			).rejects.toThrow(
 				"activityPlaces[0]: a linked place or free text is required",
 			);
+		});
+
+		it("clears all activity places when null is sent", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", activityPlaces: null },
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE person_id = ? AND alt_group_id IS NULL",
+				["person-1"],
+			);
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).startsWith(
+						"INSERT INTO tanahpedia_person_activity_place",
+					),
+				),
+			).toBe(false);
 		});
 
 		it("inserts birth date, death date, death cause, birth place, and roles", async () => {
