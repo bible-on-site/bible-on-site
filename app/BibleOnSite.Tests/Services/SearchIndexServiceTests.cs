@@ -911,6 +911,27 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task PackSettings_WhenTheCommentaryIndexCheckFails_StillLoadTheInstalledState()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        await index.DisposeAsync();
+        var fileSystem = new Mock<IFileSystem>();
+        var settings = new ExtensionPacksViewModel(notes,
+            new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(fileSystem.Object)), new Mock<IAppNavigator>().Object, () => index);
+
+        await settings.Invoking(s => s.LoadAsync()).Should().NotThrowAsync();
+
+        settings.IsPerushimInstalled.Should().BeTrue();
+        settings.ShowPerushimDownloadButton.Should().BeFalse("a failed check leaves the notes-availability state");
+    }
+
+    [Fact]
     public async Task SearchAsync_ReportsProgressDuringCommentaryInitialization()
     {
         await using var storage = new TestStorage();

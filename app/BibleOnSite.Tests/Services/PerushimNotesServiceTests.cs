@@ -255,14 +255,17 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, null)]
-    [InlineData(true, null)]
-    [InlineData(true, "v4:1700000000:n1")]
-    [InlineData(true, "v4:1800000000:n2")]
+    [InlineData(false, true, false, null)]
+    [InlineData(true, false, false, null)]
+    [InlineData(true, true, false, null)]
+    [InlineData(true, true, true, null)]
+    [InlineData(true, true, false, "v4:1700000000:n1")]
+    [InlineData(true, true, false, "v4:1800000000:n2")]
     public async Task TryDownloadNotesAsync_WithStaleSearchIndex_FailsWithoutAnIndexForTheInstalledNotes(
-        bool fetchSucceeds, string? packIndexFingerprint)
+        bool fetchSucceeds, bool packHasAssets, bool packIndexCorrupt, string? packIndexFingerprint)
     {
-        var dataDir = Path.Join(_tempRoot, $"stale-index-{fetchSucceeds}-{packIndexFingerprint?.Replace(':', '-')}");
+        var dataDir = Path.Join(_tempRoot,
+            $"stale-index-{fetchSucceeds}-{packHasAssets}-{packIndexCorrupt}-{packIndexFingerprint?.Replace(':', '-')}");
         var padDir = Path.Join(dataDir, "pad");
         Directory.CreateDirectory(padDir);
         await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
@@ -275,8 +278,13 @@ public sealed class PerushimNotesServiceTests : IDisposable
             await index.ExecuteAsync("INSERT INTO search_metadata VALUES ('notes', ?)", packIndexFingerprint);
             await index.CloseAsync();
         }
+        else if (packIndexCorrupt)
+        {
+            await File.WriteAllTextAsync(Path.Join(padDir, PerushimNotesService.SearchIndexDbName),
+                "not a database", TestContext.Current.CancellationToken);
+        }
         var localNotes = File.ReadAllBytes(Path.Join(dataDir, NotesDbFileName));
-        var pad = new FakePadDeliveryService { AssetPathAfterFetch = padDir, FetchResult = fetchSucceeds };
+        var pad = new FakePadDeliveryService { AssetPathAfterFetch = packHasAssets ? padDir : null, FetchResult = fetchSucceeds };
         var service = PerushimNotesService.CreateForTesting(pad, dataDir);
         await service.InitializeAsync();
         service.IsSearchIndexStale = true;
