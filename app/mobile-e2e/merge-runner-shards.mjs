@@ -20,9 +20,9 @@ export function discoverShardInputs(inputsDir, plan) {
   if (plan.shards.length === 1 && readdirSync(inputsDir).includes("case-manifest.json")) return [inputsDir];
   const byShard = new Map();
   for (const name of readdirSync(inputsDir)) {
-    const match = new RegExp(`${plan.platform}-shard(\\d+)$`).exec(name);
-    if (!match) continue;
-    const index = Number(match[1]);
+    const match = /(?:^|\.)([a-z]+)-shard(\d+)$/.exec(name);
+    if (match?.[1] !== plan.platform) continue;
+    const index = Number(match[2]);
     if (byShard.has(index)) throw new Error(`Duplicate artifact for ${plan.platform} shard ${index}.`);
     byShard.set(index, join(inputsDir, name));
   }
