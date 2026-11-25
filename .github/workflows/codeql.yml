@@ -36,12 +36,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Shared router classification (#3795): a pull request scans only the
-  # languages its diff can actually alter — dependency manifests stay in
-  # scope so dependency changes are still scanned, and the router always
-  # returns at least `actions` so the required code-scanning status still
-  # reports a completed analysis. Scheduled, push and merge-group scans keep
-  # the full matrix.
+  # Shared router classification (#3795): a pull request runs a real scan
+  # only for the languages its diff can actually alter — dependency
+  # manifests stay in scope so dependency changes are still scanned.
+  # Out-of-scope languages still owe the required code-scanning ruleset an
+  # analysis result for the merge ref, so their legs upload an empty result
+  # instead of scanning. Scheduled, push and merge-group scans keep the
+  # full matrix — the queue's real scan gates the actual merge.
   detect:
     timeout-minutes: 10
     name: Language scope detection
@@ -65,9 +66,14 @@ jobs:
         id: scope
         env:
           LANGUAGES: ${{ steps.detect.outputs.codeql_languages }}
+        # The code-scanning ruleset waits for a result per language
+        # category configured on the base branch, so every leg runs —
+        # `scan` only decides whether it analyzes or reports empty.
         run: >-
-          node -e 'const include = JSON.parse(process.env.LANGUAGES)
-          .map((language) => ({ language, "build-mode": "none" }));
+          node -e 'const wanted = new Set(JSON.parse(process.env.LANGUAGES));
+          const include = ["actions", "csharp", "javascript-typescript", "python"]
+          .map((language) => ({ language, "build-mode": "none",
+          scan: wanted.has(language) }));
           console.log(`matrix=${JSON.stringify(include)}`);'
           >> "$GITHUB_OUTPUT"
 
@@ -90,18 +96,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name == 'pull_request' && fromJSON(needs.detect.outputs.matrix) || fromJSON('[{"language":"actions","build-mode":"none"},{"language":"csharp","build-mode":"none"},{"language":"javascript-typescript","build-mode":"none"},{"language":"python","build-mode":"none"}]') }}
+        include: ${{ github.event_name == 'pull_request' && fromJSON(needs.detect.outputs.matrix) || fromJSON('[{"language":"actions","build-mode":"none","scan":true},{"language":"csharp","build-mode":"none","scan":true},{"language":"javascript-typescript","build-mode":"none","scan":true},{"language":"python","build-mode":"none","scan":true}]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
+        if: matrix.scan
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
       - name: Perform CodeQL Analysis
+        if: matrix.scan
         uses: github/codeql-action/analyze@v4
         with:
+          category: "/language:${{ matrix.language }}"
+
+      # A diff that cannot alter a language still owes the code-scanning
+      # ruleset a result for the merge ref, or the merge queue stays
+      # "expecting results" and never enqueues (#3795). An empty run uploads
+      # in seconds; the merge-group event re-scans everything for real.
+      - name: Upload out-of-scope empty result
+        if: ${{ !matrix.scan }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: devops/github/ci/codeql-empty.sarif.json
           category: "/language:${{ matrix.language }}"
