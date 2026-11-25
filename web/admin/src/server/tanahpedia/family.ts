@@ -88,11 +88,15 @@ async function getGodId(conn: PoolConnection): Promise<string> {
 
 /** Normalized person place fact: exactly one side is set. `id` is the
  * existing row id when the editor kept a row, so activity places reconcile
- * without re-creating (and orphaning citations). */
+ * without re-creating (and orphaning citations). `original*` carries the
+ * values the editor loaded for that row — the CAS token detecting a
+ * contribution merge that edited the row in place. */
 interface PersonPlaceValue {
 	id?: string | null;
 	placeId: string | null;
 	placeText: string | null;
+	originalPlaceId?: string | null;
+	originalPlaceText?: string | null;
 }
 
 /**
@@ -164,11 +168,16 @@ async function upsertPersonPlace(
 		}
 	}
 	if (value === null) {
-		await txExecute(
-			conn,
-			`DELETE FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL`,
-			[personId],
-		);
+		// Delete only the row that was checked — a second canonical row (if
+		// one somehow exists) is never touched by a clear the editor did not
+		// see.
+		if (existing) {
+			await txExecute(
+				conn,
+				`DELETE FROM ${table} WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+				[existing.id, personId],
+			);
+		}
 		return;
 	}
 	if (existing) {
@@ -244,6 +253,19 @@ async function replacePersonActivityPlaces(
 			continue;
 		}
 		kept.add(retained.id);
+		// CAS: the locked row must still hold what the editor loaded — a
+		// contribution merge editing the row in place keeps its id, so the id
+		// match alone is not enough to overwrite it with stale values.
+		if (
+			(place.originalPlaceId !== undefined ||
+				place.originalPlaceText !== undefined) &&
+			(retained.place_id !== (place.originalPlaceId ?? null) ||
+				retained.place_text !== (place.originalPlaceText ?? null))
+		) {
+			throw new Error(
+				`activityPlaces: row ${retained.id} changed since the editor loaded it (a contribution review may have edited it); reload and retry`,
+			);
+		}
 		if (
 			retained.place_id === place.placeId &&
 			retained.place_text === place.placeText
@@ -694,7 +716,12 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								throw new Error(
 									`activityPlaces[${index}]: a linked place or free text is required`,
 								);
-							return { ...value, id: place.id ?? null };
+							return {
+								...value,
+								id: place.id ?? null,
+								originalPlaceId: place.originalPlaceId,
+								originalPlaceText: place.originalPlaceText,
+							};
 						}),
 						removedIds: data.removedActivityPlaceIds,
 					});

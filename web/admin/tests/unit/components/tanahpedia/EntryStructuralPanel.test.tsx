@@ -493,8 +493,20 @@ describe("EntryStructuralPanel", () => {
 							placeText: "מצרים",
 						},
 						activityPlaces: [
-							{ id: "a1", placeId: "place-1", placeText: null },
-							{ id: "a2", placeId: null, placeText: "חרן" },
+							{
+								id: "a1",
+								placeId: "place-1",
+								placeText: null,
+								originalPlaceId: "place-8",
+								originalPlaceText: null,
+							},
+							{
+								id: "a2",
+								placeId: null,
+								placeText: "חרן",
+								originalPlaceId: null,
+								originalPlaceText: "חרן",
+							},
 						],
 						// The loaded "" and "a4" rows were deleted; only persisted ids
 						// are sent back, so the server deletes just "a4".
@@ -528,8 +540,20 @@ describe("EntryStructuralPanel", () => {
 							placeText: "מצרים",
 						},
 						activityPlaces: [
-							{ id: "a1", placeId: "place-1", placeText: null },
-							{ id: "a2", placeId: null, placeText: "חרן" },
+							{
+								id: "a1",
+								placeId: "place-1",
+								placeText: null,
+								originalPlaceId: "place-8",
+								originalPlaceText: null,
+							},
+							{
+								id: "a2",
+								placeId: null,
+								placeText: "חרן",
+								originalPlaceId: null,
+								originalPlaceText: "חרן",
+							},
 						],
 						removedActivityPlaceIds: ["a4"],
 					},

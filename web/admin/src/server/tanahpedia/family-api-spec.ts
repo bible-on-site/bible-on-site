@@ -40,6 +40,11 @@ export interface FamilyPersonPlace {
 	id?: string | null;
 	placeId?: string | null;
 	placeText?: string | null;
+	/** The values the editor loaded for this row — a CAS token so a
+	 * contribution merge editing the row in place is detected rather than
+	 * overwritten. Sent only for persisted rows (id set). */
+	originalPlaceId?: string | null;
+	originalPlaceText?: string | null;
 }
 
 export interface CreateFamilyPersonInput {

@@ -266,11 +266,22 @@ function PersonCard({
 								placeText: p.deathPlace.placeText,
 							}
 						: null,
-					activityPlaces: activityPlaces.map((draft) => ({
-						id: draft.id ?? null,
-						placeId: draft.mode === "place" ? draft.placeId : null,
-						placeText: draft.mode === "text" ? draft.placeText.trim() : null,
-					})),
+					activityPlaces: activityPlaces.map((draft) => {
+						const loaded = draft.id
+							? p.activityPlaces.find((fact) => fact.id === draft.id)
+							: undefined;
+						return {
+							id: draft.id ?? null,
+							placeId: draft.mode === "place" ? draft.placeId : null,
+							placeText: draft.mode === "text" ? draft.placeText.trim() : null,
+							...(loaded
+								? {
+										originalPlaceId: loaded.placeId,
+										originalPlaceText: loaded.placeText,
+									}
+								: {}),
+						};
+					}),
 					removedActivityPlaceIds: p.activityPlaces
 						.map((fact) => fact.id)
 						.filter((id) => id !== "" && !keptIds.has(id)),
