@@ -8,7 +8,10 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Version folded into every search fingerprint (`v4:{content-id}:n{NORM_VERSION}`).
 /// The app's `SearchText.NormalizationVersion` must equal this value.
-pub const NORM_VERSION: u32 = 1;
+/// 2: every block-level tag — open or close — is a word break, and the shared
+/// tag set grew to cover td/th/h4-h6/ul/ol/table/blockquote/section/article/
+/// header/footer/hr (previously only br/p/div/li/tr/h1-h3 closed blocks broke).
+pub const NORM_VERSION: u32 = 2;
 
 /// Strips markup the same way `SearchText.PlainText` does: script/style blocks
 /// vanish, structural tags turn into a word break, and the rest is removed.
@@ -22,8 +25,11 @@ pub fn plain_text(text: &str) -> String {
 
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    // Remove <script…>…</script> and <style…>…</style> blocks entirely.
-    while let Some((start, end)) = find_script_or_style(rest) {
+    // Remove `<!--…-->` comments and <script…>…</script>/<style…>…</style>
+    // blocks entirely. Comments compete with script/style in document order:
+    // a `<style>` opener inside a comment must not pair with a real closing
+    // tag and erase the text between them.
+    while let Some((start, end)) = find_comment_or_script(rest) {
         out.push_str(&rest[..start]);
         rest = &rest[end..];
     }
@@ -49,7 +55,6 @@ pub fn plain_text(text: &str) -> String {
         // every consumed char so an unterminated tag can be re-emitted as text.
         let mut consumed = String::new();
         let mut tag = String::new();
-        let mut closing = false;
         let mut first = true;
         let mut in_name = true;
         let mut terminated = false;
@@ -62,7 +67,6 @@ pub fn plain_text(text: &str) -> String {
             if first {
                 first = false;
                 if t == '/' {
-                    closing = true;
                     continue;
                 }
             }
@@ -80,15 +84,43 @@ pub fn plain_text(text: &str) -> String {
             result.push_str(&consumed);
             break;
         }
-        const BREAK: [&str; 8] = ["br", "p", "div", "li", "tr", "h1", "h2", "h3"];
-        if BREAK.contains(&tag.as_str()) && (closing || tag == "br") {
-            // A close tag (or <br>) emits the break the element stood for.
+        // Block-level tags — the same set the app (`SearchText.cs`), the website
+        // (`lib/search/normalize.ts`) and the article-search service
+        // (`web/api/src/services/article_search/text.rs`) break words on. Open
+        // and close tags break alike so `<div>…` and `…</td><td>…` split the
+        // same way every port parses them.
+        const BREAK: [&str; 22] = [
+            "br",
+            "p",
+            "div",
+            "li",
+            "tr",
+            "td",
+            "th",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "ul",
+            "ol",
+            "table",
+            "blockquote",
+            "section",
+            "article",
+            "header",
+            "footer",
+            "hr",
+        ];
+        if BREAK.contains(&tag.as_str()) && !result.ends_with(' ') {
+            // A block tag (open or close) emits the break the element stands for;
+            // adjacent ones share a single break like the other ports.
             result.push(' ');
         }
-        // All other tags drop entirely — opening block tags too (their break
-        // arrives with the close tag, matching InnerText closely enough).
+        // All other tags drop entirely.
     }
-    deentitized(&result)
+    deentitized(&result).trim().to_string()
 }
 
 /// `SearchText.Normalize`: NFD, drop combining marks + quote chars, lowercase
@@ -119,6 +151,24 @@ pub fn normalize(text: &str) -> String {
         }
     }
     out.trim_end().to_string()
+}
+
+/// Locates the earliest `<!--` comment or `<script>`/`<style>` open tag and
+/// returns the range to drop: a comment through its `-->` (or EOF), a
+/// script/style block through its matching close (or its own open tag).
+fn find_comment_or_script(text: &str) -> Option<(usize, usize)> {
+    let comment = text.find("<!--").map(|start| {
+        let end = text[start + 4..]
+            .find("-->")
+            .map(|p| start + 4 + p + 3)
+            .unwrap_or(text.len());
+        (start, end)
+    });
+    let script = find_script_or_style(text);
+    match (comment, script) {
+        (Some(c), Some(s)) => Some(if c.0 <= s.0 { c } else { s }),
+        (only, None) | (None, only) => only,
+    }
 }
 
 /// Locates the earliest `<script>`/`<style>` open tag and the index just past
@@ -281,5 +331,49 @@ mod tests {
         assert_eq!(normalize("  a  b  "), "a b");
         assert_eq!(normalize("word's end"), "words end");
         assert_eq!(normalize("a-ב c"), "a ב c");
+    }
+
+    // The same cases are asserted in search-normalize.test.ts (website),
+    // SearchTextTests.cs (app) and article_search/text.rs (api): every open or
+    // close block-level tag is a word break in all four ports, and each emits
+    // the same plain text byte-for-byte (one space per boundary cluster).
+    #[test]
+    fn block_tags_break_words_like_the_other_ports() {
+        for (html, expected) in [
+            ("<td>foo</td><td>bar</td>", "foo bar"),
+            ("<th>א</th><td>ב</td>", "א ב"),
+            ("<h4>א</h4>ב", "א ב"),
+            ("<ul><li>א</li><li>ב</li></ul>", "א ב"),
+            ("<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"),
+            ("<blockquote>א</blockquote><section>ב</section>", "א ב"),
+            ("<header>א</header><article>ב</article>", "א ב"),
+            ("<footer>א</footer>ב", "א ב"),
+            ("א<hr>ב", "א ב"),
+            ("<div>א", "א"),
+            ("<p>א</p><p>ב</p>", "א ב"),
+            ("א<br>ב", "א ב"),
+            // A boundary emits one space unless preceding text ends in one.
+            // whitespace around tags stays literal in every port.
+            ("א <br>ב", "א ב"),
+            ("א  <br>ב", "א  ב"),
+            ("א<br> ב", "א  ב"),
+            ("א <br> <br>ב", "א  ב"),
+            ("א<div></div>ב", "א ב"),
+            // A comment emits nothing; markup inside it never reaches the scanner.
+            ("א<!-- <style> -->ב", "אב"),
+            // A commented-out opener must not pair with a real close tag.
+            ("א<!-- <style> -->ב<style>x</style>ג", "אבג"),
+            // Comment markers inside a skipped script/style body are inert —
+            // the closing tag still ends the block.
+            ("א<script><!--</script>ב", "אב"),
+            ("א<style>x<!-- -->y</style>ב", "אב"),
+            // A script block starting before a comment marker still wins —
+            // whichever construct opens first is the one removed.
+            ("א<script>x<!--y</script>ב", "אב"),
+            // An unterminated comment swallows to end of input.
+            ("א<!--x", "א"),
+        ] {
+            assert_eq!(plain_text(html), expected, "for {html}");
+        }
     }
 }

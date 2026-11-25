@@ -15,6 +15,7 @@ public partial class ExtensionPacksViewModel : ObservableObject
 {
     private readonly PerushimNotesService _perushimNotesService;
     private readonly RecitationService _recitationService;
+    private readonly Func<SearchIndexService>? _searchIndex;
     private readonly IAppNavigator _navigator;
     private CancellationTokenSource? _perushimDownload;
 
@@ -22,14 +23,23 @@ public partial class ExtensionPacksViewModel : ObservableObject
     public RecitationPacksViewModel Packs { get; }
 
     public ExtensionPacksViewModel()
-        : this(PerushimNotesService.Instance, RecitationService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance)
+        : this(PerushimNotesService.Instance, RecitationService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance,
+            () => SearchIndexService.Instance)
     {
     }
 
     public ExtensionPacksViewModel(PerushimNotesService perushimNotesService,
         RecitationService recitationService, PerekDataService perekDataService, IAppNavigator navigator)
+        : this(perushimNotesService, recitationService, perekDataService, navigator, null)
+    {
+    }
+
+    public ExtensionPacksViewModel(PerushimNotesService perushimNotesService,
+        RecitationService recitationService, PerekDataService perekDataService, IAppNavigator navigator,
+        Func<SearchIndexService>? searchIndex)
     {
         _perushimNotesService = perushimNotesService;
+        _searchIndex = searchIndex;
         _recitationService = recitationService;
         _navigator = navigator;
         Packs = new RecitationPacksViewModel(recitationService, perekDataService, navigator);
@@ -44,14 +54,16 @@ public partial class ExtensionPacksViewModel : ObservableObject
     /// <summary>Whether perushim notes are installed and available.</summary>
     public bool IsPerushimInstalled => _perushimNotesService.IsAvailable;
 
-    /// <summary>Whether to show the download controls (when NOT installed).</summary>
-    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable;
+    /// <summary>Whether to show the download controls (not installed, or its search index is stale).</summary>
+    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable || _perushimNotesService.IsSearchIndexStale;
 
     /// <summary>Status text for perushim notes.</summary>
     public string PerushimNotesStatusText =>
-        _perushimNotesService.IsAvailable
-            ? "חבילת הפירושים מותקנת ✓"
-            : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+        !_perushimNotesService.IsAvailable
+            ? "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים."
+            : _perushimNotesService.IsSearchIndexStale
+                ? "חבילת הפירושים מותקנת, אך החיפוש בפירושים דורש עדכון. הורידו שוב כדי לעדכן."
+                : "חבילת הפירושים מותקנת ✓";
 
     /// <summary>True while the perushim package is downloading.</summary>
     [ObservableProperty]
@@ -93,6 +105,14 @@ public partial class ExtensionPacksViewModel : ObservableObject
         await Packs.LoadAsync();
         NotifyPerushimState();
         OnPropertyChanged(nameof(RecitationStateText));
+        if (_searchIndex != null && _perushimNotesService.IsAvailable)
+        {
+            try { await _searchIndex().CheckCommentaryIndexAsync(); }
+            #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Commentary index check: {ex.Message}"); } //NOSONAR — the check only refines the shown pack state; settings must still load
+            #pragma warning restore S2221
+            NotifyPerushimState();
+        }
     }
 
     /// <summary>

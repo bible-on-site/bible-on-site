@@ -16,8 +16,8 @@ def write_search_index(path: Path, notes_timestamp: int = 200, slim: bool = True
         with db:
             db.execute("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)")
             db.executemany("INSERT INTO search_metadata VALUES (?, ?)", [
-                ("notes", f"v4:{notes_timestamp}:n1"),
-                ("verses", "v4:2026-01-03 22:08:48 UTC:n1"),
+                ("notes", f"v4:{notes_timestamp}:n2"),
+                ("verses", "v4:2026-01-03 22:08:48 UTC:n2"),
             ])
             db.executescript("""
                 CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
@@ -210,7 +210,7 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_stale_verse_index_is_rejected_before_changing_assets(self):
         with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
             with db:
-                db.execute("UPDATE search_metadata SET fingerprint='v4:old-scripture:n1' WHERE name='verses'")
+                db.execute("UPDATE search_metadata SET fingerprint='v4:old-scripture:n2' WHERE name='verses'")
         with self.assertRaisesRegex(ValueError, "different bundled scripture"):
             prepare_assets(self.source, self.app, "iOS")
         self.assertFalse((self.app / "Resources/Raw" / CATALOG).exists())
@@ -219,7 +219,7 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_old_normalization_is_rejected(self):
         with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
             with db:
-                db.execute("UPDATE search_metadata SET fingerprint='v4:200:n0' WHERE name='notes'")
+                db.execute("UPDATE search_metadata SET fingerprint='v4:200:n1' WHERE name='notes'")
         with self.assertRaisesRegex(ValueError, "different notes generation"):
             validate_pair(self.source)
 

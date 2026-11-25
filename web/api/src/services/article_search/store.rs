@@ -16,8 +16,9 @@ use sea_orm::{ConnectionTrait, DbBackend, DbErr, Statement, Value};
 
 /// Schema version persisted in `article_search_state`; bump when the model
 /// format, normalization, or public eligibility changes so stale indexes rebuild.
+/// Version 3 widened the block-tag set in `strip_html` (search normalization).
 /// Version 2 includes articles independently of daily bulletin approval.
-pub const SCHEMA_VERSION: i32 = 2;
+pub const SCHEMA_VERSION: i32 = 3;
 
 /// Queue rows failing this many times are skipped by the regular drain and are
 /// retried only after a reconcile sweep resets their attempts — protects the
