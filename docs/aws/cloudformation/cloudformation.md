@@ -31,12 +31,14 @@ scheduled for 2029-06-30). The data deployment rehearsal in
 `ci-data-deploy.yml` uses Python 3.15 to match the db-populator runtime.
 
 The live functions are created outside CloudFormation. After explicit approval
-of the AWS change, upgrade each one in `il-central-1`, recording the previous
-runtime for rollback:
+of the AWS change, upgrade each one in `il-central-1` to its target runtime
+(`python3.15` for `bible-on-site-db-populator`, `python3.14` for
+`ecr-to-ecs-deploy` until its own rollout), recording the previous runtime for
+rollback:
 
 ```bash
 aws lambda get-function-configuration --function-name <NAME> --query Runtime --region il-central-1
-aws lambda update-function-configuration --function-name <NAME> --runtime python3.15 --region il-central-1
+aws lambda update-function-configuration --function-name <NAME> --runtime <RUNTIME> --region il-central-1
 aws lambda wait function-updated --function-name <NAME> --region il-central-1
 ```
 
