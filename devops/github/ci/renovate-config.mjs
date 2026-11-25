@@ -176,7 +176,7 @@ export function validateRenovateConfig(root = process.cwd()) {
 					}
 					if (!match.includes("(?<currentValue>"))
 						findings.push(
-							`${where}.matchStrings must capture (?<currentValue>...) so an update can resolve a version`,
+							`${where}.matchStrings must capture the 'currentValue' named group so an update can resolve a version`,
 						);
 				}
 			});
