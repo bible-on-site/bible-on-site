@@ -129,8 +129,14 @@ export function TanahpediaEntryPreview() {
 				return;
 			}
 			fetchPreview(uniqueName).then((data) => {
-				if (data && activeAnchor.current === anchor) {
+				if (activeAnchor.current !== anchor) return;
+				if (data) {
 					setOpen({ anchor, data });
+				} else {
+					// A failed fetch shows nothing: release the anchor so the
+					// next hover refetches instead of early-returning on the
+					// same-anchor guard.
+					activeAnchor.current = null;
 				}
 			});
 		},

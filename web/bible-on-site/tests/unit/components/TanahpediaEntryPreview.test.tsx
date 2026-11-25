@@ -873,6 +873,35 @@ describe("TanahpediaEntryPreview", () => {
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("Recovered");
 	});
 
+	it("retries a failed fetch on a quick re-hover inside the hide delay", async () => {
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce({ ok: false })
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({ title: "Recovered", snippet: "s" }),
+			});
+		global.fetch = fetchMock as unknown as typeof fetch;
+		render(
+			<>
+				<TanahpediaEntryPreview />
+				{entityAnchor("quick-retry-entry", "Quick")}
+			</>,
+		);
+		const link = screen.getByRole("link", { name: "Quick" });
+
+		await hover(link);
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+		// The failed anchor is released at once: re-hovering before the
+		// 200ms hide delay expires still refetches rather than hitting the
+		// same-anchor guard.
+		fireEvent.mouseOut(link, { relatedTarget: document.body });
+		await hover(link);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("Recovered");
+	});
+
 	it("does not render a preview when the fetch rejects", async () => {
 		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		global.fetch = jest
