@@ -1,3 +1,5 @@
+import { copyFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -11,6 +13,28 @@ import istanbul from "vite-plugin-istanbul";
 import { defineConfig } from "vitest/config";
 
 const measureCoverage = process.env.MEASURE_COV === "1";
+
+// Canonical shared branding (#3708): public/ brand assets are staged copies,
+// not tracked files. Nitro serves public/ at the site root, so every URL
+// stays exactly what the app has always served.
+const brandingRoot = fileURLToPath(
+	new URL("../shared/branding/", import.meta.url),
+);
+const adminRoot = fileURLToPath(new URL(".", import.meta.url));
+for (const [source, destination] of [
+	["fonts/AlHeperekUI-Regular.woff2", "public/fonts/AlHeperekUI-Regular.woff2"],
+	[
+		"fonts/AlHeperekUI-SemiBold.woff2",
+		"public/fonts/AlHeperekUI-SemiBold.woff2",
+	],
+	["fonts/AlHeperekUI-Bold.woff2", "public/fonts/AlHeperekUI-Bold.woff2"],
+	["fonts/AlHeperek-license.txt", "public/fonts/AlHeperek-license.txt"],
+	["derived/favicon.ico", "public/favicon.ico"],
+] as const) {
+	const target = `${adminRoot}${destination}`;
+	mkdirSync(dirname(target), { recursive: true });
+	copyFileSync(`${brandingRoot}${source}`, target);
+}
 
 // vite-plugin-istanbul only instruments the client transform (it returns early
 // on `options.ssr`), so SSR modules need a matching instrumenter writing to the

@@ -717,6 +717,9 @@ jobs:
           docker rm "${CONTAINER_ID}"
           chmod +x ./bootstrap
           mkdir -p fonts
+          # Al Heperek ships from the canonical shared branding dir (#3708);
+          # Taamey Frank stays vendored under bulletin/fonts.
+          cp web/shared/branding/fonts/*.ttf fonts/
           cp ${{ env.BULLETIN_DIRECTORY }}/fonts/*.ttf fonts/
           zip -r "${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip" ./bootstrap fonts/
           rm -rf ./bootstrap fonts/
@@ -2836,6 +2839,17 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26.13.1"
+
+      # The generated bulletin text contract lives here, not in
+      # recitation_ci: bulletin-only extractor edits and native SQLite
+      # corpus renames must run it too (#3709).
+      - name: Verify corpus text extraction contract
+        run: node --test scripts/extract-tanach-text.test.mjs
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -4249,7 +4263,7 @@ jobs:
       module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics"]'
+      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/branding"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
@@ -4289,7 +4303,7 @@ jobs:
       module_name: app
       module_directory: app
       # Keep in sync with app extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["data/recitation/recitation.sqlite", "web/bible-on-site/src/data/recitation/opus-playback.json"]'
+      extra_module_paths: '["data/recitation/recitation.sqlite", "web/bible-on-site/src/data/recitation/opus-playback.json", "web/shared/branding"]'
       module_version: ${{ needs.package_app.outputs.module_version }}
       artifacts_json: |
         [
@@ -4319,6 +4333,10 @@ jobs:
     with:
       module_name: bulletin
       module_directory: web/bulletin
+      # Keep in sync with bulletin extraModulePaths + the floating corpus
+      # pattern in devops/github/ci/determine-changes.ts. The wildcard is a
+      # git pathspec: release notes follow the corpus across dump renames.
+      extra_module_paths: '["web/shared/branding", "web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json"]'
       module_version: ${{ needs.package_bulletin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
       cd_event_type: deploy-bulletin
@@ -4338,7 +4356,7 @@ jobs:
       module_name: admin
       module_directory: web/admin
       # Keep in sync with admin extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships"]'
+      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships", "web/shared/branding"]'
       module_version: ${{ needs.package_admin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws

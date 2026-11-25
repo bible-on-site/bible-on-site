@@ -196,23 +196,25 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg">
+		<!-- App Icon — canonical shared artwork (#3708), resource names preserved. -->
+		<MauiIcon Include="..\..\web\shared\branding\derived\appicon.svg" ForegroundFile="..\..\web\shared\branding\derived\appiconfg.svg">
 			<ForegroundScale Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">0.66</ForegroundScale>
 		</MauiIcon>
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="320,98" />
+		<MauiSplashScreen Include="..\..\web\shared\branding\derived\splash.svg" Color="#1552ac" BaseSize="320,98" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
+		<MauiImage Include="..\..\web\shared\branding\derived\logo_header.jpg" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
-		<MauiImage Include="Resources\AppIcon\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
+		<MauiImage Include="..\..\web\shared\branding\derived\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
 
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
-		<MauiAsset Include="Resources\Fonts\AlHeperek-license.txt" LogicalName="AlHeperek-license.txt" />
-		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
+		<MauiFont Include="..\..\web\shared\branding\fonts\*.ttf" />
+		<MauiAsset Include="..\..\web\shared\branding\fonts\AlHeperek-license.txt" LogicalName="AlHeperek-license.txt" />
+		<EmbeddedResource Include="..\..\web\shared\branding\fonts\AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
 		<!-- Drawn scripture (תיקון קוראים) shapes against the embedded Al
 		     Heperek TTF — its pre-baked base/mark contours ship beside it (#3685). -->
 		<EmbeddedResource Include="Resources\Fonts\AlHeperekUI-outlines.json" LogicalName="AlHeperekUI-outlines.json" />

@@ -52,10 +52,11 @@ export function getBoldFontBytes(): Uint8Array {
 let logoCache: Uint8Array | null = null;
 
 /**
- * The project's brand logo (the app's logo_header.jpg, vendored next to the
- * fonts). JPEG embeds directly via pdf-lib — keeping it under download/ puts
- * its bytes in the calendar-PDF render fingerprint, so a logo change
- * invalidates the affected cached artifacts (#2727).
+ * The project's brand logo — a staged copy of the canonical
+ * web/shared/branding derived asset (#3708). JPEG embeds directly via
+ * pdf-lib — keeping it under download/ puts its bytes in the calendar-PDF
+ * render fingerprint, so a logo change invalidates the affected cached
+ * artifacts (#2727).
  */
 export function getLogoBytes(): Uint8Array {
 	if (!logoCache) {

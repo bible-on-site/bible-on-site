@@ -132,7 +132,7 @@ Use the elevated surface, subtle border and 12px corners for the accessibility p
 
 Use the shared web radii for small markers (4px), controls (8px), panels (12px) and pill-shaped controls (999px). Draw interface icons on a 24-unit grid with a 2-unit stroke and rounded ends. Align drawer icons to the label. Give compact primary web controls a 44×44px hit area, expanding the invisible target around a smaller glyph where needed. Preserve recognizable brand and social glyphs. [Radius scale · #2899](https://github.com/bible-on-site/bible-on-site/pull/2899) · [Icon and target sizing · #2896](https://github.com/bible-on-site/bible-on-site/pull/2896) · [Centered gear · #3720](https://github.com/bible-on-site/bible-on-site/pull/3720)
 
-Use the approved unframed emblem beside the outlined על הפרק wordmark. Choose the supplied light or reversed lockup for its surface. Use the fitted 16/24/32/48px masters for small icons, with the 32px composition at 24px. Native adaptive icons use a full-bleed background and a safe-zone foreground. [Logo masters](web/bible-on-site/source-assets/logos) · [Logo manifest](docs/branding/logo-manifest.json) · [Brand approval · #3554](https://github.com/bible-on-site/bible-on-site/pull/3554)
+Use the approved unframed emblem beside the outlined על הפרק wordmark. Choose the supplied light or reversed lockup for its surface. Use the fitted 16/24/32/48px masters for small icons, with the 32px composition at 24px. Native adaptive icons use a full-bleed background and a safe-zone foreground. [Logo masters](web/shared/branding/logos) · [Logo manifest](docs/branding/logo-manifest.json) · [Brand approval · #3554](https://github.com/bible-on-site/bible-on-site/pull/3554)
 
 ## Motion & Micro-interaction
 

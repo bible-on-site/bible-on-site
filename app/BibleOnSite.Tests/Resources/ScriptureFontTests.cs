@@ -22,8 +22,13 @@ public class ScriptureFontTests
     [Fact]
     public void BundledFont_IsAValidAlHeperekTrueTypeFile()
     {
-        var path = Path.Join(AppRoot, "Resources", "Fonts", "AlHeperekUI-Regular.ttf");
-        Assert.True(File.Exists(path), "AlHeperekUI-Regular.ttf must be bundled in Resources/Fonts");
+        // The packaged face is the canonical shared brand font (#3708) — the
+        // project references web/shared/branding/fonts instead of a local copy.
+        var path = Path.GetFullPath(
+            Path.Join(AppRoot, "..", "..", "web", "shared", "branding", "fonts", "AlHeperekUI-Regular.ttf"));
+        Assert.True(File.Exists(path), "AlHeperekUI-Regular.ttf must be bundled from web/shared/branding/fonts");
+        var csproj = File.ReadAllText(Path.Join(AppRoot, "BibleOnSite.csproj"));
+        Assert.Contains("shared\\branding\\fonts\\*.ttf", csproj);
 
         var bytes = File.ReadAllBytes(path);
         // TrueType sfnt magic, not a web-only WOFF/WOFF2 (#2623 requires a

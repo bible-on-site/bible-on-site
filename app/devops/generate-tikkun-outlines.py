@@ -56,8 +56,9 @@ class LayerPen(BasePen):
 
 def main():
     """Write deterministic contour data paired to the exact packaged font."""
-    fonts = Path(__file__).resolve().parents[1] / "BibleOnSite/Resources/Fonts"
-    font_path = fonts / "AlHeperekUI-Regular.ttf"
+    repo = Path(__file__).resolve().parents[2]
+    font_path = repo / "web/shared/branding/fonts/AlHeperekUI-Regular.ttf"
+    fonts = repo / "app/BibleOnSite/Resources/Fonts"
     font = TTFont(font_path)
     glyph_set = font.getGlyphSet()
     classes = font["GDEF"].table.GlyphClassDef.classDefs

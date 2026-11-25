@@ -27,6 +27,9 @@ interface ModuleRule {
 	 * semantics only take effect for the shared contract trees below.
 	 */
 	extraModulePaths?: string[];
+	/** Files matching this pattern outside `directory` also change the module
+	 * — for versioned artifacts whose filename floats (e.g. `sefaria-dump-*`). */
+	extraModulePattern?: RegExp;
 	/** Files or directories whose change requires the module's checks. */
 	ciPaths: string[];
 	/** Files that require the module's checks without changing the module. */
@@ -102,11 +105,13 @@ const DATA_CI_ONLY_PATTERN =
 export const MODULES = {
 	website: {
 		directory: "web/bible-on-site",
-		// Approved timing changes must package/release the website too.
+		// Approved timing changes must package/release the website too; the
+		// canonical shared brand assets feed its staged public files (#3708).
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 			...WEBSITE_ADMIN_SHARED_CONTRACTS,
+			"web/shared/branding",
 		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
@@ -162,10 +167,12 @@ export const MODULES = {
 	},
 	app: {
 		directory: "app",
-		// Both approved timings and the Opus inventory ship in the native app.
+		// Both approved timings and the Opus inventory ship in the native app;
+		// its fonts and launcher artwork are the shared brand files (#3708).
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
+			"web/shared/branding",
 		],
 		// The e2e-impact selector/collector and the exec coverage-tree
 		// extractor drive the Appium suite (#2085). The runner workflow defines
@@ -204,6 +211,8 @@ export const MODULES = {
 		extraModulePaths: [
 			...WEBSITE_ADMIN_SHARED_CONTRACTS,
 			...ADMIN_API_SHARED_CONTRACTS,
+			// Admin stages the shared webfonts and favicon at build time (#3708).
+			"web/shared/branding",
 		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
@@ -236,6 +245,25 @@ export const MODULES = {
 	},
 	bulletin: {
 		directory: "web/bulletin",
+		// The Lambda zip ships the shared Al Heperek fonts and the PDF embeds
+		// the canonical header logo (#3708); the pinned website corpus
+		// regenerates the embedded perek text at build time (#3709). The corpus
+		// entry is a git pathspec glob so release notes keep tracking it across
+		// dump renames; detection itself uses extraModulePattern below.
+		extraModulePaths: [
+			"web/shared/branding",
+			"web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json",
+		],
+		// The corpus file carries the dump version in its name — match the
+		// stem so a corpus bump cannot silently stop selecting the bulletin.
+		extraModulePattern:
+			/^web\/bible-on-site\/src\/data\/db\/sefaria-dump-.+\.tanah_view\.json$/,
+		// The bundled native SQLite must stay stem-locked with the corpus
+		// (#3709): a native-only rename changes no bulletin artifact, but the
+		// parity contract test must still run — and fail — until both sides
+		// are bumped together.
+		extraCiPattern:
+			/^app\/BibleOnSite\/Resources\/Raw\/sefaria-dump-.+\.tanah_view\.sqlite$/,
 		// The release image also compiles the API's shared entities crate.
 		ciPaths: [
 			"devops/github/release/recovery-request.mjs",
@@ -260,7 +288,7 @@ export const MODULES = {
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
-			"app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"web/shared/branding/derived/logo_header.jpg",
 			"web/bible-on-site/public/icons/envelope.svg",
 			"web/bible-on-site/public/icons/phone.svg",
 			"web/bible-on-site/public/icons/whatsapp.svg",
@@ -473,7 +501,8 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 						(isAt(file, rule.directory) &&
 							!isModuleEvidenceDocumentation(file) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
-						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
+						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)) ||
+						(rule.extraModulePattern?.test(file) ?? false),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>
