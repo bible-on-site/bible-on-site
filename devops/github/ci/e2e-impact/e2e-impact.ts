@@ -486,7 +486,7 @@ async function plan(flags: Map<string, string>): Promise<void> {
 	);
 	appendSummary(
 		[
-			`### iOS shard plan — ${mode} mode`,
+			`### ${platform} shard plan — ${mode} mode`,
 			``,
 			`- cases: **${runSet.length}** over **${result.shards.length}** shard(s)`,
 			`- estimated case time: ${(result.totals.caseMs / 60_000).toFixed(1)}min, makespan ~${Math.ceil(result.totals.makespanMs / 60_000)}min`,

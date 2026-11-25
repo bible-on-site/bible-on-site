@@ -87,6 +87,17 @@ describe("planShards", () => {
 		assert.equal(partition(shards).length, 20);
 	});
 
+	test("splits the Android suite into two legs that each fit the fixed pilot deadline", () => {
+		// 28 cases totalling ~11 minutes, as on the master Android baseline.
+		const suite = Array.from({ length: 28 }, (_, index) =>
+			estimate(`T${String(index).padStart(2, "0")}`, (10 + index * 0.9) * 1000),
+		);
+		const shards = planShards(suite, config({ maxShards: 2, targetMs: 6 * 60_000 }));
+		assert.equal(shards.length, 2);
+		assert.deepEqual(partition(shards).sort(), suite.map((entry) => entry.id));
+		for (const shard of shards) assert.ok(shard.estimatedMs < 6 * 60_000);
+	});
+
 	test("never exceeds the case count", () => {
 		const shards = planShards(
 			[estimate("A", 60 * 60_000), estimate("B", 60 * 60_000)],

@@ -1,0 +1,120 @@
+name: Merge Appium shards
+description: >-
+  Verifies one platform's planned device legs ran the whole planned suite
+  exactly once, merges their native coverage, timings and evidence, scores
+  shadow selection parity, and uploads the combined artifacts under the same
+  names an unsharded leg would. Publishes the master baselines only from a
+  complete default-branch run. Expects the repository checked out and Node
+  set up.
+
+inputs:
+  platform-id:
+    description: Lower-case platform id (ios or android).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download shard plan
+      uses: actions/download-artifact@v8
+      with:
+        name: app-mobile-e2e-plan.${{ github.run_id }}.${{ inputs.platform-id }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}-plan
+    # One directory per shard artifact — the merge discovers them by their
+    # <platform>-shard<N> names and requires exactly one per planned shard.
+    - name: Download runner artifacts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: app-mobile-e2e-shard.${{ github.run_id }}.${{ inputs.platform-id }}-shard*
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}-runners
+    - name: Verify full disjoint suite and merge native coverage
+      id: merge
+      shell: bash
+      run: |
+        ROOT=app/.artifacts/mobile-e2e/${{ inputs.platform-id }}
+        node app/mobile-e2e/merge-runner-shards.mjs "$ROOT" "${{ github.sha }}" \
+          --inputs "$ROOT-runners" --plan "$ROOT-plan/${{ inputs.platform-id }}-shard-plan.json"
+    # Timing history descends from the same trusted baseline as the impact
+    # map; the merge's case-timings.json and --overhead-ms roll this run's
+    # observations into the tree the publish steps below write back.
+    - name: Download timing and coverage history
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+          --name "app-mobile-e2e-coverage.master.${{ inputs.platform-id }}" \
+          --out "app/.artifacts/mobile-e2e/${{ inputs.platform-id }}-history"
+    - name: Collect complete test coverage tree
+      shell: bash
+      run: |
+        ROOT=app/.artifacts/mobile-e2e/${{ inputs.platform-id }}
+        INCOMPLETE_ARGS=()
+        if [ "${{ steps.merge.outputs.complete }}" != "true" ]; then
+          INCOMPLETE_ARGS=(--incomplete)
+        fi
+        HISTORY_ARGS=()
+        if [ -f "$ROOT-history/coverage-tree.json" ]; then
+          HISTORY_ARGS=(--history "$ROOT-history/coverage-tree.json")
+        fi
+        OVERHEAD_ARGS=()
+        if [ -n "${{ steps.merge.outputs.overhead-ms }}" ]; then
+          OVERHEAD_ARGS=(--overhead-ms "${{ steps.merge.outputs.overhead-ms }}")
+        fi
+        node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
+          --suite app/mobile-e2e --platform "${{ inputs.platform-id }}" \
+          --artifacts "$ROOT" --snapshot-sha "${{ github.sha }}" \
+          --exec-tree "$ROOT/exec-coverage-tree.json" \
+          --out "$ROOT/coverage-tree.json" \
+          "${INCOMPLETE_ARGS[@]}" "${HISTORY_ARGS[@]}" "${OVERHEAD_ARGS[@]}"
+    # Shadow-mode parity (#2085): score the plan's suite-level selection
+    # manifest against the merged full-suite outcomes — an unselected failure
+    # is the parity miss the rollout gate counts before enforcement. Pure
+    # diagnostics; a missing manifest reports a problem.
+    - name: Verify shadow selection parity
+      shell: bash
+      run: |
+        ROOT=app/.artifacts/mobile-e2e/${{ inputs.platform-id }}
+        node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+          --manifest "$ROOT-plan/selection-manifest.json" \
+          --tree "$ROOT/coverage-tree.json" \
+          --out "$ROOT/selection-verify.json"
+    - name: Upload combined app coverage
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-e2e-coverage.${{ github.run_id }}.${{ inputs.platform-id }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}/coverage-app/
+        retention-days: 90
+        if-no-files-found: error
+    - name: Upload complete suite evidence
+      uses: actions/upload-artifact@v7
+      with:
+        name: appium-${{ inputs.platform-id }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}/
+        retention-days: 14
+        include-hidden-files: true
+        if-no-files-found: error
+    - name: Publish complete selector baseline
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-mobile-e2e-coverage.master.${{ inputs.platform-id }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}/coverage-tree.json
+        retention-days: 90
+        overwrite: true
+    - name: Publish complete execution baseline
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-mobile-e2e-exec-coverage.master.${{ inputs.platform-id }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}/exec-coverage-tree.json
+        retention-days: 90
+        overwrite: true
+    - name: Publish complete app coverage baseline
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-e2e-coverage.master.${{ inputs.platform-id }}
+        path: app/.artifacts/mobile-e2e/${{ inputs.platform-id }}/coverage-app/
+        retention-days: 90
+        overwrite: true

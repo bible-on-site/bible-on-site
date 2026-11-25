@@ -21,7 +21,7 @@ on:
       shard:
         type: string
         default: ""
-      ios_plan_artifact:
+      shard_plan_artifact:
         description: "Shard-plan artifact; its shards/shard-N.json assigns this leg's cases (#2263)"
         type: string
         default: ""
@@ -264,11 +264,11 @@ jobs:
       # selector falls back to the full applicable suite (#2085). Shadow mode
       # computes the deterministic subset for evidence while the suite still
       # runs everything; a discovery problem resolves to selectAll — never to
-      # a silently empty run. iOS shard legs skip this entirely: the plan job
-      # already selected and partitioned the suite once for the whole matrix,
-      # and each leg stages its assigned manifest below (#2263).
+      # a silently empty run. Planned shard legs skip this entirely: the plan
+      # job already selected and partitioned the suite once for the whole
+      # matrix, and each leg stages its assigned manifest below (#2263).
       - name: Download baseline and select affected tests
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && inputs.ios_plan_artifact == ''
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && inputs.shard_plan_artifact == ''
         id: selection
         background: true
         env:
@@ -396,24 +396,24 @@ jobs:
         background: true
         run: bun run --cwd app/mobile-e2e ios:wda
 
-      # Dynamic iOS shards (#2263): the plan job decided this leg's cases once
-      # for the whole matrix, so the leg stages its assigned manifest verbatim
+      # Dynamic shards (#2263): the plan job decided this leg's cases once for
+      # the whole matrix, so the leg stages its assigned manifest verbatim
       # instead of selecting again. A missing or mismatched manifest fails here
       # — never widens silently to the full suite.
-      - name: Download iOS shard plan
-        if: inputs.mode != 'build' && inputs.ios_plan_artifact != ''
+      - name: Download ${{ inputs.platform }} shard plan
+        if: inputs.mode != 'build' && inputs.shard_plan_artifact != ''
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.ios_plan_artifact }}
-          path: ${{ runner.temp }}/ios-plan
+          name: ${{ inputs.shard_plan_artifact }}
+          path: ${{ runner.temp }}/shard-plan
 
-      - name: Stage assigned iOS shard manifest
-        if: inputs.mode != 'build' && inputs.ios_plan_artifact != ''
+      - name: Stage assigned ${{ inputs.platform }} shard manifest
+        if: inputs.mode != 'build' && inputs.shard_plan_artifact != ''
         id: shard_manifest
         run: |
-          MANIFEST="${{ runner.temp }}/ios-plan/shards/shard-${{ inputs.shard }}.json"
+          MANIFEST="${{ runner.temp }}/shard-plan/shards/shard-${{ inputs.shard }}.json"
           if [ ! -f "$MANIFEST" ]; then
-            echo "::error::No shard manifest for iOS shard ${{ inputs.shard }} in ${{ inputs.ios_plan_artifact }}."
+            echo "::error::No shard manifest for ${{ inputs.platform }} shard ${{ inputs.shard }} in ${{ inputs.shard_plan_artifact }}."
             exit 1
           fi
           node -e '
@@ -422,11 +422,12 @@ jobs:
             if (m.shard !== Number(process.argv[2])) problems.push(`manifest is for shard ${m.shard}`);
             if (m.testedSha !== process.argv[3]) problems.push(`manifest tested ${m.testedSha}`);
             if (!Array.isArray(m.selected) || m.selected.length === 0) problems.push("manifest assigns no cases");
-            if (problems.length > 0) throw new Error(`Bad iOS shard manifest: ${problems.join("; ")}.`);
+            if (problems.length > 0) throw new Error(`Bad shard manifest: ${problems.join("; ")}.`);
           ' "$MANIFEST" "${{ inputs.shard }}" "${{ github.sha }}"
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           cp "$MANIFEST" "$MOBILE_E2E_ARTIFACTS/case-manifest.json"
-          cp "${{ runner.temp }}/ios-plan/ios-shard-plan.json" "$MOBILE_E2E_ARTIFACTS/ios-shard-plan.json"
+          PLAN="${{ inputs.platform_id }}-shard-plan.json"
+          cp "${{ runner.temp }}/shard-plan/$PLAN" "$MOBILE_E2E_ARTIFACTS/$PLAN"
           echo "manifest=$MOBILE_E2E_ARTIFACTS/case-manifest.json" >> "$GITHUB_OUTPUT"
 
       # The simulator and WDA are already warming while the archive transfers.
@@ -781,8 +782,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           MOBILE_UDID: emulator-5554
-          # Empty in shadow mode: the manifest is reported, not enforced.
-          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
+          # A planned leg enforces its shard assignment; otherwise empty in
+          # shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.shard_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         with:
           api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: ${{ env.ANDROID_ABI }}
@@ -907,9 +909,8 @@ jobs:
         timeout-minutes: 50
         env:
           # A planned leg always enforces its shard manifest — the partition is
-          # the assignment, not a narrowing hint. Android legs keep shadow-mode
-          # reporting: empty unless enforce passes the selection manifest.
-          MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
+          # the assignment, not a narrowing hint.
+          MOBILE_E2E_SELECTION: ${{ inputs.shard_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         run: bun run --cwd app/mobile-e2e test
 
       # Coverage resets, dump pulls and device-diagnostics captures are
@@ -997,7 +998,7 @@ jobs:
             exit 0
           fi
           INCOMPLETE_ARGS=()
-          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ]; then
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ] || [ -n "${{ inputs.shard_plan_artifact }}" ]; then
             INCOMPLETE_ARGS=(--incomplete)
           fi
           node devops/e2e-coverage-trees/e2e-coverage-trees.ts extract \
@@ -1021,7 +1022,7 @@ jobs:
           PILOT_OUTCOME: ${{ inputs.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
         run: |
           INCOMPLETE_ARGS=()
-          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ]; then
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ] || [ -n "${{ inputs.shard_plan_artifact }}" ]; then
             INCOMPLETE_ARGS=(--incomplete)
           fi
           EXEC_ARGS=()
@@ -1035,59 +1036,8 @@ jobs:
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
 
-      # Shadow-mode parity (#2085): score this leg's selection manifest
-      # against the outcomes the full run observed — an unselected failure is
-      # the parity miss the rollout gate counts before enforcement. Android
-      # only: iOS legs execute a shard assignment, and suite-level parity is
-      # scored by merge_ios against the merged tree. Pure diagnostics.
-      - name: Verify shadow selection parity
-        if: inputs.mode != 'build' && inputs.mode != 'device-tests' && inputs.platform == 'Android' && (always() && !cancelled())
-        run: |
-          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
-            --manifest "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
-            --tree "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" \
-            --out "$MOBILE_E2E_ARTIFACTS/selection-verify.json"
-
-      # The authoritative baseline is published only from a completed,
-      # successful default-branch run; PR and merge-queue evidence stays
-      # provisional inside the run's appium artifact.
-      - name: Publish coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success' && steps['silent-failures'].outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-mobile-e2e-coverage.master.${{ inputs.platform_id }}
-          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/coverage-tree.json
-          retention-days: 90
-          overwrite: true
-
-      # Executable coverage baseline (#1232): published under the same trust
-      # rules as the coverage tree — only a completed, successful
-      # default-branch run refreshes it, so a partial or selected run can
-      # never overwrite a complete baseline.
-      - name: Publish app coverage baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success' && steps['silent-failures'].outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-e2e-coverage.master.${{ inputs.artifact }}
-          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/coverage-app/
-          retention-days: 90
-          overwrite: true
-
-      # The exec tree gets its own baseline artifact per the storage policy
-      # in docs/devops/e2e-test-selection.md — same trust rule as the
-      # automation-id baseline above. Runs without exec coverage (no
-      # template → no extracted tree) skip the publish.
-      - name: Publish exec coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != '' && steps['silent-failures'].outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-mobile-e2e-exec-coverage.master.${{ inputs.artifact }}
-          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/exec-coverage-tree.json
-          retention-days: 90
-          overwrite: true
-
-      - name: Upload iOS runner merge inputs
-        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && !cancelled())
+      - name: Upload ${{ inputs.platform }} runner merge inputs
+        if: inputs.mode != 'build' && (inputs.shard_plan_artifact != '' && always() && !cancelled())
         uses: actions/upload-artifact@v7
         with:
           overwrite: true

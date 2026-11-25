@@ -13,22 +13,22 @@ const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const union = (...arrays) => [...new Set(arrays.flat())].sort();
 
 // Locates one downloaded artifact directory per planned shard, keyed by the
-// shard number in its name (app-mobile-e2e-shard.<run>.ios-shard<N>).
+// shard number in its name (app-mobile-e2e-shard.<run>.<platform>-shard<N>).
 // download-artifact extracts a pattern matching exactly one artifact straight
 // into its path, so a single-shard plan may find its files in inputsDir itself.
 export function discoverShardInputs(inputsDir, plan) {
   if (plan.shards.length === 1 && readdirSync(inputsDir).includes("case-manifest.json")) return [inputsDir];
   const byShard = new Map();
   for (const name of readdirSync(inputsDir)) {
-    const match = /ios-shard(\d+)$/.exec(name);
+    const match = new RegExp(`${plan.platform}-shard(\\d+)$`).exec(name);
     if (!match) continue;
     const index = Number(match[1]);
-    if (byShard.has(index)) throw new Error(`Duplicate artifact for iOS shard ${index}.`);
+    if (byShard.has(index)) throw new Error(`Duplicate artifact for ${plan.platform} shard ${index}.`);
     byShard.set(index, join(inputsDir, name));
   }
   return plan.shards.map((shard) => {
     const dir = byShard.get(shard.shard);
-    if (dir === undefined) throw new Error(`Missing artifacts for iOS shard ${shard.shard}.`);
+    if (dir === undefined) throw new Error(`Missing artifacts for ${plan.platform} shard ${shard.shard}.`);
     return dir;
   });
 }
@@ -45,15 +45,15 @@ const claimsExecution = (test) =>
 // Independent runners may produce distinct instrumented module hashes.
 // Execution evidence joins by source declaration; retain every module/hash
 // and each shard's diagnostics instead of attaching dumps to another build.
-export function mergeExecTrees(trees, snapshotSha, complete) {
-  if (trees.length === 0) throw new Error("No iOS runner trees to merge.");
+export function mergeExecTrees(trees, snapshotSha, complete, platform) {
+  if (trees.length === 0) throw new Error(`No ${platform} runner trees to merge.`);
   const result = structuredClone(trees[0]);
   result.nodes = {};
   result.tests = {};
   for (const tree of trees) {
-    const error = validateExecTree(tree, { suite: "app-mobile-e2e", platform: "ios" });
+    const error = validateExecTree(tree, { suite: "app-mobile-e2e", platform });
     if (error || tree.snapshotSha !== snapshotSha) {
-      throw new Error(`Incompatible iOS execution tree: ${error ?? "snapshot SHA"}`);
+      throw new Error(`Incompatible ${platform} execution tree: ${error ?? "snapshot SHA"}`);
     }
     for (const [id, node] of Object.entries(tree.nodes)) {
       const prior = result.nodes[id];
@@ -115,19 +115,20 @@ export function mergeExecTrees(trees, snapshotSha, complete) {
 }
 
 // Every shard must have finished its supervised pilot cleanly, produced only
-// passing iOS evidence, and together cover the planned run set exactly once.
+// passing evidence for its platform, and together cover the planned run set
+// exactly once.
 // A failed, timed-out or incomplete shard therefore fails the merge — the
 // required check can never go green on a partial suite.
-export function validateRunnerEvidence(parts, expectedIds) {
-  if (parts.length === 0) throw new Error("No iOS runners to verify.");
+export function validateRunnerEvidence(parts, expectedIds, platform) {
+  if (parts.length === 0) throw new Error(`No ${platform} runners to verify.`);
   const seen = new Set();
   for (const part of parts) {
     if (part.timing.status !== "completed" || part.timing.exitCode !== 0) {
-      throw new Error("An iOS runner did not finish its supervised pilot.");
+      throw new Error(`A ${platform} runner did not finish its supervised pilot.`);
     }
     for (const record of part.evidence) {
-      if (record.platform !== "ios" || record.outcome !== "passed") {
-        throw new Error(`Unsuccessful iOS evidence: ${record.test}`);
+      if (record.platform !== platform || record.outcome !== "passed") {
+        throw new Error(`Unsuccessful ${platform} evidence: ${record.test}`);
       }
       if (seen.has(record.test)) throw new Error(`Scenario overlap: ${record.test}`);
       seen.add(record.test);
@@ -137,7 +138,7 @@ export function validateRunnerEvidence(parts, expectedIds) {
   const missing = [...expected].filter((id) => !seen.has(id));
   const extra = [...seen].filter((id) => !expected.has(id));
   if (missing.length || extra.length) {
-    throw new Error(`iOS runner union mismatch: missing=${missing.join(",")} extra=${extra.join(",")}`);
+    throw new Error(`${platform} runner union mismatch: missing=${missing.join(",")} extra=${extra.join(",")}`);
   }
   return seen;
 }
@@ -163,10 +164,10 @@ export function mergeRunnerArtifacts(inputs, output, snapshotSha, plan, fullSuit
     const executedIds = (executed.selected ?? []).map((entry) => entry.id).sort();
     if (executed.shard !== assignment.shard
       || canonicalize(executedIds) !== canonicalize(assignment.tests)) {
-      throw new Error(`iOS shard ${assignment.shard} did not run its assigned manifest.`);
+      throw new Error(`${plan.platform} shard ${assignment.shard} did not run its assigned manifest.`);
     }
   });
-  const seen = validateRunnerEvidence(parts, plan.runSet);
+  const seen = validateRunnerEvidence(parts, plan.runSet, plan.platform);
   const complete = seen.size === fullSuiteIds.length && fullSuiteIds.every((id) => seen.has(id));
 
   // Timing evidence (#2263): merged per-case durations for the collector's
@@ -196,14 +197,14 @@ export function mergeRunnerArtifacts(inputs, output, snapshotSha, plan, fullSuit
   const overheadMs = overheads.length === 0 ? null
     : Math.round(overheads.reduce((a, b) => a + b, 0) / overheads.length);
 
-  const tree = mergeExecTrees(inputs.map((input) => readJson(join(input, "exec-coverage-tree.json"))), snapshotSha, complete);
+  const tree = mergeExecTrees(inputs.map((input) => readJson(join(input, "exec-coverage-tree.json"))), snapshotSha, complete, plan.platform);
   mkdirSync(join(output, "coverage-app"), { recursive: true });
   mergeShardEvidence(inputs, join(output, "coverage-evidence"));
   mergeShardAppCoverage(inputs, join(output, "app-coverage"));
   writeFileSync(join(output, "case-timings.json"), JSON.stringify(caseTimings, null, 2));
   writeFileSync(join(output, "exec-coverage-tree.json"), JSON.stringify(tree, null, 2));
   const lcov = mergeLcovTexts(inputs.map((input) => readFileSync(join(input, "coverage-app", "lcov.info"), "utf8")), undefined, ["app/BibleOnSite/"]);
-  if (!lcov.includes("SF:")) throw new Error("Combined iOS LCOV has no source records.");
+  if (!lcov.includes("SF:")) throw new Error(`Combined ${plan.platform} LCOV has no source records.`);
   writeFileSync(join(output, "coverage-app", "lcov.info"), lcov);
   writeFileSync(join(output, "runner-union.json"), JSON.stringify({
     snapshotSha, complete, planFingerprint: plan.fingerprint,
@@ -223,23 +224,23 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const inputsDir = flags.get("inputs");
   const planPath = flags.get("plan");
   if (!outputArg || !snapshotSha || !inputsDir || !planPath) {
-    throw new Error("Usage: merge-runner-shards.mjs <output> <sha> --inputs <dir> --plan <ios-plan.json>");
+    throw new Error("Usage: merge-runner-shards.mjs <output> <sha> --inputs <dir> --plan <shard-plan.json>");
   }
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
   const rules = loadRules(join(root, "app/mobile-e2e/e2e-impact.json"));
+  const plan = readJson(planPath);
+  if (plan.kind !== "appium-shard-plan" || plan.testedSha !== snapshotSha) {
+    throw new Error(`The ${plan.platform} shard plan does not match this commit.`);
+  }
   const full = discoverSuiteTests(root, rules.tests.root, rules.tests.glob, rules.tests.category)
-    .filter((test) => test.platform.toLowerCase() === "ios" || test.platform === "Shared")
+    .filter((test) => test.platform.toLowerCase() === plan.platform || test.platform === "Shared")
     .map((test) => test.id);
   const output = resolve(outputArg);
-  const plan = readJson(planPath);
-  if (plan.kind !== "ios-shard-plan" || plan.testedSha !== snapshotSha) {
-    throw new Error("The iOS shard plan does not match this commit.");
-  }
   const inputs = discoverShardInputs(resolve(inputsDir), plan);
   const { complete, overheadMs } = mergeRunnerArtifacts(inputs, output, snapshotSha, plan, full);
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `complete=${complete}\n`);
     if (overheadMs !== null) appendFileSync(process.env.GITHUB_OUTPUT, `overhead-ms=${overheadMs}\n`);
   }
-  console.log(`Merged ${inputs.length} iOS runners: ${plan.runSet.length} planned scenarios; full suite=${complete}.`);
+  console.log(`Merged ${inputs.length} ${plan.platform} runners: ${plan.runSet.length} planned scenarios; full suite=${complete}.`);
 }

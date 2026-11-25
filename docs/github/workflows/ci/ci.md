@@ -3,8 +3,8 @@
 | Workflow | Purpose |
 |----------|---------|
 | [`ci.yml`](../../../../.github/workflows/ci.yml) | Main CI pipeline (detect, test, package, release, dispatch CD) |
-| [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) | Native E2E orchestrator — resolves perushim input, plans runtime-balanced iOS shards, fans out Android and shared-build + planned iOS legs, merges iOS results |
-| [`app-mobile-e2e-runner.yml`](../../../../.github/workflows/app-mobile-e2e-runner.yml) | Reusable native leg — one Android `build-and-run`, one iOS `build`, or one iOS `prebuilt-run` shard |
+| [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) | Native E2E orchestrator — resolves perushim input, plans runtime-balanced Android and iOS shards, fans out planned Android legs and shared-build + planned iOS legs, merges each platform's results |
+| [`app-mobile-e2e-runner.yml`](../../../../.github/workflows/app-mobile-e2e-runner.yml) | Reusable native leg — one Android `build-and-run` shard, one iOS `build`, or one iOS `prebuilt-run` shard |
 | [`app-mobile-e2e-ab.yml`](../../../../.github/workflows/app-mobile-e2e-ab.yml) | Dispatch-only iOS runner A/B (`xcode-27` vs `namespace-profile-mac-os`), #2635 — see [runbook](../../../devops/ios-runner-ab-experiment.md) |
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
@@ -329,7 +329,9 @@ selection job on every CI event.
 The reusable orchestrator composes one orchestration layer over reusable legs:
 
 ```
-appium_android (runner: build-and-run)
+plan_android   (select -> runtime plan -> matrix)
+android_shard_<N> (runner: build-and-run, needs plan_android)
+merge_android  (needs every planned Android shard)
 build_ios      (runner: build)
 plan_ios       (select -> runtime plan -> ios-matrix)
 ios_shard_<N>  (runner: prebuilt-run, needs
@@ -351,8 +353,9 @@ merge_ios (always(), needs every planned shard)
   rewrites embedded `artifact_upload_base_url`/`artifact_key`/`run` markers
   (`rewrite-shared-app-runtime-markers.mjs`) before validating the runtime
   directories against the build's checksum manifest.
-- **Sharding** (#2263): `plan_ios` selects the affected iOS cases once and
-  assigns them to runtime-balanced shards; each leg executes exactly its
+- **Sharding** (#2263): `plan_ios` / `plan_android` select a platform's
+  affected cases once and assign them to runtime-balanced shards — Android
+  legs are sized to the fixed 15-minute pilot deadline; each leg executes exactly its
   assigned `case-manifest.json`, and union validation in
   `merge-runner-shards.mjs` proves no planned scenario is dropped or
   duplicated before any merge output is trusted.

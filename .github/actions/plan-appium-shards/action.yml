@@ -1,0 +1,101 @@
+name: Plan Appium shards
+description: >-
+  Selection and shard planning for one platform's Appium suite, run exactly
+  once before its device matrix expands (#2263): discovers the suite
+  statically, applies the published baseline's impact map and rolling
+  per-case runtimes, then emits one bounded shard assignment per device leg.
+  Legs execute the manifest they are assigned and never re-select; a
+  legitimately empty selection produces zero shards, so no device starts.
+  Expects the repository checked out and Node set up.
+
+inputs:
+  platform-id:
+    description: Lower-case platform id (ios or android).
+    required: true
+  mode:
+    description: e2e_selection_mode (shadow or enforce).
+    required: true
+  force-full-suite:
+    description: '"true" skips coverage selection and plans every applicable case.'
+    required: true
+  max-shards:
+    description: Upper bound on device legs.
+    required: true
+  target-minutes:
+    description: Estimated case minutes per leg before another leg is added.
+    required: true
+
+outputs:
+  matrix:
+    description: Job matrix with one shard value per planned leg.
+    value: ${{ steps.matrix.outputs.matrix }}
+  shards:
+    description: Number of planned legs.
+    value: ${{ steps.matrix.outputs.shards }}
+
+runs:
+  using: composite
+  steps:
+    # The published baseline carries both the impact map and the rolling
+    # per-case timing history. A missing or unreadable tree means no
+    # trustworthy evidence at all: selection falls back to the full suite and
+    # every case is scheduled at the unmeasured weight.
+    - name: Download coverage and timing baseline
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+          --name "app-mobile-e2e-coverage.master.${{ inputs.platform-id }}" \
+          --out "$RUNNER_TEMP/${{ inputs.platform-id }}-baseline"
+    - name: Select affected tests
+      shell: bash
+      run: |
+        BASELINE="$RUNNER_TEMP/${{ inputs.platform-id }}-baseline/coverage-tree.json"
+        BASELINE_ARGS=()
+        if [ -f "$BASELINE" ]; then
+          BASELINE_ARGS=(--baseline "$BASELINE")
+        fi
+        FORCE_ARGS=()
+        if [ "${{ inputs.force-full-suite }}" == "true" ]; then
+          FORCE_ARGS=(--force-full)
+        fi
+        # --allow-empty: today's smoke policy always selects ≥1 case, but a
+        # future policy could legitimately empty the set — the shards==0
+        # guards on the device and merge jobs then skip the whole platform.
+        node devops/github/ci/e2e-impact/e2e-impact.ts select \
+          --suite app/mobile-e2e \
+          --platform "${{ inputs.platform-id }}" \
+          --tested-sha "${{ github.sha }}" \
+          --out "$RUNNER_TEMP/${{ inputs.platform-id }}-plan/selection-manifest.json" \
+          --compare --allow-empty "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
+    - name: Plan runtime-balanced shards
+      shell: bash
+      run: |
+        BASELINE="$RUNNER_TEMP/${{ inputs.platform-id }}-baseline/coverage-tree.json"
+        PLAN_DIR="$RUNNER_TEMP/${{ inputs.platform-id }}-plan"
+        HISTORY_ARGS=()
+        if [ -f "$BASELINE" ]; then
+          HISTORY_ARGS=(--history "$BASELINE")
+        fi
+        node devops/github/ci/e2e-impact/e2e-impact.ts plan \
+          --suite app/mobile-e2e \
+          --platform "${{ inputs.platform-id }}" \
+          --manifest "$PLAN_DIR/selection-manifest.json" \
+          --tested-sha "${{ github.sha }}" \
+          --mode "${{ inputs.mode }}" \
+          --max-shards "${{ inputs.max-shards }}" \
+          --target-minutes "${{ inputs.target-minutes }}" \
+          --out "$PLAN_DIR/${{ inputs.platform-id }}-shard-plan.json" \
+          --shard-dir "$PLAN_DIR/shards" "${HISTORY_ARGS[@]}"
+    - name: Emit device matrix
+      id: matrix
+      shell: bash
+      run: node app/mobile-e2e/appium-matrix.mjs "$RUNNER_TEMP/${{ inputs.platform-id }}-plan/${{ inputs.platform-id }}-shard-plan.json"
+    - name: Upload shard plan
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-mobile-e2e-plan.${{ github.run_id }}.${{ inputs.platform-id }}
+        path: ${{ runner.temp }}/${{ inputs.platform-id }}-plan/
+        retention-days: 14
+        if-no-files-found: error

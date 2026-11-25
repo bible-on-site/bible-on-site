@@ -10,7 +10,7 @@ const timing = { status: "completed", exitCode: 0, elapsedMs: 400000, deadlineMs
 const evidence = (test) => ({ test, platform: "ios", outcome: "passed" });
 const part = (...ids) => ({ timing, evidence: ids.map(evidence) });
 const plan = (...groups) => ({
-  kind: "ios-shard-plan", schemaVersion: 1, suite: "app-mobile-e2e", platform: "ios",
+  kind: "appium-shard-plan", schemaVersion: 1, suite: "app-mobile-e2e", platform: "ios",
   mode: "shadow", testedSha: sha, fingerprint: "fp",
   runSet: groups.flat().sort(),
   shards: groups.map((tests, index) => ({ shard: index + 1, tests, estimatedMs: 1000 })),
@@ -49,25 +49,47 @@ function tree(id, hash, placeholders = []) {
 }
 
 test("requires a disjoint successful union of every planned scenario", () => {
-  assert.deepEqual([...validateRunnerEvidence([part("a", "b"), part("c")], ["a", "b", "c"])], ["a", "b", "c"]);
-  assert.throws(() => validateRunnerEvidence([part("a"), part("b")], ["a", "b", "c"]), /missing=c/);
-  assert.throws(() => validateRunnerEvidence([part("a"), part("a")], ["a"]), /overlap/);
-  assert.throws(() => validateRunnerEvidence([part("a"), part("b")], ["a"]), /extra=b/);
-  assert.throws(() => validateRunnerEvidence([], ["a"]), /No iOS runners/);
+  assert.deepEqual([...validateRunnerEvidence([part("a", "b"), part("c")], ["a", "b", "c"], "ios")], ["a", "b", "c"]);
+  assert.throws(() => validateRunnerEvidence([part("a"), part("b")], ["a", "b", "c"], "ios"), /missing=c/);
+  assert.throws(() => validateRunnerEvidence([part("a"), part("a")], ["a"], "ios"), /overlap/);
+  assert.throws(() => validateRunnerEvidence([part("a"), part("b")], ["a"], "ios"), /extra=b/);
+  assert.throws(() => validateRunnerEvidence([], ["a"], "ios"), /No ios runners/);
 });
 
 test("a timed-out runner or failed scenario cannot publish a complete union", () => {
-  assert.throws(() => validateRunnerEvidence([{ ...part("a"), timing: { status: "timed-out", exitCode: 124 } }, part("b")], ["a", "b"]), /did not finish/);
-  assert.throws(() => validateRunnerEvidence([{ timing, evidence: [{ ...evidence("a"), outcome: "failed" }] }, part("b")], ["a", "b"]), /Unsuccessful/);
+  assert.throws(() => validateRunnerEvidence([{ ...part("a"), timing: { status: "timed-out", exitCode: 124 } }, part("b")], ["a", "b"], "ios"), /did not finish/);
+  assert.throws(() => validateRunnerEvidence([{ timing, evidence: [{ ...evidence("a"), outcome: "failed" }] }, part("b")], ["a", "b"], "ios"), /Unsuccessful/);
+});
+
+test("an Android union accepts only Android evidence", () => {
+  const android = (...ids) => ({ timing, evidence: ids.map((id) => ({ ...evidence(id), platform: "android" })) });
+  assert.deepEqual([...validateRunnerEvidence([android("a"), android("b")], ["a", "b"], "android")], ["a", "b"]);
+  assert.throws(() => validateRunnerEvidence([android("a"), part("b")], ["a", "b"], "android"), /Unsuccessful android evidence: b/);
+});
+
+test("locates Android shard artifacts by their android-shard names only", () => {
+  const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
+  try {
+    for (const name of ["app-mobile-e2e-shard.7.android-shard2", "app-mobile-e2e-shard.7.android-shard1", "app-mobile-e2e-shard.7.ios-shard3"]) {
+      mkdirSync(join(root, name), { recursive: true });
+    }
+    const androidPlan = { ...plan(["a"], ["b"]), platform: "android" };
+    assert.deepEqual(discoverShardInputs(root, androidPlan).map((input) => input.split(/[\\/]/).pop()),
+      ["app-mobile-e2e-shard.7.android-shard1", "app-mobile-e2e-shard.7.android-shard2"]);
+    assert.throws(() => discoverShardInputs(root, { ...plan(["a"], ["b"], ["c"]), platform: "android" }),
+      /Missing artifacts for android shard 3/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a single-shard plan reads the artifact download-artifact extracted into the inputs root", () => {
   const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
   try {
-    assert.throws(() => discoverShardInputs(root, plan(["a"])), /Missing artifacts for iOS shard 1/);
+    assert.throws(() => discoverShardInputs(root, plan(["a"])), /Missing artifacts for ios shard 1/);
     writeFileSync(join(root, "case-manifest.json"), "{}");
     assert.deepEqual(discoverShardInputs(root, plan(["a"])), [root]);
-    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"])), /Missing artifacts for iOS shard 1/);
+    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"])), /Missing artifacts for ios shard 1/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -82,7 +104,7 @@ test("locates shard artifact directories by the shard number in their name", () 
     const inputs = discoverShardInputs(root, plan(["a"], ["b", "c"]));
     assert.deepEqual(inputs.map((input) => input.split(/[\\/]/).pop()),
       ["app-mobile-e2e-shard.7.ios-shard1", "app-mobile-e2e-shard.7.ios-shard2"]);
-    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"], ["c"])), /Missing artifacts for iOS shard 3/);
+    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"], ["c"])), /Missing artifacts for ios shard 3/);
     mkdirSync(join(root, "app-mobile-e2e-shard.8.ios-shard1"), { recursive: true });
     assert.throws(() => discoverShardInputs(root, plan(["a"], ["b", "c"])), /Duplicate artifact/);
   } finally {
@@ -91,7 +113,7 @@ test("locates shard artifact directories by the shard number in their name", () 
 });
 
 test("retains independent build hashes, startup coverage and every test attribution", () => {
-  const merged = mergeExecTrees([tree("a", "hash-one"), tree("b", "hash-two"), tree("c", "hash-three")], sha, true);
+  const merged = mergeExecTrees([tree("a", "hash-one"), tree("b", "hash-two"), tree("c", "hash-three")], sha, true, "ios");
   assert.deepEqual(Object.keys(merged.tests), ["a", "b", "c"]);
   assert.equal(merged.modules.length, 3);
   assert.deepEqual(merged.shared.reasons, ["hash-one", "hash-three", "hash-two"].sort());
@@ -100,8 +122,8 @@ test("retains independent build hashes, startup coverage and every test attribut
 });
 
 test("refuses execution evidence from another commit or an overlapping test", () => {
-  assert.throws(() => mergeExecTrees([tree("a", "h1"), { ...tree("b", "h2"), snapshotSha: "b".repeat(40) }], sha, true), /snapshot SHA/);
-  assert.throws(() => mergeExecTrees([tree("a", "h1"), tree("a", "h2")], sha, true), /overlap/);
+  assert.throws(() => mergeExecTrees([tree("a", "h1"), { ...tree("b", "h2"), snapshotSha: "b".repeat(40) }], sha, true, "ios"), /snapshot SHA/);
+  assert.throws(() => mergeExecTrees([tree("a", "h1"), tree("a", "h2")], sha, true, "ios"), /overlap/);
 });
 
 // #2263 in-process manifest skips: each shard's report enumerates the whole
@@ -109,7 +131,7 @@ test("refuses execution evidence from another commit or an overlapping test", ()
 // shards own. Those ghosts must not collide with the shard that ran them.
 test("never-executed placeholders never collide with the executing shard's entry", () => {
   const merged = mergeExecTrees(
-    [tree("a", "h1", ["b", "c"]), tree("b", "h2", ["a", "c"])], sha, true);
+    [tree("a", "h1", ["b", "c"]), tree("b", "h2", ["a", "c"])], sha, true, "ios");
   assert.equal(merged.tests.a.measured, true);
   assert.equal(merged.tests.b.measured, true);
   // A case no shard executed survives as one unmeasured entry.
@@ -117,7 +139,7 @@ test("never-executed placeholders never collide with the executing shard's entry
   assert.equal(merged.tests.c.measured, false);
   // Order is irrelevant: the measured entry wins the ghost either way.
   const reversed = mergeExecTrees(
-    [tree("b", "h2", ["a"]), tree("a", "h1", ["b"])], sha, true);
+    [tree("b", "h2", ["a"]), tree("a", "h1", ["b"])], sha, true, "ios");
   assert.equal(reversed.tests.a.attribution, "per-test");
   assert.equal(reversed.tests.b.attribution, "per-test");
 });
@@ -131,7 +153,7 @@ test("a case that ran without a dump in one shard still claims it", () => {
   first.diagnostics.missingDumps = ["b", "c"];
   const second = tree("d", "h2", ["a", "b", "c"]);
   second.diagnostics.missingDumps = ["a", "b", "c"];
-  const merged = mergeExecTrees([first, second], sha, true);
+  const merged = mergeExecTrees([first, second], sha, true, "ios");
   assert.equal(merged.tests.b.outcome, "passed");
   assert.deepEqual(merged.diagnostics.missingDumps, ["b"]);
 });

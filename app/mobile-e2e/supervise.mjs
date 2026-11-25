@@ -8,9 +8,10 @@ export const MAX_PILOT_TIMEOUT_MS = 45 * 60 * 1000;
 
 // A planned iOS shard may carry the whole suite on one runner (fewer macOS
 // runner-minutes than parallel legs repeating setup), so its deadline scales
-// with the plan's estimate; unplanned runs keep the fixed 15-minute deadline.
-export function pilotTimeoutMs(estimatedMs) {
-  if (!Number.isFinite(estimatedMs) || estimatedMs <= 0) return PILOT_TIMEOUT_MS;
+// with the plan's estimate. Android shards are sized to fit the fixed
+// 15-minute deadline instead, as are unplanned runs.
+export function pilotTimeoutMs(estimatedMs, platform) {
+  if (platform !== "iOS" || !Number.isFinite(estimatedMs) || estimatedMs <= 0) return PILOT_TIMEOUT_MS;
   return Math.min(MAX_PILOT_TIMEOUT_MS,
     Math.max(PILOT_TIMEOUT_MS, Math.ceil(estimatedMs * 1.5) + 5 * 60 * 1000));
 }
@@ -157,7 +158,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   mkdirSync(artifacts, { recursive: true });
   const selection = process.env.MOBILE_E2E_SELECTION;
   const timeoutMs = pilotTimeoutMs(selection
-    ? JSON.parse(readFileSync(selection, "utf8")).estimatedMs : undefined);
+    ? JSON.parse(readFileSync(selection, "utf8")).estimatedMs : undefined, process.env.MOBILE_PLATFORM);
   const started = Date.now();
   const timingPath = resolve(artifacts, "pilot-timing.json");
   const save = extra => writeFileSync(timingPath, JSON.stringify({

@@ -67,27 +67,27 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `exec-coverage-tree.json` | `e2e-coverage-trees.ts extract` | The exec tree (schemaVersion 1) — per-test executed files + the `shared` bucket |
 | `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists; also carries per-case `timing` and `overhead` history (#2263) |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
-| `ios-shard-plan.json` + `shards/shard-N.json` | `e2e-impact.ts plan` (`plan_ios` job, #2263) | The deterministic shard plan and the per-shard case manifests the iOS legs enforce |
-| `case-manifest.json` | iOS runner leg | The shard manifest this leg actually executed — the merge replays it against the plan's assignment |
+| `<platform>-shard-plan.json` + `shards/shard-N.json` | `e2e-impact.ts plan` (`plan_ios` / `plan_android` jobs, #2263) | The deterministic shard plan and the per-shard case manifests the legs enforce |
+| `case-manifest.json` | planned runner leg | The shard manifest this leg actually executed — the merge replays it against the plan's assignment |
 | `case-timings.json` | `merge-runner-shards.mjs` | Merged per-case durations across all shards — the collector's timing-history input |
 | `runner-union.json` | `merge-runner-shards.mjs` | Union report: planned-vs-observed per-shard durations, completeness and pilot timings |
 
 Artifact upload (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`):
 
-- `app-mobile-e2e-plan.<run_id>.ios` — the `plan_ios` output consumed by every
-  iOS leg and by `merge_ios` (#2263).
+- `app-mobile-e2e-plan.<run_id>.<platform>` — the `plan_ios` / `plan_android`
+  output consumed by every leg of that platform and by its merge job (#2263).
 - `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
   iOS shard legs.
-- `app-mobile-e2e-shard.<run_id>.ios-shard<N>` — one iOS leg's merge inputs
+- `app-mobile-e2e-shard.<run_id>.<platform>-shard<N>` — one leg's merge inputs
   (`case-manifest.json`, trees, manifests, evidence, dumps, LCOV) consumed by
-  `merge_ios`.
+  `merge_ios` / `merge_android`.
 - `appium-<artifact>-<run_id>-<attempt>` — the whole per-leg artifacts
   directory (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`);
-  `<artifact>` is `android`, `ios-build` or `ios-shard<N>`. The merged iOS
-  result additionally uploads as `appium-ios-<run_id>-<attempt>` from
-  `merge_ios`.
+  `<artifact>` is `android-shard<N>`, `ios-build` or `ios-shard<N>`. Each
+  merged result additionally uploads as `appium-<platform>-<run_id>-<attempt>`
+  from its merge job.
 - `app-e2e-coverage.<run_id>.<artifact>` — `coverage-app/` per leg;
-  `merge_ios` merges the iOS shard LCOVs into `app-e2e-coverage.<run_id>.ios`.
+  the merge jobs merge the shard LCOVs into `app-e2e-coverage.<run_id>.<platform>`.
 - `app-mobile-e2e-coverage.master.<platform>` — selector tree baseline
   (`coverage-tree.json`), published only from a completed, successful
   default-branch run.
@@ -96,7 +96,7 @@ Artifact upload (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`):
 - `app-e2e-coverage.master.<platform>` — `coverage-app/` baseline, same
   trust rule.
 
-On iOS all three `*.master.ios` baselines are published by `merge_ios`
+All three `*.master.<platform>` baselines are published by the merge job
 (rather than inside a shard leg) and only when the merged evidence reports
 `complete == true` — a shard whose own tree is marked `--incomplete` can
 still contribute to a complete merged baseline, while a partial union
@@ -519,9 +519,9 @@ manifests are execution assignments, not suite selections.
   and external files remain file-granular.
 - **Coverage of framework code**: only the instrumented app module(s) appear;
   MAUI/framework hits are out of evidence scope.
-- **iOS sharding**: each shard extracts a per-shard tree marked
+- **Sharding**: each shard extracts a per-shard tree marked
   `--incomplete` (it holds only its assigned slice of the plan by
-  construction); `merge_ios` validates the union against the shard plan —
+  construction); the merge job validates the union against the shard plan —
   every assignment observed exactly once — and only then can the merged
   tree publish baselines. A per-shard `coverage-tree.json` is therefore
   diagnostic, never baseline input. The split is `plan_ios`'s

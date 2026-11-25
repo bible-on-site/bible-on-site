@@ -1,5 +1,5 @@
 /**
- * Deterministic runtime-balanced iOS shard planning (#2263).
+ * Deterministic runtime-balanced Appium shard planning (#2263).
  *
  * The selector decides WHICH cases run; this module only partitions that
  * decided set across bounded parallel shards — timing shifts the balance,
@@ -53,8 +53,8 @@ export interface PlanConfig {
 	fallbackMs: number;
 }
 
-export interface IosShardPlan {
-	kind: "ios-shard-plan";
+export interface ShardPlan {
+	kind: "appium-shard-plan";
 	schemaVersion: number;
 	suite: string;
 	platform: string;
@@ -139,7 +139,7 @@ export function buildPlan(input: {
 	runSet: string[];
 	estimates: CaseEstimate[];
 	config: PlanConfig;
-}): IosShardPlan {
+}): ShardPlan {
 	const shards = planShards(input.estimates, input.config);
 	const byId = new Map(input.estimates.map((entry) => [entry.id, entry]));
 	const expected = new Set(input.runSet);
@@ -154,7 +154,7 @@ export function buildPlan(input: {
 		throw new Error("The shard plan does not partition the run set exactly once.");
 	}
 	return {
-		kind: "ios-shard-plan",
+		kind: "appium-shard-plan",
 		schemaVersion: SCHEMA_VERSION,
 		suite: input.suite,
 		platform: input.platform,
@@ -189,7 +189,7 @@ export function buildPlan(input: {
  * unassigned cases skip inside the process rather than by filter magic.
  */
 export function shardManifest(
-	plan: IosShardPlan,
+	plan: ShardPlan,
 	shard: ShardAssignment,
 	reasons: Map<string, string[]>,
 ): Record<string, unknown> {

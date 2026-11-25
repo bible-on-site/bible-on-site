@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ios-matrix: ${{ steps.matrix.outputs.matrix }}
-      ios-shards: ${{ steps.matrix.outputs.ios-shards }}
+      ios-shards: ${{ steps.matrix.outputs.shards }}
       runner_a: ${{ steps.legs.outputs.runner_a }}
       runner_b: ${{ steps.legs.outputs.runner_b }}
     steps:
@@ -238,7 +238,7 @@ jobs:
       runner: ${{ needs.plan_ios.outputs.runner_a }}
       workload: maui-ios
       shard: ${{ matrix.shard }}
-      ios_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
+      shard_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
       mode: prebuilt-run
       e2e_selection_mode: shadow
       force_full_suite: ${{ inputs.force_full_suite }}
@@ -261,7 +261,7 @@ jobs:
       runner: ${{ needs.plan_ios.outputs.runner_b }}
       workload: maui-ios
       shard: ${{ matrix.shard }}
-      ios_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
+      shard_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
       mode: prebuilt-run
       e2e_selection_mode: shadow
       force_full_suite: ${{ inputs.force_full_suite }}

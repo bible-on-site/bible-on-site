@@ -132,7 +132,7 @@ content fingerprint). The iOS `plan_ios` job opts into `--allow-empty`: a
 clean zero-affected diff legitimately schedules no shards instead of
 selecting everything, while every uncertain path still selects the suite.
 
-## Runtime-balanced iOS sharding (#2263)
+## Runtime-balanced Appium sharding (#2263)
 
 `plan` turns the selection manifest into a bounded shard plan before the
 matrix expands:
@@ -148,7 +148,10 @@ matrix expands:
   scheduling stays deterministic and cold-start history accrues from the
   run's own measurements.
 - **Shard count** — `ceil(total estimated case ms / target)` clamped to
-  `[1, min(--max-shards = 4, case count)]`. A shard holding less than a
+  `[1, min(--max-shards, case count)]`. iOS plans with `--max-shards 4
+  --target-minutes 26` (its deadline scales with the estimate); Android
+  plans with `--max-shards 2 --target-minutes 6`, sizing each emulator leg
+  to fit the fixed 15-minute pilot deadline. A shard holding less than a
   minute of work folds into its least-loaded peer: the job bring-up
   (`DEFAULT_SETUP_MS` plus measured `overhead`) would dwarf it.
 - **Assignment** — longest-processing-time-first onto the least-loaded
@@ -160,10 +163,10 @@ matrix expands:
   and the aggregate result stays green only because nothing was selected —
   never because planning failed.
 
-Each iOS runner leg stages `shards/shard-N.json` as `case-manifest.json` in
+Each runner leg stages `shards/shard-N.json` as `case-manifest.json` in
 its artifacts and enforces it through `MOBILE_E2E_SELECTION` (the partition
 is an assignment in both modes — it does not wait for `enforce`). The merge
-job downloads every `ios-shard<N>` artifact and the plan, then:
+job downloads every `<platform>-shard<N>` artifact and the plan, then:
 
 1. requires exactly one artifact per planned shard — no missing, no
    duplicates;
@@ -179,27 +182,25 @@ job downloads every `ios-shard<N>` artifact and the plan, then:
 
 ## CI wiring (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`)
 
-1. **plan_ios** (#2263) — a single predecessor job: `baseline-download` →
+1. **plan_ios / plan_android** (#2263) — one predecessor job per platform
+   running `.github/actions/plan-appium-shards`: `baseline-download` →
    `select --allow-empty` → `plan` → `appium-matrix.mjs`, publishing the
-   `app-mobile-e2e-plan.<run>.ios` artifact (plan, selection manifest and
-   one `shards/shard-N.json` per shard) and the `ios-matrix` output the
-   runner matrix expands from. The Android leg is untouched — it still
-   resolves selection inside its own runner as a background step overlapped
-   with device/caches setup.
+   `app-mobile-e2e-plan.<run>.<platform>` artifact (plan, selection manifest
+   and one `shards/shard-N.json` per shard) and the matrix the runner legs
+   expand from.
 2. **baseline-download** — fetches the newest
    `app-mobile-e2e-coverage.master.<platform>` artifact through the REST API
-   (`actions: read`). Absent baselines are reported, not fatal — the iOS
-   planner falls back to the full suite at the unmeasured weight, and the
-   Android leg resolves `selectAll`.
+   (`actions: read`). Absent baselines are reported, not fatal — the
+   planner falls back to the full suite at the unmeasured weight.
 3. **select** — writes `selection-manifest.json` plus a step summary of the
    selected/unselected tests and their reasons.
-4. **tests** — an iOS leg enforces its assigned `case-manifest.json` in both
-   modes (the partition is an assignment, not a selection mode); the Android
-   leg receives `MOBILE_E2E_SELECTION` only in `enforce` mode.
+4. **tests** — a planned leg enforces its assigned `case-manifest.json` in
+   both modes (the partition is an assignment, not a selection mode).
    `TestMobileE2E` intersects the manifest's `FullyQualifiedName` list with
    the existing category/platform filter and refuses a non-`selectAll`
    manifest that selects nothing.
-5. **merge_ios** (#2263) — downloads the plan and every shard artifact,
+5. **merge_ios / merge_android** (#2263) — run
+   `.github/actions/merge-appium-shards`: download the plan and every shard artifact,
    requires compatible suite/platform/snapshot trees, validates the
    complete disjoint run set (no drops, no overlap — each leg's report
    still enumerates the suite's unassigned cases as skipped/not-executed
@@ -208,10 +209,10 @@ job downloads every `ios-shard<N>` artifact and the plan, then:
    `collect-appium --history` input.
 6. **collect-appium** — runs `always()`: a failed run still collects
    evidence for its passed tests but marks the tree `complete: false`, and
-   on iOS every shard's tree is additionally marked `--incomplete` by
+   every planned shard's tree is additionally marked `--incomplete` by
    construction. Only the merge's collected union tree can feed a baseline.
-7. **publish** — Android baselines publish inside the runner leg; the iOS
-   `*.master.ios` baselines publish only from `merge_ios` when the merged
+7. **publish** — the `*.master.<platform>` baselines publish only from the
+   platform's merge job when the merged
    evidence is `complete`, and only on a completed, successful `master`
    push (`push` on `refs/heads/master` — a `workflow_dispatch` cannot
    refresh them), so provisional PR/merge-queue evidence can never poison

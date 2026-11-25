@@ -151,10 +151,15 @@ test("the production clock expires without waiting for child progress", async ()
   }
 });
 
-test("a planned shard's deadline scales with its estimate within fixed bounds", () => {
-  assert.equal(pilotTimeoutMs(undefined), PILOT_TIMEOUT_MS);
-  assert.equal(pilotTimeoutMs(0), PILOT_TIMEOUT_MS);
-  assert.equal(pilotTimeoutMs(5 * 60_000), PILOT_TIMEOUT_MS);
-  assert.equal(pilotTimeoutMs(25 * 60_000), 42.5 * 60_000);
-  assert.equal(pilotTimeoutMs(60 * 60_000), MAX_PILOT_TIMEOUT_MS);
+test("a planned iOS shard's deadline scales with its estimate within fixed bounds", () => {
+  assert.equal(pilotTimeoutMs(undefined, "iOS"), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(0, "iOS"), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(5 * 60_000, "iOS"), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(25 * 60_000, "iOS"), 42.5 * 60_000);
+  assert.equal(pilotTimeoutMs(60 * 60_000, "iOS"), MAX_PILOT_TIMEOUT_MS);
+});
+
+test("a planned Android shard keeps the fixed deadline whatever its estimate", () => {
+  assert.equal(pilotTimeoutMs(25 * 60_000, "Android"), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(25 * 60_000, undefined), PILOT_TIMEOUT_MS);
 });
