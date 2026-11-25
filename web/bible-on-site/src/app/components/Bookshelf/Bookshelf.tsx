@@ -293,7 +293,7 @@ function BookBlock({
 		backgroundSize: `${sqSize}px ${sqSize}px`,
 	};
 
-	// #3799 — every crack between book faces was a coplanar/flush joint that
+	// #3799 — every crack between sefer faces was a coplanar/flush joint that
 	// rasterization opens to whatever sits behind: adjacent covers shared one
 	// plane so the neighbor's cover flickered through the seam (defect 1) and
 	// the bottom page face shared the shelf-top plane (defect 2). Faces keep
@@ -373,9 +373,9 @@ function BookBlock({
 						<div className={styles.coverSubtitle}>מקראות גדולות</div>
 					</div>
 				</div>
-				{/* Inset `lip` so it never shares a plane with the next book's
-					left cover — coplanar covers were the flickering seam that
-					let the neighboring cover show through the joint. */}
+				{/* Inset `lip` so it never shares a plane with the next
+					sefer's left cover — coplanar covers were the flickering
+					seam that let the neighboring cover show through. */}
 				<div
 					className={styles.right}
 					style={{
