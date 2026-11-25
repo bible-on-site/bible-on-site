@@ -212,7 +212,8 @@ Readers can opt in to a browser notification with the daily perek (#1096).
 - **Opt-in UI** (#3732): a dedicated browser-reminder card
   (`PushNotificationsToggle`, `#bulletin-push`) sits alongside the Telegram,
   WhatsApp and email cards in the daily-bulletin section of the home page,
-  with separate `הפעלת התראות` and `ביטול התראות` controls. The reader
+  with a single state-aware toggle where the other cards' action buttons sit:
+  `הפעלת התראות` while off, `ביטול התראות` while on. The reader
   settings dropdown carries the same subscription as a
   `התראה יומית בדפדפן` checkbox; both surfaces share
   `src/lib/push-notifications.ts` and a same-tab status event, so an action

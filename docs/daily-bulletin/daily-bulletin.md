@@ -34,7 +34,8 @@ The additive migration creates settings, subscribers, jobs and per-recipient his
 
 The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector. Fresh installations default to test; real delivery requires configuring and explicitly confirming the intended group. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
 
-The new controls have actual desktop/mobile [before and after captures](screenshots/README.md). Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
+The public join carousel and native-app counterpart follow channel validation
+and must expose only public join links. [Issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)
 
 ## Public joining (#2939, #2940, #2941)
 
@@ -66,6 +67,22 @@ The release detector routes this migration and its db-populator preservation-tes
 Input fields: `date`, `hebrewDate`, `perekId`, nullable `article` containing `id`, `title`, `author`, and `html`, plus `dedications` as a string array. Output fields: `subject`, `source`, `emailHtml`, `pdfBase64`, and `filename`.
 
 The authenticated admin creates and reads previews. The renderer does not connect to subscriber services or send messages.
+
+### Local visual checks
+
+Run the [local admin app](../../web/admin/README.md#local-development) against
+a disposable MySQL database. Save a bulletin preview with synthetic recipients
+and set `BULLETIN_EMAIL_WORKER_ENABLED=false`. Open `/bulletins` to check the
+saved test audience, consent counts, and HTML/PDF preview. With Playwright
+Chromium installed, capture the page from the repository root.
+
+```powershell
+New-Item -ItemType Directory -Force .outputs | Out-Null
+node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '1440,1100' --full-page --wait-for-selector 'body:has(iframe):has(#email-audience)' http://localhost:3101/bulletins .outputs/bulletin-admin.png
+```
+
+Repeat at `390,844` to inspect the phone layout. Attach captures to the PR or
+issue, or publish them as CI artifacts.
 
 ## Legacy behavior to restore
 
