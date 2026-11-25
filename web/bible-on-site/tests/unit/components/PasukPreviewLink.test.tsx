@@ -240,9 +240,9 @@ describe("PasukPreviewLink", () => {
 				json: async () => ({ reference: "r", text: "נסיון חוזר" }),
 			} as Response);
 		render(
-			<PasukPreviewLink href="/929/36#pasuk-7">בראשית לו ז</PasukPreviewLink>,
+			<PasukPreviewLink href="/929/47#pasuk-9">בראשית מז ט</PasukPreviewLink>,
 		);
-		const link = screen.getByRole("link", { name: "בראשית לו ז" });
+		const link = screen.getByRole("link", { name: "בראשית מז ט" });
 		await act(async () => {
 			fireEvent.mouseEnter(link);
 		});
