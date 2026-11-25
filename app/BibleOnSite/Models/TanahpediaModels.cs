@@ -157,12 +157,17 @@ public class TanahpediaImage
 /// gallery item: figure plus the "caption · credit" line and the full
 /// attribution, mirroring the website's ImageFigure.
 /// </summary>
-public partial class TanahpediaImageLink : ObservableObject
+public class TanahpediaImageLink : ObservableObject
 {
+    private bool _isAttributionExpanded;
+
     /// <summary>Tap-expanded attribution details; hidden by default like the
     /// website's collapsed attribution disclosure.</summary>
-    [ObservableProperty]
-    private bool _isAttributionExpanded;
+    public bool IsAttributionExpanded
+    {
+        get => _isAttributionExpanded;
+        set => SetProperty(ref _isAttributionExpanded, value);
+    }
 
     /// <summary><c>tanahpedia_{entry,entity}_image.id</c>.</summary>
     public string Id { get; set; } = string.Empty;
