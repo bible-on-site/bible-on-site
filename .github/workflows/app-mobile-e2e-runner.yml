@@ -1036,6 +1036,25 @@ jobs:
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
 
+      # Shadow-mode parity (#2085) for this leg's slice: the plan's suite-level
+      # selection narrowed to the cases this leg was assigned, scored against
+      # the outcomes it observed. Runs on failing legs too — a failure the
+      # selection left unselected is exactly the miss the rollout gate counts,
+      # and the merge job only scores the union once every leg passed.
+      - name: Verify shard selection parity
+        if: inputs.mode != 'build' && inputs.shard_plan_artifact != '' && always() && !cancelled() && steps.shard_manifest.outcome == 'success'
+        run: |
+          SLICE="$RUNNER_TEMP/shard-selection-manifest.json"
+          jq --slurpfile shard "$MOBILE_E2E_ARTIFACTS/case-manifest.json" \
+            '($shard[0].selected | map(.id)) as $ids
+             | .selected |= map(select(.id | IN($ids[])))
+             | .unselected |= map(select(.id | IN($ids[])))' \
+            "${{ runner.temp }}/shard-plan/selection-manifest.json" > "$SLICE"
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$SLICE" \
+            --tree "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-verify.json"
+
       - name: Upload ${{ inputs.platform }} runner merge inputs
         if: inputs.mode != 'build' && (inputs.shard_plan_artifact != '' && always() && !cancelled())
         uses: actions/upload-artifact@v7

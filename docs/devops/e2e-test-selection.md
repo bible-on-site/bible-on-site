@@ -482,11 +482,13 @@ mismatch, or a tree collected from a different revision than
 verdict, with empty buckets. Verify is pure diagnostics: it never throws on
 evidence gaps and never gates the job. Reports ship per run inside each
 suite's diagnostics artifact: `selection-verify.json` under
-`.coverage/e2e-impact/` for the three Playwright suites (ci.yml), inside
-`$MOBILE_E2E_ARTIFACTS` for the Android leg, and under
-`app/.artifacts/mobile-e2e/ios/` for iOS — where `merge_ios` joins the
-plan's suite-level manifest against the merged tree, since per-shard
-manifests are execution assignments, not suite selections.
+`.coverage/e2e-impact/` for the three Playwright suites (ci.yml), and under
+`app/.artifacts/mobile-e2e/<platform>/` for Appium — where the merge job joins
+the plan's suite-level manifest against the merged tree, since per-shard
+manifests are execution assignments, not suite selections. Each planned leg
+also scores the suite-level manifest narrowed to its assigned cases inside
+its own `$MOBILE_E2E_ARTIFACTS`, so a failing leg (which stops the merge)
+still reports its misses.
 
 ## Known gaps (explicit, by design)
 
