@@ -27,6 +27,9 @@ interface ModuleRule {
 	 * semantics only take effect for the shared contract trees below.
 	 */
 	extraModulePaths?: string[];
+	/** Files matching this pattern outside `directory` also change the module
+	 * — for versioned artifacts whose filename floats (e.g. `sefaria-dump-*`). */
+	extraModulePattern?: RegExp;
 	/** Files or directories whose change requires the module's checks. */
 	ciPaths: string[];
 	/** Files that require the module's checks without changing the module. */
@@ -102,11 +105,13 @@ const DATA_CI_ONLY_PATTERN =
 export const MODULES = {
 	website: {
 		directory: "web/bible-on-site",
-		// Approved timing changes must package/release the website too.
+		// Approved timing changes must package/release the website too; the
+		// canonical shared brand assets feed its staged public files (#3708).
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 			...WEBSITE_ADMIN_SHARED_CONTRACTS,
+			"web/shared/branding",
 		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
@@ -162,10 +167,12 @@ export const MODULES = {
 	},
 	app: {
 		directory: "app",
-		// Both approved timings and the Opus inventory ship in the native app.
+		// Both approved timings and the Opus inventory ship in the native app;
+		// its fonts and launcher artwork are the shared brand files (#3708).
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
+			"web/shared/branding",
 		],
 		// The e2e-impact selector/collector and the exec coverage-tree
 		// extractor drive the Appium suite (#2085). The runner workflow defines
@@ -204,6 +211,8 @@ export const MODULES = {
 		extraModulePaths: [
 			...WEBSITE_ADMIN_SHARED_CONTRACTS,
 			...ADMIN_API_SHARED_CONTRACTS,
+			// Admin stages the shared webfonts and favicon at build time (#3708).
+			"web/shared/branding",
 		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
@@ -236,6 +245,25 @@ export const MODULES = {
 	},
 	bulletin: {
 		directory: "web/bulletin",
+		// The Lambda zip ships the shared Al Heperek fonts and the PDF embeds
+		// the canonical header logo (#3708); the pinned website corpus
+		// regenerates the embedded perek text at build time (#3709). The corpus
+		// entry is a git pathspec glob so release notes keep tracking it across
+		// dump renames; detection itself uses extraModulePattern below.
+		extraModulePaths: [
+			"web/shared/branding",
+			"web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json",
+		],
+		// The corpus file carries the dump version in its name — match the
+		// stem so a corpus bump cannot silently stop selecting the bulletin.
+		extraModulePattern:
+			/^web\/bible-on-site\/src\/data\/db\/sefaria-dump-.+\.tanah_view\.json$/,
+		// The bundled native SQLite must stay stem-locked with the corpus
+		// (#3709): a native-only rename changes no bulletin artifact, but the
+		// parity contract test must still run — and fail — until both sides
+		// are bumped together.
+		extraCiPattern:
+			/^app\/BibleOnSite\/Resources\/Raw\/sefaria-dump-.+\.tanah_view\.sqlite$/,
 		// The release image also compiles the API's shared entities crate.
 		ciPaths: [
 			"devops/github/release/recovery-request.mjs",
@@ -260,7 +288,7 @@ export const MODULES = {
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
-			"app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"web/shared/branding/derived/logo_header.jpg",
 			"web/bible-on-site/public/icons/envelope.svg",
 			"web/bible-on-site/public/icons/phone.svg",
 			"web/bible-on-site/public/icons/whatsapp.svg",
@@ -365,6 +393,39 @@ const MODULE_EVIDENCE_FILES = new Set([
 	"web/bulletin/docs/daily-bulletin-typography-page2.png",
 ]);
 const EVIDENCE_EXTENSION = /\.(?:avif|gif|jpe?g|md|png|webp)$/i;
+
+// Dependency-bot configuration is not deliverable code: a diff confined to the
+// Renovate config locations changes no module, dependency graph or runtime
+// input, so only Renovate validation should run (#3795). Package and lockfile
+// updates keep the ordinary module paths — the classification never matches
+// them. Local/custom config inside a module still routes to that module.
+const RENOVATE_CONFIG_PATTERN =
+	/^(?:renovate\.json5?|\.renovaterc(?:\.json5?)?|\.github\/renovate\.json5?)$/;
+
+// Language inputs for the repo-managed CodeQL workflow (#3795): a pull
+// request scans only the languages its diff can actually alter. Dependency
+// manifests stay in scope so a dependency change is still scanned. Anything
+// outside every map — config-only JSON, docs, Rust, data — resolves to the
+// cheapest language so the required code-scanning status still reports.
+const CODEQL_LANGUAGE_PATHS: Record<string, RegExp> = {
+	actions: /^\.github\/(?:workflows|actions)\//,
+	csharp:
+		/^app\/|\.(?:cs|csproj|sln|slnx|props|targets|razor|csx|resx|xaml)$|(?:^|\/)global\.json$|(?:^|\/)nuget\.config$/i,
+	"javascript-typescript":
+		/\.(?:m?ts|tsx|[cm]?js|jsx|d\.ts)$|(?:^|\/)(?:package\.json|bun\.lock|bunfig\.toml|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|tsconfig[^/]*\.json)$/i,
+	python:
+		/\.pyi?$|(?:^|\/)(?:requirements[^/]*\.txt|pyproject\.toml|Pipfile(?:\.lock)?|setup\.py|constraints[^/]*\.txt)$/i,
+};
+
+/** Languages whose inputs the diff can alter; never empty for PR scoping. */
+export function codeqlLanguages(changedFiles: string[]): string[] {
+	const languages = Object.entries(CODEQL_LANGUAGE_PATHS)
+		.filter(([, pattern]) => changedFiles.some((file) => pattern.test(file)))
+		.map(([language]) => language);
+	// The code-scanning ruleset needs a completed CodeQL result for the PR
+	// regardless of touched inputs; `actions` is the cheapest complete scan.
+	return languages.length ? languages : ["actions"];
+}
 
 function isModuleEvidenceDocumentation(file: string): boolean {
 	return (
@@ -473,7 +534,8 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 						(isAt(file, rule.directory) &&
 							!isModuleEvidenceDocumentation(file) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
-						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
+						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)) ||
+						(rule.extraModulePattern?.test(file) ?? false),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>
@@ -662,7 +724,16 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		!Object.values(changes).some(
 			(flags) => flags.module_changed || flags.ci_changed,
 		);
-	if (mergeGroup && !docsOnly) {
+	// A diff confined to Renovate configuration validates the config itself
+	// only: no module flag may fire, and like docs_only the merge-group diff
+	// already spans the combined candidate (#3795).
+	const renovateConfigOnly =
+		files.length > 0 &&
+		files.every((file) => RENOVATE_CONFIG_PATTERN.test(file)) &&
+		!Object.values(changes).some(
+			(flags) => flags.module_changed || flags.ci_changed,
+		);
+	if (mergeGroup && !docsOnly && !renovateConfigOnly) {
 		// A preceding queue entry may still have unfinished checks. Validate
 		// the combined head conservatively, without any release intent.
 		for (const flags of Object.values(changes)) {
@@ -688,6 +759,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 			));
 	lines.push(`data_deploy_ci_changed=${dataDeployCiChanged}`);
 	lines.push(`docs_only=${docsOnly}`);
+	lines.push(`renovate_config_only=${renovateConfigOnly}`);
+	lines.push(
+		`codeql_languages=${JSON.stringify(codeqlLanguages(deliveryFiles))}`,
+	);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(
 		`bulletin_release_recovery=${recoveryModules.includes("bulletin")}`,

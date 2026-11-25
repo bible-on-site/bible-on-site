@@ -101,7 +101,6 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 		attribution,
 	});
 	outputs.push({ file, bytes });
-	if (id === "logo-header") outputs.push({ file: "logo-header.jpg", bytes });
 }
 
 const { fontVersion } = JSON.parse(
@@ -112,10 +111,10 @@ const { fontVersion } = JSON.parse(
 );
 await addAsset(
 	"logo-header",
-	"app/BibleOnSite/Resources/Images/logo_header.jpg",
+	"web/shared/branding/derived/logo_header.jpg",
 	"jpg",
 	async (source) => source,
-	`Al Heperek Yehuda ${fontVersion} outlined wordmark, shared with the native application and PDF header.`,
+	`Al Heperek Yehuda ${fontVersion} outlined wordmark, shared with the native application, website and PDF header.`,
 );
 
 const sources = {

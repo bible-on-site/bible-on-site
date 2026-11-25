@@ -6,7 +6,10 @@ import { ReadingTime } from "@/app/components/ReadingTime";
 import { loadRecitation } from "@/lib/recitation-loader";
 import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
-import { getArticleSummariesByPerekId } from "../../../lib/articles";
+import {
+	getArticleSummariesByPerekId,
+	getFurtherReadingSummariesByPerekId,
+} from "../../../lib/articles";
 import {
 	getPerekDedications,
 	getSeferDedications,
@@ -36,6 +39,7 @@ import {
 } from "../../components/dedications/DedicationLines";
 import { JsonLd } from "../../components/JsonLd";
 import Breadcrumb from "./components/Breadcrumb";
+import { ArticlesSection } from "./components/ArticlesSection";
 import { DailyArticlesSection } from "./components/DailyArticlesSection";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
@@ -68,6 +72,20 @@ const getCachedArticleSummaries = cachedPerKey(
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getArticleSummariesByPerekId(perekId),
+);
+
+/**
+ * The perek's לקריאה נוספת list (#3752): verified secondary coverage —
+ * articles primarily attached elsewhere that discuss a source in this
+ * perek. Shares the `perek:{id}:articles` tag: a covering-row change is an
+ * article change, and the dependency resolver expires the covered perek's
+ * tag on either side of it (old ∪ live covering rows).
+ */
+const getCachedFurtherReading = cachedPerKey(
+	"further-reading-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),
 );
 
 /** Cache perushim summaries per perek (same caching strategy as articles). */
@@ -150,6 +168,7 @@ export default async function Perek({
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articles = await getCachedArticleSummaries(perekId);
+	const furtherArticles = await getCachedFurtherReading(perekId);
 	const perushim = await getCachedPerushim(perekId);
 	// The metric is optional decoration — a failed read renders the page
 	// badge-less rather than erroring, and stays uncached so the next render
@@ -196,6 +215,7 @@ export default async function Perek({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
+					furtherArticles={furtherArticles}
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
@@ -242,6 +262,17 @@ export default async function Perek({
 					articles={articles}
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>
+
+				{/* לקריאה נוספת (#3752) - secondary coverage recommendations
+				    below the regular list; hidden when no other perek's article
+				    covers a source in this one. */}
+				{furtherArticles.length > 0 && (
+					<ArticlesSection
+						articles={furtherArticles}
+						title="לקריאה נוספת"
+						scrollStorageKey={`further-reading-perek-${perekId}`}
+					/>
+				)}
 			</main>
 		</>
 	);

@@ -155,6 +155,11 @@ public class PerushimNotesService : IReaderNotesAvailability
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
+    /// <summary>Whether the installed notes have no matching search index on the device
+    /// (e.g. an app update bumped the index normalization), so commentary search needs a
+    /// fresh pack even though the notes stay readable. Reported by the search index.</summary>
+    public bool IsSearchIndexStale { get; internal set; }
+
     /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
     public bool IsInitialized => _initialized;
 
@@ -389,6 +394,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             }
             File.Delete(Path.Join(DataDirectory, NotesDbName));
             _notesMissing = true;
+            IsSearchIndexStale = false;
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
@@ -403,6 +409,10 @@ public class PerushimNotesService : IReaderNotesAvailability
             await InitializeCoreAsync();
             if (IsAvailable)
             {
+                if (IsSearchIndexStale && !await TryRefreshSearchIndexAsync(progress, cancellationToken))
+                {
+                    return false;
+                }
                 File.Delete(RemovedMarkerPath);
                 return true;
             }
@@ -456,6 +466,47 @@ public class PerushimNotesService : IReaderNotesAvailability
 
         Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
+    }
+
+    /// <summary>
+    /// Refetches the pack for readable notes whose search index went stale and stages its
+    /// index only when it was built for the installed notes, which stay untouched. A pack of
+    /// a newer notes generation is left to the launch-time upgrade, which swaps both together.
+    /// </summary>
+    private async Task<bool> TryRefreshSearchIndexAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        if (!await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
+        {
+            return false;
+        }
+        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+        var sourcePath = padPath == null ? null : PadIndexSourcePath(padPath);
+        if (sourcePath == null || await ReadIndexNotesFingerprintAsync(sourcePath)
+            != await SearchIndexService.FingerprintAsync(_connection!, "build_timestamp"))
+        {
+            return false;
+        }
+        await TryCopyPadIndexAsync(padPath!);
+        var staged = File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
+        IsSearchIndexStale = !staged;
+        return staged;
+    }
+
+    private static async Task<string?> ReadIndexNotesFingerprintAsync(string indexPath)
+    {
+        var index = new SQLiteAsyncConnection(indexPath, SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            return await index.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+        finally
+        {
+            await index.CloseAsync();
+        }
     }
 
     /// <summary>
@@ -571,6 +622,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             _connection = null;
         }
         _notesMissing = true;
+        IsSearchIndexStale = false;
         // Never leave an unusable generation on the device: the ~285 MB legacy
         // DB, its paired search index, journal sidecars, and interrupted
         // replacement leftovers are all app-owned and must go.

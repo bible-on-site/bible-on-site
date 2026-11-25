@@ -122,7 +122,7 @@ for (const module of ["admin", "bulletin"]) {
 		mkdirSync(join(root, "assets"));
 		const name =
 			module === "admin"
-				? "bible-on-site-admin-v1.0.0.tar.gz"
+				? "bible-on-site-admin-v1.0.0-arm64.tar.gz"
 				: "bulletin-lambda-v1.0.0.zip";
 		const packageBytes = Buffer.from(`current-run ${module} package`);
 		writeFileSync(join(root, "assets", name), packageBytes);

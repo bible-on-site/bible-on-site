@@ -9,6 +9,14 @@ on:
         description: Service Dockerfile to validate (website, api, admin)
         required: true
         type: string
+      arch_matrix:
+        # Callers pass a JSON strategy matrix; website/admin scope it to the
+        # single ARM64 production arch (#3794) while api keeps the default
+        # amd64+arm64 pair.
+        description: JSON strategy matrix override for the validated arches
+        required: false
+        type: string
+        default: '{"include":[{"arch":"amd64","runner":"ubuntu-24.04","machine":"x86_64"},{"arch":"arm64","runner":"ubuntu-24.04-arm","machine":"aarch64"}]}'
   workflow_dispatch:
     inputs:
       service:
@@ -16,6 +24,12 @@ on:
         required: true
         type: choice
         options: [website, api, admin]
+      arch:
+        description: Single architecture to validate
+        required: true
+        type: choice
+        options: [amd64, arm64]
+        default: arm64
 
 permissions:
   contents: read
@@ -26,14 +40,9 @@ jobs:
     name: ${{ inputs.service }} / ${{ matrix.arch }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-            machine: x86_64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            machine: aarch64
+      # workflow_call supplies arch_matrix; the dispatch form maps its single
+      # arch choice onto the same matrix shape.
+      matrix: ${{ fromJSON(inputs.arch_matrix || format('{{"include":[{{"arch":"{0}","runner":"{1}","machine":"{2}"}}]}}', inputs.arch, inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04', inputs.arch == 'arm64' && 'aarch64' || 'x86_64')) }}
     runs-on: ${{ matrix.runner }}
     env:
       SERVICE: ${{ inputs.service }}

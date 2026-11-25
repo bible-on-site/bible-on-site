@@ -348,6 +348,57 @@ test.describe("Sefer left-page panel", () => {
 		await expect(blank.locator("a#article-1")).toBeFocused();
 	});
 
+	test("groups לקריאה נוספת below the panel's own cards and keeps the browsed perek (#3752)", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		// בראשית ב carries no articles of its own; fixture article 1
+		// (primary בראשית א) verifiably covers בראשית ב א, so the
+		// recommendation group is the whole list.
+		await seferPage.openSeferViewForPerek(2);
+		const blank = page.locator('.he-book .page[data-page-index="6"]');
+		await blank.getByRole("tab", { name: "מאמרים" }).click();
+
+		await expect(
+			blank.getByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeVisible();
+		const card = blank.locator("a#article-1");
+		await expect(card).toBeVisible();
+		// The crawlable href still routes through the article's own perek.
+		await expect(card).toHaveAttribute("href", "/929/1/1");
+
+		// Opening the recommendation embeds the article while the browsed
+		// perek stays in the URL. The article id rides `?further=` — the
+		// canonical /929/{perek}/{slug} path would 404 on reload because the
+		// article belongs to בראשית א, not the viewed ב (#3752 review).
+		await card.click();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(page).toHaveURL(/\/929\/2\?book&further=1/);
+
+		// A fresh load of that URL restores the same embedded article.
+		await page.reload();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(
+			blank.getByRole("heading", { name: "בראשית ברא - עיון בפסוק הראשון" }),
+		).toBeVisible();
+
+		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
+		await expect(card).toBeVisible();
+		// Returning to the grid drops the selection — a stale further= would
+		// reopen the article on the next reload or book-view entry.
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === "/929/2" &&
+				url.searchParams.has("book") &&
+				!url.searchParams.has("further"),
+		);
+	});
+
 	test("deep-linked perush view selects only that perush without touching defaults", async ({
 		page,
 	}) => {

@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn verifies_rds_hostname_even_if_url_disables_tls() {
         let options = mysql_options(
-            "mysql://reader:p%40ss@tanah-mysql.test.il-central-1.rds.amazonaws.com/tanah?ssl-mode=DISABLED",
+            "mysql://reader@tanah-mysql.test.il-central-1.rds.amazonaws.com/tanah?ssl-mode=DISABLED",
         );
         assert!(matches!(
             options.get_ssl_mode(),

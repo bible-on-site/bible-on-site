@@ -15,12 +15,21 @@ describe("Sefer content navigation", () => {
 	});
 
 	it.each([
-		["/929/1/42?book", { perekId: 1, slug: "42" }],
-		["/929/1/%D7%A8%D7%A9%22%D7%99?book", { perekId: 1, slug: 'רש"י' }],
+		["/929/1/42?book", { perekId: 1, slug: "42", further: false }],
+		[
+			"/929/1/%D7%A8%D7%A9%22%D7%99?book",
+			{ perekId: 1, slug: 'רש"י', further: false },
+		],
 		["/929/1?book", null],
 		["/929/בראשית/תוכן?book", null],
 		["/929/1/42", null],
 		["/929/1/42/extra?book", null],
+		// לקריאה נוספת (#3752): the secondary selection rides a `further`
+		// parameter on the browsed chapter — the recommended article's own
+		// perek differs, so the path-slug form would 404 on reload.
+		["/929/2?book&further=1", { perekId: 2, slug: "1", further: true }],
+		["/929/2?book&further=", null],
+		["/929/2?further=1", null],
 	])("reads content from %s", (route, expected) => {
 		expect(seferContentFromRoute(route)).toEqual(expected);
 	});
@@ -37,6 +46,15 @@ describe("Sefer content navigation", () => {
 		expect(history.state.route).toBe("/929/1?book");
 	});
 
+	it("writes a secondary-coverage selection on the browsed chapter (#3752)", () => {
+		// Article 1 belongs to perek 1; selecting it from perek 2's book panel
+		// must not produce /929/2/1?book — that standalone route 404s on reload.
+		writeSeferContentHistory(2, "1", false, true);
+		expect(history.state.route).toBe("/929/2?book&further=1");
+		expect(seferContentFromRoute(location.pathname + location.search))
+			.toEqual({ perekId: 2, slug: "1", further: true });
+	});
+
 	it("restores content before the book stops popstate propagation", () => {
 		const { result, unmount } = renderHook(() => useSeferContentNavigation(1));
 		const bookListener = (event: PopStateEvent) =>
@@ -44,7 +62,11 @@ describe("Sefer content navigation", () => {
 		window.addEventListener("popstate", bookListener, true);
 		try {
 			act(() => result.current.navigate(1, "42"));
-			expect(result.current.content).toEqual({ perekId: 1, slug: "42" });
+			expect(result.current.content).toEqual({
+				perekId: 1,
+				slug: "42",
+				further: false,
+			});
 			act(() => {
 				history.replaceState(history.state, "", "/929/1?book");
 				window.dispatchEvent(
@@ -107,7 +129,11 @@ describe("Sefer content navigation", () => {
 			// The book finishes the already-visible chapter turn after selection.
 			history.replaceState(history.state, "", "/929/1?book");
 		});
-		expect(result.current.content).toEqual({ perekId: 1, slug: 'רש"י' });
+		expect(result.current.content).toEqual({
+			perekId: 1,
+			slug: 'רש"י',
+			further: false,
+		});
 		expect(decodeURIComponent(location.pathname)).toBe('/929/1/רש"י');
 		expect(history.length).toBe(entries);
 		expect(history.state.__flipBookOwner).toBe("book");
@@ -137,6 +163,10 @@ describe("Sefer content navigation", () => {
 			result.current.onPageFlipped();
 			result.current.navigate(1, 'רש"י');
 		});
-		expect(result.current.content).toEqual({ perekId: 1, slug: 'רש"י' });
+		expect(result.current.content).toEqual({
+			perekId: 1,
+			slug: 'רש"י',
+			further: false,
+		});
 	});
 });

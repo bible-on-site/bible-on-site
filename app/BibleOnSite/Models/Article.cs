@@ -38,6 +38,21 @@ public class Article
     public IReadOnlyList<ReadingProgressUnit> ProgressUnits { get; set; } = [];
 
     /// <summary>
+    /// Whether the API verified this article's verse-level coverage (issue
+    /// #2189). Only then is <see cref="CoveringSources"/> authoritative —
+    /// the לקריאה נוספת recommendation match (#3752) gates on it.
+    /// </summary>
+    public bool CoverageVerified { get; set; }
+
+    /// <summary>
+    /// The article's verified covering sources — canonical perek+pasuk
+    /// coordinates its content discusses beyond (and inside) its primary
+    /// perek. Empty when unmapped or when the starter payload predates the
+    /// field.
+    /// </summary>
+    public IReadOnlyList<ArticleCoveringSource> CoveringSources { get; set; } = [];
+
+    /// <summary>
     /// "זמן קריאה משוער: X" badge text measured over the whole article body —
     /// never the abstract alone (issue #2607). Null when there is nothing to
     /// show (unknown or verified-empty metric).
@@ -91,3 +106,10 @@ public class Article
         };
     }
 }
+
+/// <summary>
+/// One canonical {perekId, pasuk} coordinate an article covers
+/// (tanah_article_covering_source, #2189). Meaningful only when the owning
+/// article's <see cref="Article.CoverageVerified"/> is true.
+/// </summary>
+public record ArticleCoveringSource(int PerekId, int Pasuk);

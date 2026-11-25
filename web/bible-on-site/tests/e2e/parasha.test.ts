@@ -131,7 +131,10 @@ test.describe("פרשה reading root", () => {
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 		await page
 			.locator("#main-menu")
-			.getByRole("link", { name: "פרשה על הפרק", exact: true })
+			.getByRole("link", {
+				name: "פרשה על הפרק לימוד לפי סדר הפרשות",
+				exact: true,
+			})
 			.click();
 		await page.waitForURL(
 			(url) => decodeURIComponent(url.pathname) === "/פרשה",

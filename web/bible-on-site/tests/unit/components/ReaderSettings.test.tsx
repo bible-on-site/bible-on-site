@@ -1,5 +1,15 @@
 /** @jest-environment jsdom */
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+
+// The reminder opt-in path navigates to the dedicated bulletin card (#3732).
+jest.mock("next/navigation", () => {
+	const push = jest.fn();
+	return { useRouter: () => ({ push }), __push: push };
+});
+import * as nextNavigation from "next/navigation";
+const routerPush = () =>
+	(nextNavigation as unknown as { __push: jest.Mock }).__push;
+
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
 import {
 	DIVINE_NAME_MASKING_KEY,
@@ -26,7 +36,85 @@ beforeAll(() => {
 beforeEach(() => {
 	localStorage.clear();
 	document.documentElement.removeAttribute("style");
+	// Default: push unconfigured so the reminder row stays hidden unless a
+	// test installs the push environment below.
+	global.fetch = jest.fn(async () => ({
+		ok: true,
+		json: async () => ({ publicKey: null }),
+	})) as unknown as typeof fetch;
 });
+afterEach(() => {
+	Reflect.deleteProperty(navigator, "serviceWorker");
+	Reflect.deleteProperty(window, "PushManager");
+	Reflect.deleteProperty(window, "Notification");
+});
+
+// Minimal push environment mirroring PushNotificationsToggle's suite.
+function setupPush(
+	env: {
+		configured?: boolean;
+		supported?: boolean;
+		permission?: NotificationPermission;
+		subscribed?: boolean;
+	} = {},
+) {
+	const {
+		configured = true,
+		supported = true,
+		permission = "default",
+		subscribed = false,
+	} = env;
+	const endpoint = "https://fcm.googleapis.com/fcm/send/rs";
+	const subscription = () => ({
+		endpoint,
+		toJSON: () => ({ endpoint, keys: { p256dh: "p", auth: "a" } }),
+		unsubscribe: jest.fn().mockResolvedValue(true),
+	});
+	const existing = subscribed ? subscription() : null;
+	const created = subscription();
+	const pushManager = {
+		getSubscription: jest.fn().mockResolvedValue(existing),
+		subscribe: jest.fn().mockResolvedValue(created),
+	};
+	const serviceWorker = {
+		getRegistration: jest
+			.fn()
+			.mockResolvedValue(subscribed ? { pushManager } : undefined),
+		register: jest.fn().mockResolvedValue({ pushManager }),
+		ready: Promise.resolve(),
+	};
+	const requestPermissionMock = jest.fn().mockResolvedValue(permission);
+	global.fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+		if (!init)
+			return {
+				ok: true,
+				json: async () => ({ publicKey: configured ? "AQID" : null }),
+			};
+		return { ok: true };
+	}) as unknown as typeof fetch;
+	if (supported) {
+		Object.defineProperty(navigator, "serviceWorker", {
+			configurable: true,
+			value: serviceWorker,
+		});
+		Object.assign(window, {
+			PushManager: class {},
+			Notification: {
+				permission,
+				requestPermission: requestPermissionMock,
+			},
+		});
+	}
+	return { serviceWorker, pushManager, existing, requestPermissionMock };
+}
+
+const openPanel = async () => {
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	await act(async () => {});
+};
+const reminderCheckbox = () =>
+	screen.findByRole("checkbox", { name: "התראה יומית בדפדפן" });
 // The DOM externs declare a narrower StorageEvent constructor than the
 // runtime one; the subscriber only reads `event.key`, so a plain Event
 // carrying the property is enough.
@@ -430,4 +518,124 @@ test("secondary display settings stay collapsed behind groups that keep their st
 		"false",
 	);
 	expect(groups.ריווח()).toBeNull();
+});
+
+describe("התראה יומית בדפדפן (#3732)", () => {
+	it("stays hidden when the deployment has push turned off", async () => {
+		setupPush({ configured: false });
+		await openPanel();
+		await act(async () => {});
+		expect(
+			screen.queryByRole("checkbox", { name: "התראה יומית בדפדפן" }),
+		).toBeNull();
+	});
+
+	it("subscribes directly when permission is already granted, without prompting", async () => {
+		const { pushManager, requestPermissionMock } = setupPush({
+			permission: "granted",
+		});
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).not.toBeChecked();
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		expect(requestPermissionMock).not.toHaveBeenCalled();
+		expect(pushManager.subscribe).toHaveBeenCalled();
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			"/api/push/subscription",
+			expect.objectContaining({ method: "POST" }),
+		);
+		expect(checkbox).toBeChecked();
+	});
+
+	it("navigates to the dedicated section instead of prompting when permission is default", async () => {
+		const { pushManager, requestPermissionMock } = setupPush({
+			permission: "default",
+		});
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		expect(requestPermissionMock).not.toHaveBeenCalled();
+		expect(pushManager.subscribe).not.toHaveBeenCalled();
+		expect(routerPush()).toHaveBeenCalledWith("/#bulletin-push");
+		expect(screen.queryByRole("dialog")).toBeNull();
+	});
+
+	it("shows the on state and unsubscribes directly from the dropdown", async () => {
+		const { existing } = setupPush({ subscribed: true });
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).toBeChecked();
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			"/api/push/subscription",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(existing?.unsubscribe).toHaveBeenCalled();
+		expect(checkbox).not.toBeChecked();
+	});
+
+	it("keeps the reminder checked and lets opt-out retry when the delete fails", async () => {
+		const { existing } = setupPush({ subscribed: true });
+		let deleteOk = false;
+		(global.fetch as jest.Mock).mockImplementation(
+			async (_url: string, init?: RequestInit) =>
+				init
+					? { ok: init.method === "POST" ? true : deleteOk }
+					: {
+							ok: true,
+							json: async () => ({ publicKey: "AQID" }),
+						},
+		);
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).toBeChecked();
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		// The subscription is still live — the checkbox must keep reflecting
+		// "on" so unchecking retries the DELETE rather than offering opt-in.
+		expect(existing?.unsubscribe).not.toHaveBeenCalled();
+		expect(checkbox).toBeChecked();
+		expect(
+			screen.getByRole("group", { name: "התראה יומית בדפדפן" }),
+		).toHaveTextContent("נסו שוב");
+
+		deleteOk = true;
+		await act(async () => {
+			fireEvent.click(checkbox);
+		});
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			"/api/push/subscription",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(existing?.unsubscribe).toHaveBeenCalled();
+		expect(checkbox).not.toBeChecked();
+	});
+
+	it("shows the blocked state with a disabled control", async () => {
+		setupPush({ permission: "denied" });
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).toBeDisabled();
+		expect(checkbox).not.toBeChecked();
+		expect(
+			screen.getByRole("group", { name: "התראה יומית בדפדפן" }),
+		).toHaveTextContent("ההתראות חסומות בדפדפן");
+	});
+
+	it("shows the unsupported state with a disabled control", async () => {
+		setupPush({ supported: false });
+		await openPanel();
+		const checkbox = await reminderCheckbox();
+		expect(checkbox).toBeDisabled();
+		expect(
+			screen.getByRole("group", { name: "התראה יומית בדפדפן" }),
+		).toHaveTextContent("אינו תומך");
+	});
 });

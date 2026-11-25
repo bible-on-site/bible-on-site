@@ -151,23 +151,32 @@
 }
 
 /* At least 44px tall to tap. Not flex: 1: a full-row link would reach into
-   Link's 200px prefetch margin while the menu is parked off-screen. */
+   Link's 200px prefetch margin while the menu is parked off-screen. Column
+   layout: the title row keeps icon + label on one line; the optional
+   subtitle sits on its own line inside the same link (#3731). */
 .menuItem > a {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   min-height: 44px;
   margin-block: 0;
 }
 
-.menuItemLabel {
+.itemRow {
   display: flex;
   align-items: center;
-  cursor: pointer;
-  width: 100%;
 }
 
-.menuItemLabel > * {
-  margin-right: 0.5rem;
+/* Subtitle: visibly secondary to the label, aligned under its text and
+   free to wrap (#3731). */
+.itemSubtitle {
+  display: block;
+  margin-top: 0.125rem;
+  padding-inline-start: 2rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--muted-text, #6b7280);
 }
 
 /* Current page: inline-start accent bar plus a muted tint. */

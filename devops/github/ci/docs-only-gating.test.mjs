@@ -28,6 +28,16 @@ test("determine_changes publishes the docs_only output", () => {
 	);
 });
 
+// Renovate-config-only routing (#3795) mirrors the docs-only contract: a
+// diff confined to Renovate configuration must not run heavy validation, yet
+// the required checks and the dedicated config validation still resolve.
+test("determine_changes publishes the renovate_config_only output", () => {
+	assert.equal(
+		jobs.determine_changes.outputs.renovate_config_only,
+		"${{ steps.determine.outputs.renovate_config_only }}",
+	);
+});
+
 // Jobs allowed to evaluate to a run while docs_only is true: the router, the
 // detection tier that feeds recovery triggers and module outputs, and the
 // required status-resolution aggregator (which restores the trusted master
@@ -75,6 +85,22 @@ test("preamble and independent validation jobs skip through the shared gate", ()
 			`${name} must skip docs-only runs`,
 		);
 	}
+	// The same suites skip on Renovate-config-only runs (#3795).
+	for (const name of [
+		"workflow_timeouts",
+		"root_evidence_guard",
+		"database_backups",
+		"transcription_ci",
+	]) {
+		assert.ok(
+			job_if_includes(name, "renovate_config_only != 'true'"),
+			`${name} must skip Renovate-config-only runs`,
+		);
+	}
+	assert.ok(
+		job_if_includes("perushim_data", "renovate_config_only != 'true'"),
+		"perushim_data only heals baselines on Renovate-config-only runs",
+	);
 });
 
 test("the detection tier never skips: baseline gaps must still recover", () => {
@@ -192,6 +218,7 @@ test("docs-only baseline recovery can build a missing MongoDB image", () => {
 	// baseline recovery and perushim_data's docs-only recovery path.
 	assert.ok(gate.includes("is_data_master_coverage_available == 'false'"));
 	assert.ok(gate.includes("docs_only != 'true'"));
+	assert.ok(gate.includes("renovate_config_only != 'true'"));
 	assert.ok(gate.includes("baseline_recovery_required == 'true'"));
 	assert.ok(gate.includes("perushim_pipeline_module_changed == 'true'"));
 	assert.ok(gate.includes("perushim_pipeline_ci_changed == 'true'"));
@@ -261,6 +288,11 @@ test("auxiliary workflows gate merge-group work through the shared router", () =
 			detect.outputs.docs_only,
 			"${{ steps.detect.outputs.docs_only }}",
 		);
+		assert.equal(
+			detect.outputs.renovate_config_only,
+			"${{ steps.detect.outputs.renovate_config_only }}",
+			`${file} must expose the Renovate-config-only classification (#3795)`,
+		);
 		assert.ok(
 			detect.steps.some(
 				(step) => step.run === "node devops/github/ci/determine-changes.ts",
@@ -280,6 +312,12 @@ test("auxiliary workflows gate merge-group work through the shared router", () =
 				),
 				`${file}:${name} must skip docs-only runs`,
 			);
+			assert.ok(
+				String(job.if).includes(
+					"needs.detect_docs.outputs.renovate_config_only != 'true'",
+				),
+				`${file}:${name} must skip Renovate-config-only runs (#3795)`,
+			);
 		}
 	}
 });
@@ -298,14 +336,49 @@ test("required status checks still resolve on docs-only merges", () => {
 			String(step.run ?? "").includes("DOCS_ONLY"),
 		);
 		assert.ok(verify, `${file}: submit-nuget lost its docs-only resolution`);
+		assert.ok(
+			String(verify.run).includes("RENOVATE_CONFIG_ONLY"),
+			`${file}: submit-nuget lost its Renovate-only resolution (#3795)`,
+		);
 	}
 	// CodeQL must keep scanning: the code-scanning ruleset requires real
 	// results for the updated commit, so a docs-only change cannot skip it.
+	// The analyze guard only overrides the needs-skipped propagation — on a PR
+	// it reduces to needs.detect.result == 'success', which never depends on
+	// the diff's shape (detect always resolves a nonempty language scope).
 	const analyze = load("codeql.yml").jobs.analyze;
 	assert.equal(
 		analyze.if,
-		undefined,
+		"${{ !cancelled() && (github.event_name != 'pull_request' || needs.detect.result == 'success') }}",
 		"CodeQL analyze must run on docs-only changes — a skipped analysis " +
 			"leaves the required code-scanning check pending forever",
 	);
+});
+
+test("a Renovate-config-only change keeps a dedicated validation leg", () => {
+	const check = jobs.cross_module_ci.steps.find(
+		(step) => step.id === "check_prerequisites",
+	);
+	assert.ok(
+		String(check.run).includes("renovate_config_only"),
+		"the docs-gated suite block must also cover Renovate-only runs",
+	);
+	const validate = jobs.cross_module_ci.steps.find((step) =>
+		String(step.name ?? "").includes("Validate Renovate"),
+	);
+	assert.ok(validate, "the dedicated Renovate validation step is missing");
+	assert.equal(
+		validate.if,
+		"${{ needs.determine_changes.outputs.renovate_config_only == 'true' }}",
+	);
+	for (const script of [
+		"test:renovate-config",
+		"verify:renovate-config",
+		"test:cargo-make-zip-guard",
+		"verify:cargo-make-zip",
+	])
+		assert.ok(
+			String(validate.run).includes(script),
+			`the Renovate validation step must run ${script}`,
+		);
 });

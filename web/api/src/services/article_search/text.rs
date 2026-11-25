@@ -12,10 +12,33 @@ use unicode_normalization::char::is_combining_mark;
 const SKIP_CONTENT_TAGS: [&str; 2] = ["script", "style"];
 
 /// Tags that separate phrases — rendered as a space so adjacent words in
-/// different blocks do not merge into a single token.
-const BLOCK_TAGS: [&str; 17] = [
-    "br", "p", "div", "li", "tr", "td", "th", "table", "ul", "ol", "h1", "h2", "h3", "h4", "h5",
-    "h6", "hr",
+/// different blocks do not merge into a single token. Shared with the app's
+/// `SearchText.cs`, the website's `lib/search/normalize.ts` and the shipped
+/// index builder (`data/sefaria/pipelines/perushim-view/.../search_text.rs`);
+/// every open or close tag of one of these names is a word break.
+const BLOCK_TAGS: [&str; 22] = [
+    "br",
+    "p",
+    "div",
+    "li",
+    "tr",
+    "td",
+    "th",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "table",
+    "blockquote",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "hr",
 ];
 
 /// Strips HTML markup, dropping script/style bodies and decoding the entities
@@ -34,6 +57,55 @@ pub fn strip_html(html: &str) -> String {
         }
         match c {
             '<' => {
+                // Inside a skipped script/style body only the matching
+                // `</name>` matters — `<` starting anything else (a comment
+                // marker, a stray tag) is inert content, as HtmlAgilityPack
+                // parses it. A naive tag-parse would swallow the closing tag
+                // into a bogus `<…>` and drop the rest of the document.
+                if let Some(open) = skipping.clone() {
+                    let close = format!("/{open}");
+                    let probe: String = chars
+                        .clone()
+                        .take(close.len() + 1)
+                        .collect::<String>()
+                        .to_lowercase();
+                    if probe.starts_with(&close)
+                        && probe[close.len()..]
+                            .chars()
+                            .next()
+                            .is_none_or(|u| u.is_whitespace() || u == '/' || u == '>')
+                    {
+                        for _ in 0..close.len() {
+                            chars.next();
+                        }
+                        for u in chars.by_ref() {
+                            if u == '>' {
+                                break;
+                            }
+                        }
+                        skipping = None;
+                    }
+                    continue;
+                }
+                // A comment emits nothing — HtmlAgilityPack keeps it as an
+                // inert comment node. Drop the whole `<!-- … -->` block so
+                // its tail doesn't survive as literal text. Never inside a
+                // skipped script/style body (handled above), where `-->`
+                // could be absent and the swallow would hide the closing tag.
+                if chars.clone().take(3).collect::<String>() == "!--"
+                {
+                    for _ in 0..3 {
+                        chars.next();
+                    }
+                    let mut tail = String::new();
+                    for u in chars.by_ref() {
+                        if u == '>' && tail.ends_with("--") {
+                            break;
+                        }
+                        tail.push(u);
+                    }
+                    continue;
+                }
                 let mut tag = String::new();
                 let mut closed = false;
                 for inner in chars.by_ref() {
@@ -53,12 +125,6 @@ pub fn strip_html(html: &str) -> String {
                     .next()
                     .unwrap_or_default()
                     .to_lowercase();
-                if let Some(open) = skipping.as_ref() {
-                    if is_close && name == *open {
-                        skipping = None;
-                    }
-                    continue;
-                }
                 let self_closing = tag.trim_end().ends_with('/');
                 if !is_close && !self_closing && SKIP_CONTENT_TAGS.contains(&name.as_str()) {
                     skipping = Some(name);
@@ -408,6 +474,50 @@ mod tests {
     fn strip_html_truncated_tag_is_safe() {
         assert_eq!(strip_html("abc <p"), "abc");
         assert_eq!(strip_html("<img src=\"x\">tail"), "tail");
+    }
+
+    // The same cases are asserted in search-normalize.test.ts (website),
+    // SearchTextTests.cs (app) and the index builder's search_text.rs: every
+    // open or close block-level tag is a word break in all four ports, and
+    // each emits the same plain text byte-for-byte.
+    #[test]
+    fn block_tags_break_words_like_the_other_ports() {
+        for (html, expected) in [
+            ("<td>foo</td><td>bar</td>", "foo bar"),
+            ("<th>א</th><td>ב</td>", "א ב"),
+            ("<h4>א</h4>ב", "א ב"),
+            ("<ul><li>א</li><li>ב</li></ul>", "א ב"),
+            ("<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"),
+            ("<blockquote>א</blockquote><section>ב</section>", "א ב"),
+            ("<header>א</header><article>ב</article>", "א ב"),
+            ("<footer>א</footer>ב", "א ב"),
+            ("א<hr>ב", "א ב"),
+            ("<div>א", "א"),
+            ("<p>א</p><p>ב</p>", "א ב"),
+            ("א<br>ב", "א ב"),
+            // A boundary emits one space unless preceding text ends in one.
+            // whitespace around tags stays literal in every port.
+            ("א <br>ב", "א ב"),
+            ("א  <br>ב", "א  ב"),
+            ("א<br> ב", "א  ב"),
+            ("א <br> <br>ב", "א  ב"),
+            ("א<div></div>ב", "א ב"),
+            // A comment emits nothing; markup inside it never reaches the scanner.
+            ("א<!-- <style> -->ב", "אב"),
+            // A commented-out opener must not pair with a real close tag.
+            ("א<!-- <style> -->ב<style>x</style>ג", "אבג"),
+            // Comment markers inside a skipped script/style body are inert —
+            // the closing tag still ends the block.
+            ("א<script><!--</script>ב", "אב"),
+            ("א<style>x<!-- -->y</style>ב", "אב"),
+            // A script block starting before a comment marker still wins —
+            // whichever construct opens first is the one removed.
+            ("א<script>x<!--y</script>ב", "אב"),
+            // An unterminated comment swallows to end of input.
+            ("א<!--x", "א"),
+        ] {
+            assert_eq!(strip_html(html), expected, "for {html}");
+        }
     }
 
     #[test]

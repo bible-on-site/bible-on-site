@@ -10,18 +10,19 @@ const sourceRepository = `https://github.com/${repository}`;
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const fontManifest = join(root, "docs/branding/font-manifest.json");
 const logoManifest = join(root, "docs/branding/logo-manifest.json");
-const canonicalLogos = "web/bible-on-site/source-assets/logos";
+// The canonical branding root shared by every consumer (#3708): the website
+// and admin stage their public copies at build time, the native project and
+// the bulletin reference these files directly — only this directory is
+// vendored from the release archive.
+const canonicalBranding = "web/shared/branding";
+const canonicalLogos = `${canonicalBranding}/logos`;
 const stableTag = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const sha256Pattern = /^[a-f0-9]{64}$/;
 const commitSha = /^[a-f0-9]{40}$/;
 const weights = { Regular: 400, SemiBold: 600, Bold: 700 };
 const fontDestinations = {
-	ttf: [
-		"app/BibleOnSite/Resources/Fonts",
-		"web/bible-on-site/src/lib/download/fonts",
-		"web/bulletin/fonts",
-	],
-	woff2: ["web/bible-on-site/public/fonts", "web/admin/public/fonts"],
+	ttf: [`${canonicalBranding}/fonts`],
+	woff2: [`${canonicalBranding}/fonts`],
 };
 
 const archiveName = (tag) => `AlHeperekFont-${tag}.zip`;
@@ -145,7 +146,6 @@ function importRelease(directory, tag, hash, revision) {
 	const licenseCopies = Object.values(fontDestinations)
 		.flat()
 		.map((path) => `${path}/AlHeperek-license.txt`);
-	licenseCopies.push("web/bible-on-site/public/font-license.txt");
 	copy("LICENSE.txt", licenseCopies);
 
 	let logoFontHash;

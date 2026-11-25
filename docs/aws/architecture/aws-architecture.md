@@ -55,7 +55,7 @@ and serves files through the admin service from a private S3 bucket.
   dead-letter queue. Channel audiences and subscriber consent govern sends.
   [Daily bulletin schedule](../daily-bulletin-schedule.md)
 - **Data deployment.** GitHub Actions stages SQL in `bible-on-site-data-deploy`
-  and invokes the Python 3.14 `bible-on-site-db-populator` Lambda to apply it
+  and invokes the Python 3.15 `bible-on-site-db-populator` Lambda to apply it
   to RDS. Database connection secrets are held in SSM Parameter Store.
   [Data deployment runbook](../../../devops/deploy/README.md#2-data-deployment-database-population)
 
@@ -74,10 +74,11 @@ switch, which is unset.
 ## Release and monitoring
 
 GitHub Actions assumes AWS deployment roles using OIDC and publishes versioned
-images and `latest` to ECR. Each `latest` points to an OCI image index for
-amd64 and ARM64. Version tags are immutable. The website and admin lifecycle
-policies protect their newest tagged x86 rollback images. The API repository
-has no ECR lifecycle policy.
+images and `latest` to ECR. Each `latest` points to an OCI image index: amd64
+and ARM64 children for the API, the ARM64 child alone for website/admin since
+the amd64 retirement (#3794). Version tags are immutable. The website and
+admin lifecycle policies protect their newest tagged x86 rollback images. The
+API repository has no ECR lifecycle policy.
 
 | Service | ECR repository | ECS rollout owner |
 | --- | --- | --- |

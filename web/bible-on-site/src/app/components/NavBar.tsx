@@ -11,54 +11,63 @@ type NavSubItem = {
 	href: string;
 	label: string;
 	icon: string;
-	external?: boolean;
 	title?: string;
+	/** Visible secondary line inside the same link (#3731). */
+	subtitle?: string;
 };
 
 type NavItem = NavSubItem & { sub?: NavSubItem[] };
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 	{
-		title: "לימוד",
+		title: "לימוד על הפרק",
 		items: [
-			{ href: "/929", label: "על הפרק", icon: "/icons/open-book.svg" },
+			{
+				href: "/929",
+				label: "על הפרק",
+				icon: "/icons/open-book.svg",
+				subtitle: "הלימוד בחלוקה המוכרת",
+			},
+		],
+	},
+	{
+		title: "חלוקות נוספות",
+		items: [
 			{
 				href: "/מסורה",
 				label: "מסורה על הפרק",
 				icon: "/icons/separator-horizontal.svg",
+				subtitle: "חלוקת המסורה היהודית הקדומה",
 			},
-			{ href: "/פרשה", label: "פרשה על הפרק", icon: "/icons/scroll.svg" },
+			{
+				href: "/פרשה",
+				label: "פרשה על הפרק",
+				icon: "/icons/scroll.svg",
+				subtitle: "לימוד לפי סדר הפרשות",
+			},
 			{
 				href: "/מועדים",
 				label: "מועדים על הפרק",
 				icon: "/icons/party-popper.svg",
+				subtitle: "לימוד במעגל השנה",
 			},
-			{ href: "/לוח", label: "לוח לימוד יומי", icon: "/icons/calendar-today.svg" },
+			{
+				href: "/929/authors",
+				label: "הרבנים",
+				icon: "/icons/rabbi.svg",
+				subtitle: "איתור מאמרים לפי המחברים",
+			},
 		],
 	},
 	{
-		title: "תוכן",
+		title: "אפשרויות לימוד נוספות",
 		items: [
-			{ href: "/929/authors", label: "הרבנים", icon: "/icons/rabbi.svg" },
-			{ href: "/pedia", label: "תנכפדיה", icon: "/icons/library.svg" },
 			{
 				href: "/dailyBulletin",
 				label: "עלון יומי",
 				icon: "/icons/daily-bulletin.svg",
-				sub: [
-					{
-						href: "/whatsappGroup",
-						label: "קבוצת ווטסאפ",
-						icon: "/icons/whatsapp.svg",
-					},
-				],
+				subtitle: "הפרק היומי והמאמרים ישירות אליכם",
 			},
-		],
-	},
-	{
-		title: "שירות",
-		items: [
-			{ href: "/tos", label: "תנאי שימוש", icon: "/icons/handshake.svg" },
 			{
 				href: "/app",
 				label: "יישומון",
@@ -67,12 +76,39 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 					href: platform.href ?? "",
 					label: platform.name,
 					icon: platform.icon,
-					external: true,
 					title: platform.description,
 				})),
 			},
-			{ href: "/contact", label: "צור קשר", icon: "/icons/contact.svg" },
+		],
+	},
+	{
+		title: "כלי לימוד",
+		items: [
+			{
+				href: "/pedia",
+				label: "תנכפדיה",
+				icon: "/icons/library.svg",
+				subtitle: 'אנציקלופדיה תנ"כית',
+			},
+			{
+				href: "/לוח",
+				label: "לוח לימוד יומי",
+				icon: "/icons/calendar-today.svg",
+				subtitle: "לוח עזר פרקים לפי תאריך",
+			},
+		],
+	},
+	{
+		title: "שונות",
+		items: [
+			{
+				href: "/tos",
+				label: "תנאי שימוש",
+				icon: "/icons/handshake.svg",
+				subtitle: "והצהרות פרטיות ונגישות",
+			},
 			{ href: "/donation", label: "תרומות", icon: "/icons/donation.svg" },
+			{ href: "/contact", label: "צור קשר", icon: "/icons/contact.svg" },
 		],
 	},
 ];
@@ -149,23 +185,16 @@ export const NavBar = ({ version }: { version: string }) => {
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [open]);
 
-	const subLink = (sub: NavSubItem) =>
-		sub.external ? (
-			<a
-				href={sub.href || undefined} // nosemgrep -- repo-owned appPlatforms store links, not user input
-				target="_blank"
-				rel="noopener noreferrer"
-			>
-				<span>{sub.label}</span>
-			</a>
-		) : (
-			<Link
-				href={sub.href} // nosemgrep -- literal NAV_GROUPS route constant, not user input
-				aria-current={sub.href === current ? "page" : undefined}
-			>
-				<span>{sub.label}</span>
-			</Link>
-		);
+	// Sub items are always external store links (appPlatforms).
+	const subLink = (sub: NavSubItem) => (
+		<a
+			href={sub.href || undefined} // nosemgrep -- repo-owned appPlatforms store links, not user input
+			target="_blank"
+			rel="noopener noreferrer"
+		>
+			<span>{sub.label}</span>
+		</a>
+	);
 
 	return (
 		<div className={`${styles.hamburgerMenu} ${open ? styles.open : ""}`}>
@@ -216,20 +245,31 @@ export const NavBar = ({ version }: { version: string }) => {
 							<ul className={styles.groupItems}>
 								{group.items.map((item) => (
 									<li key={item.href} className={styles.menuItem}>
-										<Image
-											src={item.icon}
-											alt=""
-											unoptimized
-											width={16}
-											height={16}
-										/>
 										<Link
 											href={item.href}
 											aria-current={
 												item.href === current ? "page" : undefined
 											}
 										>
-											<span>{item.label}</span>
+											{/* Icon and label share the first line so the icon
+											    centers on the label's line box even when a
+											    subtitle adds a second line (#3731). */}
+											<span className={styles.itemRow}>
+												<Image
+													src={item.icon}
+													alt=""
+													unoptimized
+													width={16}
+													height={16}
+												/>
+												<span>{item.label}</span>
+											</span>
+											{" "}
+											{item.subtitle && (
+												<small className={styles.itemSubtitle}>
+													{item.subtitle}
+												</small>
+											)}
 										</Link>
 										{item.sub && (
 											<ul>

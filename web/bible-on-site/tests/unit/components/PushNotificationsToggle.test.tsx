@@ -2,10 +2,12 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { PushNotificationsToggle } from "@/app/components/PushNotificationsToggle";
 import {
 	base64UrlToBytes,
-	PushNotificationsToggle,
-} from "@/app/components/PushNotificationsToggle";
+	PUSH_SECTION_ID,
+	PUSH_STATUS_EVENT,
+} from "@/lib/push-notifications";
 
 const FCM = "https://fcm.googleapis.com/fcm/send/abc";
 
@@ -20,7 +22,6 @@ function pushSubscription() {
 interface Env {
 	configured?: boolean;
 	supported?: boolean;
-	userAgent?: string;
 	permission?: NotificationPermission;
 	requestPermission?: NotificationPermission;
 	subscribed?: boolean;
@@ -32,7 +33,6 @@ function setup(env: Env = {}) {
 	const {
 		configured = true,
 		supported = true,
-		userAgent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/140",
 		permission = "default",
 		requestPermission = "granted",
 		subscribed = false,
@@ -52,6 +52,7 @@ function setup(env: Env = {}) {
 		register: jest.fn().mockResolvedValue({ pushManager }),
 		ready: Promise.resolve(),
 	};
+	const requestPermissionMock = jest.fn().mockResolvedValue(requestPermission);
 	const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
 		if (!init) {
 			return {
@@ -62,10 +63,6 @@ function setup(env: Env = {}) {
 		return { ok: init.method === "POST" ? postOk : deleteOk };
 	});
 	global.fetch = fetchMock as unknown as typeof fetch;
-	Object.defineProperty(navigator, "userAgent", {
-		configurable: true,
-		value: userAgent,
-	});
 	if (supported) {
 		Object.defineProperty(navigator, "serviceWorker", {
 			configurable: true,
@@ -75,12 +72,32 @@ function setup(env: Env = {}) {
 			PushManager: class {},
 			Notification: {
 				permission,
-				requestPermission: jest.fn().mockResolvedValue(requestPermission),
+				requestPermission: requestPermissionMock,
 			},
 		});
 	}
-	return { fetchMock, serviceWorker, pushManager, existing, created };
+	return {
+		fetchMock,
+		serviceWorker,
+		pushManager,
+		existing,
+		created,
+		requestPermissionMock,
+	};
 }
+
+const card = () => document.getElementById(PUSH_SECTION_ID);
+const enableButton = () => screen.getByRole("button", { name: "הפעלת התראות" });
+const disableButton = () =>
+	screen.getByRole("button", { name: "ביטול התראות" });
+const noDisableButton = () =>
+	expect(
+		screen.queryByRole("button", { name: "ביטול התראות" }),
+	).not.toBeInTheDocument();
+const noEnableButton = () =>
+	expect(
+		screen.queryByRole("button", { name: "הפעלת התראות" }),
+	).not.toBeInTheDocument();
 
 async function renderToggle() {
 	await act(async () => {
@@ -88,23 +105,18 @@ async function renderToggle() {
 	});
 }
 
-async function clickToggle() {
+async function click(name: string) {
 	await act(async () => {
-		fireEvent.click(screen.getByRole("checkbox"));
+		fireEvent.click(screen.getByRole("button", { name }));
 	});
 }
 
 describe("PushNotificationsToggle", () => {
 	afterEach(() => {
-		for (const key of [
-			"serviceWorker",
-			"userAgent",
-			"platform",
-			"maxTouchPoints",
-		])
-			Reflect.deleteProperty(navigator, key);
+		Reflect.deleteProperty(navigator, "serviceWorker");
 		Reflect.deleteProperty(window, "PushManager");
 		Reflect.deleteProperty(window, "Notification");
+		window.location.hash = "";
 		jest.restoreAllMocks();
 	});
 
@@ -112,6 +124,7 @@ describe("PushNotificationsToggle", () => {
 		it("renders nothing", async () => {
 			setup({ configured: false });
 			await renderToggle();
+			expect(card()).toBeNull();
 			expect(screen.queryByRole("status")).not.toBeInTheDocument();
 		});
 	});
@@ -120,7 +133,7 @@ describe("PushNotificationsToggle", () => {
 		setup();
 		global.fetch = jest.fn().mockResolvedValue({ ok: false });
 		await renderToggle();
-		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		expect(card()).toBeNull();
 	});
 
 	it("renders nothing when the status check fails", async () => {
@@ -128,64 +141,72 @@ describe("PushNotificationsToggle", () => {
 		setup();
 		global.fetch = jest.fn().mockRejectedValue(new Error("offline"));
 		await renderToggle();
-		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		expect(card()).toBeNull();
 		expect(warn).toHaveBeenCalled();
 	});
 
-	it("explains unsupported browsers", async () => {
+	it("explains unsupported browsers without action controls", async () => {
 		setup({ supported: false });
 		await renderToggle();
+		expect(card()).not.toBeNull();
 		expect(screen.getByRole("status")).toHaveTextContent("אינו תומך");
-		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "הפעלת התראות" }),
+		).not.toBeInTheDocument();
 	});
-
-	// Apple limits iOS/iPadOS Web Push to Home Screen apps; the product
-	// decision (#2936) is an accurate unavailable state, never install advice.
-	it.each([
-		["iPhone", "Mozilla/5.0 (iPhone)", {}],
-		[
-			"touch-screen iPadOS reporting a Mac UA",
-			"Mozilla/5.0 (Macintosh)",
-			{ platform: "MacIntel", maxTouchPoints: 5 },
-		],
-	] as const)(
-		"reports %s as unsupported without Home Screen advice",
-		async (_device, userAgent, navigatorExtras) => {
-			setup({ supported: false, userAgent });
-			for (const [key, value] of Object.entries(navigatorExtras))
-				Object.defineProperty(navigator, key, {
-					configurable: true,
-					value,
-				});
-			await renderToggle();
-			const status = screen.getByRole("status");
-			expect(status).toHaveTextContent("אינו תומך");
-			expect(status).not.toHaveTextContent("מסך הבית");
-			expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-		},
-	);
 
 	it("ignores a status check that resolves after unmount", async () => {
 		setup();
 		const { unmount } = render(<PushNotificationsToggle />);
 		unmount();
 		await act(async () => {});
-		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		expect(card()).toBeNull();
 	});
 
-	it("explains blocked notifications", async () => {
+	it("explains blocked notifications without action controls", async () => {
 		setup({ permission: "denied" });
 		await renderToggle();
 		expect(screen.getByRole("status")).toHaveTextContent("חסומות");
-		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "הפעלת התראות" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("never requests permission on load", async () => {
+		const { requestPermissionMock } = setup();
+		await renderToggle();
+		expect(requestPermissionMock).not.toHaveBeenCalled();
+	});
+
+	it("anchors the card for the dropdown's navigation target", async () => {
+		setup();
+		await renderToggle();
+		expect(card()?.id).toBe(PUSH_SECTION_ID);
+		expect(card()).toHaveAttribute("tabIndex", "-1");
+		expect(screen.getByRole("heading", { name: "דפדפן" })).toBeInTheDocument();
+	});
+
+	it("focuses the card when navigated to via its hash", async () => {
+		setup();
+		window.location.hash = `#${PUSH_SECTION_ID}`;
+		await renderToggle();
+		expect(card()).toHaveFocus();
 	});
 
 	describe("when not subscribed", () => {
-		it("subscribes and stores the subscription on opt-in", async () => {
-			const { fetchMock, serviceWorker, pushManager } = setup();
+		it("shows the off state through a single enable control", async () => {
+			setup();
 			await renderToggle();
-			expect(screen.getByRole("checkbox")).not.toBeChecked();
-			await clickToggle();
+			expect(enableButton()).toBeEnabled();
+			noDisableButton();
+		});
+
+		it("requests permission once from the enable click and subscribes", async () => {
+			const { fetchMock, serviceWorker, pushManager, requestPermissionMock } =
+				setup();
+			await renderToggle();
+			await click("הפעלת התראות");
+			expect(requestPermissionMock).toHaveBeenCalledTimes(1);
 			expect(serviceWorker.register).toHaveBeenCalledWith("/sw.js", {
 				scope: "/",
 				updateViaCache: "none",
@@ -198,8 +219,9 @@ describe("PushNotificationsToggle", () => {
 				"/api/push/subscription",
 				expect.objectContaining({ method: "POST" }),
 			);
-			expect(screen.getByRole("checkbox")).toBeChecked();
 			expect(screen.getByRole("status")).toHaveTextContent("פעילה");
+			expect(disableButton()).toBeEnabled();
+			noEnableButton();
 		});
 
 		it.each([
@@ -208,19 +230,27 @@ describe("PushNotificationsToggle", () => {
 		] as const)("stays off when permission is %s", async (answer, blocked) => {
 			const { serviceWorker } = setup({ requestPermission: answer });
 			await renderToggle();
-			await clickToggle();
+			await click("הפעלת התראות");
 			expect(serviceWorker.register).not.toHaveBeenCalled();
-			if (blocked)
+			if (blocked) {
 				expect(screen.getByRole("status")).toHaveTextContent("חסומות");
-			else expect(screen.getByRole("checkbox")).not.toBeChecked();
+				expect(
+					screen.queryByRole("button", { name: "הפעלת התראות" }),
+				).not.toBeInTheDocument();
+			} else {
+				expect(enableButton()).toBeEnabled();
+			}
 		});
 
 		it("rolls back the browser subscription when the server rejects it", async () => {
 			const { created } = setup({ postOk: false });
 			await renderToggle();
-			await clickToggle();
+			await click("הפעלת התראות");
 			expect(created.unsubscribe).toHaveBeenCalled();
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			// Nothing was stored — the toggle keeps offering opt-in.
+			expect(enableButton()).toBeEnabled();
+			noDisableButton();
 		});
 
 		it("reports an error when subscribing throws", async () => {
@@ -228,18 +258,29 @@ describe("PushNotificationsToggle", () => {
 			const { pushManager } = setup();
 			pushManager.subscribe.mockRejectedValue(new Error("AbortError"));
 			await renderToggle();
-			await clickToggle();
+			await click("הפעלת התראות");
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			expect(enableButton()).toBeEnabled();
 			expect(warn).toHaveBeenCalled();
 		});
 	});
 
 	describe("when subscribed", () => {
-		it("deletes and unsubscribes on opt-out", async () => {
-			const { fetchMock, existing } = setup({ subscribed: true });
+		it("shows the on state through a single disable control", async () => {
+			setup({ subscribed: true });
 			await renderToggle();
-			expect(screen.getByRole("checkbox")).toBeChecked();
-			await clickToggle();
+			expect(screen.getByRole("status")).toHaveTextContent("פעילה");
+			expect(disableButton()).toBeEnabled();
+			noEnableButton();
+		});
+
+		it("deletes and unsubscribes on opt-out without a permission call", async () => {
+			const { fetchMock, existing, requestPermissionMock } = setup({
+				subscribed: true,
+			});
+			await renderToggle();
+			await click("ביטול התראות");
+			expect(requestPermissionMock).not.toHaveBeenCalled();
 			expect(fetchMock).toHaveBeenLastCalledWith(
 				"/api/push/subscription",
 				expect.objectContaining({
@@ -248,15 +289,51 @@ describe("PushNotificationsToggle", () => {
 				}),
 			);
 			expect(existing?.unsubscribe).toHaveBeenCalled();
-			expect(screen.getByRole("checkbox")).not.toBeChecked();
+			expect(enableButton()).toBeEnabled();
 		});
 
-		it("keeps the subscription when the server delete fails", async () => {
-			const { existing } = setup({ subscribed: true, deleteOk: false });
+		it("keeps the subscription and lets opt-out retry when the server delete fails", async () => {
+			const { existing, fetchMock } = setup({
+				subscribed: true,
+				deleteOk: false,
+			});
+			const events: { status: string; failed: boolean }[] = [];
+			window.addEventListener(PUSH_STATUS_EVENT, (event) =>
+				events.push(
+					(
+						event as CustomEvent<{
+							status: string;
+							failed: boolean;
+						}>
+					).detail,
+				),
+			);
 			await renderToggle();
-			await clickToggle();
+			await click("ביטול התראות");
 			expect(existing?.unsubscribe).not.toHaveBeenCalled();
 			expect(screen.getByRole("status")).toHaveTextContent("נסו שוב");
+			// The subscription is still live: opt-out stays retryable and the
+			// broadcast keeps reporting "on" rather than a bogus "off".
+			expect(disableButton()).toBeEnabled();
+			noEnableButton();
+			expect(events).toEqual([{ status: "on", failed: true }]);
+
+			fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+				init
+					? { ok: true }
+					: {
+							ok: true,
+							json: async () => ({ publicKey: "AQID" }),
+						},
+			);
+			await click("ביטול התראות");
+			expect(fetchMock).toHaveBeenLastCalledWith(
+				"/api/push/subscription",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+			expect(existing?.unsubscribe).toHaveBeenCalled();
+			expect(enableButton()).toBeEnabled();
+			expect(screen.getByRole("status")).not.toHaveTextContent("נסו שוב");
 		});
 	});
 
@@ -264,9 +341,27 @@ describe("PushNotificationsToggle", () => {
 		const { fetchMock, serviceWorker } = setup({ subscribed: true });
 		await renderToggle();
 		serviceWorker.getRegistration.mockResolvedValue(undefined);
-		await clickToggle();
+		await click("ביטול התראות");
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(screen.getByRole("checkbox")).not.toBeChecked();
+		expect(enableButton()).toBeEnabled();
+	});
+
+	it("broadcasts status changes so other mounted surfaces stay in sync", async () => {
+		setup();
+		const events: { status: string; failed: boolean }[] = [];
+		window.addEventListener(PUSH_STATUS_EVENT, (event) =>
+			events.push(
+				(
+					event as CustomEvent<{
+						status: string;
+						failed: boolean;
+					}>
+				).detail,
+			),
+		);
+		await renderToggle();
+		await click("הפעלת התראות");
+		expect(events).toEqual([{ status: "on", failed: false }]);
 	});
 });
 

@@ -41,10 +41,30 @@
 }
 
 .authorsPage {
+  /* Keeps the fixed backdrop (::before) inside this page's stacking context. */
+  isolation: isolate;
   max-width: 1000px;
   margin: 0 auto;
   padding: 24px 16px;
   padding-top: 88px; /* Account for fixed header (72px) + spacing */
+}
+
+/* Blue pencil sketch of a synagogue congregation (#3773), painted as a fixed
+   backdrop so the scene stays recognizable behind the scrolling index.
+   Anchored to the bottom where the congregation sits; the scrim keeps card
+   edges, text and focus rings separated from the artwork. */
+.authorsPage::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
+    url(/images/rabbis-blue-sketch.webp);
+  background-position: center, center bottom;
+  background-size: cover, cover;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 .pageHeader {
@@ -170,6 +190,14 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  /* Scrim in --background (#0f1219) so the sketch reads as a faint etching
+     and keeps the dark surfaces readable. */
+  .authorsPage::before {
+    background-image:
+      linear-gradient(rgba(15, 18, 25, 0.78), rgba(15, 18, 25, 0.78)),
+      url(/images/rabbis-blue-sketch.webp);
+  }
+
   .breadcrumb ol {
     color: #b8c2d9;
   }
@@ -211,6 +239,18 @@
 
   .authorPlaceholder {
     color: var(--muted-text, #64748b);
+  }
+}
+
+/* ניגודיות גבוהה and forced-colors drop the decorative artwork so surfaces
+   stay flat (same policy as skeleton.module.css). */
+:global(html[data-a11y-contrast="high"]) .authorsPage::before {
+  content: none;
+}
+
+@media (forced-colors: active) {
+  .authorsPage::before {
+    content: none;
   }
 }
 

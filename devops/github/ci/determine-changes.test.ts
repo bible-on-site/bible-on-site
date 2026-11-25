@@ -17,6 +17,7 @@ import {
 	type ModuleKey,
 	applyReleaseRecovery,
 	baseRevision,
+	codeqlLanguages,
 	detectChanges,
 	isDataDeployChange,
 	isDataDeployCiChange,
@@ -606,6 +607,7 @@ describe("detectChanges", () => {
 		assert.deepEqual(JSON.parse(match[1]), [
 			"data/recitation/recitation.sqlite",
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
+			"web/shared/branding",
 		]);
 	});
 
@@ -628,6 +630,73 @@ describe("detectChanges", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/app/page.tsx"], "app"), [
 			{ module_changed: false, ci_changed: false },
 		]);
+	});
+
+	test("shared brand files release every consumer (#3708)", () => {
+		for (const path of [
+			"web/shared/branding/fonts/AlHeperekUI-Regular.ttf",
+			"web/shared/branding/fonts/AlHeperekUI-Bold.woff2",
+			"web/shared/branding/logos/header-logo.svg",
+			"web/shared/branding/derived/logo_header.jpg",
+			"web/shared/branding/derived/favicon.ico",
+		]) {
+			assert.deepEqual(
+				changed([path], "website", "admin", "app", "bulletin"),
+				[
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: false },
+					{ module_changed: true, ci_changed: false },
+				],
+				path,
+			);
+		}
+		// Unrelated shared files stay check-only for the web consumers.
+		assert.deepEqual(
+			changed(["web/shared/tests-util/e2e-impact.ts"], "website", "app", "bulletin"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+		// Directory boundaries: a sibling path must not release consumers —
+		// it still matches the generic web/shared check selector for website.
+		assert.deepEqual(
+			changed(["web/shared/branding-x/font.ttf"], "website", "app"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+	});
+
+	test("the pinned corpus releases the bulletin through the version stem (#3709)", () => {
+		for (const corpus of [
+			"web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			// A bumped dump keeps selecting the bulletin even though the exact
+			// release-notes pin still names the previous file.
+			"web/bible-on-site/src/data/db/sefaria-dump-5785-tishrei-1.tanah_view.json",
+		]) {
+			assert.deepEqual(changed([corpus], "website", "bulletin"), [
+				{ module_changed: true, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
+			]);
+		}
+	});
+
+	test("a native-only corpus rename runs the bulletin parity check without releasing it (#3709)", () => {
+		for (const sqlite of [
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			// The stem floats with the dump — detection must not pin it.
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5785-tishrei-1.tanah_view.sqlite",
+		]) {
+			assert.deepEqual(
+				changed([sqlite], "bulletin"),
+				[{ module_changed: false, ci_changed: true }],
+				sqlite,
+			);
+		}
 	});
 
 	for (const path of [
@@ -1295,7 +1364,7 @@ test("bulletin infrastructure changes select data checks without releasing conte
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",
-		"app/BibleOnSite/Resources/Images/logo_header.jpg",
+		"web/shared/branding/derived/logo_header.jpg",
 		"web/bible-on-site/public/icons/envelope.svg",
 		"web/bible-on-site/public/icons/phone.svg",
 		"web/bible-on-site/public/icons/whatsapp.svg",
@@ -1558,7 +1627,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 6,
+				Object.keys(MODULES).length * 2 + 8,
 			);
 			return { changes, output };
 		} finally {
@@ -2034,6 +2103,102 @@ describe("main", () => {
 			assert.match(output, /^docs_only=false$/m);
 		});
 	});
+
+	describe("Renovate-config-only classification (#3795)", () => {
+		const noChecks = (changes: ReturnType<typeof detectChanges>) => {
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, {
+					module_changed: false,
+					ci_changed: false,
+				});
+		};
+
+		for (const path of [
+			"renovate.json",
+			"renovate.json5",
+			".renovaterc",
+			".renovaterc.json",
+			".github/renovate.json",
+		]) {
+			test(`push of ${path} reports renovate_config_only`, () => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				noChecks(changes);
+				assert.match(output, /^renovate_config_only=true$/m);
+				assert.match(output, /^docs_only=false$/m);
+			});
+		}
+
+		test("a Renovate-config-only pull request reports renovate_config_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"renovate.json",
+			);
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		test("a Renovate-config-only merge group does not force module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"renovate.json",
+			);
+			// Like docs_only, the queue must not inflate a config-only delta into
+			// the combined-candidate rehearsal (#3795).
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		for (const extra of [
+			// A real dependency update routes to its module — never config-only.
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/bun.lock",
+			"app/BibleOnSite/BibleOnSite.csproj",
+			// Any non-config file alongside, docs included, is not config-only.
+			"docs/guide.md",
+			// Module-local Renovate settings are not repo-level config.
+			"web/admin/renovate.json",
+		]) {
+			test(`renovate.json plus ${extra} is not renovate_config_only`, () => {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"renovate.json",
+					"write",
+					undefined,
+					{ extraPaths: [extra] },
+				);
+				assert.match(output, /^renovate_config_only=false$/m, extra);
+			});
+		}
+	});
+
+	describe("CodeQL language scoping (#3795)", () => {
+		for (const [files, expected] of [
+			[["renovate.json"], ["actions"]],
+			[["docs/guide.md"], ["actions"]],
+			[["web/api/src/main.rs"], ["actions"]],
+			[[".github/workflows/ci.yml"], ["actions"]],
+			[["app/BibleOnSite/AppShell.xaml.cs"], ["csharp"]],
+			[["web/admin/src/page.tsx"], ["javascript-typescript"]],
+			[["web/bible-on-site/bun.lock"], ["javascript-typescript"]],
+			[["devops/deploy/data-deploy/index.mts"], ["javascript-typescript"]],
+			[["devops/backups/backup.py"], ["python"]],
+			[
+				[".github/workflows/codeql.yml", "devops/transcription/run.py"],
+				["actions", "python"],
+			],
+		] as const) {
+			test(`codeqlLanguages(${JSON.stringify(files)}) scopes to ${JSON.stringify(expected)}`, () => {
+				assert.deepEqual(codeqlLanguages([...files]), [...expected]);
+			});
+		}
+	});
 });
 
 describe("merge-group workflow contract", () => {
@@ -2174,28 +2339,27 @@ describe("merge-group workflow contract", () => {
 							? "skipped"
 							: "success";
 					}
-					if (
-						expression === "needs.package_api.outputs.module_version" ||
-						expression === "needs.package_admin.outputs.module_version"
-					)
+					if (expression === "needs.package_api.outputs.module_version")
 						return versions.amd64;
 					if (
 						expression === "needs.package_api_arm64.outputs.module_version" ||
-						expression === "needs.package_admin_arm64.outputs.module_version"
+						expression === "needs.package_admin.outputs.module_version"
 					)
 						return versions.arm64;
-					if (
-						expression === "needs.package_website.outputs.module_version" ||
-						expression === "needs.package_website_arm64.outputs.module_version"
-					)
+					if (expression === "needs.package_website.outputs.module_version")
 						return "0.2.600";
 					if (expression.includes("_ci_changed")) return String(ciChanged);
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
 						return String(baselineAvailable);
-					// These scenarios exercise code/queue changes; docs_only stays
-					// false so the docs-gated suite checks still evaluate (#3621).
-					if (expression === "needs.determine_changes.outputs.docs_only")
+					// These scenarios exercise code/queue changes; docs_only and
+					// renovate_config_only stay false so the docs-gated suite
+					// checks still evaluate (#3621, #3795).
+					if (
+						expression === "needs.determine_changes.outputs.docs_only" ||
+						expression ===
+							"needs.determine_changes.outputs.renovate_config_only"
+					)
 						return "false";
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
@@ -2262,7 +2426,6 @@ fi
 			"package_api",
 			"package_bulletin",
 			"package_admin",
-			"package_admin_arm64",
 			"validate_website_architectures",
 			"validate_api_architectures",
 			"validate_admin_architectures",

@@ -82,6 +82,11 @@ public class StarterService : BaseGraphQLService
                     abstract
                     name
                     priority
+                    coverageVerified
+                    coveringSources {
+                        perekId
+                        pasuk
+                    }
                     readingMetric {
                         wordCount
                         estimatedSeconds
@@ -186,6 +191,10 @@ public class StarterService : BaseGraphQLService
                     Name = a.Name,
                     Priority = a.Priority,
                     ReadingMetric = a.ReadingMetric?.ToModel(),
+                    CoverageVerified = a.CoverageVerified,
+                    CoveringSources = (a.CoveringSources ?? [])
+                        .Select(s => new ArticleCoveringSource(s.PerekId, s.Pasuk))
+                        .ToList(),
                     Author = author
                 };
             })
@@ -244,6 +253,24 @@ public class StarterService : BaseGraphQLService
             return Articles.Where(a => a.Id == articleId).Take(1).ToList();
         }
         return GetArticlesByPerekId(perekId);
+    }
+
+    /// <summary>
+    /// לקריאה נוספת (#3752): articles from OTHER perakim whose verified
+    /// covering sources map a pasuk of the viewed perek — the secondary
+    /// recommendations below the perek's own list. Independent of the daily
+    /// override (#3098): an assigned article still replaces the primary list
+    /// while this one keeps reflecting coverage. Articles already deduped by
+    /// the one-row-per-article snapshot; a perek with no matches gets [].
+    /// </summary>
+    public List<Article> GetFurtherReadingArticles(int perekId)
+    {
+        return Articles
+            .Where(a => a.CoverageVerified
+                && a.PerekId != perekId
+                && a.CoveringSources.Any(s => s.PerekId == perekId))
+            .OrderBy(a => a.Priority)
+            .ToList();
     }
 
     /// <summary>
@@ -458,7 +485,12 @@ public class StarterService : BaseGraphQLService
         string? Abstract,
         string Name,
         int Priority,
-        ReadingMetricData? ReadingMetric = null);
+        ReadingMetricData? ReadingMetric = null,
+        bool CoverageVerified = false,
+        List<CoveringSourceData>? CoveringSources = null);
+
+    /// <summary>One canonical perek+pasuk coordinate an article covers (#2189).</summary>
+    internal record CoveringSourceData(int PerekId, int Pasuk);
 
     /// <summary>Persisted reading metric as the API returns it (issue #2607); serialized into the local cache so offline starts keep the badge.</summary>
     internal record ReadingMetricData(

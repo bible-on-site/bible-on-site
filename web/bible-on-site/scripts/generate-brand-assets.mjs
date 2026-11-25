@@ -10,20 +10,20 @@ if (args.some((arg) => arg !== "--check")) {
 const check = args.includes("--check");
 const website = fileURLToPath(new URL("..", import.meta.url));
 const repository = resolve(website, "../..");
-const logos = resolve(website, "source-assets/logos");
-const output = resolve(website, "public/images/logos");
+const branding = resolve(repository, "web/shared/branding");
+const logos = resolve(branding, "logos");
+// One canonical derived set staged by every consumer (#3708). The website
+// copies these into public/ at build time, admin copies its subset through
+// vite.config.ts, the native project references them directly and the
+// bulletin embeds the header JPEG — so generated copies must never drift.
+const derived = resolve(branding, "derived");
 const read = (file) => readFile(resolve(logos, file));
 const outputs = [];
 const add = (path, bytes) => outputs.push({ path, bytes: Buffer.from(bytes) });
 const header = await read("header-logo.svg");
 const reversed = await read("header-logo-reversed.svg");
 
-add(resolve(output, "header-logo.svg"), header);
-add(resolve(output, "header-logo-reversed.svg"), reversed);
-add(
-	resolve(repository, "app/BibleOnSite/Resources/Splash/splash.svg"),
-	reversed,
-);
+add(resolve(derived, "splash.svg"), reversed);
 
 const sourceIcon = (await read("app-icon.svg")).toString();
 // The canonical artwork group is shared by the composite and the transparent
@@ -68,48 +68,44 @@ for (const [name, svg] of [
 	["appiconfg.svg", foreground],
 	["appicon_full.svg", appIcon],
 ]) {
-	add(resolve(repository, "app/BibleOnSite/Resources/AppIcon", name), svg);
+	add(resolve(derived, name), svg);
 }
 
 add(
-	resolve(output, "logo192.webp"),
+	resolve(derived, "logo192.webp"),
 	await sharp(Buffer.from(appIcon))
 		.resize(192, 192)
 		.webp({ lossless: true })
 		.toBuffer(),
 );
 add(
-	resolve(website, "public/apple-touch-icon.png"),
+	resolve(derived, "apple-touch-icon.png"),
 	await sharp(Buffer.from(appIcon)).resize(180, 180).png().toBuffer(),
 );
 add(
-	resolve(output, "logo-white-letters-69.webp"),
+	resolve(derived, "logo-white-letters-69.webp"),
 	await sharp(reversed)
 		.resize({ width: 360 })
 		.webp({ lossless: true })
 		.toBuffer(),
 );
-const jpeg = await sharp(header)
-	.resize({ width: 1040 })
-	.flatten({ background: "white" })
-	.jpeg({ quality: 95 })
-	.toBuffer();
-for (const path of [
-	"app/BibleOnSite/Resources/Images/logo_header.jpg",
-	"web/bible-on-site/src/lib/download/logo_header.jpg",
-	"web/bible-on-site/public/images/logos/header-logo.jpg",
-]) {
-	add(resolve(repository, path), jpeg);
-}
+add(
+	resolve(derived, "logo_header.jpg"),
+	await sharp(header)
+		.resize({ width: 1040 })
+		.flatten({ background: "white" })
+		.jpeg({ quality: 95 })
+		.toBuffer(),
+);
 
 const faviconSizes = [16, 24, 32, 48];
 const faviconImages = [];
 for (const size of faviconSizes) {
-	const name = `favicon-${size}`;
-	const svg = await read(`${name}.svg`);
-	const png = await sharp(svg).resize(size, size).png().toBuffer();
-	add(resolve(output, `${name}.svg`), svg);
-	add(resolve(output, `${name}.png`), png);
+	const png = await sharp(await read(`favicon-${size}.svg`))
+		.resize(size, size)
+		.png()
+		.toBuffer();
+	add(resolve(derived, `favicon-${size}.png`), png);
 	faviconImages.push(png);
 }
 // ICO supports PNG image payloads. Package the exact individually fitted
@@ -129,8 +125,7 @@ for (const [index, size] of faviconSizes.entries()) {
 	imageOffset += faviconImages[index].length;
 }
 const favicon = Buffer.concat([directory, ...faviconImages]);
-add(resolve(website, "src/app/favicon.ico"), favicon);
-add(resolve(repository, "web/admin/public/favicon.ico"), favicon);
+add(resolve(derived, "favicon.ico"), favicon);
 
 for (const { path, bytes } of outputs) {
 	if (check) {

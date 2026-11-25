@@ -199,6 +199,23 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
     }
 
+    /// <summary>Runs the commentary index check a commentary search makes, once, so settings
+    /// can offer a pack refresh for a stale index before any search ran.</summary>
+    public async Task<bool> CheckCommentaryIndexAsync()
+    {
+        Task build;
+        lock (_buildSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_buildTasks.TryGetValue("notes", out build!) || build.IsFaulted || build.IsCanceled)
+            {
+                _buildTasks["notes"] = build = Task.Run(() => EnsureIndexAsync("notes"));
+            }
+        }
+        await build;
+        return CommentaryAvailable;
+    }
+
     public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken) =>
         SearchAsync(query, filters, books, limit, cancellationToken, null);
@@ -527,6 +544,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                     var expected = await FingerprintAsync(connection, "build_timestamp");
                     CommentaryAvailable = await _index.ExecuteScalarAsync<string>(
                         "SELECT fingerprint FROM search_metadata WHERE name = 'notes'") == expected;
+                    _notes.IsSearchIndexStale = !CommentaryAvailable;
                     if (CommentaryAvailable)
                     {
                         _ready["notes"] = expected;
@@ -574,7 +592,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     /// only for sources without metadata — file times are never a validity
     /// signal on their own.
     /// </summary>
-    private static async Task<string> FingerprintAsync(SQLiteAsyncConnection source, string contentKey)
+    internal static async Task<string> FingerprintAsync(SQLiteAsyncConnection source, string contentKey)
     {
         string? id = null;
         try

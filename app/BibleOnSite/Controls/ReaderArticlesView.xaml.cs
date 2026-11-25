@@ -59,4 +59,20 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
             ArticleSelected?.Invoke(this, article);
         }
     }
+
+    protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
+    {
+        base.OnPropertyChanged(propertyName);
+        if (propertyName is nameof(ItemsSource) or nameof(IsGrouped))
+        {
+            ApplyGroupHeaderTemplate();
+        }
+    }
+
+    private void ApplyGroupHeaderTemplate()
+    {
+        GroupHeaderTemplate = ReaderArticlesViewGrouping.ServesGroupHeaders(IsGrouped, ItemsSource)
+            ? (DataTemplate)Resources["ArticleGroupHeaderTemplate"]
+            : null;
+    }
 }

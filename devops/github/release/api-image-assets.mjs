@@ -27,8 +27,9 @@ export function verifyAPIImageAssets(
 		throw new Error("API archives require the published canonical release");
 	}
 	const payload = releasePayload(release);
+	const artifacts = nativeImageArtifacts(payload);
 	if (
-		!nativeImageArtifacts(payload) ||
+		!artifacts ||
 		payload.module_name !== moduleName ||
 		payload.ref !== sourceRef
 	)
@@ -39,8 +40,11 @@ export function verifyAPIImageAssets(
 			: moduleName === "website"
 				? "bible-on-site"
 				: "bible-on-site-admin";
+	// ARM64-only website/admin payloads (#3794) verify the single archive.
 	const names = [
-		`${image}-v${version}.tar.gz`,
+		...(artifacts.amd64 !== undefined
+			? [`${image}-v${version}.tar.gz`]
+			: []),
 		`${image}-v${version}-arm64.tar.gz`,
 	];
 	for (const name of names) {
@@ -87,6 +91,6 @@ if (
 ) {
 	main();
 	console.log(
-		"Both API release archives match their published source and SHA256 digests.",
+		"The release archives match their published source and SHA256 digests.",
 	);
 }

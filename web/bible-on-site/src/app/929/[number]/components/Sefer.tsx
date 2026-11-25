@@ -188,6 +188,9 @@ const Sefer = (props: {
 	perekObj: PerekObj;
 	sefer: SefarimItem;
 	articles: ArticleSummary[];
+	/** לקריאה נוספת (#3752) for the current perek — verified secondary
+	 * coverage; other perakim's arrives through the batch summary fetch. */
+	furtherArticles?: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
@@ -197,6 +200,10 @@ const Sefer = (props: {
 	/** Perek-scoped dedication lines by canonical perek id (#2731). */
 	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
+	/** The initial slug names a לקריאה נוספת recommendation, not a primary
+	 * article/perush — keeps its `?book&further=` URL shape on rewrite
+	 * (#3752). */
+	initialFurther?: boolean;
 	initialBookPage?: BookPage | null;
 	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
 	perekPasukUnits?: ReadingProgressUnit[];
@@ -210,11 +217,13 @@ const Sefer = (props: {
 	const {
 		perekObj,
 		articles,
+		furtherArticles,
 		perushim,
 		perekIds,
 		entityRefsByPerek,
 		imagesByPerek,
 		initialSlug,
+		initialFurther,
 		initialBookPage,
 		perekPasukUnits,
 		perekMetric,
@@ -228,6 +237,7 @@ const Sefer = (props: {
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
+		initialFurther,
 	);
 	// Memoized so the contentPages memo below keeps its identity across
 	// per-flip re-renders (additionals flatMap would otherwise rebuild it).
@@ -243,8 +253,8 @@ const Sefer = (props: {
 	const navigateFromPage = useMemo(
 		() =>
 			perekIds?.map(
-				(perekId) => (slug?: string) =>
-					contentNavigation.navigate(perekId, slug),
+				(perekId) => (slug?: string, further?: boolean) =>
+					contentNavigation.navigate(perekId, slug, further),
 			),
 		[perekIds, contentNavigation.navigate],
 	);
@@ -686,6 +696,15 @@ const Sefer = (props: {
 										: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
 												?.articles
 							}
+							// Secondary-coverage recommendations ride a separate prop:
+							// the daily override replaces the primary list only (#3098),
+							// לקריאה נוספת always reflects coverage (#3752).
+							furtherArticles={
+								perekIdx === currentPerekIdx
+									? furtherArticles
+									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
+											?.furtherReading
+							}
 							perushim={
 								perekIdx === currentPerekIdx
 									? perushim
@@ -720,6 +739,7 @@ const Sefer = (props: {
 			activePerekId,
 			isVisible,
 			articles,
+			furtherArticles,
 			perushim,
 			batchSummaries,
 			dailyOverride,

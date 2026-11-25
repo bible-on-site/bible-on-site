@@ -29,8 +29,8 @@ permissions:
 
 jobs:
   # Shared router classification: dependency manifests cannot change inside a
-  # docs-only change, so the expensive MAUI restore is skipped while the
-  # required submit-nuget check still reports (#3621).
+  # docs-only or Renovate-config-only change, so the expensive MAUI restore is
+  # skipped while the required submit-nuget check still reports (#3621, #3795).
   detect_docs:
     timeout-minutes: 10
     name: Docs-only change detection
@@ -39,6 +39,7 @@ jobs:
       contents: read
     outputs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
+      renovate_config_only: ${{ steps.detect.outputs.renovate_config_only }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,7 +54,7 @@ jobs:
   submit-snapshots:
     timeout-minutes: 60
     needs: detect_docs
-    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' && needs.detect_docs.outputs.renovate_config_only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -168,7 +169,7 @@ jobs:
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
       - name: 'Submit NuGet dependencies'
-        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.1
         with:
           detectorsCategories: NuGet
           fail-on-empty: true
@@ -191,9 +192,14 @@ jobs:
         env:
           SUBMISSION_RESULT: ${{ needs.submit-snapshots.result }}
           DOCS_ONLY: ${{ needs.detect_docs.outputs.docs_only }}
+          RENOVATE_CONFIG_ONLY: ${{ needs.detect_docs.outputs.renovate_config_only }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
             echo "Docs-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          if [ "$RENOVATE_CONFIG_ONLY" = "true" ]; then
+            echo "Renovate-config-only change: dependency graph is unchanged; nothing to submit."
             exit 0
           fi
           test "$SUBMISSION_RESULT" = success

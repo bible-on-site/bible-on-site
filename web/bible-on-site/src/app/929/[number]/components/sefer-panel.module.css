@@ -686,6 +686,23 @@
 	color: #8b7355;
 }
 
+/* ─── לקריאה נוספת group (#3752) — secondary coverage below the
+   perek's own cards, separated by a hairline so the heading reads as
+   a new section inside the same scroll pane. ────────────────────── */
+
+.furtherReadingGroup {
+	margin-top: 4px;
+	padding-top: 10px;
+	border-top: 1px solid #d4c9a8;
+}
+
+.furtherReadingTitle {
+	margin: 0 0 10px;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: var(--hc-muted, #6b5835);
+}
+
 /* ─── Article fullscreen (item 7) ───────────────────── */
 
 .articleFullscreen {

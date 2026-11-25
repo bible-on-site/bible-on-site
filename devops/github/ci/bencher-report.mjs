@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const pending = (check) => check.status !== "completed" && check.conclusion == null;
 
+/** Bounded rereads while a verified check's listing replicates (~4s spacing). */
+export const CHECK_LISTING_REREADS = 15;
+export const CHECK_LISTING_REREAD_MS = 4_000;
+
 async function verifyReport(context, io, result) {
 	const urls = [...result.stdout.matchAll(/View report:\s+(https:\/\/[^\s]+)/gu)];
 	if (urls.length !== 1) throw new Error("Bencher did not print exactly one report URL");
@@ -37,12 +41,18 @@ export async function runBencherReport(context, io) {
 		&& check.name === `Bencher Report (${context.project})`);
 	let verified = null;
 	let found = await created();
-	// The commits check-runs listing is not atomic with check creation: a check
-	// born seconds earlier can be absent (#3739). Once this invocation's report
-	// has verified, read the listing again before declaring the check missing.
+	// The commits check-runs listing lags check creation by an unbounded few
+	// seconds: on run 45362415787 the check Bencher created at 09:50:38Z was
+	// still absent from both listings read at 09:50:42-43Z (#3739). A verified
+	// report proves the check exists on GitHub's primary, so keep re-reading on
+	// a fixed cadence until it replicates; still fail closed once the bounded
+	// rereads run out.
 	if (found.length === 0 && !runError) {
 		verified = await verifyReport(context, io, result);
-		found = await created();
+		for (let reread = 0; reread < CHECK_LISTING_REREADS && found.length === 0; reread++) {
+			await io.delay(CHECK_LISTING_REREAD_MS);
+			found = await created();
+		}
 	}
 	if (found.length !== 1) {
 		throw runError ?? new Error(`Expected one new Bencher check for this invocation; found ${found.length}`);
@@ -99,12 +109,14 @@ export async function runBencherReport(context, io) {
 /** Platform adapter, kept separate so CLI arguments and API failures are tested. */
 export function createBencherIO(context, options) {
 	const { repository, command, args, exec = execFileSync, spawn = spawnSync,
-		fetchReport = fetch, stdout = process.stdout, stderr = process.stderr } = options;
+		fetchReport = fetch, stdout = process.stdout, stderr = process.stderr,
+		delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = options;
 	const gh = (args, input) => JSON.parse(exec("gh", ["api", ...args], {
 		encoding: "utf8", input: input === undefined ? undefined : JSON.stringify(input),
 		maxBuffer: 16 * 1024 * 1024,
 	}));
 	return {
+		delay,
 		listChecks: () => gh([
 			`repos/${repository}/commits/${context.checkSha}/check-runs?filter=all&per_page=100`,
 			"--paginate", "--slurp",

@@ -13,7 +13,7 @@ test("saved display settings apply when entering the reader from another page", 
 	await page.getByRole("button", { name: "תפריט ראשי", exact: true }).click();
 	await page
 		.getByRole("navigation", { name: "תפריט ראשי", exact: true })
-		.getByRole("link", { name: "על הפרק", exact: true })
+		.getByRole("link", { name: "על הפרק הלימוד בחלוקה המוכרת", exact: true })
 		.click();
 	await expect(page).toHaveURL(/\/929\/[1-9]\d*$/);
 	await expect(page.getByRole("article")).toBeVisible();

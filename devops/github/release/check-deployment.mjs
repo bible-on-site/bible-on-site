@@ -304,6 +304,17 @@ export function checkDeployment(
 					? { adminArm64: true }
 					: { websiteArm64: true }
 			: {}),
+		// ARM64-only website/admin payloads (#3794) carry no canonical amd64
+		// archive; legacy unpinned releases still default to the amd64 path.
+		...(moduleName === "api" ||
+		moduleName === "website" ||
+		moduleName === "admin"
+			? {
+					nativeAmd64:
+						platformArtifacts === undefined ||
+						platformArtifacts.amd64 !== undefined,
+				}
+			: {}),
 		...(recoveryFile ? { recoveryFile } : {}),
 	};
 }
@@ -359,7 +370,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\nnative_amd64=${result.nativeAmd64 === true}\n`,
 	);
 	if (result.recoveryFile)
 		appendFileSync(
