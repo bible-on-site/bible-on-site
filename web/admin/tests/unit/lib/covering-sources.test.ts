@@ -134,6 +134,12 @@ describe("coveringSourceError", () => {
 		).toBe("יש להזין מספר פסוק שלם");
 	});
 
+	it("flags a fractional pasuk", () => {
+		expect(coveringSourceError({ perek_id: 1, pasuk: 5.5 })).toBe(
+			"יש להזין מספר פסוק שלם",
+		);
+	});
+
 	it("flags pasuk 0", () => {
 		expect(coveringSourceError({ perek_id: 1, pasuk: 0 })).toBe(
 			"מספר הפסוק חייב להיות לפחות 1",

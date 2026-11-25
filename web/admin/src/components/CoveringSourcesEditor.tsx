@@ -105,7 +105,9 @@ export function CoveringSourcesEditor({
 						value={Number.isNaN(source.pasuk) ? "" : source.pasuk}
 						onChange={(e) =>
 							updateRow(index, {
-								pasuk: Number.parseInt(e.target.value, 10),
+								/* valueAsNumber keeps "5.5" fractional (flagged
+								   non-integer) instead of truncating to 5. */
+								pasuk: e.target.valueAsNumber,
 							})
 						}
 						className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm"

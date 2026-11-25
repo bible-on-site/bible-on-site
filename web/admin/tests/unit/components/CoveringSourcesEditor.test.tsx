@@ -182,6 +182,17 @@ describe("CoveringSourcesEditor", () => {
 		expect(Number.isNaN(next[0].pasuk)).toBe(true);
 	});
 
+	it("keeps a fractional pasuk fractional so it is flagged, not truncated", () => {
+		const { onChange } = renderEditor([{ perek_id: 1, pasuk: 5 }]);
+
+		fireEvent.change(screen.getByLabelText("פסוק למקור 1"), {
+			target: { value: "5.5" },
+		});
+
+		const next = onChange.mock.calls.at(-1)?.[0] as CoveringSource[];
+		expect(next[0].pasuk).toBe(5.5);
+	});
+
 	it("renders a cleared pasuk draft as an empty input", () => {
 		renderEditor([{ perek_id: 1, pasuk: Number.NaN }]);
 
