@@ -20,7 +20,12 @@ function readMockDateCookie(): string | undefined {
 }
 
 export function getCurrentDate(): Date {
-	const mocked = process.env.MOCK_DATE || readMockDateCookie();
+	// The cookie channel exists only for local dev/e2e; NODE_ENV is inlined at
+	// build time so this stays inert in production bundles even if a user sets
+	// the cookie by hand.
+	const mocked =
+		process.env.MOCK_DATE ||
+		(process.env.NODE_ENV !== "production" ? readMockDateCookie() : undefined);
 	if (mocked) {
 		return new Date(mocked);
 	}
