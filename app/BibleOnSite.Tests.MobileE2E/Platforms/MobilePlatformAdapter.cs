@@ -282,7 +282,7 @@ public abstract class MobilePlatformAdapter
             // lookup, and that reset opens with UiDevice.waitForIdle: a ~500ms
             // accessibility quiet window (10s cap) paid per lookup whether the
             // UI ever settles or not. The master run that hit the 15-minute
-            // pilot deadline spent 517s in 789 findElements calls (655ms
+            // pilot deadline spent 517s in 789 findElements calls (515ms
             // average on hits, 952ms on misses — elements are absent precisely
             // while the UI churns, so misses idle longer) plus the same wait
             // after every click. The page objects already poll explicit element
