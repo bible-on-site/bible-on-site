@@ -168,7 +168,7 @@ jobs:
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
       - name: 'Submit NuGet dependencies'
-        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.1
         with:
           detectorsCategories: NuGet
           fail-on-empty: true
