@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCurrentDate } from "@/util/date";
 import {
 	constructTsetAwareHDate,
 	hebcalDateToNumber,
@@ -17,7 +18,7 @@ export function LiveLearningCalendar({
 	const [today, setToday] = useState<number | null>(null);
 	useEffect(() => {
 		const refresh = () =>
-			setToday(hebcalDateToNumber(constructTsetAwareHDate(new Date())));
+			setToday(hebcalDateToNumber(constructTsetAwareHDate(getCurrentDate())));
 		refresh();
 		const interval = window.setInterval(refresh, 60_000);
 		window.addEventListener("focus", refresh);

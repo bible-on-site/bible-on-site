@@ -157,6 +157,7 @@ import type {
 } from "@/app/masora/[unit]/components/masora-book-utils";
 import type { Perek } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 
 const range = (
 	startPerek: number,
@@ -228,6 +229,16 @@ const baseProps = () => ({
 });
 
 describe("MasoraSefer", () => {
+	it("dates the blank commentary pages from MOCK_DATE when it is set", () => {
+		// 21 Sivan 5784 — a different Hebrew date than the real clock's.
+		process.env.MOCK_DATE = "2024-06-27T12:00:00+03:00";
+		render(<MasoraSefer {...baseProps()} />);
+		delete process.env.MOCK_DATE;
+		const expected = constructTsetAwareHDate(
+			new Date("2024-06-27T12:00:00+03:00"),
+		).toTraditionalHebrewString();
+		expect(mockBlankPages.get("1:torah")?.hebrewDateStr).toBe(expected);
+	});
 	it("does not rerender scripture when background summaries arrive", async () => {
 		let finish!: (value: unknown) => void;
 		mockSummariesBatch.mockReturnValueOnce(

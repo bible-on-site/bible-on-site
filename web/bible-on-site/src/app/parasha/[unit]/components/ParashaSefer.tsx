@@ -35,6 +35,7 @@ import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import { rangesPerekIds } from "@/lib/reading/ranges";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
@@ -209,7 +210,7 @@ const ParashaSefer = (props: {
 	};
 
 	const hebrewDateStr = useMemo(
-		() => constructTsetAwareHDate(new Date()).toTraditionalHebrewString(),
+		() => constructTsetAwareHDate(getCurrentDate()).toTraditionalHebrewString(),
 		[],
 	);
 
