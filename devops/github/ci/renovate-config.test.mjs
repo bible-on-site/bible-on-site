@@ -68,11 +68,7 @@ test("alternate config locations are validated by file name", () => {
 				JSON.stringify({ packageRules: [{ matchPackageNames: ["/(broken/"] }] }),
 			);
 			const findings = validateRenovateConfig(root);
-			assert.match(
-				findings[0],
-				Reflect.construct(RegExp, [`^${name.replace(/\./g, "\\.")}\\.`]),
-				name,
-			);
+			assert.ok(findings[0].startsWith(`${name}.`), `${name}: ${findings[0]}`);
 			assert.match(findings[0], /does not compile/);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
