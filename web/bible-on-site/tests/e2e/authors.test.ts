@@ -86,18 +86,27 @@ test.describe("/929/authors page", () => {
 	test("paints the blue sketch as a fixed backdrop behind the index", async ({
 		page,
 	}) => {
+		// The browser only fetches the image when the ::before box actually
+		// generates and paints — a `content: none`/`display: none` regression
+		// would never trigger this response.
+		const sketchResponse = page.waitForResponse(
+			"**/rabbis-blue-sketch.webp",
+		);
 		await page.goto("/929/authors");
+		expect((await sketchResponse).status()).toBe(200);
 
 		const backdrop = await page.locator("main").evaluate((el) => {
 			const style = window.getComputedStyle(el, "::before");
 			return {
 				backgroundImage: style.backgroundImage,
+				content: style.content,
 				position: style.position,
 			};
 		});
 
 		// Fixed keeps the congregation scene recognizable while the grid scrolls.
 		expect(backdrop.position).toBe("fixed");
+		expect(backdrop.content).not.toBe("none");
 		expect(backdrop.backgroundImage).toContain("rabbis-blue-sketch.webp");
 	});
 
