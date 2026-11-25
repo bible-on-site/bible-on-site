@@ -988,7 +988,10 @@ public class SearchIndexServiceTests
             filters, books, 10, TestContext.Current.CancellationToken));
 
         // The transient condition cleared: the next call retries the faulted
-        // init instead of rethrowing it until an app restart.
+        // init instead of rethrowing it until an app restart. The faulted query
+        // leaves the file's pooled handle open, so close it before the delete
+        // (Windows cannot unlink an open file).
+        await storage.CloseDatabaseFileAsync("search.sqlite");
         File.Delete(indexPath);
         (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
             .Should().ContainSingle();
