@@ -13,17 +13,22 @@
 //! `articles_service`).
 
 use crate::{
-    common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
+    common::{
+        error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
+        website_revalidate::WebsiteRevalidator,
+    },
     dtos::tanahpedia_images::{
         TanahpediaEntityImageLinkInput, TanahpediaEntryImageLinkInput, TanahpediaImage,
         TanahpediaImageAsset, TanahpediaImageLink, TanahpediaImageLinkFull,
+        TanahpediaImageWriteResult,
     },
     providers::Database,
     services::tanahpedia_entries_service::is_missing_mysql_schema,
 };
 use entities::tanahpedia::{entity, entity_image, entry, entry_image, image};
 use sea_orm::{
-    ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, Statement, TransactionTrait,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter,
+    QuerySelect, Statement, TransactionTrait,
 };
 use uuid::Uuid;
 
@@ -40,8 +45,8 @@ struct ImageLinkRow {
     is_primary: bool,
     image_id: String,
     url: String,
-    width: Option<i16>,
-    height: Option<i16>,
+    width: Option<u16>,
+    height: Option<u16>,
     alt_text: String,
     caption: Option<String>,
     creator: Option<String>,
@@ -54,6 +59,7 @@ struct ImageLinkRow {
     modifications: Option<String>,
     permission_evidence: Option<String>,
     is_public: bool,
+    revision: i32,
 }
 
 const IMAGE_SELECT: &str = r#"l.id AS id, l.OWNER_ID AS owner_id, l.sort_order AS sort_order,
@@ -63,7 +69,7 @@ const IMAGE_SELECT: &str = r#"l.id AS id, l.OWNER_ID AS owner_id, l.sort_order A
        i.source_url AS source_url, i.license_name AS license_name,
        i.license_url AS license_url, i.is_public_domain AS is_public_domain,
        i.modifications AS modifications, i.permission_evidence AS permission_evidence,
-       i.is_public AS is_public"#;
+       i.is_public AS is_public, i.revision AS revision"#;
 
 fn image_link_sql(table: &str, owner_column: &str, include_unpublished: bool) -> String {
     let published_filter = if include_unpublished {
@@ -115,8 +121,16 @@ fn to_public_image(row: &ImageLinkRow) -> TanahpediaImage {
         credit_line: row.credit_line.clone(),
         source_name: row.source_name.clone(),
         source_url: row.source_url.clone(),
-        license_name: row.license_name.clone(),
-        license_url: row.license_url.clone(),
+        license_name: if row.is_public_domain {
+            None
+        } else {
+            row.license_name.clone()
+        },
+        license_url: if row.is_public_domain {
+            None
+        } else {
+            row.license_url.clone()
+        },
         is_public_domain: row.is_public_domain,
         modifications: row.modifications.clone(),
     }
@@ -134,12 +148,22 @@ fn to_asset(row: &ImageLinkRow) -> TanahpediaImageAsset {
         credit_line: row.credit_line.clone(),
         source_name: row.source_name.clone(),
         source_url: row.source_url.clone(),
-        license_name: row.license_name.clone(),
-        license_url: row.license_url.clone(),
+        license_name: if row.is_public_domain {
+            None
+        } else {
+            row.license_name.clone()
+        },
+        license_url: if row.is_public_domain {
+            None
+        } else {
+            row.license_url.clone()
+        },
         is_public_domain: row.is_public_domain,
         modifications: row.modifications.clone(),
         permission_evidence: row.permission_evidence.clone(),
         is_public: row.is_public,
+        revision: row.revision,
+        revalidation: None,
     }
 }
 
@@ -162,6 +186,7 @@ fn to_link_full(row: &ImageLinkRow, owner_kind: &str) -> TanahpediaImageLinkFull
         sort_order: i32::from(row.sort_order),
         is_primary: row.is_primary,
         image: to_asset(row),
+        revalidation: None,
     }
 }
 
@@ -278,12 +303,22 @@ pub async fn get_image_asset(
         credit_line: m.credit_line,
         source_name: m.source_name,
         source_url: m.source_url,
-        license_name: m.license_name,
-        license_url: m.license_url,
+        license_name: if m.is_public_domain {
+            None
+        } else {
+            m.license_name
+        },
+        license_url: if m.is_public_domain {
+            None
+        } else {
+            m.license_url
+        },
         is_public_domain: m.is_public_domain,
         modifications: m.modifications,
         permission_evidence: m.permission_evidence,
         is_public: m.is_public,
+        revision: m.revision,
+        revalidation: None,
     }))
 }
 
@@ -296,6 +331,13 @@ fn blank_to_none(value: Option<String>) -> Option<String> {
             Some(trimmed)
         }
     })
+}
+
+/// MySQL stores dimensions as SMALLINT UNSIGNED; GraphQL uses i32, so reject
+/// out-of-range input instead of narrowing it through a lossy cast.
+fn checked_u16(value: i32) -> Result<u16, ServiceError> {
+    u16::try_from(value)
+        .map_err(|_| ServiceError::bad_request("מידות התמונה חייבות להיות בין 0 ל-65535"))
 }
 
 /// Validation shared by create and update: required fields stay non-empty
@@ -321,11 +363,130 @@ fn validate_asset(
     Ok(())
 }
 
+#[derive(Default)]
+struct ImageRevalidationOwners {
+    entry_unique_names: Vec<String>,
+    entity_ids: Vec<String>,
+}
+
+impl ImageRevalidationOwners {
+    fn is_empty(&self) -> bool {
+        self.entry_unique_names.is_empty() && self.entity_ids.is_empty()
+    }
+}
+
+fn sorted_unique(values: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut values: Vec<String> = values.into_iter().collect();
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
+#[derive(FromQueryResult)]
+struct EntryOwnerRow {
+    entry_id: String,
+}
+
+#[derive(FromQueryResult)]
+struct EntityOwnerRow {
+    entity_id: String,
+}
+
+#[derive(FromQueryResult)]
+struct EntryNameRow {
+    unique_name: String,
+}
+
+/// Owners whose rendered galleries carry one image asset. Deletes must run
+/// this before the FK cascade removes the link rows — afterwards the owner
+/// set is unrecoverable.
+async fn image_revalidation_owners<C: ConnectionTrait>(
+    conn: &C,
+    image_id: &str,
+) -> Result<ImageRevalidationOwners, ServiceError> {
+    let entry_ids: Vec<String> = entry_image::Entity::find()
+        .select_only()
+        .column(entry_image::Column::EntryId)
+        .filter(entry_image::Column::ImageId.eq(image_id))
+        .into_model::<EntryOwnerRow>()
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| row.entry_id)
+        .collect();
+    let entity_ids: Vec<String> = entity_image::Entity::find()
+        .select_only()
+        .column(entity_image::Column::EntityId)
+        .filter(entity_image::Column::ImageId.eq(image_id))
+        .into_model::<EntityOwnerRow>()
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| row.entity_id)
+        .collect();
+    let entry_unique_names = if entry_ids.is_empty() {
+        Vec::new()
+    } else {
+        entry::Entity::find()
+            .select_only()
+            .column(entry::Column::UniqueName)
+            .filter(entry::Column::Id.is_in(entry_ids))
+            .into_model::<EntryNameRow>()
+            .all(conn)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .map(|row| row.unique_name)
+            .collect()
+    };
+    Ok(ImageRevalidationOwners {
+        entry_unique_names: sorted_unique(entry_unique_names),
+        entity_ids: sorted_unique(entity_ids),
+    })
+}
+
+async fn revalidate_image_owners(
+    revalidator: &WebsiteRevalidator,
+    owners: &ImageRevalidationOwners,
+) -> Option<String> {
+    if owners.is_empty() {
+        return None;
+    }
+    Some(
+        revalidator
+            .invalidate_pedia_entry_and_entities(&owners.entry_unique_names, &owners.entity_ids)
+            .await
+            .as_str()
+            .to_string(),
+    )
+}
+
+fn owner_targets(
+    owner_kind: &str,
+    owner_id: &str,
+    entry_unique_name: Option<String>,
+) -> ImageRevalidationOwners {
+    if owner_kind == "ENTRY" {
+        ImageRevalidationOwners {
+            entry_unique_names: entry_unique_name.into_iter().collect(),
+            entity_ids: Vec::new(),
+        }
+    } else {
+        ImageRevalidationOwners {
+            entry_unique_names: Vec::new(),
+            entity_ids: vec![owner_id.to_string()],
+        }
+    }
+}
+
 /// Create or update an image asset. `input.id` null → create with a fresh
 /// UUID; otherwise update the existing row (404-style bad_request when the
 /// id does not exist).
 pub async fn put_image_asset(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     input: crate::dtos::tanahpedia_images::TanahpediaImageAssetInput,
 ) -> Result<TanahpediaImageAsset, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::put_image_asset");
@@ -337,36 +498,31 @@ pub async fn put_image_asset(
         &input.permission_evidence,
     )?;
 
-    const COLUMNS: [&str; 15] = [
-        "url",
-        "width",
-        "height",
-        "alt_text",
-        "caption",
-        "creator",
-        "credit_line",
-        "source_name",
-        "source_url",
-        "license_name",
-        "license_url",
-        "is_public_domain",
-        "modifications",
-        "permission_evidence",
-        "is_public",
-    ];
+    let is_public_domain = input.is_public_domain.unwrap_or(false);
+    // Rights states are mutually exclusive: public domain never carries a license.
+    let license_name = if is_public_domain {
+        None
+    } else {
+        blank_to_none(input.license_name)
+    };
+    let license_url = if is_public_domain {
+        None
+    } else {
+        blank_to_none(input.license_url)
+    };
     let values: Vec<sea_orm::Value> = vec![
         input.url.trim().to_string().into(),
-        input.width.map(|w| w as i16).into(),
-        input.height.map(|h| h as i16).into(),
+        input.width.map(checked_u16).transpose()?.into(),
+        input.height.map(checked_u16).transpose()?.into(),
         input.alt_text.trim().to_string().into(),
         blank_to_none(input.caption).into(),
         blank_to_none(input.creator).into(),
         blank_to_none(input.credit_line).into(),
         blank_to_none(input.source_name).into(),
         blank_to_none(input.source_url).into(),
-        blank_to_none(input.license_name).into(),
-        blank_to_none(input.license_url).into(),
-        input.is_public_domain.unwrap_or(false).into(),
+        license_name.into(),
+        license_url.into(),
+        is_public_domain.into(),
         blank_to_none(input.modifications).into(),
         blank_to_none(input.permission_evidence).into(),
         is_public.into(),
@@ -378,34 +534,41 @@ pub async fn put_image_asset(
     };
 
     let txn = db.get_connection().begin().await.map_err(db_error)?;
-    let exists = image::Entity::find_by_id(&image_id)
+    let existing = image::Entity::find_by_id(&image_id)
         .one(&txn)
         .await
-        .map_err(db_error)?
-        .is_some();
-
-    if exists {
-        let assignments = COLUMNS
-            .iter()
-            .map(|column| format!("{column} = ?"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        txn.execute_raw(Statement::from_sql_and_values(
-            DatabaseBackend::MySql,
-            format!("UPDATE tanahpedia_image SET {assignments} WHERE id = ?"),
-            values.into_iter().chain([image_id.clone().into()]),
-        ))
-        .await
         .map_err(db_error)?;
+    let mut owners = ImageRevalidationOwners::default();
+
+    if let Some(existing) = existing {
+        if input.revision != Some(existing.revision) {
+            return Err(ServiceError::bad_request(
+                "התמונה נערכה במקום אחר - רענן לפני שמירה חוזרת",
+            ));
+        }
+        owners = image_revalidation_owners(&txn, &image_id).await?;
+        let updated = txn
+            .execute_raw(Statement::from_sql_and_values(
+                DatabaseBackend::MySql,
+                "UPDATE tanahpedia_image SET url = ?, width = ?, height = ?, alt_text = ?, caption = ?, creator = ?, credit_line = ?, source_name = ?, source_url = ?, license_name = ?, license_url = ?, is_public_domain = ?, modifications = ?, permission_evidence = ?, is_public = ?, revision = revision + 1 WHERE id = ? AND revision = ?",
+                values
+                    .into_iter()
+                    .chain([image_id.clone().into(), existing.revision.into()]),
+            ))
+            .await
+            .map_err(db_error)?;
+        if updated.rows_affected() == 0 {
+            return Err(ServiceError::bad_request(
+                "התמונה נערכה במקום אחר - רענן לפני שמירה חוזרת",
+            ));
+        }
     } else {
         if input.id.is_some() {
             return Err(ServiceError::bad_request("התמונה לא נמצאה"));
         }
-        let columns = COLUMNS.join(", ");
-        let placeholders = COLUMNS.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
         txn.execute_raw(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
-            format!("INSERT INTO tanahpedia_image (id, {columns}) VALUES (?, {placeholders})"),
+            "INSERT INTO tanahpedia_image (id, url, width, height, alt_text, caption, creator, credit_line, source_name, source_url, license_name, license_url, is_public_domain, modifications, permission_evidence, is_public, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
             std::iter::once(image_id.clone().into()).chain(values),
         ))
         .await
@@ -413,19 +576,38 @@ pub async fn put_image_asset(
     }
     txn.commit().await.map_err(db_error)?;
 
-    get_image_asset(db, &image_id)
+    let revalidation = revalidate_image_owners(revalidator, &owners).await;
+    let mut asset = get_image_asset(db, &image_id)
         .await?
-        .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))
+        .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))?;
+    asset.revalidation = revalidation;
+    Ok(asset)
 }
 
 /// Delete an image asset; its entity/entry links cascade away with it.
-pub async fn delete_image_asset(db: &Database, image_id: &str) -> Result<bool, ServiceError> {
+pub async fn delete_image_asset(
+    db: &Database,
+    revalidator: &WebsiteRevalidator,
+    image_id: &str,
+) -> Result<TanahpediaImageWriteResult, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::delete_image_asset", %image_id);
+    // The FK cascade destroys every link row, so capture the affected owners
+    // before the delete — they are impossible to reconstruct afterwards.
+    let owners = image_revalidation_owners(db.get_connection(), image_id).await?;
     let result = image::Entity::delete_by_id(image_id)
         .exec(db.get_connection())
         .await
         .map_err(db_error)?;
-    Ok(result.rows_affected > 0)
+    let affected = result.rows_affected > 0;
+    let revalidation = if affected {
+        revalidate_image_owners(revalidator, &owners).await
+    } else {
+        None
+    };
+    Ok(TanahpediaImageWriteResult {
+        affected,
+        revalidation,
+    })
 }
 
 /// The `owner` side of a link row — ENTRY scopes `entry_id`, ENTITY scopes
@@ -440,29 +622,20 @@ struct LinkWriteSpec<'a> {
 async fn assert_owner_exists(
     txn: &sea_orm::DatabaseTransaction,
     spec: &LinkWriteSpec<'_>,
-) -> Result<(), ServiceError> {
-    let (found, missing_label) = match spec.owner_kind {
-        "ENTRY" => (
-            entry::Entity::find_by_id(spec.owner_id)
-                .one(txn)
-                .await
-                .map_err(db_error)?
-                .is_some(),
-            "הערך לא נמצא",
-        ),
-        _ => (
-            entity::Entity::find_by_id(spec.owner_id)
-                .one(txn)
-                .await
-                .map_err(db_error)?
-                .is_some(),
-            "הישות לא נמצאה",
-        ),
-    };
-    if found {
-        Ok(())
-    } else {
-        Err(ServiceError::bad_request(missing_label))
+) -> Result<Option<String>, ServiceError> {
+    match spec.owner_kind {
+        "ENTRY" => entry::Entity::find_by_id(spec.owner_id)
+            .one(txn)
+            .await
+            .map_err(db_error)?
+            .map(|model| Some(model.unique_name))
+            .ok_or_else(|| ServiceError::bad_request("הערך לא נמצא")),
+        _ => entity::Entity::find_by_id(spec.owner_id)
+            .one(txn)
+            .await
+            .map_err(db_error)?
+            .map(|_| None)
+            .ok_or_else(|| ServiceError::bad_request("הישות לא נמצאה")),
     }
 }
 
@@ -495,6 +668,7 @@ async fn link_row_by_id(
 /// same transaction; the `primary_owner` unique index backstops it.
 async fn put_image_link(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     spec: LinkWriteSpec<'_>,
     link_id: Option<&str>,
     image_id: &str,
@@ -502,7 +676,7 @@ async fn put_image_link(
     is_primary: Option<bool>,
 ) -> Result<TanahpediaImageLinkFull, ServiceError> {
     let txn = db.get_connection().begin().await.map_err(db_error)?;
-    assert_owner_exists(&txn, &spec).await?;
+    let entry_unique_name = assert_owner_exists(&txn, &spec).await?;
 
     // Attach needs the asset; update only needs the link row.
     if link_id.is_none()
@@ -602,14 +776,19 @@ async fn put_image_link(
     }
     txn.commit().await.map_err(db_error)?;
 
-    link_row_by_id(db, &spec, &effective_id)
+    let owners = owner_targets(spec.owner_kind, spec.owner_id, entry_unique_name);
+    let revalidation = revalidate_image_owners(revalidator, &owners).await;
+    let mut link = link_row_by_id(db, &spec, &effective_id)
         .await?
         .map(|row| to_link_full(&row, spec.owner_kind))
-        .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))
+        .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))?;
+    link.revalidation = revalidation;
+    Ok(link)
 }
 
 pub async fn put_entity_image_link(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     input: TanahpediaEntityImageLinkInput,
 ) -> Result<TanahpediaImageLinkFull, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::put_entity_image_link");
@@ -621,6 +800,7 @@ pub async fn put_entity_image_link(
     }
     put_image_link(
         db,
+        revalidator,
         LinkWriteSpec {
             table: "tanahpedia_entity_image",
             owner_column: "entity_id",
@@ -637,6 +817,7 @@ pub async fn put_entity_image_link(
 
 pub async fn put_entry_image_link(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     input: TanahpediaEntryImageLinkInput,
 ) -> Result<TanahpediaImageLinkFull, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::put_entry_image_link");
@@ -648,6 +829,7 @@ pub async fn put_entry_image_link(
     }
     put_image_link(
         db,
+        revalidator,
         LinkWriteSpec {
             table: "tanahpedia_entry_image",
             owner_column: "entry_id",
@@ -663,31 +845,105 @@ pub async fn put_entry_image_link(
 }
 
 /// Remove one image link — unlinking never leaves a stale primary because
-/// the flag lives on the removed row.
-pub async fn remove_entity_image_link(db: &Database, id: &str) -> Result<bool, ServiceError> {
+/// the flag lives on the removed row. The owner is captured before the row
+/// disappears so the affected gallery can be expired.
+pub async fn remove_entity_image_link(
+    db: &Database,
+    revalidator: &WebsiteRevalidator,
+    id: &str,
+) -> Result<TanahpediaImageWriteResult, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::remove_entity_image_link", %id);
+    let txn = db.get_connection().begin().await.map_err(db_error)?;
+    let owner_id = entity_image::Entity::find_by_id(id)
+        .one(&txn)
+        .await
+        .map_err(db_error)?
+        .map(|link| link.entity_id);
     let result = entity_image::Entity::delete_by_id(id)
-        .exec(db.get_connection())
+        .exec(&txn)
         .await
         .map_err(db_error)?;
-    Ok(result.rows_affected > 0)
+    txn.commit().await.map_err(db_error)?;
+    let affected = result.rows_affected > 0;
+    let revalidation = if affected {
+        match owner_id {
+            Some(owner_id) => {
+                revalidate_image_owners(
+                    revalidator,
+                    &ImageRevalidationOwners {
+                        entry_unique_names: Vec::new(),
+                        entity_ids: vec![owner_id],
+                    },
+                )
+                .await
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+    Ok(TanahpediaImageWriteResult {
+        affected,
+        revalidation,
+    })
 }
 
 /// Remove one image link — see `remove_entity_image_link`.
-pub async fn remove_entry_image_link(db: &Database, id: &str) -> Result<bool, ServiceError> {
+pub async fn remove_entry_image_link(
+    db: &Database,
+    revalidator: &WebsiteRevalidator,
+    id: &str,
+) -> Result<TanahpediaImageWriteResult, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::remove_entry_image_link", %id);
+    let txn = db.get_connection().begin().await.map_err(db_error)?;
+    let owner_id = entry_image::Entity::find_by_id(id)
+        .one(&txn)
+        .await
+        .map_err(db_error)?
+        .map(|link| link.entry_id);
+    let entry_unique_name = match &owner_id {
+        Some(owner_id) => entry::Entity::find_by_id(owner_id)
+            .one(&txn)
+            .await
+            .map_err(db_error)?
+            .map(|model| model.unique_name),
+        None => None,
+    };
     let result = entry_image::Entity::delete_by_id(id)
-        .exec(db.get_connection())
+        .exec(&txn)
         .await
         .map_err(db_error)?;
-    Ok(result.rows_affected > 0)
+    txn.commit().await.map_err(db_error)?;
+    let affected = result.rows_affected > 0;
+    let revalidation = if affected {
+        match entry_unique_name {
+            Some(unique_name) => {
+                revalidate_image_owners(
+                    revalidator,
+                    &ImageRevalidationOwners {
+                        entry_unique_names: vec![unique_name],
+                        entity_ids: Vec::new(),
+                    },
+                )
+                .await
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+    Ok(TanahpediaImageWriteResult {
+        affected,
+        revalidation,
+    })
 }
 
 /// Explicitly clear the owner's primary flag — the "no primary" state.
 pub async fn clear_entity_primary_image(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     entity_id: &str,
-) -> Result<bool, ServiceError> {
+) -> Result<TanahpediaImageWriteResult, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::clear_entity_primary_image", %entity_id);
     let result = db
         .get_connection()
@@ -698,15 +954,39 @@ pub async fn clear_entity_primary_image(
         ))
         .await
         .map_err(db_error)?;
-    Ok(result.rows_affected() > 0)
+    let affected = result.rows_affected() > 0;
+    let revalidation = if affected {
+        revalidate_image_owners(
+            revalidator,
+            &ImageRevalidationOwners {
+                entry_unique_names: Vec::new(),
+                entity_ids: vec![entity_id.to_string()],
+            },
+        )
+        .await
+    } else {
+        None
+    };
+    Ok(TanahpediaImageWriteResult {
+        affected,
+        revalidation,
+    })
 }
 
 /// Explicitly clear the owner's primary flag — see `clear_entity_primary_image`.
 pub async fn clear_entry_primary_image(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     entry_id: &str,
-) -> Result<bool, ServiceError> {
+) -> Result<TanahpediaImageWriteResult, ServiceError> {
     tracing::info_span!("tanahpedia_images_service::clear_entry_primary_image", %entry_id);
+    // Resolve the invalidation target before the write: after commit a
+    // transient read error must not make the committed mutation look failed.
+    let entry_unique_name = entry::Entity::find_by_id(entry_id)
+        .one(db.get_connection())
+        .await
+        .map_err(db_error)?
+        .map(|model| model.unique_name);
     let result = db
         .get_connection()
         .execute_raw(Statement::from_sql_and_values(
@@ -716,7 +996,28 @@ pub async fn clear_entry_primary_image(
         ))
         .await
         .map_err(db_error)?;
-    Ok(result.rows_affected() > 0)
+    let affected = result.rows_affected() > 0;
+    let revalidation = if affected {
+        match entry_unique_name {
+            Some(unique_name) => {
+                revalidate_image_owners(
+                    revalidator,
+                    &ImageRevalidationOwners {
+                        entry_unique_names: vec![unique_name],
+                        entity_ids: Vec::new(),
+                    },
+                )
+                .await
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+    Ok(TanahpediaImageWriteResult {
+        affected,
+        revalidation,
+    })
 }
 
 #[cfg(test)]
@@ -751,6 +1052,7 @@ mod tests {
             modifications: None,
             permission_evidence: Some("evidence".to_string()),
             is_public: true,
+            revision: 1,
             created_at: now(),
             updated_at: now(),
         }
@@ -769,8 +1071,8 @@ mod tests {
             ("is_primary", is_primary.into()),
             ("image_id", image_id.into()),
             ("url", "https://cdn.example.com/img.jpg".into()),
-            ("width", 800_i16.into()),
-            ("height", 600_i16.into()),
+            ("width", 800_u16.into()),
+            ("height", 600_u16.into()),
             ("alt_text", "תיאור התמונה".into()),
             ("caption", "כיתוב".into()),
             ("creator", "יוצר".into()),
@@ -786,6 +1088,7 @@ mod tests {
             ("modifications", Value::String(None)),
             ("permission_evidence", "evidence".into()),
             ("is_public", true.into()),
+            ("revision", 1_i32.into()),
         ]
         .into_iter()
         .map(|(key, value)| (key.to_string(), value))
@@ -938,6 +1241,7 @@ mod tests {
             modifications: None,
             permission_evidence: None,
             is_public: None,
+            revision: None,
         };
         over(&mut input);
         input
@@ -948,18 +1252,33 @@ mod tests {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
 
-        let no_url = put_image_asset(&db, asset_input(|i| i.url = " ".to_string())).await;
+        let no_url = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| i.url = " ".to_string()),
+        )
+        .await;
         assert!(no_url.is_err());
 
-        let no_alt = put_image_asset(&db, asset_input(|i| i.alt_text = "".to_string())).await;
+        let no_alt = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| i.alt_text = "".to_string()),
+        )
+        .await;
         assert!(no_alt.is_err());
 
         // Publishing requires recorded permission/public-domain evidence.
-        let public_no_evidence =
-            put_image_asset(&db, asset_input(|i| i.is_public = Some(true))).await;
+        let public_no_evidence = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| i.is_public = Some(true)),
+        )
+        .await;
         assert!(public_no_evidence.is_err());
         let public_blank_evidence = put_image_asset(
             &db,
+            &WebsiteRevalidator::new(None, None),
             asset_input(|i| {
                 i.is_public = Some(true);
                 i.permission_evidence = Some("  ".to_string());
@@ -983,10 +1302,18 @@ mod tests {
                 .into_connection(),
         );
 
-        let asset = put_image_asset(&db, asset_input(|_| {})).await.unwrap();
+        let asset = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|_| {}),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(asset.image_id, "img-new");
         assert_eq!(asset.alt_text, "תיאור התמונה");
+        // A brand-new unattached asset has no rendered surface to expire.
+        assert_eq!(asset.revalidation, None);
     }
 
     #[tokio::test]
@@ -996,6 +1323,32 @@ mod tests {
                 .append_query_results::<image::Model, Vec<image::Model>, _>([vec![image_model(
                     "img1",
                 )]])
+                // owner lookup before the write: one entry owner, one entity
+                // owner, then the entry unique-name lookup for revalidation
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("entry_id", "e1".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("entity_id", "en1".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("unique_name", "ערך".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
                 .append_exec_results([exec_result(1)])
                 .append_query_results::<image::Model, Vec<image::Model>, _>([vec![image_model(
                     "img1",
@@ -1003,10 +1356,24 @@ mod tests {
                 .into_connection(),
         );
 
-        let updated = put_image_asset(&update_db, asset_input(|i| i.id = Some("img1".to_string())))
-            .await
-            .unwrap();
+        let updated = put_image_asset(
+            &update_db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| {
+                i.id = Some("img1".to_string());
+                i.revision = Some(1);
+            }),
+        )
+        .await
+        .unwrap();
         assert_eq!(updated.image_id, "img1");
+        assert_eq!(updated.revalidation.as_deref(), Some("SKIPPED"));
+        let log = format!(
+            "{:?}",
+            update_db.get_connection().clone().into_transaction_log()
+        );
+        assert!(log.contains("revision = revision + 1"), "{log}");
+        assert!(log.contains("WHERE id = ? AND revision = ?"), "{log}");
 
         let missing_db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
@@ -1015,6 +1382,7 @@ mod tests {
         );
         let missing = put_image_asset(
             &missing_db,
+            &WebsiteRevalidator::new(None, None),
             asset_input(|i| i.id = Some("ghost".to_string())),
         )
         .await;
@@ -1022,20 +1390,122 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_image_asset_reports_rows_affected() {
-        let deleted = Database::from_connection(
+    async fn put_image_asset_rejects_a_stale_revision_before_any_write() {
+        let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                .append_exec_results([exec_result(1)])
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![image_model(
+                    "img1",
+                )]])
                 .into_connection(),
         );
-        assert!(delete_image_asset(&deleted, "img1").await.unwrap());
 
-        let kept = Database::from_connection(
+        let result = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| {
+                i.id = Some("img1".to_string());
+                i.revision = Some(0);
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(!log.contains("UPDATE tanahpedia_image"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn put_image_asset_rejects_a_revision_guard_race_without_success() {
+        let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![image_model(
+                    "img1",
+                )]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
                 .append_exec_results([exec_result(0)])
                 .into_connection(),
         );
-        assert!(!delete_image_asset(&kept, "img1").await.unwrap());
+
+        let result = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| {
+                i.id = Some("img1".to_string());
+                i.revision = Some(1);
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_image_asset_reports_rows_affected() {
+        let deleted = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("entry_id", "e1".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("entity_id", "en1".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        [("unique_name", "ערך".into())]
+                            .into_iter()
+                            .map(|(k, v): (&'static str, Value)| (k.to_string(), v))
+                            .collect(),
+                    ],
+                ])
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let deleted_result =
+            delete_image_asset(&deleted, &WebsiteRevalidator::new(None, None), "img1")
+                .await
+                .unwrap();
+        assert!(deleted_result.affected);
+        assert_eq!(deleted_result.revalidation.as_deref(), Some("SKIPPED"));
+        let log = format!(
+            "{:?}",
+            deleted.get_connection().clone().into_transaction_log()
+        );
+        let owner_lookup = log.find("tanahpedia_entry_image").unwrap();
+        let delete = log.rfind("DELETE FROM").unwrap();
+        assert!(owner_lookup < delete, "{log}");
+
+        let kept = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_exec_results([exec_result(0)])
+                .into_connection(),
+        );
+        assert!(
+            !delete_image_asset(&kept, &WebsiteRevalidator::new(None, None), "img1")
+                .await
+                .unwrap()
+                .affected
+        );
     }
 
     #[tokio::test]
@@ -1045,6 +1515,7 @@ mod tests {
 
         let no_entity = put_entity_image_link(
             &db,
+            &WebsiteRevalidator::new(None, None),
             TanahpediaEntityImageLinkInput {
                 id: None,
                 entity_id: " ".to_string(),
@@ -1058,6 +1529,7 @@ mod tests {
 
         let no_image = put_entry_image_link(
             &db,
+            &WebsiteRevalidator::new(None, None),
             TanahpediaEntryImageLinkInput {
                 id: None,
                 entry_id: "e1".to_string(),
@@ -1088,6 +1560,26 @@ mod tests {
             name: "ישות".to_string(),
             created_at: now(),
             updated_at: now(),
+        }
+    }
+
+    fn entity_link_model(id: &str, entity_id: &str) -> entity_image::Model {
+        entity_image::Model {
+            id: id.to_string(),
+            entity_id: entity_id.to_string(),
+            image_id: "img1".to_string(),
+            sort_order: 0,
+            is_primary: false,
+        }
+    }
+
+    fn entry_link_model(id: &str, entry_id: &str) -> entry_image::Model {
+        entry_image::Model {
+            id: id.to_string(),
+            entry_id: entry_id.to_string(),
+            image_id: "img1".to_string(),
+            sort_order: 0,
+            is_primary: false,
         }
     }
 
@@ -1123,6 +1615,7 @@ mod tests {
 
         let link = put_entity_image_link(
             &db,
+            &WebsiteRevalidator::new(None, None),
             TanahpediaEntityImageLinkInput {
                 id: None,
                 entity_id: "en1".to_string(),
@@ -1137,6 +1630,7 @@ mod tests {
         assert_eq!(link.id, "generated");
         assert_eq!(link.owner_kind, "ENTITY");
         assert!(link.is_primary);
+        assert_eq!(link.revalidation.as_deref(), Some("SKIPPED"));
     }
 
     #[tokio::test]
@@ -1155,6 +1649,7 @@ mod tests {
 
         let link = put_entry_image_link(
             &db,
+            &WebsiteRevalidator::new(None, None),
             TanahpediaEntryImageLinkInput {
                 id: Some("l1".to_string()),
                 entry_id: "e1".to_string(),
@@ -1167,6 +1662,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(link.id, "l1");
+        assert_eq!(link.revalidation.as_deref(), Some("SKIPPED"));
     }
 
     #[tokio::test]
@@ -1182,6 +1678,7 @@ mod tests {
 
         let result = put_entry_image_link(
             &db,
+            &WebsiteRevalidator::new(None, None),
             TanahpediaEntryImageLinkInput {
                 id: Some("ghost".to_string()),
                 entry_id: "e1".to_string(),
@@ -1198,16 +1695,71 @@ mod tests {
     async fn remove_and_clear_report_rows_affected() {
         let removed = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity_image::Model, Vec<entity_image::Model>, _>([vec![
+                    entity_link_model("l1", "en1"),
+                ]])
                 .append_exec_results([exec_result(1)])
                 .into_connection(),
         );
-        assert!(remove_entity_image_link(&removed, "l1").await.unwrap());
+        let removed_result =
+            remove_entity_image_link(&removed, &WebsiteRevalidator::new(None, None), "l1")
+                .await
+                .unwrap();
+        assert!(removed_result.affected);
+        assert_eq!(removed_result.revalidation.as_deref(), Some("SKIPPED"));
+
+        let removed_entry = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_image::Model, Vec<entry_image::Model>, _>([vec![
+                    entry_link_model("l2", "e1"),
+                ]])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "e1",
+                )]])
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let removed_entry_result =
+            remove_entry_image_link(&removed_entry, &WebsiteRevalidator::new(None, None), "l2")
+                .await
+                .unwrap();
+        assert!(removed_entry_result.affected);
+        assert_eq!(
+            removed_entry_result.revalidation.as_deref(),
+            Some("SKIPPED")
+        );
 
         let cleared = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_exec_results([exec_result(1)])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "e1",
+                )]])
                 .into_connection(),
         );
-        assert!(clear_entry_primary_image(&cleared, "e1").await.unwrap());
+        let cleared_result =
+            clear_entry_primary_image(&cleared, &WebsiteRevalidator::new(None, None), "e1")
+                .await
+                .unwrap();
+        assert!(cleared_result.affected);
+        assert_eq!(cleared_result.revalidation.as_deref(), Some("SKIPPED"));
+
+        let cleared_entity = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let cleared_entity_result = clear_entity_primary_image(
+            &cleared_entity,
+            &WebsiteRevalidator::new(None, None),
+            "en1",
+        )
+        .await
+        .unwrap();
+        assert!(cleared_entity_result.affected);
+        assert_eq!(
+            cleared_entity_result.revalidation.as_deref(),
+            Some("SKIPPED")
+        );
     }
 }

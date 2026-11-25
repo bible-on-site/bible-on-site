@@ -490,6 +490,7 @@ describe("tanahpedia service", () => {
 				{ role: "PROPHET", cnt: "3" },
 				{ role: "KING", cnt: 2 },
 			])
+			.mockResolvedValueOnce([{ role: "TANAH_COMMENTATOR", cnt: "1" }])
 			.mockResolvedValueOnce([
 				{ cat: "BEHEMA", cnt: "4" },
 				{ cat: "TAHOR", cnt: 5 },
@@ -512,6 +513,7 @@ describe("tanahpedia service", () => {
 			.mockResolvedValueOnce([{ entityType: "PLACE", cnt: "9" }])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([{ c: "6" }]);
 
 		await expect(getCategoryCounts()).resolves.toMatchObject({ PLACE: 9 });
@@ -519,6 +521,7 @@ describe("tanahpedia service", () => {
 
 	it("leaves place counts at zero when no fallback place count row exists", async () => {
 		mockQuery
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])

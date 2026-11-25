@@ -537,6 +537,10 @@ export function EntryStructuralPanel({ entryId }: EntryStructuralPanelProps) {
 		void queryClient.invalidateQueries({
 			queryKey: structuralQueryKey(entryId),
 		});
+		// Entity membership feeds the image panel's entity groups too.
+		void queryClient.invalidateQueries({
+			queryKey: ["tanahpedia-entry-images", entryId],
+		});
 	}, [queryClient, entryId]);
 
 	const { data, isLoading, error } = useQuery({

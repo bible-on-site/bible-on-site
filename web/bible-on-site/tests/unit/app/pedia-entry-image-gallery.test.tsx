@@ -59,7 +59,7 @@ describe("EntryImageGallery (#3769)", () => {
 						id: "entity-link",
 						ownerKind: "ENTITY",
 						ownerId: "ent-1",
-						image: image({ altText: "ישות" }),
+						image: image({ imageId: "img-entity", altText: "ישות" }),
 					}),
 				]}
 			/>,
@@ -168,5 +168,24 @@ describe("EntryImageGallery (#3769)", () => {
 			"https://creativecommons.org/licenses/by-sa/4.0/",
 		);
 		expect(screen.queryByText("נחלת הכלל")).not.toBeInTheDocument();
+	});
+
+	it("renders an explicit entry cross-link once when the entity inherits the same asset", () => {
+		render(
+			<EntryImageGallery
+				entryImages={[link({ id: "entry-copy", image: image({ altText: "ערך" }) })]}
+				entityImages={[
+					link({
+						id: "entity-copy",
+						ownerKind: "ENTITY",
+						ownerId: "ent-1",
+						image: image({ altText: "ישות" }),
+					}),
+				]}
+			/>,
+		);
+
+		expect(screen.getAllByRole("img")).toHaveLength(1);
+		expect(screen.getByRole("img")).toHaveAttribute("alt", "ערך");
 	});
 });

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
 import { useUndoAction } from "~/components/UndoToast";
 import { classifySaveError } from "~/lib/server-fn-errors";
-import { uploadPediaImageFile } from "~/server/s3";
+import { createPediaImageUpload, uploadPediaImageChunk } from "~/server/s3";
 import {
 	clearPrimaryImage,
 	type EntityImageGroup,
@@ -36,6 +36,7 @@ interface AssetDraft {
 	modifications: string;
 	permissionEvidence: string;
 	isPublic: boolean;
+	revision: number | null;
 }
 
 const EMPTY_DRAFT: AssetDraft = {
@@ -55,6 +56,7 @@ const EMPTY_DRAFT: AssetDraft = {
 	modifications: "",
 	permissionEvidence: "",
 	isPublic: false,
+	revision: null,
 };
 
 interface EditorState {
@@ -82,6 +84,7 @@ function draftFromLink(link: PediaImageLinkView): AssetDraft {
 		modifications: image.modifications ?? "",
 		permissionEvidence: image.permissionEvidence ?? "",
 		isPublic: image.isPublic,
+		revision: image.revision,
 	};
 }
 
@@ -107,6 +110,7 @@ function draftToInput(draft: AssetDraft): PediaImageAssetInput {
 		modifications: draft.modifications,
 		permissionEvidence: draft.permissionEvidence,
 		isPublic: draft.isPublic,
+		revision: draft.revision,
 	};
 }
 
@@ -130,7 +134,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
  * Owns both scopes rendered on the public entry page: links attached
  * directly to the entry plus the links of each entity attached to it (the
  * website merges both). Attach accepts an uploaded file (S3 via
- * `uploadPediaImageFile`) or an external URL; every save publishes
+ * chunked S3 upload) or an external URL; every save publishes
  * immediately and revalidates the site — same explicit-save boundary as the
  * alias manager.
  */
@@ -148,7 +152,7 @@ export function EntryImagesPanel({ entryId }: EntryImagesPanelProps) {
 	const scheduleUndo = useUndoAction();
 
 	const invalidate = () =>
-		queryClient.invalidateQueries({ queryKey: imagesKey });
+		queryClient.invalidateQueries({ queryKey: ["tanahpedia-entry-images"] });
 
 	const reportError = (err: unknown) =>
 		setActionError(classifySaveError(err).message);
@@ -225,23 +229,31 @@ export function EntryImagesPanel({ entryId }: EntryImagesPanelProps) {
 		}
 	};
 
-	const uploadFile = async (file: File) => {
-		setActionError(null);
-		const base64Data = await new Promise<string>((resolve, reject) => {
+	const readChunk = (blob: Blob) =>
+		new Promise<string>((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = () =>
 				resolve((reader.result as string).split(",")[1] ?? "");
 			reader.onerror = () => reject(reader.error);
-			reader.readAsDataURL(file);
+			reader.readAsDataURL(blob);
 		});
+
+	const uploadFile = async (file: File) => {
+		setActionError(null);
 		try {
-			const { imageUrl } = await uploadPediaImageFile({
-				data: {
-					fileName: file.name,
-					contentType: file.type,
-					base64Data,
-				},
+			const session = await createPediaImageUpload({
+				data: { contentType: file.type, totalSize: file.size },
 			});
+			let imageUrl: string | undefined;
+			for (let index = 0; index < session.chunkCount; index += 1) {
+				const start = index * session.chunkBytes;
+				const base64Data = await readChunk(file.slice(start, start + session.chunkBytes));
+				const result = await uploadPediaImageChunk({
+					data: { uploadId: session.uploadId, chunkIndex: index, base64Data },
+				});
+				imageUrl = result.complete ? result.imageUrl : imageUrl;
+			}
+			if (!imageUrl) throw new Error("Image upload did not complete");
 			setEditor((prev) =>
 				prev ? { ...prev, draft: { ...prev.draft, url: imageUrl } } : prev,
 			);

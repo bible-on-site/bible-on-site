@@ -67,6 +67,12 @@ pub struct TanahpediaImageAsset {
     /// Permission / public-domain evidence; never exposed publicly.
     pub permission_evidence: Option<String>,
     pub is_public: bool,
+    /// Optimistic editor revision; increments on every asset write.
+    pub revision: i32,
+    /// Post-commit website-invalidation outcome — only set on mutation
+    /// results (`null` on reads and on writes with no public surface):
+    /// APPLIED / FAILED / SKIPPED.
+    pub revalidation: Option<String>,
 }
 
 /// Editor view of an image link — same link fields as `TanahpediaImageLink`
@@ -80,6 +86,21 @@ pub struct TanahpediaImageLinkFull {
     pub sort_order: i32,
     pub is_primary: bool,
     pub image: TanahpediaImageAsset,
+    /// Post-commit website-invalidation outcome — same mutation-result
+    /// contract as `TanahpediaImageAsset.revalidation`.
+    pub revalidation: Option<String>,
+}
+
+/// Boolean-style image mutations still report the post-commit website
+/// invalidation outcome, so an editor can tell a committed write apart from
+/// a no-op and see when revalidation was skipped/failed.
+#[derive(SimpleObject)]
+pub struct TanahpediaImageWriteResult {
+    /// Whether the mutation affected any row.
+    pub affected: bool,
+    /// APPLIED / FAILED / SKIPPED; `null` when no row changed or no public
+    /// owner surface could be resolved.
+    pub revalidation: Option<String>,
 }
 
 /// Upsert payload for `putTanahpediaImageAsset` — `id` null creates a new
@@ -102,6 +123,8 @@ pub struct TanahpediaImageAssetInput {
     pub modifications: Option<String>,
     pub permission_evidence: Option<String>,
     pub is_public: Option<bool>,
+    /// Current row revision — required when `id` updates an existing asset.
+    pub revision: Option<i32>,
 }
 
 /// Attach or update an entity-image link. `id` null attaches `imageId` to

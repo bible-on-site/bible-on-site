@@ -210,6 +210,21 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// <summary>Entry body is shown - loaded and not a disambiguation/not-found state.</summary>
     public bool ShowEntry => IsLoaded && !IsDisambiguation && !IsNotFound;
 
+    /// <summary>Expand/collapse one figure's attribution details.</summary>
+    [RelayCommand]
+    private static void ToggleImageAttribution(TanahpediaImageLink link)
+    {
+        link.IsAttributionExpanded = !link.IsAttributionExpanded;
+    }
+
+    /// <summary>Open a source/license provenance link through the same
+    /// internal/external routing as article HTML links.</summary>
+    [RelayCommand]
+    private async Task OpenImageLinkAsync(string? url)
+    {
+        await AppLinkHelper.FollowHtmlLinkAsync(url, Launcher.Default, _navigator);
+    }
+
     /// <summary>
     /// Loads the entry by name, then resolves synonyms when no canonical entry
     /// owns it - mirroring the website's slug resolution (alias → single
@@ -385,8 +400,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         // Entry-scope links first, then entity-scope — the gallery merge the
         // website renders (#3769).
+        var seenImageIds = new HashSet<string>(StringComparer.Ordinal);
         Images = new ObservableCollection<TanahpediaImageLink>(
-            detail.Images.Concat(detail.EntityImages));
+            detail.Images.Concat(detail.EntityImages)
+                .Where(link => seenImageIds.Add(link.Image.ImageId)));
         IsLoaded = true;
     }
 

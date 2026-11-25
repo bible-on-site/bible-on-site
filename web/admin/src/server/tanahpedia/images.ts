@@ -51,6 +51,8 @@ export interface PediaImageAssetView {
 	modifications: string | null;
 	permissionEvidence: string | null;
 	isPublic: boolean;
+	/** Optimistic-write revision; required when updating an existing asset. */
+	revision: number;
 }
 
 export interface PediaImageLinkView {
@@ -92,6 +94,8 @@ export interface PediaImageAssetInput {
 	modifications?: string | null;
 	permissionEvidence?: string | null;
 	isPublic?: boolean | null;
+	/** Current row revision — required for updates, omitted on create. */
+	revision?: number | null;
 }
 
 export interface PediaImageLinkInput {
@@ -121,6 +125,7 @@ interface AssetRow {
 	modifications: string | null;
 	permissionEvidence: string | null;
 	isPublic: number;
+	revision: number;
 }
 
 interface LinkRow extends AssetRow {
@@ -130,24 +135,70 @@ interface LinkRow extends AssetRow {
 	isPrimary: number;
 }
 
-const OWNER_SPEC: Record<ImageOwnerKind, { table: string; column: string }> = {
-	ENTRY: { table: "tanahpedia_entry_image", column: "entry_id" },
-	ENTITY: { table: "tanahpedia_entity_image", column: "entity_id" },
-};
-
 const ASSET_COLUMNS = `i.id AS imageId, i.url AS url, i.width AS width,
 	i.height AS height, i.alt_text AS altText, i.caption AS caption,
 	i.creator AS creator, i.credit_line AS creditLine, i.source_name AS sourceName,
 	i.source_url AS sourceUrl, i.license_name AS licenseName,
 	i.license_url AS licenseUrl, i.is_public_domain AS isPublicDomain,
 	i.modifications AS modifications, i.permission_evidence AS permissionEvidence,
-	i.is_public AS isPublic`;
+	i.is_public AS isPublic, i.revision AS revision`;
 
-function linkSelect(table: string, ownerColumn: string): string {
-	return `SELECT l.id AS id, l.${ownerColumn} AS ownerId, l.sort_order AS sortOrder,
-		l.is_primary AS isPrimary, ${ASSET_COLUMNS}
-	 FROM ${table} l JOIN tanahpedia_image i ON i.id = l.image_id`;
+interface OwnerSql {
+	ownerExists: string;
+	selectLinks: string;
+	clearSiblingPrimaries: string;
+	updateLink: string;
+	nextSortOrder: string;
+	insertLink: string;
+	selectOwnerByLinkId: string;
+	deleteLink: string;
+	clearPrimary: string;
 }
+
+// Fully static per-owner SQL: the link table and owner column are part of
+// each statement, never interpolated into a query string at runtime.
+const OWNER_SQL: Record<ImageOwnerKind, OwnerSql> = {
+	ENTRY: {
+		ownerExists: "SELECT id FROM tanahpedia_entry WHERE id = ?",
+		selectLinks: `SELECT l.id AS id, l.entry_id AS ownerId, l.sort_order AS sortOrder,
+			l.is_primary AS isPrimary, ${ASSET_COLUMNS}
+		 FROM tanahpedia_entry_image l JOIN tanahpedia_image i ON i.id = l.image_id
+		 WHERE l.entry_id = ? ORDER BY l.sort_order, l.id`,
+		clearSiblingPrimaries:
+			"UPDATE tanahpedia_entry_image SET is_primary = 0 WHERE entry_id = ? AND id <> ?",
+		updateLink: `UPDATE tanahpedia_entry_image SET sort_order = COALESCE(?, sort_order),
+			 is_primary = COALESCE(?, is_primary) WHERE id = ? AND entry_id = ?`,
+		nextSortOrder:
+			"SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tanahpedia_entry_image WHERE entry_id = ?",
+		insertLink: `INSERT INTO tanahpedia_entry_image (id, entry_id, image_id, sort_order, is_primary)
+			 VALUES (?, ?, ?, ?, ?)`,
+		selectOwnerByLinkId:
+			"SELECT entry_id AS ownerId FROM tanahpedia_entry_image WHERE id = ?",
+		deleteLink: "DELETE FROM tanahpedia_entry_image WHERE id = ?",
+		clearPrimary:
+			"UPDATE tanahpedia_entry_image SET is_primary = 0 WHERE entry_id = ?",
+	},
+	ENTITY: {
+		ownerExists: "SELECT id FROM tanahpedia_entity WHERE id = ?",
+		selectLinks: `SELECT l.id AS id, l.entity_id AS ownerId, l.sort_order AS sortOrder,
+			l.is_primary AS isPrimary, ${ASSET_COLUMNS}
+		 FROM tanahpedia_entity_image l JOIN tanahpedia_image i ON i.id = l.image_id
+		 WHERE l.entity_id = ? ORDER BY l.sort_order, l.id`,
+		clearSiblingPrimaries:
+			"UPDATE tanahpedia_entity_image SET is_primary = 0 WHERE entity_id = ? AND id <> ?",
+		updateLink: `UPDATE tanahpedia_entity_image SET sort_order = COALESCE(?, sort_order),
+			 is_primary = COALESCE(?, is_primary) WHERE id = ? AND entity_id = ?`,
+		nextSortOrder:
+			"SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tanahpedia_entity_image WHERE entity_id = ?",
+		insertLink: `INSERT INTO tanahpedia_entity_image (id, entity_id, image_id, sort_order, is_primary)
+			 VALUES (?, ?, ?, ?, ?)`,
+		selectOwnerByLinkId:
+			"SELECT entity_id AS ownerId FROM tanahpedia_entity_image WHERE id = ?",
+		deleteLink: "DELETE FROM tanahpedia_entity_image WHERE id = ?",
+		clearPrimary:
+			"UPDATE tanahpedia_entity_image SET is_primary = 0 WHERE entity_id = ?",
+	},
+};
 
 function rowToAsset(row: AssetRow): PediaImageAssetView {
 	return {
@@ -167,6 +218,7 @@ function rowToAsset(row: AssetRow): PediaImageAssetView {
 		modifications: row.modifications,
 		permissionEvidence: row.permissionEvidence,
 		isPublic: Number(row.isPublic) === 1,
+		revision: row.revision,
 	};
 }
 
@@ -188,12 +240,7 @@ async function linkRows(
 	ownerKind: ImageOwnerKind,
 	ownerId: string,
 ): Promise<PediaImageLinkView[]> {
-	const { table, column } = OWNER_SPEC[ownerKind];
-	const rows = await query<LinkRow>(
-		`${linkSelect(table, column)}
-		 WHERE l.${column} = ? ORDER BY l.sort_order, l.id`,
-		[ownerId],
-	);
+	const rows = await query<LinkRow>(OWNER_SQL[ownerKind].selectLinks, [ownerId]);
 	return rows.map((row) => rowToLink(row, ownerKind));
 }
 
@@ -298,8 +345,8 @@ export const putImageAsset = createServerFn({ method: "POST" })
 
 		const id = data.id?.trim() || randomUUID();
 		const existing = data.id?.trim()
-			? await queryOne<{ id: string }>(
-					"SELECT id FROM tanahpedia_image WHERE id = ?",
+			? await queryOne<{ id: string; revision: number }>(
+					"SELECT id, revision FROM tanahpedia_image WHERE id = ?",
 					[id],
 				)
 			: null;
@@ -307,35 +354,50 @@ export const putImageAsset = createServerFn({ method: "POST" })
 			throw validationError("התמונה לא נמצאה");
 		}
 
-		const fields: [string, unknown][] = [
-			["url", url],
-			["width", data.width ?? null],
-			["height", data.height ?? null],
-			["alt_text", altText],
-			["caption", blankToNull(data.caption)],
-			["creator", blankToNull(data.creator)],
-			["credit_line", blankToNull(data.creditLine)],
-			["source_name", blankToNull(data.sourceName)],
-			["source_url", blankToNull(data.sourceUrl)],
-			["license_name", blankToNull(data.licenseName)],
-			["license_url", blankToNull(data.licenseUrl)],
-			["is_public_domain", data.isPublicDomain === true ? 1 : 0],
-			["modifications", blankToNull(data.modifications)],
-			["permission_evidence", permissionEvidence],
-			["is_public", isPublic ? 1 : 0],
+		// Public domain is a rights state, not a license. Persist the states
+		// mutually exclusively even when a form still carries a stale license.
+		const isPublicDomain = data.isPublicDomain === true;
+		const licenseName = isPublicDomain ? null : blankToNull(data.licenseName);
+		const licenseUrl = isPublicDomain ? null : blankToNull(data.licenseUrl);
+		const values: unknown[] = [
+			url,
+			data.width ?? null,
+			data.height ?? null,
+			altText,
+			blankToNull(data.caption),
+			blankToNull(data.creator),
+			blankToNull(data.creditLine),
+			blankToNull(data.sourceName),
+			blankToNull(data.sourceUrl),
+			licenseName,
+			licenseUrl,
+			isPublicDomain ? 1 : 0,
+			blankToNull(data.modifications),
+			permissionEvidence,
+			isPublic ? 1 : 0,
 		];
 		if (existing) {
-			const assignments = fields.map(([column]) => `${column} = ?`).join(", ");
-			await execute(`UPDATE tanahpedia_image SET ${assignments} WHERE id = ?`, [
-				...fields.map(([, v]) => v),
-				id,
-			]);
+			if (data.revision !== existing.revision) {
+				throw validationError("התמונה נערכה במקום אחר - רענן לפני שמירה חוזרת");
+			}
+			const updated = await execute(
+				`UPDATE tanahpedia_image SET url = ?, width = ?, height = ?, alt_text = ?,
+				 caption = ?, creator = ?, credit_line = ?, source_name = ?, source_url = ?,
+				 license_name = ?, license_url = ?, is_public_domain = ?, modifications = ?,
+				 permission_evidence = ?, is_public = ?, revision = revision + 1
+				 WHERE id = ? AND revision = ?`,
+				[...values, id, data.revision],
+			);
+			if (updated.affectedRows === 0) {
+				throw validationError("התמונה נערכה במקום אחר - רענן לפני שמירה חוזרת");
+			}
 		} else {
-			const columns = fields.map(([column]) => column).join(", ");
-			const ph = fields.map(() => "?").join(", ");
 			await execute(
-				`INSERT INTO tanahpedia_image (id, ${columns}) VALUES (?, ${ph})`,
-				[id, ...fields.map(([, v]) => v)],
+				`INSERT INTO tanahpedia_image (id, url, width, height, alt_text, caption,
+				 creator, credit_line, source_name, source_url, license_name, license_url,
+				 is_public_domain, modifications, permission_evidence, is_public, revision)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+				[id, ...values],
 			);
 		}
 
@@ -376,11 +438,9 @@ async function assertOwnerExists(
 	ownerKind: ImageOwnerKind,
 	ownerId: string,
 ): Promise<void> {
-	const table =
-		ownerKind === "ENTRY" ? "tanahpedia_entry" : "tanahpedia_entity";
 	const found = await txQueryOne<{ id: string }>(
 		conn,
-		`SELECT id FROM ${table} WHERE id = ?`,
+		OWNER_SQL[ownerKind].ownerExists,
 		[ownerId],
 	);
 	if (!found) {
@@ -393,7 +453,7 @@ async function assertOwnerExists(
 export const putImageLink = createServerFn({ method: "POST" })
 	.validator((data: PediaImageLinkInput) => data)
 	.handler(async ({ data }): Promise<PediaImageLinkView> => {
-		const { table, column } = OWNER_SPEC[data.ownerKind];
+		const ownerSql = OWNER_SQL[data.ownerKind];
 		const ownerId = data.ownerId?.trim() ?? "";
 		if (!ownerId) {
 			throw validationError(
@@ -424,20 +484,19 @@ export const putImageLink = createServerFn({ method: "POST" })
 			// and the transaction rolls the clear back if the write itself fails.
 			const effectiveId = linkId ?? randomUUID();
 			if (data.isPrimary === true) {
-				await txExecute(
-					conn,
-					`UPDATE ${table} SET is_primary = 0 WHERE ${column} = ? AND id <> ?`,
-					[ownerId, effectiveId],
-				);
+				await txExecute(conn, ownerSql.clearSiblingPrimaries, [
+					ownerId,
+					effectiveId,
+				]);
 			}
 
 			if (linkId) {
-				const updated = await txExecute(
-					conn,
-					`UPDATE ${table} SET sort_order = COALESCE(?, sort_order),
-					 is_primary = COALESCE(?, is_primary) WHERE id = ? AND ${column} = ?`,
-					[data.sortOrder ?? null, data.isPrimary ?? null, linkId, ownerId],
-				);
+				const updated = await txExecute(conn, ownerSql.updateLink, [
+					data.sortOrder ?? null,
+					data.isPrimary ?? null,
+					linkId,
+					ownerId,
+				]);
 				if (updated.affectedRows === 0) {
 					throw validationError("הקישור לתמונה לא נמצא");
 				}
@@ -445,19 +504,18 @@ export const putImageLink = createServerFn({ method: "POST" })
 				const next =
 					data.sortOrder ??
 					(
-						await txQueryOne<{ next: number }>(
-							conn,
-							`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ${table} WHERE ${column} = ?`,
-							[ownerId],
-						)
+						await txQueryOne<{ next: number }>(conn, ownerSql.nextSortOrder, [
+							ownerId,
+						])
 					)?.next ??
 					0;
-				await txExecute(
-					conn,
-					`INSERT INTO ${table} (id, ${column}, image_id, sort_order, is_primary)
-					 VALUES (?, ?, ?, ?, ?)`,
-					[effectiveId, ownerId, imageId, next, data.isPrimary === true ? 1 : 0],
-				);
+				await txExecute(conn, ownerSql.insertLink, [
+					effectiveId,
+					ownerId,
+					imageId,
+					next,
+					data.isPrimary === true ? 1 : 0,
+				]);
 			}
 			return effectiveId;
 		});
@@ -478,14 +536,11 @@ export const putImageLink = createServerFn({ method: "POST" })
 export const removeImageLink = createServerFn({ method: "POST" })
 	.validator((data: { ownerKind: ImageOwnerKind; id: string }) => data)
 	.handler(async ({ data }): Promise<{ removed: boolean }> => {
-		const { table, column } = OWNER_SPEC[data.ownerKind];
-		const owner = await queryOne<{ ownerId: string }>(
-			`SELECT ${column} AS ownerId FROM ${table} WHERE id = ?`,
-			[data.id],
-		);
-		const result = await execute(`DELETE FROM ${table} WHERE id = ?`, [
+		const ownerSql = OWNER_SQL[data.ownerKind];
+		const owner = await queryOne<{ ownerId: string }>(ownerSql.selectOwnerByLinkId, [
 			data.id,
 		]);
+		const result = await execute(ownerSql.deleteLink, [data.id]);
 		if (result.affectedRows > 0 && owner) {
 			await revalidateWebsite(
 				data.ownerKind === "ENTRY"
@@ -499,11 +554,9 @@ export const removeImageLink = createServerFn({ method: "POST" })
 export const clearPrimaryImage = createServerFn({ method: "POST" })
 	.validator((data: { ownerKind: ImageOwnerKind; ownerId: string }) => data)
 	.handler(async ({ data }): Promise<{ cleared: boolean }> => {
-		const { table, column } = OWNER_SPEC[data.ownerKind];
-		const result = await execute(
-			`UPDATE ${table} SET is_primary = 0 WHERE ${column} = ?`,
-			[data.ownerId],
-		);
+		const result = await execute(OWNER_SQL[data.ownerKind].clearPrimary, [
+			data.ownerId,
+		]);
 		if (result.affectedRows > 0) {
 			await revalidateWebsite(
 				data.ownerKind === "ENTRY"

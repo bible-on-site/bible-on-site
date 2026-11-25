@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 namespace BibleOnSite.Models;
 
 /// <summary>
@@ -139,6 +140,12 @@ public class TanahpediaImage
 
     /// <summary>Changes from the source item, e.g. crops.</summary>
     public string? Modifications { get; set; }
+
+    public string? LicenseDisplay => IsPublicDomain ? "נחלת הכלל" : LicenseName;
+    public bool HasSourceLink => !string.IsNullOrWhiteSpace(SourceUrl);
+    public bool HasPlainSource => !HasSourceLink && !string.IsNullOrWhiteSpace(SourceName);
+    public bool HasLicenseLink => !IsPublicDomain && !string.IsNullOrWhiteSpace(LicenseUrl);
+    public bool HasPlainLicense => IsPublicDomain || (!HasLicenseLink && !string.IsNullOrWhiteSpace(LicenseName));
 }
 
 /// <summary>
@@ -146,8 +153,13 @@ public class TanahpediaImage
 /// gallery item: figure plus the "caption · credit" line and the full
 /// attribution, mirroring the website's ImageFigure.
 /// </summary>
-public class TanahpediaImageLink
+public partial class TanahpediaImageLink : ObservableObject
 {
+    /// <summary>Tap-expanded attribution details; hidden by default like the
+    /// website's collapsed attribution disclosure.</summary>
+    [ObservableProperty]
+    private bool _isAttributionExpanded;
+
     /// <summary><c>tanahpedia_{entry,entity}_image.id</c>.</summary>
     public string Id { get; set; } = string.Empty;
 
@@ -199,7 +211,7 @@ public class TanahpediaImageLink
             }
             // License absent + public-domain flag means נחלת הכלל — the same
             // distinction the website draws.
-            var license = Image.LicenseName ?? (Image.IsPublicDomain ? "נחלת הכלל" : null);
+            var license = Image.IsPublicDomain ? "נחלת הכלל" : Image.LicenseName;
             if (license is { Length: > 0 })
             {
                 parts.Add($"רישיון: {license}");

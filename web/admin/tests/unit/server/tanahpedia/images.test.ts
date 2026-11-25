@@ -78,6 +78,7 @@ const ASSET_ROW = {
 	modifications: null,
 	permissionEvidence: "evidence",
 	isPublic: 1,
+	revision: 3,
 };
 
 const LINK_ROW = {
@@ -187,20 +188,45 @@ describe("tanahpedia images api (#3769)", () => {
 		expect(asset.permissionEvidence).toBe("evidence");
 	});
 
-	it("updates an existing asset instead of inserting", async () => {
+	it("updates an existing asset with the current revision and increments it", async () => {
 		queryOneMock
-			.mockResolvedValueOnce({ id: "img-1" }) // existing check
+			.mockResolvedValueOnce({ id: "img-1", revision: 7 }) // existing check
 			.mockResolvedValueOnce(ASSET_ROW); // re-read
 		queryMock.mockResolvedValue([]);
 
 		await putImageAsset({
-			data: { id: "img-1", url: "u", altText: "a" },
+			data: { id: "img-1", url: "u", altText: "a", revision: 7 },
 		});
 
 		expect(executeMock).toHaveBeenCalledTimes(1);
-		expect(executeMock.mock.calls[0][0]).toContain(
-			"UPDATE tanahpedia_image",
-		);
+		const [sql, params] = executeMock.mock.calls[0];
+		expect(sql).toContain("UPDATE tanahpedia_image");
+		expect(sql).toContain("revision = revision + 1");
+		expect(sql).toContain("WHERE id = ? AND revision = ?");
+		expect(params.slice(-2)).toEqual(["img-1", 7]);
+	});
+
+	it("rejects a stale asset revision before any write", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "img-1", revision: 8 });
+
+		await expect(
+			putImageAsset({
+				data: { id: "img-1", url: "u", altText: "a", revision: 7 },
+			}),
+		).rejects.toThrow("התמונה נערכה במקום אחר");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects an update when the revision guard loses a concurrent-write race", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "img-1", revision: 7 });
+		executeMock.mockResolvedValueOnce({ affectedRows: 0 });
+
+		await expect(
+			putImageAsset({
+				data: { id: "img-1", url: "u", altText: "a", revision: 7 },
+			}),
+		).rejects.toThrow("התמונה נערכה במקום אחר");
+		expect(queryMock).not.toHaveBeenCalled();
 	});
 
 	it("deletes an asset and reports whether a row went away", async () => {

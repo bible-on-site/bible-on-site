@@ -137,10 +137,58 @@
                                                    FontSize="13"
                                                    IsVisible="{Binding CaptionText, Converter={StaticResource StringNotEmptyConverter}}"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                                            <Label Text="{Binding AttributionText}"
-                                                   FontSize="11"
-                                                   IsVisible="{Binding AttributionText, Converter={StaticResource StringNotEmptyConverter}}"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                            <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.ToggleImageAttributionCommand}"
+                                                                   CommandParameter="{Binding .}"
+                                                                   IsVisible="{Binding AttributionText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                                   SemanticProperties.Description="פרטי ייחוס">
+                                                <Border Padding="10,4"
+                                                        StrokeShape="RoundRectangle 12"
+                                                        Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                        StrokeThickness="1"
+                                                        HorizontalOptions="Start">
+                                                    <Label Text="פרטי ייחוס"
+                                                           FontSize="11"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                                                </Border>
+                                            </controls:TappableView>
+                                            <VerticalStackLayout Spacing="3"
+                                                                 Padding="8,0,0,0"
+                                                                 IsVisible="{Binding IsAttributionExpanded}">
+                                                <Label Text="{Binding Image.Creator, StringFormat='יוצר/צלם: {0}'}"
+                                                       FontSize="11"
+                                                       IsVisible="{Binding Image.Creator, Converter={StaticResource StringNotEmptyConverter}}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenImageLinkCommand}"
+                                                                       CommandParameter="{Binding Image.SourceUrl}"
+                                                                       IsVisible="{Binding Image.HasSourceLink}"
+                                                                       SemanticProperties.Description="מקור התמונה">
+                                                    <Label Text="{Binding Image.SourceName, StringFormat='מקור: {0}'}"
+                                                           FontSize="11"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                           TextDecorations="Underline"/>
+                                                </controls:TappableView>
+                                                <Label Text="{Binding Image.SourceName, StringFormat='מקור: {0}'}"
+                                                       FontSize="11"
+                                                       IsVisible="{Binding Image.HasPlainSource}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenImageLinkCommand}"
+                                                                       CommandParameter="{Binding Image.LicenseUrl}"
+                                                                       IsVisible="{Binding Image.HasLicenseLink}"
+                                                                       SemanticProperties.Description="רישיון התמונה">
+                                                    <Label Text="{Binding Image.LicenseDisplay, StringFormat='רישיון: {0}'}"
+                                                           FontSize="11"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                           TextDecorations="Underline"/>
+                                                </controls:TappableView>
+                                                <Label Text="{Binding Image.LicenseDisplay, StringFormat='רישיון: {0}'}"
+                                                       FontSize="11"
+                                                       IsVisible="{Binding Image.HasPlainLicense}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                <Label Text="{Binding Image.Modifications, StringFormat='שינויים: {0}'}"
+                                                       FontSize="11"
+                                                       IsVisible="{Binding Image.Modifications, Converter={StaticResource StringNotEmptyConverter}}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                            </VerticalStackLayout>
                                         </VerticalStackLayout>
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>

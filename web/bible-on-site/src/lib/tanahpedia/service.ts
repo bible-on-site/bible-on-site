@@ -673,7 +673,7 @@ export async function getPersonFamilySummary(
 export async function getCategoryCounts(): Promise<
 	Record<CategoryKey, number>
 > {
-	const [entityRows, roleRows, animalRows, placeRowCountRows] =
+	const [entityRows, roleRows, commentatorRows, animalRows, placeRowCountRows] =
 		await Promise.all([
 			query<{ entityType: EntityType; cnt: number }>(
 				`SELECT e.entity_type AS entityType, COUNT(DISTINCT ee.entry_id) AS cnt
@@ -681,6 +681,8 @@ export async function getCategoryCounts(): Promise<
 			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
 			 GROUP BY e.entity_type`,
 			),
+			// Prophet/king predate the additive commentator table — keep their
+			// counts during rollout instead of dropping all three roles together.
 			query<{ role: string; cnt: number }>(
 				`SELECT 'PROPHET' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_prophet pr
@@ -690,9 +692,10 @@ export async function getCategoryCounts(): Promise<
 			 SELECT 'KING' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_king pk
 			 JOIN tanahpedia_person p ON p.id = pk.person_id
-			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
-			 UNION ALL
-			 SELECT 'TANAH_COMMENTATOR' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
+			),
+			query<{ role: string; cnt: number }>(
+				`SELECT 'TANAH_COMMENTATOR' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_commentator pc
 			 JOIN tanahpedia_person p ON p.id = pc.person_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
@@ -727,7 +730,8 @@ export async function getCategoryCounts(): Promise<
 	counts.TAHOR = 0;
 	counts.TAMEH = 0;
 	for (const row of entityRows) counts[row.entityType] = Number(row.cnt);
-	for (const row of roleRows) counts[row.role as CategoryKey] = Number(row.cnt);
+	for (const row of [...roleRows, ...commentatorRows])
+		counts[row.role as CategoryKey] = Number(row.cnt);
 	for (const row of animalRows)
 		counts[row.cat as CategoryKey] = Number(row.cnt);
 	/* מקומות: אם אין ערך מקושר לישות PLACE אך קיימות שורות ב־tanahpedia_place (דמו / אכלוס חלקי), אל נציג 0 */
@@ -1262,6 +1266,7 @@ function rowToImageLink(
 	row: PediaImageLinkRow,
 	ownerKind: "ENTRY" | "ENTITY",
 ): PediaImageLink {
+	const isPublicDomain = Number(row.isPublicDomain) === 1;
 	return {
 		id: row.id,
 		ownerKind,
@@ -1279,9 +1284,9 @@ function rowToImageLink(
 			creditLine: row.creditLine,
 			sourceName: row.sourceName,
 			sourceUrl: row.sourceUrl,
-			licenseName: row.licenseName,
-			licenseUrl: row.licenseUrl,
-			isPublicDomain: Number(row.isPublicDomain) === 1,
+			licenseName: isPublicDomain ? null : row.licenseName,
+			licenseUrl: isPublicDomain ? null : row.licenseUrl,
+			isPublicDomain,
 			modifications: row.modifications,
 		},
 	};

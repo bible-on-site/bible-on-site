@@ -7,8 +7,8 @@ pub struct Model {
     pub id: String,
     /// Served asset URL (CDN/S3 public object or external host).
     pub url: String,
-    pub width: Option<i16>,
-    pub height: Option<i16>,
+    pub width: Option<u16>,
+    pub height: Option<u16>,
     pub alt_text: String,
     pub caption: Option<String>,
     /// Artist / photographer when known.
@@ -29,6 +29,7 @@ pub struct Model {
     pub permission_evidence: Option<String>,
     /// Published to readers only after evidence is recorded.
     pub is_public: bool,
+    pub revision: i32,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

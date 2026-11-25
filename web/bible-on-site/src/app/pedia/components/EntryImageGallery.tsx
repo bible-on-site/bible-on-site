@@ -22,7 +22,9 @@ function ProvenanceDetails({ image }: { image: PediaImage }) {
 			פריט המקור
 		</a>
 	) : null;
-	const license = image.licenseName ? (
+	const license = image.isPublicDomain ? (
+		"נחלת הכלל"
+	) : image.licenseName ? (
 		image.licenseUrl ? (
 			<a href={image.licenseUrl} target="_blank" rel="noopener noreferrer">
 				{image.licenseName}
@@ -30,8 +32,6 @@ function ProvenanceDetails({ image }: { image: PediaImage }) {
 		) : (
 			image.licenseName
 		)
-	) : image.isPublicDomain ? (
-		"נחלת הכלל"
 	) : null;
 
 	const rows: { label: string; value: ReactNode }[] = [];
@@ -99,7 +99,14 @@ export function EntryImageGallery({
 	entryImages: PediaImageLink[];
 	entityImages: PediaImageLink[];
 }) {
-	const links = [...entryImages, ...entityImages];
+	// Entry links win over the inherited entity copy when an editor explicitly
+	// cross-links the same asset; the scopes stay separate for primary selection.
+	const seenImageIds = new Set<string>();
+	const links = [...entryImages, ...entityImages].filter((link) => {
+		if (seenImageIds.has(link.image.imageId)) return false;
+		seenImageIds.add(link.image.imageId);
+		return true;
+	});
 	if (links.length === 0) return null;
 	return (
 		<section

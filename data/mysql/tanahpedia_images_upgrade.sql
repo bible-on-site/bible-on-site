@@ -23,9 +23,11 @@ CREATE TABLE IF NOT EXISTS `tanahpedia_image` (
     `modifications` varchar(500) DEFAULT NULL COMMENT 'Changes from the source item, e.g. crops',
     `permission_evidence` text COMMENT 'PRIVATE: permission/public-domain evidence; never publicly exposed',
     `is_public` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Published to readers only after evidence is recorded',
+    `revision` int NOT NULL DEFAULT 1 COMMENT 'Optimistic editor revision; increments on every asset write',
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    CONSTRAINT `ck_image_rights_state` CHECK (`is_public_domain` = 0 OR (`license_name` IS NULL AND `license_url` IS NULL))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `tanahpedia_entity_image` (

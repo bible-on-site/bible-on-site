@@ -2,8 +2,9 @@
 -- under the אישים category. One empty canonical entry per person plus the
 -- aliases that resolve to it through tanahpedia_entry_synonym. Idempotent:
 -- every row is inserted only when missing and existing entities, persons,
--- entries and aliases are reused by name, so a deploy rerun neither
--- duplicates nor clobbers admin edits.
+-- entries and aliases are reused by name on first seed, while the fixed seed ids
+-- win on rerun. An editor can therefore rename seeded rows without the next
+-- deploy colliding on those ids or clobbering the editorial rename.
 --
 -- Requires tanahpedia_person_role_commentator (see
 -- tanahpedia_person_role_commentator_upgrade.sql).
@@ -11,30 +12,32 @@
 -- -------------------------------------------
 -- 1. הרב חיים יוסף דוד אזולאי
 -- -------------------------------------------
-SET @c1_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב חיים יוסף דוד אזולאי' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000001', 'PERSON', N'הרב חיים יוסף דוד אזולאי', NOW(), NOW()
-WHERE @c1_entity IS NULL;
-
-SET @c1_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב חיים יוסף דוד אזולאי' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב חיים יוסף דוד אזולאי'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000001'
 );
 
-SET @c1_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c1_entity LIMIT 1
+SET @c1_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000001' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב חיים יוסף דוד אזולאי' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000001', @c1_entity
-WHERE @c1_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c1_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000001'
+);
 
-SET @c1_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c1_entity LIMIT 1
+SET @c1_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c1_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000001' LIMIT 1)
 );
 
 SET @c1_main_name_type = (
@@ -60,10 +63,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000001', N'הרב-חיים-יוסף-דוד-אזולאי', N'הרב חיים יוסף דוד אזולאי', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-חיים-יוסף-דוד-אזולאי'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000001'
 );
 
-SET @c1_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-חיים-יוסף-דוד-אזולאי' LIMIT 1
+SET @c1_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000001' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-חיים-יוסף-דוד-אזולאי' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -90,30 +96,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 2. הרב מאיר שמחה הכהן מדבינסק
 -- -------------------------------------------
-SET @c2_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר שמחה הכהן מדבינסק' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000002', 'PERSON', N'הרב מאיר שמחה הכהן מדבינסק', NOW(), NOW()
-WHERE @c2_entity IS NULL;
-
-SET @c2_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר שמחה הכהן מדבינסק' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר שמחה הכהן מדבינסק'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000002'
 );
 
-SET @c2_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c2_entity LIMIT 1
+SET @c2_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000002' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב מאיר שמחה הכהן מדבינסק' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000002', @c2_entity
-WHERE @c2_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c2_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000002'
+);
 
-SET @c2_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c2_entity LIMIT 1
+SET @c2_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c2_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000002' LIMIT 1)
 );
 
 SET @c2_main_name_type = (
@@ -139,10 +147,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000002', N'הרב-מאיר-שמחה-הכהן-מדבינסק', N'הרב מאיר שמחה הכהן מדבינסק', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-שמחה-הכהן-מדבינסק'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000002'
 );
 
-SET @c2_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-שמחה-הכהן-מדבינסק' LIMIT 1
+SET @c2_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000002' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-שמחה-הכהן-מדבינסק' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -183,30 +194,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 3. הרב יעקב צבי מקלנבורג
 -- -------------------------------------------
-SET @c3_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב יעקב צבי מקלנבורג' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000003', 'PERSON', N'הרב יעקב צבי מקלנבורג', NOW(), NOW()
-WHERE @c3_entity IS NULL;
-
-SET @c3_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב יעקב צבי מקלנבורג' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב יעקב צבי מקלנבורג'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000003'
 );
 
-SET @c3_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c3_entity LIMIT 1
+SET @c3_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000003' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב יעקב צבי מקלנבורג' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000003', @c3_entity
-WHERE @c3_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c3_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000003'
+);
 
-SET @c3_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c3_entity LIMIT 1
+SET @c3_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c3_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000003' LIMIT 1)
 );
 
 SET @c3_main_name_type = (
@@ -232,10 +245,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000003', N'הרב-יעקב-צבי-מקלנבורג', N'הרב יעקב צבי מקלנבורג', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-יעקב-צבי-מקלנבורג'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000003'
 );
 
-SET @c3_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-יעקב-צבי-מקלנבורג' LIMIT 1
+SET @c3_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000003' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-יעקב-צבי-מקלנבורג' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -262,30 +278,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 4. הרב ברוך הלוי אפשטיין
 -- -------------------------------------------
-SET @c4_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב ברוך הלוי אפשטיין' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000004', 'PERSON', N'הרב ברוך הלוי אפשטיין', NOW(), NOW()
-WHERE @c4_entity IS NULL;
-
-SET @c4_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב ברוך הלוי אפשטיין' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב ברוך הלוי אפשטיין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000004'
 );
 
-SET @c4_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c4_entity LIMIT 1
+SET @c4_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000004' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב ברוך הלוי אפשטיין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000004', @c4_entity
-WHERE @c4_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c4_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000004'
+);
 
-SET @c4_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c4_entity LIMIT 1
+SET @c4_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c4_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000004' LIMIT 1)
 );
 
 SET @c4_main_name_type = (
@@ -311,10 +329,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000004', N'הרב-ברוך-הלוי-אפשטיין', N'הרב ברוך הלוי אפשטיין', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-ברוך-הלוי-אפשטיין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000004'
 );
 
-SET @c4_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-ברוך-הלוי-אפשטיין' LIMIT 1
+SET @c4_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000004' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-ברוך-הלוי-אפשטיין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -341,30 +362,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 5. הרב אשר וסרטיל
 -- -------------------------------------------
-SET @c5_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב אשר וסרטיל' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000005', 'PERSON', N'הרב אשר וסרטיל', NOW(), NOW()
-WHERE @c5_entity IS NULL;
-
-SET @c5_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב אשר וסרטיל' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב אשר וסרטיל'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000005'
 );
 
-SET @c5_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c5_entity LIMIT 1
+SET @c5_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000005' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב אשר וסרטיל' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000005', @c5_entity
-WHERE @c5_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c5_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000005'
+);
 
-SET @c5_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c5_entity LIMIT 1
+SET @c5_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c5_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000005' LIMIT 1)
 );
 
 SET @c5_main_name_type = (
@@ -390,10 +413,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000005', N'הרב-אשר-וסרטיל', N'הרב אשר וסרטיל', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-אשר-וסרטיל'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000005'
 );
 
-SET @c5_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-אשר-וסרטיל' LIMIT 1
+SET @c5_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000005' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-אשר-וסרטיל' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -413,30 +439,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 6. הרב משה איסרליש
 -- -------------------------------------------
-SET @c6_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב משה איסרליש' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000006', 'PERSON', N'הרב משה איסרליש', NOW(), NOW()
-WHERE @c6_entity IS NULL;
-
-SET @c6_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב משה איסרליש' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב משה איסרליש'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000006'
 );
 
-SET @c6_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c6_entity LIMIT 1
+SET @c6_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000006' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב משה איסרליש' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000006', @c6_entity
-WHERE @c6_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c6_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000006'
+);
 
-SET @c6_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c6_entity LIMIT 1
+SET @c6_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c6_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000006' LIMIT 1)
 );
 
 SET @c6_main_name_type = (
@@ -462,10 +490,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000006', N'הרב-משה-איסרליש', N'הרב משה איסרליש', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-משה-איסרליש'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000006'
 );
 
-SET @c6_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-משה-איסרליש' LIMIT 1
+SET @c6_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000006' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-משה-איסרליש' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -492,30 +523,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 7. הרב נפתלי צבי יהודה ברלין
 -- -------------------------------------------
-SET @c7_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב נפתלי צבי יהודה ברלין' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000007', 'PERSON', N'הרב נפתלי צבי יהודה ברלין', NOW(), NOW()
-WHERE @c7_entity IS NULL;
-
-SET @c7_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב נפתלי צבי יהודה ברלין' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב נפתלי צבי יהודה ברלין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000007'
 );
 
-SET @c7_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c7_entity LIMIT 1
+SET @c7_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000007' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב נפתלי צבי יהודה ברלין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000007', @c7_entity
-WHERE @c7_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c7_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000007'
+);
 
-SET @c7_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c7_entity LIMIT 1
+SET @c7_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c7_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000007' LIMIT 1)
 );
 
 SET @c7_main_name_type = (
@@ -541,10 +574,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000007', N'הרב-נפתלי-צבי-יהודה-ברלין', N'הרב נפתלי צבי יהודה ברלין', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-נפתלי-צבי-יהודה-ברלין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000007'
 );
 
-SET @c7_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-נפתלי-צבי-יהודה-ברלין' LIMIT 1
+SET @c7_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000007' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-נפתלי-צבי-יהודה-ברלין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -571,30 +607,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 8. הרב אליהו בן שלמה זלמן
 -- -------------------------------------------
-SET @c8_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב אליהו בן שלמה זלמן' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000008', 'PERSON', N'הרב אליהו בן שלמה זלמן', NOW(), NOW()
-WHERE @c8_entity IS NULL;
-
-SET @c8_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב אליהו בן שלמה זלמן' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב אליהו בן שלמה זלמן'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000008'
 );
 
-SET @c8_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c8_entity LIMIT 1
+SET @c8_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000008' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב אליהו בן שלמה זלמן' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000008', @c8_entity
-WHERE @c8_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c8_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000008'
+);
 
-SET @c8_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c8_entity LIMIT 1
+SET @c8_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c8_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000008' LIMIT 1)
 );
 
 SET @c8_main_name_type = (
@@ -620,10 +658,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000008', N'הרב-אליהו-בן-שלמה-זלמן', N'הרב אליהו בן שלמה זלמן', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-אליהו-בן-שלמה-זלמן'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000008'
 );
 
-SET @c8_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-אליהו-בן-שלמה-זלמן' LIMIT 1
+SET @c8_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000008' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-אליהו-בן-שלמה-זלמן' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -685,30 +726,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 9. הרב מאיר ליבוש בן יחיאל מיכל וייזר
 -- -------------------------------------------
-SET @c9_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר ליבוש בן יחיאל מיכל וייזר' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000009', 'PERSON', N'הרב מאיר ליבוש בן יחיאל מיכל וייזר', NOW(), NOW()
-WHERE @c9_entity IS NULL;
-
-SET @c9_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר ליבוש בן יחיאל מיכל וייזר' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב מאיר ליבוש בן יחיאל מיכל וייזר'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000009'
 );
 
-SET @c9_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c9_entity LIMIT 1
+SET @c9_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000009' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב מאיר ליבוש בן יחיאל מיכל וייזר' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000009', @c9_entity
-WHERE @c9_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c9_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000009'
+);
 
-SET @c9_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c9_entity LIMIT 1
+SET @c9_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c9_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000009' LIMIT 1)
 );
 
 SET @c9_main_name_type = (
@@ -734,10 +777,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000009', N'הרב-מאיר-ליבוש-בן-יחיאל-מיכל-וייזר', N'הרב מאיר ליבוש בן יחיאל מיכל וייזר', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-ליבוש-בן-יחיאל-מיכל-וייזר'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000009'
 );
 
-SET @c9_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-ליבוש-בן-יחיאל-מיכל-וייזר' LIMIT 1
+SET @c9_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000009' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-מאיר-ליבוש-בן-יחיאל-מיכל-וייזר' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)
@@ -764,30 +810,32 @@ WHERE NOT EXISTS (
 -- -------------------------------------------
 -- 10. הרב יוסף רוזין
 -- -------------------------------------------
-SET @c10_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב יוסף רוזין' LIMIT 1
-);
-
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at)
 SELECT 'e6c00000-0000-4000-8000-000000000010', 'PERSON', N'הרב יוסף רוזין', NOW(), NOW()
-WHERE @c10_entity IS NULL;
-
-SET @c10_entity = (
-	SELECT id FROM tanahpedia_entity
-	WHERE entity_type = 'PERSON' AND name = N'הרב יוסף רוזין' LIMIT 1
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity
+	WHERE entity_type = 'PERSON' AND name = N'הרב יוסף רוזין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000010'
 );
 
-SET @c10_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c10_entity LIMIT 1
+SET @c10_entity = COALESCE(
+	(SELECT id FROM tanahpedia_entity WHERE id = 'e6c00000-0000-4000-8000-000000000010' LIMIT 1),
+	(SELECT id FROM tanahpedia_entity
+	 WHERE entity_type = 'PERSON' AND name = N'הרב יוסף רוזין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_person (id, entity_id)
 SELECT 'p6c00000-0000-4000-8000-000000000010', @c10_entity
-WHERE @c10_person IS NULL;
+WHERE NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE entity_id = @c10_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000010'
+);
 
-SET @c10_person = (
-	SELECT id FROM tanahpedia_person WHERE entity_id = @c10_entity LIMIT 1
+SET @c10_person = COALESCE(
+	(SELECT id FROM tanahpedia_person WHERE entity_id = @c10_entity LIMIT 1),
+	(SELECT id FROM tanahpedia_person WHERE id = 'p6c00000-0000-4000-8000-000000000010' LIMIT 1)
 );
 
 SET @c10_main_name_type = (
@@ -813,10 +861,13 @@ INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updat
 SELECT 'ea6c0000-0000-4000-8000-000000000010', N'הרב-יוסף-רוזין', N'הרב יוסף רוזין', '', NOW(), NOW()
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = N'הרב-יוסף-רוזין'
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000010'
 );
 
-SET @c10_entry = (
-	SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-יוסף-רוזין' LIMIT 1
+SET @c10_entry = COALESCE(
+	(SELECT id FROM tanahpedia_entry WHERE id = 'ea6c0000-0000-4000-8000-000000000010' LIMIT 1),
+	(SELECT id FROM tanahpedia_entry WHERE unique_name = N'הרב-יוסף-רוזין' LIMIT 1)
 );
 
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id)

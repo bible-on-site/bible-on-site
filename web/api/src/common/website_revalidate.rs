@@ -79,6 +79,12 @@ enum EntityChange<'a> {
         #[serde(rename = "uniqueNames")]
         unique_names: &'a [String],
     },
+    /// One Tanahpedia entry whose rendered page/dependencies changed.
+    #[serde(rename = "pedia-entry", rename_all = "camelCase")]
+    PediaEntry { unique_name: &'a str },
+    /// One Tanahpedia entity whose linked entry pages changed.
+    #[serde(rename = "pedia-entity", rename_all = "camelCase")]
+    PediaEntity { entity_id: &'a str },
     /// An article create/update/move/delete — `perek_ids` is old ∪ new.
     #[serde(rename = "article", rename_all = "camelCase")]
     Article {
@@ -177,6 +183,28 @@ impl WebsiteRevalidator {
             unique_names: names,
         }])
         .await
+    }
+
+    /// Expires the entry pages directly affected by a Tanahpedia asset write:
+    /// `entry_unique_names` are entry-scoped owners, while `entity_ids` are
+    /// entity-scoped owners whose linked entry pages the website resolves.
+    /// The caller must not invoke this with both sets empty — the endpoint
+    /// correctly rejects a no-op change body.
+    pub async fn invalidate_pedia_entry_and_entities(
+        &self,
+        entry_unique_names: &[String],
+        entity_ids: &[String],
+    ) -> Revalidation {
+        let changes = entry_unique_names
+            .iter()
+            .map(|name| EntityChange::PediaEntry {
+                unique_name: name.as_str(),
+            })
+            .chain(entity_ids.iter().map(|id| EntityChange::PediaEntity {
+                entity_id: id.as_str(),
+            }))
+            .collect();
+        self.post_changes(changes).await
     }
 
     /// Expires every scoped page/tag a dedication's old ∪ new assignments
@@ -378,6 +406,27 @@ mod tests {
         assert!(request.contains(
             r#"{"changes":[{"kind":"pedia-entries","uniqueNames":["משה","משה-רבנו"]}]}"#
         ));
+    }
+
+    #[tokio::test]
+    async fn posts_pedia_entry_and_entity_changes() {
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+
+        let outcome = revalidator
+            .invalidate_pedia_entry_and_entities(&["משה".to_string()], &["entity-1".to_string()])
+            .await;
+
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(
+            request.contains(r#"{"kind":"pedia-entry","uniqueName":"משה"}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"pedia-entity","entityId":"entity-1"}"#),
+            "{request}"
+        );
     }
 
     #[tokio::test]

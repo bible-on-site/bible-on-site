@@ -51,6 +51,7 @@ function asset(over: Record<string, unknown> = {}) {
 		modifications: null,
 		permissionEvidence: "evidence",
 		isPublic: true,
+		revision: 5,
 		...over,
 	};
 }
@@ -196,6 +197,7 @@ describe("EntryImagesPanel", () => {
 		expect(mocks.putImageAsset).toHaveBeenCalledWith({
 			data: expect.objectContaining({
 				id: "img-1",
+				revision: 5,
 				width: 640,
 				height: 640,
 				permissionEvidence: "ראיות חדשות",

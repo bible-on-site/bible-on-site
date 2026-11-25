@@ -10,9 +10,11 @@
 use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::common::auth::ApiAuth;
+use crate::common::website_revalidate::WebsiteRevalidator;
 use crate::dtos::tanahpedia_images::{
     TanahpediaEntityImageLinkInput, TanahpediaEntryImageLinkInput, TanahpediaImageAsset,
     TanahpediaImageAssetInput, TanahpediaImageLink, TanahpediaImageLinkFull,
+    TanahpediaImageWriteResult,
 };
 use crate::providers::Database;
 use crate::services::tanahpedia_images_service;
@@ -116,21 +118,33 @@ impl TanahpediaImagesMutation {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::put_image_asset(ctx.data::<Database>()?, input)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::put_image_asset(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            input,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Delete an image asset; its entity/entry links cascade away with it.
-    /// Returns whether a row was removed. Same authorization as the other
-    /// Tanahpedia mutations.
-    async fn delete_tanahpedia_image_asset(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
+    /// `result.affected` reports whether a row was removed; `result.revalidation`
+    /// is the post-commit website invalidation outcome.
+    async fn delete_tanahpedia_image_asset(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+    ) -> Result<TanahpediaImageWriteResult> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::delete_image_asset(ctx.data::<Database>()?, &id)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::delete_image_asset(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            &id,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Attach an image to an entity or update an existing link's
@@ -144,9 +158,13 @@ impl TanahpediaImagesMutation {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::put_entity_image_link(ctx.data::<Database>()?, input)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::put_entity_image_link(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            input,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Attach an image to an entry or update an existing link's
@@ -159,52 +177,68 @@ impl TanahpediaImagesMutation {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::put_entry_image_link(ctx.data::<Database>()?, input)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::put_entry_image_link(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            input,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
-    /// Remove one entity-image link. Returns whether a row was removed.
+    /// Remove one entity-image link. See `deleteTanahpediaImageAsset` for the result contract.
     async fn remove_tanahpedia_entity_image_link(
         &self,
         ctx: &Context<'_>,
         id: String,
-    ) -> Result<bool> {
+    ) -> Result<TanahpediaImageWriteResult> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::remove_entity_image_link(ctx.data::<Database>()?, &id)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::remove_entity_image_link(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            &id,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
-    /// Remove one entry-image link. Returns whether a row was removed.
+    /// Remove one entry-image link. See `deleteTanahpediaImageAsset` for the result contract.
     async fn remove_tanahpedia_entry_image_link(
         &self,
         ctx: &Context<'_>,
         id: String,
-    ) -> Result<bool> {
+    ) -> Result<TanahpediaImageWriteResult> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::remove_entry_image_link(ctx.data::<Database>()?, &id)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::remove_entry_image_link(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            &id,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Clear the entity's primary-image flag — the explicit "no primary"
-    /// state. Returns whether any link was flagged.
+    /// state. See `deleteTanahpediaImageAsset` for the result contract.
     async fn clear_tanahpedia_entity_primary_image(
         &self,
         ctx: &Context<'_>,
         entity_id: String,
-    ) -> Result<bool> {
+    ) -> Result<TanahpediaImageWriteResult> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::clear_entity_primary_image(ctx.data::<Database>()?, &entity_id)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::clear_entity_primary_image(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            &entity_id,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Clear the entry's primary-image flag — see
@@ -213,12 +247,16 @@ impl TanahpediaImagesMutation {
         &self,
         ctx: &Context<'_>,
         entry_id: String,
-    ) -> Result<bool> {
+    ) -> Result<TanahpediaImageWriteResult> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
-        tanahpedia_images_service::clear_entry_primary_image(ctx.data::<Database>()?, &entry_id)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_images_service::clear_entry_primary_image(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            &entry_id,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 }
