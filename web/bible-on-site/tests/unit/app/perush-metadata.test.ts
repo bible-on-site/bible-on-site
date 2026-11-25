@@ -20,6 +20,7 @@ jest.mock("../../../src/lib/perushim", () => ({
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticleSummariesByPerekId: jest.fn(),
+	getFurtherReadingSummariesByPerekId: jest.fn(async () => []),
 	getAllArticlePerekIdPairs: jest.fn(),
 }));
 

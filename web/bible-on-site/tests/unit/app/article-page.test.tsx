@@ -58,6 +58,7 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticleSummariesByPerekId: jest.fn(),
+	getFurtherReadingSummariesByPerekId: jest.fn(),
 	getAllArticlePerekIdPairs: jest.fn(),
 }));
 
@@ -143,6 +144,7 @@ import {
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getFurtherReadingSummariesByPerekId,
 } from "../../../src/lib/articles";
 import {
 	getAllPerushPerekNamePairs,
@@ -160,6 +162,10 @@ const mockGetArticleById = getArticleById as jest.MockedFunction<
 const mockGetArticlesByPerekId =
 	getArticleSummariesByPerekId as jest.MockedFunction<
 		typeof getArticleSummariesByPerekId
+	>;
+const mockGetFurtherReading =
+	getFurtherReadingSummariesByPerekId as jest.MockedFunction<
+		typeof getFurtherReadingSummariesByPerekId
 	>;
 const mockGetPerekByPerekId = getPerekByPerekId as jest.MockedFunction<
 	typeof getPerekByPerekId
@@ -632,6 +638,7 @@ describe("[slug] page", () => {
 		beforeEach(() => {
 			mockGetArticleById.mockResolvedValue(sampleArticle);
 			mockGetArticlesByPerekId.mockResolvedValue([sampleArticleSummary]);
+			mockGetFurtherReading.mockResolvedValue([]);
 			mockGetPerekByPerekId.mockReturnValue(minimalPerek);
 			mockGetSeferByName.mockReturnValue({
 				name: "בראשית",
@@ -666,6 +673,44 @@ describe("[slug] page", () => {
 				articleView.compareDocumentPosition(chapterText) &
 					Node.DOCUMENT_POSITION_FOLLOWING,
 			).toBeTruthy();
+		});
+
+		it("renders the לקריאה נוספת section below the regular articles (#3752)", async () => {
+			mockGetFurtherReading.mockResolvedValue([
+				{
+					...sampleArticleSummary,
+					id: 99,
+					perekId: 8,
+					authorName: "הרב מפרק אחר",
+				},
+			]);
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			render(jsx);
+
+			const heading = screen.getByRole("heading", {
+				name: "לקריאה נוספת",
+			});
+			const section = heading.closest("section") as HTMLElement;
+			expect(section).not.toBeNull();
+			const card = within(section).getByRole("link", {
+				name: /הרב מפרק אחר/,
+			});
+			// The card routes through the article's OWN primary perek.
+			expect(card.getAttribute("href")).toBe("/929/8/99");
+		});
+
+		it("hides לקריאה נוספת when no secondary coverage matches (#3752)", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			render(jsx);
+
+			expect(
+				screen.queryByRole("heading", { name: "לקריאה נוספת" }),
+			).toBeNull();
 		});
 
 		it("keeps authored blockquotes as semantic elements inside the article body (#3443)", async () => {
@@ -734,8 +779,10 @@ describe("[slug] page", () => {
 			const header = articleView?.querySelector("header");
 			expect(
 				header != null &&
-					!!(header.compareDocumentPosition(group) &
-						Node.DOCUMENT_POSITION_FOLLOWING),
+					!!(
+						header.compareDocumentPosition(group) &
+						Node.DOCUMENT_POSITION_FOLLOWING
+					),
 			).toBe(true);
 			expect(
 				within(group)
@@ -831,6 +878,43 @@ describe("[slug] page", () => {
 
 			expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+		});
+
+		it("renders the לקריאה נוספת section inside the perush view too (#3752)", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+			mockGetFurtherReading.mockResolvedValue([
+				{
+					...sampleArticleSummary,
+					id: 99,
+					perekId: 8,
+					authorName: "הרב מפרק אחר",
+				},
+			]);
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			const heading = screen.getByRole("heading", {
+				name: "לקריאה נוספת",
+			});
+			// Safe to assert non-null: the לקריאה נוספת heading always renders
+			// inside its wrapping <section>, so closest("section") cannot be null.
+			const section = heading.closest("section") as HTMLElement;
+			expect(section).not.toBeNull();
+			expect(
+				within(section).getByRole("link", { name: /הרב מפרק אחר/ }),
+			).toBeTruthy();
 		});
 
 		it("renders the expanded perush above the sefer composite with an h1", async () => {

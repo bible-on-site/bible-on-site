@@ -1242,14 +1242,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            ArticlesCollection.ItemsSource = StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum);
+            ArticlesCollection.ItemsSource = ArticleListGroup.Build(
+                StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum),
+                StarterService.Instance.GetFurtherReadingArticles(_viewModel.PerekId));
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
         catch (Exception ex) //NOSONAR — articles list degrades to empty.
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error loading articles: {ex.Message}");
-            ArticlesCollection.ItemsSource = new List<Article>();
+            ArticlesCollection.ItemsSource = new List<ArticleListGroup>();
         }
     }
 
