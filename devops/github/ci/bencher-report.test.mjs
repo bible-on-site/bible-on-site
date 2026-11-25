@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createBencherIO, runBencherReport } from "./bencher-report.mjs";
+import { CHECK_LISTING_REREADS, createBencherIO, runBencherReport } from "./bencher-report.mjs";
 
 const project = "bible-on-site-website";
 const uuid = "01a1cef7-e731-770b-8c2f-0baa5aeb657e";
@@ -23,8 +23,10 @@ function setup({ listings, before = [], after = [checkFixture()], report = fixtu
 	const lists = listings ?? [before, after];
 	return {
 		updates,
+		reads: () => reads,
 		io: {
 			listChecks: () => lists[Math.min(reads++, lists.length - 1)],
+			delay: () => Promise.resolve(),
 			run: () => result ?? { status: 0, stdout: `other output\nView report: ${url}\n` },
 			fetchReport: () => { if (fetchError) throw fetchError; return report; },
 			updateCheck: (id, body) => { updates.push({ id, body }); if (updateError) throw updateError; return { id, ...body }; },
@@ -80,6 +82,25 @@ test("stays fail-closed when the second listing is still empty or ambiguous", as
 		await assert.rejects(runBencherReport(context, io), /Expected one new Bencher check/);
 		assert.deepEqual(updates, []);
 	}
+});
+
+test("reconciles a matching check that only becomes visible several listings later", async () => {
+	const { io, updates } = setup({ listings: [[], [], [], [], [checkFixture()]] });
+	assert.equal((await runBencherReport(context, io)).repaired, true);
+	assert.equal(updates[0].body.external_id, `bencher:${projectUuid}:${uuid}:t`);
+});
+
+test("stops re-reading the listing once the check is visible", async () => {
+	const attempt = setup({ listings: [[], [], [checkFixture()]] });
+	await runBencherReport(context, attempt.io);
+	assert.equal(attempt.reads(), 3);
+});
+
+test("declares the check missing only after exhausting the bounded rereads", async () => {
+	const attempt = setup({ listings: [[], [], []] });
+	await assert.rejects(runBencherReport(context, attempt.io), /Expected one new Bencher check for this invocation; found 0/);
+	assert.equal(attempt.reads(), 2 + CHECK_LISTING_REREADS);
+	assert.deepEqual(attempt.updates, []);
 });
 
 test("rejects a second-listing completed check bound to a different report", async () => {
