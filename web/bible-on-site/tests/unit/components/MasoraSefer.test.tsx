@@ -229,11 +229,12 @@ const baseProps = () => ({
 });
 
 describe("MasoraSefer", () => {
-	it("dates the blank commentary pages from MOCK_DATE when it is set", () => {
+	it("dates the blank commentary pages from the mock-date cookie when it is set", () => {
 		// 21 Sivan 5784 — a different Hebrew date than the real clock's.
-		process.env.MOCK_DATE = "2024-06-27T12:00:00+03:00";
+		document.cookie = "mock-date=2024-06-27T12:00:00+03:00";
 		render(<MasoraSefer {...baseProps()} />);
-		delete process.env.MOCK_DATE;
+		document.cookie =
+			"mock-date=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 		const expected = constructTsetAwareHDate(
 			new Date("2024-06-27T12:00:00+03:00"),
 		).toTraditionalHebrewString();

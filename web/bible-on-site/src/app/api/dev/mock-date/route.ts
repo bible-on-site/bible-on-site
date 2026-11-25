@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MOCK_DATE_COOKIE } from "@/util/date";
 
 // Dev API for E2E tests to mock the server date via environment variable
 // Only available on localhost in development mode
@@ -33,17 +34,25 @@ export async function POST(request: Request) {
 	}
 	if (body.date === null || body.date === undefined) {
 		delete process.env.MOCK_DATE;
-		return NextResponse.json({ success: true, mockedDate: null });
+		const response = NextResponse.json({ success: true, mockedDate: null });
+		response.cookies.delete(MOCK_DATE_COOKIE);
+		return response;
 	}
 	const parsedDate = new Date(body.date);
 	if (Number.isNaN(parsedDate.getTime())) {
 		return NextResponse.json({ error: "Invalid date" }, { status: 400 });
 	}
 	process.env.MOCK_DATE = parsedDate.toISOString();
-	return NextResponse.json({
+	const response = NextResponse.json({
 		success: true,
 		mockedDate: process.env.MOCK_DATE,
 	});
+	// Client components cannot see process.env.MOCK_DATE; mirror it in a
+	// cookie so getCurrentDate() honors the mock in the browser too.
+	response.cookies.set(MOCK_DATE_COOKIE, process.env.MOCK_DATE, {
+		path: "/",
+	});
+	return response;
 }
 
 export function DELETE(request: Request) {
@@ -51,5 +60,7 @@ export function DELETE(request: Request) {
 		return new NextResponse("Forbidden", { status: 403 });
 	}
 	delete process.env.MOCK_DATE;
-	return NextResponse.json({ success: true, mockedDate: null });
+	const response = NextResponse.json({ success: true, mockedDate: null });
+	response.cookies.delete(MOCK_DATE_COOKIE);
+	return response;
 }

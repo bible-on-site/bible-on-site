@@ -67,12 +67,13 @@ it("initializes the calendar from the browser's current Hebrew date", () => {
 	);
 });
 
-it("initializes the calendar from MOCK_DATE when it is set", () => {
+it("initializes the calendar from the mock-date cookie when it is set", () => {
 	// 21 Sivan 5784 — a different Hebrew day than the fake clock's.
 	const mocked = new Date("2024-06-27T12:00:00+03:00");
-	process.env.MOCK_DATE = mocked.toISOString();
+	document.cookie = `mock-date=${mocked.toISOString()}`;
 	render(<LiveLearningCalendar pdfManifestUrl="manifest" />);
-	delete process.env.MOCK_DATE;
+	document.cookie =
+		"mock-date=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 	const today = constructTsetAwareHDate(mocked);
 	expect(screen.getByTestId("calendar")).toHaveAttribute(
 		"data-today",
