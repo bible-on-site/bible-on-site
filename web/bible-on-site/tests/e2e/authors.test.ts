@@ -75,4 +75,96 @@ test.describe("/929/authors page", () => {
 		const location = response.headers().location;
 		expect(location).toContain("/929/authors");
 	});
+
+	test("serves the blue sketch asset", async ({ request }) => {
+		const response = await request.get("/images/rabbis-blue-sketch.webp");
+
+		expect(response.status()).toBe(200);
+		expect(response.headers()["content-type"]).toContain("image/webp");
+	});
+
+	test("paints the blue sketch as a fixed backdrop behind the index", async ({
+		page,
+	}) => {
+		// The browser only fetches the image when the ::before box actually
+		// generates and paints — a `content: none`/`display: none` regression
+		// would never trigger this response.
+		const sketchResponse = page.waitForResponse(
+			"**/rabbis-blue-sketch.webp",
+		);
+		await page.goto("/929/authors");
+		expect((await sketchResponse).status()).toBe(200);
+
+		const backdrop = await page.locator("main").evaluate((el) => {
+			const style = window.getComputedStyle(el, "::before");
+			return {
+				backgroundImage: style.backgroundImage,
+				content: style.content,
+				display: style.display,
+				height: style.height,
+				opacity: style.opacity,
+				position: style.position,
+				visibility: style.visibility,
+				zIndex: style.zIndex,
+				viewportHeight: window.innerHeight,
+			};
+		});
+
+		// Fixed keeps the congregation scene recognizable while the grid scrolls.
+		expect(backdrop.position).toBe("fixed");
+		// Painted and on-screen: the box generates (content), shows (display /
+		// visibility / opacity), covers the viewport (height) and stays behind
+		// the content (z-index) rather than over it.
+		expect(backdrop.content).not.toBe("none");
+		expect(backdrop.display).not.toBe("none");
+		expect(backdrop.visibility).toBe("visible");
+		expect(backdrop.opacity).toBe("1");
+		// inset: 0 stretches the box to the full viewport — a backdrop strip
+		// (e.g. height: 1px) fails this.
+		expect(Number.parseFloat(backdrop.height)).toBeCloseTo(
+			backdrop.viewportHeight,
+			0,
+		);
+		expect(backdrop.zIndex).toBe("-1");
+		expect(backdrop.backgroundImage).toContain("rabbis-blue-sketch.webp");
+	});
+
+	test("keeps the sketch as a subdued etching in dark mode", async ({
+		page,
+	}) => {
+		await page.emulateMedia({ colorScheme: "dark" });
+		await page.goto("/929/authors");
+
+		const backgroundImage = await page
+			.locator("main")
+			.evaluate(
+				(el) => window.getComputedStyle(el, "::before").backgroundImage,
+			);
+
+		expect(backgroundImage).toContain("rabbis-blue-sketch.webp");
+		// Dark scrim layer (--background #0f1219) keeps dark surfaces readable.
+		expect(backgroundImage).toContain("15, 18, 25");
+	});
+
+	test("drops the decorative backdrop under high-contrast preference", async ({
+		page,
+	}) => {
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				"siteA11ySettings",
+				JSON.stringify({ contrast: true }),
+			);
+		});
+		await page.goto("/929/authors");
+		await expect(page.locator("html")).toHaveAttribute(
+			"data-a11y-contrast",
+			"high",
+		);
+
+		const content = await page
+			.locator("main")
+			.evaluate((el) => window.getComputedStyle(el, "::before").content);
+
+		expect(content).toBe("none");
+	});
 });
