@@ -116,6 +116,7 @@ export function createBencherIO(context, options) {
 		maxBuffer: 16 * 1024 * 1024,
 	}));
 	return {
+		delay,
 		listChecks: () => gh([
 			`repos/${repository}/commits/${context.checkSha}/check-runs?filter=all&per_page=100`,
 			"--paginate", "--slurp",

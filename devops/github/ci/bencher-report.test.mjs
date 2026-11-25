@@ -209,7 +209,9 @@ test("binds the platform adapter to the PR head, paginated checks and the exact 
 			return { ok: true, json: () => fixture() };
 		},
 		stdout: { write: (value) => output.push(value) }, stderr: { write: (value) => errors.push(value) },
+		delay: () => "real delay",
 	});
+	assert.equal(io.delay(), "real delay");
 	assert.deepEqual(io.listChecks().map((check) => check.id), [42, 99]);
 	assert.ok(calls[0].args[1].includes(`/commits/${context.checkSha}/check-runs`));
 	assert.ok(calls[0].args.includes("--paginate"));
