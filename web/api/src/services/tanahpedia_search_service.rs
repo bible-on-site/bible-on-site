@@ -200,12 +200,7 @@ const SYNONYM_MATCH: &str = "EXISTS (
 /// exactly like the listing resolver (`get_entities_with_entries`).
 fn category_key_predicate(key: &str) -> (String, Vec<sea_orm::Value>) {
     if tanahpedia_entries_service::PERSON_ROLE_CATEGORIES.contains(&key) {
-        let role_table = if key == "PROPHET" {
-            "tanahpedia_person_role_prophet"
-        } else {
-            debug_assert_eq!(key, "KING", "role keys are validated by the caller");
-            "tanahpedia_person_role_king"
-        };
+        let role_table = tanahpedia_entries_service::person_role_table(key);
         (
             format!(
                 "EXISTS (SELECT 1 FROM tanahpedia_person tp \

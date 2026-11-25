@@ -17,7 +17,10 @@ import {
 	getEntries,
 	getEntriesByEntityType,
 	getEntriesBySynonym,
+	getEntityImages,
+	getEntityImagesForEntry,
 	getEntryByUniqueName,
+	getEntryImages,
 	getEntryOccurrences,
 	getAllEntrySummaries,
 	getEntityTypeEntrySummaries,
@@ -909,5 +912,86 @@ describe("tanahpedia service", () => {
 				}),
 			]),
 		);
+	});
+
+	describe("images (#3769)", () => {
+		const imageRow = {
+			id: "link-1",
+			ownerId: "owner-1",
+			sortOrder: 0,
+			isPrimary: 1,
+			imageId: "img-1",
+			url: "https://cdn.example.com/a.jpg",
+			width: 800,
+			height: 600,
+			altText: "תיאור",
+			caption: "כיתוב",
+			creator: "יוצר",
+			creditLine: "קרדיט",
+			sourceName: "Wikimedia Commons",
+			sourceUrl: "https://commons.example.com/f.jpg",
+			licenseName: "CC BY-SA 4.0",
+			licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+			isPublicDomain: 0,
+			modifications: null,
+		};
+
+		it("maps entry-scope image rows and reads published assets only", async () => {
+			mockQuery.mockResolvedValueOnce([imageRow]);
+
+			const links = await getEntryImages("entry-1");
+
+			expect(links).toHaveLength(1);
+			expect(links[0]).toMatchObject({
+				ownerKind: "ENTRY",
+				ownerId: "owner-1",
+				isPrimary: true,
+				image: {
+					imageId: "img-1",
+					altText: "תיאור",
+					isPublicDomain: false,
+					licenseName: "CC BY-SA 4.0",
+				},
+			});
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("tanahpedia_entry_image");
+			expect(sql).toContain("i.is_public = 1");
+			expect(params).toEqual(["entry-1"]);
+		});
+
+		it("maps entity-scope rows and joins entry_entity for the entry gallery", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ ...imageRow, isPrimary: 0, isPublicDomain: 1 }])
+				.mockResolvedValueOnce([]);
+
+			const entityLinks = await getEntityImages("entity-1");
+			expect(entityLinks[0]).toMatchObject({
+				ownerKind: "ENTITY",
+				isPrimary: false,
+				image: { isPublicDomain: true },
+			});
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"tanahpedia_entity_image",
+			);
+
+			await getEntityImagesForEntry("entry-1");
+			const sql = mockQuery.mock.calls[1][0] as string;
+			expect(sql).toContain("tanahpedia_entity_image");
+			expect(sql).toContain("tanahpedia_entry_entity");
+			expect(mockQuery.mock.calls[1][1]).toEqual(["entry-1"]);
+		});
+
+		it("reads as empty while the image tables are undeployed, rethrows other errors", async () => {
+			mockQuery.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+			await expect(getEntryImages("entry-1")).resolves.toEqual([]);
+
+			mockQuery.mockRejectedValueOnce({ errno: 1146 });
+			await expect(getEntityImagesForEntry("entry-1")).resolves.toEqual([]);
+
+			mockQuery.mockRejectedValueOnce({ code: "ECONNREFUSED" });
+			await expect(getEntryImages("entry-1")).rejects.toMatchObject({
+				code: "ECONNREFUSED",
+			});
+		});
 	});
 });

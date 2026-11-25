@@ -3,6 +3,7 @@ import {
 	ENTITY_TYPE_LABELS,
 	ENTITY_TYPES,
 } from "../../../../shared/tanahpedia/index";
+import { isMissingMysqlSchema } from "../mysql-errors";
 import { query } from "../api-client";
 import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
@@ -15,9 +16,11 @@ import type {
 	EntryWithEntities,
 	PersonFamilyChildEdge,
 	PersonFamilyParentEdge,
+	PediaImageLink,
 	PersonFamilyRelatedPerson,
 	PersonFamilySpouseEdge,
 	PersonFamilySummary,
+	PersonRole,
 	PlaceIdentification,
 	PlaceMapMarker,
 	SynonymTarget,
@@ -130,13 +133,16 @@ export async function getEntitiesWithEntries(
 	}));
 }
 
+const PERSON_ROLE_TABLES: Record<PersonRole, string> = {
+	PROPHET: "tanahpedia_person_role_prophet",
+	KING: "tanahpedia_person_role_king",
+	TANAH_COMMENTATOR: "tanahpedia_person_role_commentator",
+};
+
 export async function getEntitiesWithEntriesByRole(
-	role: "PROPHET" | "KING",
+	role: PersonRole,
 ): Promise<EntityWithEntries[]> {
-	const roleTable =
-		role === "PROPHET"
-			? "tanahpedia_person_role_prophet"
-			: "tanahpedia_person_role_king";
+	const roleTable = PERSON_ROLE_TABLES[role];
 	const rows = await query<{
 		entityId: string;
 		entityName: string;
@@ -152,7 +158,12 @@ export async function getEntitiesWithEntriesByRole(
 		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
 		 ORDER BY e.name`,
-	);
+	).catch((error) => {
+		// A website build can ship before the role-table deploy lands —
+		// read as an empty listing until the schema exists.
+		if (isMissingMysqlSchema(error)) return [];
+		throw error;
+	});
 
 	const grouped = new Map<
 		string,
@@ -679,8 +690,16 @@ export async function getCategoryCounts(): Promise<
 			 SELECT 'KING' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_king pk
 			 JOIN tanahpedia_person p ON p.id = pk.person_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+			 UNION ALL
+			 SELECT 'TANAH_COMMENTATOR' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_person_role_commentator pc
+			 JOIN tanahpedia_person p ON p.id = pc.person_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
-			),
+			).catch((error) => {
+				if (isMissingMysqlSchema(error)) return [];
+				throw error;
+			}),
 			query<{ cat: string; cnt: number }>(
 				`SELECT ak.kind AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_animal_kind ak
@@ -700,6 +719,7 @@ export async function getCategoryCounts(): Promise<
 	for (const et of ENTITY_TYPES) counts[et] = 0;
 	counts.PROPHET = 0;
 	counts.KING = 0;
+	counts.TANAH_COMMENTATOR = 0;
 	counts.BEHEMA = 0;
 	counts.CHAYA = 0;
 	counts.OF = 0;
@@ -1205,4 +1225,125 @@ async function queryPerekEntityReferences(
 		// empty decoration set — the caller degrades only on a missing schema.
 		throw error;
 	}
+}
+
+// ─── Images (#3769) ─────────────────────────────────────────
+
+const PUBLIC_IMAGE_SELECT = `l.id AS id, l.OWNER AS ownerId, l.sort_order AS sortOrder,
+	   l.is_primary AS isPrimary, i.id AS imageId, i.url AS url, i.width AS width,
+	   i.height AS height, i.alt_text AS altText, i.caption AS caption,
+	   i.creator AS creator, i.credit_line AS creditLine,
+	   i.source_name AS sourceName, i.source_url AS sourceUrl,
+	   i.license_name AS licenseName, i.license_url AS licenseUrl,
+	   i.is_public_domain AS isPublicDomain, i.modifications AS modifications`;
+
+interface PediaImageLinkRow {
+	id: string;
+	ownerId: string;
+	sortOrder: number;
+	isPrimary: number;
+	imageId: string;
+	url: string;
+	width: number | null;
+	height: number | null;
+	altText: string;
+	caption: string | null;
+	creator: string | null;
+	creditLine: string | null;
+	sourceName: string | null;
+	sourceUrl: string | null;
+	licenseName: string | null;
+	licenseUrl: string | null;
+	isPublicDomain: number;
+	modifications: string | null;
+}
+
+function rowToImageLink(
+	row: PediaImageLinkRow,
+	ownerKind: "ENTRY" | "ENTITY",
+): PediaImageLink {
+	return {
+		id: row.id,
+		ownerKind,
+		ownerId: row.ownerId,
+		sortOrder: row.sortOrder,
+		isPrimary: Number(row.isPrimary) === 1,
+		image: {
+			imageId: row.imageId,
+			url: row.url,
+			width: row.width,
+			height: row.height,
+			altText: row.altText,
+			caption: row.caption,
+			creator: row.creator,
+			creditLine: row.creditLine,
+			sourceName: row.sourceName,
+			sourceUrl: row.sourceUrl,
+			licenseName: row.licenseName,
+			licenseUrl: row.licenseUrl,
+			isPublicDomain: Number(row.isPublicDomain) === 1,
+			modifications: row.modifications,
+		},
+	};
+}
+
+/** Public image links attached to an entry — `is_public` assets only, in the
+ * gallery's stored order. Reads as empty until the image tables deploy. */
+export async function getEntryImages(
+	entryId: string,
+): Promise<PediaImageLink[]> {
+	return query<PediaImageLinkRow>(
+		`SELECT ${PUBLIC_IMAGE_SELECT.replace("OWNER", "entry_id")}
+		 FROM tanahpedia_entry_image l
+		 JOIN tanahpedia_image i ON i.id = l.image_id
+		 WHERE l.entry_id = ? AND i.is_public = 1
+		 ORDER BY l.sort_order, l.id`,
+		[entryId],
+	)
+		.then((rows) => rows.map((row) => rowToImageLink(row, "ENTRY")))
+		.catch((error) => {
+			if (isMissingMysqlSchema(error)) return [];
+			throw error;
+		});
+}
+
+/** Public image links attached to an entity — see `getEntryImages`. */
+export async function getEntityImages(
+	entityId: string,
+): Promise<PediaImageLink[]> {
+	return query<PediaImageLinkRow>(
+		`SELECT ${PUBLIC_IMAGE_SELECT.replace("OWNER", "entity_id")}
+		 FROM tanahpedia_entity_image l
+		 JOIN tanahpedia_image i ON i.id = l.image_id
+		 WHERE l.entity_id = ? AND i.is_public = 1
+		 ORDER BY l.sort_order, l.id`,
+		[entityId],
+	)
+		.then((rows) => rows.map((row) => rowToImageLink(row, "ENTITY")))
+		.catch((error) => {
+			if (isMissingMysqlSchema(error)) return [];
+			throw error;
+		});
+}
+
+/** Public entity-scope images for every entity linked to an entry — the
+ * subject side of the entry gallery (entry-scope images are
+ * `getEntryImages`). Ordered per entity in stored order. */
+export async function getEntityImagesForEntry(
+	entryId: string,
+): Promise<PediaImageLink[]> {
+	return query<PediaImageLinkRow>(
+		`SELECT ${PUBLIC_IMAGE_SELECT.replace("OWNER", "entity_id")}
+		 FROM tanahpedia_entity_image l
+		 JOIN tanahpedia_image i ON i.id = l.image_id
+		 JOIN tanahpedia_entry_entity ee ON ee.entity_id = l.entity_id
+		 WHERE ee.entry_id = ? AND i.is_public = 1
+		 ORDER BY l.entity_id, l.sort_order, l.id`,
+		[entryId],
+	)
+		.then((rows) => rows.map((row) => rowToImageLink(row, "ENTITY")))
+		.catch((error) => {
+			if (isMissingMysqlSchema(error)) return [];
+			throw error;
+		});
 }

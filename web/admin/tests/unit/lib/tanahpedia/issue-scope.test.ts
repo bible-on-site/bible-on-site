@@ -12,8 +12,8 @@ describe("optional issue implementation scope", () => {
 	it("retains free-text issues and supports the complete operation catalogue", () => {
 		expect(validateIssueScope(undefined)).toBeUndefined();
 		expect(validateIssueScope(null)).toBeUndefined();
-		expect(CONTRIBUTION_ISSUE_SCOPE_KINDS).toHaveLength(46);
-		expect(new Set(CONTRIBUTION_ISSUE_SCOPE_KINDS).size).toBe(46);
+		expect(CONTRIBUTION_ISSUE_SCOPE_KINDS).toHaveLength(47);
+		expect(new Set(CONTRIBUTION_ISSUE_SCOPE_KINDS).size).toBe(47);
 	});
 	it.each(CONTRIBUTION_ISSUE_SCOPE_KINDS)(
 		"accepts kind-only %s and confines its implementation",

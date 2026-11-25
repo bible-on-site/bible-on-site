@@ -1,9 +1,12 @@
 use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
 
 use crate::{
-    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    dtos::{
+        reading_metric::{ReadingMetric, ReadingProgressUnit},
+        tanahpedia_images::TanahpediaImageLink,
+    },
     providers::Database,
-    services::reading_metrics_service,
+    services::{reading_metrics_service, tanahpedia_images_service},
 };
 
 /// Lightweight reference to a published Tanahpedia entry — the stable identity
@@ -85,6 +88,24 @@ impl TanahpediaEntryDetail {
                 .map_err(|e| e.extend())?;
         Ok(units.into_iter().map(Into::into).collect())
     }
+
+    /// Public image links attached to this entry, ordered by the link's
+    /// `sortOrder` (#3769). Resolved only when selected; reads as empty while
+    /// the additive image tables are pending deploy.
+    async fn images(&self, ctx: &Context<'_>) -> Result<Vec<TanahpediaImageLink>> {
+        tanahpedia_images_service::get_entry_images(ctx.data::<Database>()?, &self.id)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    /// Public image links attached to this entry's subject entities — the
+    /// entity-scope side of the entry gallery (e.g. the subject's portraits).
+    /// Resolved only when selected.
+    async fn entity_images(&self, ctx: &Context<'_>) -> Result<Vec<TanahpediaImageLink>> {
+        tanahpedia_images_service::get_entity_images_for_entry(ctx.data::<Database>()?, &self.id)
+            .await
+            .map_err(|e| e.extend())
+    }
 }
 
 /// An entity of a given type with the entries that describe it — zero, one or
@@ -98,8 +119,9 @@ pub struct TanahpediaEntityWithEntries {
 }
 
 /// Number of published entries linked to a category key — either a base entity
-/// type (`PERSON`, `PLACE`, ...) or a subcategory (`PROPHET`, `KING`, animal
-/// kinds `BEHEMA`/`CHAYA`/`OF`/`SHERETZ` and purities `TAHOR`/`TAMEH`).
+/// type (`PERSON`, `PLACE`, ...) or a subcategory (`PROPHET`, `KING`,
+/// `TANAH_COMMENTATOR`, animal kinds `BEHEMA`/`CHAYA`/`OF`/`SHERETZ` and
+/// purities `TAHOR`/`TAMEH`).
 #[derive(SimpleObject, Debug, Clone)]
 pub struct TanahpediaCategoryCount {
     pub category: String,

@@ -148,6 +148,67 @@ public class TanahpediaModelsTests
         item.Links[1].Prefix.Should().Be(" / ");
     }
 
+    [Fact]
+    public void ImageLink_CaptionText_JoinsCaptionAndCredit()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                Caption = "שמשון הגיבור",
+                CreditLine = "Wikimedia Commons",
+            },
+        };
+
+        link.CaptionText.Should().Be("שמשון הגיבור · Wikimedia Commons");
+    }
+
+    [Fact]
+    public void ImageLink_CaptionText_FallsBackToCreditThenNull()
+    {
+        // No caption → the concise credit alone (creditLine, else creator,
+        // else source name); nothing at all → null hides the line.
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { CreditLine = "קרדיט" },
+        }.CaptionText.Should().Be("קרדיט");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Creator = "אמן" },
+        }.CaptionText.Should().Be("אמן");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { SourceName = "מקור" },
+        }.CaptionText.Should().Be("מקור");
+        new TanahpediaImageLink().CaptionText.Should().BeNull();
+    }
+
+    [Fact]
+    public void ImageLink_AttributionText_ListedProvenanceAndPublicDomain()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                Creator = "אמן",
+                SourceName = "Wikimedia Commons",
+                LicenseName = "CC BY-SA 4.0",
+                Modifications = "חיתוך",
+            },
+        };
+
+        link.AttributionText.Should().Be(
+            "יוצר/צלם: אמן · מקור: Wikimedia Commons · רישיון: CC BY-SA 4.0 · שינויים: חיתוך");
+
+        // Public domain replaces the license line — the public-domain /
+        // license distinction the issue requires.
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { IsPublicDomain = true },
+        }.AttributionText.Should().Be("רישיון: נחלת הכלל");
+        new TanahpediaImageLink().AttributionText.Should().BeNull();
+    }
+
     private static TanahpediaEntryStub Stub(string uniqueName, string title) => new()
     {
         Id = uniqueName,

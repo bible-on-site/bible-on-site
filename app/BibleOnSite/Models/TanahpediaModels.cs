@@ -88,9 +88,129 @@ public class TanahpediaEntryDetail
     /// </summary>
     public IReadOnlyList<ReadingProgressUnit> ProgressUnits { get; set; } = [];
 
+    /// <summary>
+    /// Entry-scope image links in stored order (issue #3769); only published
+    /// assets reach this list.
+    /// </summary>
+    public List<TanahpediaImageLink> Images { get; set; } = new();
+
+    /// <summary>
+    /// Images of the entry's entities in stored order (issue #3769) — the
+    /// gallery renders them after the entry's own images, same merge as the
+    /// website.
+    /// </summary>
+    public List<TanahpediaImageLink> EntityImages { get; set; } = new();
+
     /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
     public string? ReadingTimeBadge =>
         Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
+}
+
+/// <summary>
+/// Public render view of a Tanahpedia image asset (issue #3769) — everything
+/// the gallery figure and its caption/credit line need. Private editorial
+/// fields (permission evidence, publish flag) never leave the API.
+/// </summary>
+public class TanahpediaImage
+{
+    public string ImageId { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public string AltText { get; set; } = string.Empty;
+    public string? Caption { get; set; }
+
+    /// <summary>Artist / photographer when known.</summary>
+    public string? Creator { get; set; }
+
+    /// <summary>Concise display credit line.</summary>
+    public string? CreditLine { get; set; }
+
+    /// <summary>Holding collection/site, e.g. Wikimedia Commons.</summary>
+    public string? SourceName { get; set; }
+
+    /// <summary>Source item page URL.</summary>
+    public string? SourceUrl { get; set; }
+
+    /// <summary>License / rights statement; null when public domain.</summary>
+    public string? LicenseName { get; set; }
+    public string? LicenseUrl { get; set; }
+    public bool IsPublicDomain { get; set; }
+
+    /// <summary>Changes from the source item, e.g. crops.</summary>
+    public string? Modifications { get; set; }
+}
+
+/// <summary>
+/// One image linked to an entry or to one of its entities (issue #3769) — the
+/// gallery item: figure plus the "caption · credit" line and the full
+/// attribution, mirroring the website's ImageFigure.
+/// </summary>
+public class TanahpediaImageLink
+{
+    /// <summary><c>tanahpedia_{entry,entity}_image.id</c>.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>ENTRY or ENTITY.</summary>
+    public string OwnerKind { get; set; } = string.Empty;
+
+    /// <summary>entry_id or entity_id.</summary>
+    public string OwnerId { get; set; } = string.Empty;
+
+    public int SortOrder { get; set; }
+    public bool IsPrimary { get; set; }
+    public TanahpediaImage Image { get; set; } = new();
+
+    /// <summary>
+    /// "caption · credit" line under the figure — the concise credit
+    /// (creditLine, else creator, else source name) rides with the image;
+    /// null when neither caption nor credit exists.
+    /// </summary>
+    public string? CaptionText
+    {
+        get
+        {
+            var credit = Image.CreditLine ?? Image.Creator ?? Image.SourceName;
+            if (Image.Caption is { Length: > 0 } caption)
+            {
+                return credit is { Length: > 0 } ? $"{caption} · {credit}" : caption;
+            }
+            return credit;
+        }
+    }
+
+    /// <summary>
+    /// Full attribution line under the caption — "יוצר/צלם: X · מקור: Y ·
+    /// רישיון: Z · שינויים: W"; null when there is nothing to attribute.
+    /// </summary>
+    public string? AttributionText
+    {
+        get
+        {
+            var parts = new List<string>(4);
+            if (Image.Creator is { Length: > 0 } creator)
+            {
+                parts.Add($"יוצר/צלם: {creator}");
+            }
+            var source = Image.SourceName ?? Image.SourceUrl;
+            if (source is { Length: > 0 })
+            {
+                parts.Add($"מקור: {source}");
+            }
+            // License absent + public-domain flag means נחלת הכלל — the same
+            // distinction the website draws.
+            var license = Image.LicenseName ?? (Image.IsPublicDomain ? "נחלת הכלל" : null);
+            if (license is { Length: > 0 })
+            {
+                parts.Add($"רישיון: {license}");
+            }
+            if (Image.Modifications is { Length: > 0 } modifications)
+            {
+                parts.Add($"שינויים: {modifications}");
+            }
+            return parts.Count > 0 ? string.Join(" · ", parts) : null;
+        }
+    }
 }
 
 /// <summary>

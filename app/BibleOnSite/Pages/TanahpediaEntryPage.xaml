@@ -115,6 +115,38 @@
                             </BindableLayout.ItemTemplate>
                         </FlexLayout>
 
+                        <!-- Entry image gallery (#3769) - entry links first,
+                             then entity links; each figure carries the
+                             "caption · credit" line and full attribution -->
+                        <VerticalStackLayout Spacing="12"
+                                             IsVisible="{Binding HasImages}">
+                            <Label Text="תמונות"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <VerticalStackLayout Spacing="16"
+                                                 BindableLayout.ItemsSource="{Binding Images}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TanahpediaImageLink">
+                                        <VerticalStackLayout Spacing="4">
+                                            <Image Source="{Binding Image.Url}"
+                                                   Aspect="AspectFit"
+                                                   MaximumHeightRequest="320"
+                                                   SemanticProperties.Description="{Binding Image.AltText}"/>
+                                            <Label Text="{Binding CaptionText}"
+                                                   FontSize="13"
+                                                   IsVisible="{Binding CaptionText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                            <Label Text="{Binding AttributionText}"
+                                                   FontSize="11"
+                                                   IsVisible="{Binding AttributionText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+
                         <!-- Map of the entry's linked PLACE entities -->
                         <VerticalStackLayout Spacing="6"
                                              IsVisible="{Binding HasMap}">

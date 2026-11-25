@@ -14,6 +14,7 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { isMissingMysqlSchema } from "./sql-helpers";
 import { recomputeEntryMetrics } from "../reading-metrics";
 import { pediaEntryChange, revalidateWebsite } from "../website-revalidate";
 import {
@@ -30,7 +31,12 @@ import {
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
 const ANIMAL_PURITY_KEYS = ["TAHOR", "TAMEH"] as const;
-const PERSON_ROLE_KEYS = ["PROPHET", "KING"] as const;
+const PERSON_ROLE_KEYS = ["PROPHET", "KING", "TANAH_COMMENTATOR"] as const;
+const PERSON_ROLE_TABLES: Record<(typeof PERSON_ROLE_KEYS)[number], string> = {
+	PROPHET: "tanahpedia_person_role_prophet",
+	KING: "tanahpedia_person_role_king",
+	TANAH_COMMENTATOR: "tanahpedia_person_role_commentator",
+};
 
 function isCategoryKey(s: string): s is CategoryKey {
 	return Object.hasOwn(CATEGORY_LABELS, s);
@@ -95,9 +101,9 @@ export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
 			PERSON_ROLE_KEYS.includes(category as (typeof PERSON_ROLE_KEYS)[number])
 		) {
 			const roleTable =
-				category === "PROPHET"
-					? "tanahpedia_person_role_prophet"
-					: "tanahpedia_person_role_king";
+				PERSON_ROLE_TABLES[
+					category as (typeof PERSON_ROLE_KEYS)[number]
+				];
 			return await query<TanahpediaEntryListItem>(
 				`SELECT DISTINCT ent.id, ent.unique_name, ent.title, ent.created_at, ent.updated_at
 				 FROM tanahpedia_entry ent
@@ -109,7 +115,12 @@ export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
 				 ORDER BY ent.title
 				 LIMIT ${limit}`,
 				searchParams,
-			);
+			).catch((error) => {
+				// The role table lands with the data deploy — until then the
+				// category reads as an empty listing.
+				if (isMissingMysqlSchema(error)) return [];
+				throw error;
+			});
 		}
 
 		if (
@@ -188,8 +199,16 @@ export const getTanahpediaCategoryCounts = createServerFn({
 			 SELECT 'KING' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_king pk
 			 JOIN tanahpedia_person p ON p.id = pk.person_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+			 UNION ALL
+			 SELECT 'TANAH_COMMENTATOR' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_person_role_commentator pc
+			 JOIN tanahpedia_person p ON p.id = pc.person_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
-		),
+		).catch((error) => {
+			if (isMissingMysqlSchema(error)) return [];
+			throw error;
+		}),
 		query<{ cat: string; cnt: number }>(
 			`SELECT ak.kind AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_animal_kind ak
@@ -209,6 +228,7 @@ export const getTanahpediaCategoryCounts = createServerFn({
 	for (const t of ENTITY_TYPES) counts[t] = 0;
 	counts.PROPHET = 0;
 	counts.KING = 0;
+	counts.TANAH_COMMENTATOR = 0;
 	counts.BEHEMA = 0;
 	counts.CHAYA = 0;
 	counts.OF = 0;

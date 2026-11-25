@@ -124,6 +124,52 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                         wordCount
                         cumulativeWords
                     }
+                    images {
+                        id
+                        ownerKind
+                        ownerId
+                        sortOrder
+                        isPrimary
+                        image {
+                            imageId
+                            url
+                            width
+                            height
+                            altText
+                            caption
+                            creator
+                            creditLine
+                            sourceName
+                            sourceUrl
+                            licenseName
+                            licenseUrl
+                            isPublicDomain
+                            modifications
+                        }
+                    }
+                    entityImages {
+                        id
+                        ownerKind
+                        ownerId
+                        sortOrder
+                        isPrimary
+                        image {
+                            imageId
+                            url
+                            width
+                            height
+                            altText
+                            caption
+                            creator
+                            creditLine
+                            sourceName
+                            sourceUrl
+                            licenseName
+                            licenseUrl
+                            isPublicDomain
+                            modifications
+                        }
+                    }
                 }
             }",
             "TanahpediaEntry",
@@ -152,6 +198,8 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
             }).ToList(),
             ReadingMetric = dto.ReadingMetric?.ToModel(),
             ProgressUnits = (dto.ProgressUnits ?? []).Select(unit => unit.ToModel()).ToList(),
+            Images = (dto.Images ?? []).Select(link => link.ToModel()).ToList(),
+            EntityImages = (dto.EntityImages ?? []).Select(link => link.ToModel()).ToList(),
             Occurrences = (dto.Occurrences ?? []).Select(o => new TanahpediaEntryOccurrence
             {
                 PerekId = o.PerekId,
@@ -515,6 +563,10 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public EntryReadingMetricDto? ReadingMetric { get; set; }
         [JsonPropertyName("progressUnits")]
         public List<EntryProgressUnitDto>? ProgressUnits { get; set; }
+        [JsonPropertyName("images")]
+        public List<ImageLinkDto>? Images { get; set; }
+        [JsonPropertyName("entityImages")]
+        public List<ImageLinkDto>? EntityImages { get; set; }
     }
 
     /// <summary>Persisted reading metric as the API returns it (issue #2607).</summary>
@@ -569,6 +621,84 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public string? EntityType { get; set; }
         [JsonPropertyName("entityName")]
         public string? EntityName { get; set; }
+    }
+
+    /// <summary>An image link with its asset as the API returns it (issue #3769).</summary>
+    internal class ImageLinkDto
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+        [JsonPropertyName("ownerKind")]
+        public string? OwnerKind { get; set; }
+        [JsonPropertyName("ownerId")]
+        public string? OwnerId { get; set; }
+        [JsonPropertyName("sortOrder")]
+        public int SortOrder { get; set; }
+        [JsonPropertyName("isPrimary")]
+        public bool IsPrimary { get; set; }
+        [JsonPropertyName("image")]
+        public ImageDto? Image { get; set; }
+
+        public TanahpediaImageLink ToModel() => new()
+        {
+            Id = Id ?? string.Empty,
+            OwnerKind = OwnerKind ?? string.Empty,
+            OwnerId = OwnerId ?? string.Empty,
+            SortOrder = SortOrder,
+            IsPrimary = IsPrimary,
+            Image = Image?.ToModel() ?? new TanahpediaImage()
+        };
+    }
+
+    /// <summary>The public asset fields as the API returns them (issue #3769).</summary>
+    internal class ImageDto
+    {
+        [JsonPropertyName("imageId")]
+        public string? ImageId { get; set; }
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
+        [JsonPropertyName("width")]
+        public int? Width { get; set; }
+        [JsonPropertyName("height")]
+        public int? Height { get; set; }
+        [JsonPropertyName("altText")]
+        public string? AltText { get; set; }
+        [JsonPropertyName("caption")]
+        public string? Caption { get; set; }
+        [JsonPropertyName("creator")]
+        public string? Creator { get; set; }
+        [JsonPropertyName("creditLine")]
+        public string? CreditLine { get; set; }
+        [JsonPropertyName("sourceName")]
+        public string? SourceName { get; set; }
+        [JsonPropertyName("sourceUrl")]
+        public string? SourceUrl { get; set; }
+        [JsonPropertyName("licenseName")]
+        public string? LicenseName { get; set; }
+        [JsonPropertyName("licenseUrl")]
+        public string? LicenseUrl { get; set; }
+        [JsonPropertyName("isPublicDomain")]
+        public bool IsPublicDomain { get; set; }
+        [JsonPropertyName("modifications")]
+        public string? Modifications { get; set; }
+
+        public TanahpediaImage ToModel() => new()
+        {
+            ImageId = ImageId ?? string.Empty,
+            Url = Url ?? string.Empty,
+            Width = Width,
+            Height = Height,
+            AltText = AltText ?? string.Empty,
+            Caption = Caption,
+            Creator = Creator,
+            CreditLine = CreditLine,
+            SourceName = SourceName,
+            SourceUrl = SourceUrl,
+            LicenseName = LicenseName,
+            LicenseUrl = LicenseUrl,
+            IsPublicDomain = IsPublicDomain,
+            Modifications = Modifications
+        };
     }
 
     internal class OccurrenceDto

@@ -124,6 +124,11 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<TanahpediaLinkedEntity> _entities = new();
 
+    /// <summary>The entry's gallery (issue #3769) — entry-scope links first,
+    /// then entity-scope links; the same merge the website renders.</summary>
+    [ObservableProperty]
+    private ObservableCollection<TanahpediaImageLink> _images = new();
+
     [ObservableProperty]
     private ObservableCollection<TanahpediaOccurrenceItem> _occurrences = new();
 
@@ -161,6 +166,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasContent => !string.IsNullOrEmpty(Content);
+    public bool HasImages => Images.Count > 0;
 
     /// <summary>The entry body renders as a single HtmlView — one counted
     /// child owns every stored block (issue #2607).</summary>
@@ -350,6 +356,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ReadingProgress = 0;
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>();
+        Images = new ObservableCollection<TanahpediaImageLink>();
         FamilyTree = null;
         PlaceMarkers = [];
         Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
@@ -357,6 +364,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         DedicationLines = [];
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(HasOccurrences));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
@@ -375,6 +383,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ReadingProgress = 0;
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
+        // Entry-scope links first, then entity-scope — the gallery merge the
+        // website renders (#3769).
+        Images = new ObservableCollection<TanahpediaImageLink>(
+            detail.Images.Concat(detail.EntityImages));
         IsLoaded = true;
     }
 
@@ -393,6 +405,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(HasOccurrences));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
@@ -411,6 +424,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ApplyEntryBody(detail);
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(ShowNoContentNotice));
 
         await Task.WhenAll(

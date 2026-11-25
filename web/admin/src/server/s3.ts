@@ -78,6 +78,41 @@ export async function uploadImage(
 	return getPublicUrl(key);
 }
 
+const PEDIA_IMAGE_CONTENT_TYPES: Record<string, string> = {
+	"image/jpeg": "jpg",
+	"image/png": "png",
+	"image/webp": "webp",
+};
+
+/**
+ * Upload a Tanahpedia image asset (#3769). Each upload gets a fresh object
+ * key under `pedia/images/` — the `tanahpedia_image.url` row stores the
+ * returned public URL. Content type maps to the extension; anything else is
+ * rejected before it can be published under a wrong extension.
+ */
+export async function uploadPediaImage(
+	buffer: Buffer,
+	contentType: string,
+): Promise<string> {
+	const ext = PEDIA_IMAGE_CONTENT_TYPES[contentType];
+	if (!ext) {
+		throw new Error(`Unsupported image content type: ${contentType}`);
+	}
+	const key = `pedia/images/${crypto.randomUUID()}.${ext}`;
+
+	await s3Client.send(
+		new PutObjectCommand({
+			Bucket: S3_BUCKET,
+			Key: key,
+			Body: buffer,
+			ContentType: contentType,
+			CacheControl: "max-age=31536000", // 1 year
+		}),
+	);
+
+	return getPublicUrl(key);
+}
+
 export async function deleteImage(imageUrl: string): Promise<void> {
 	// Extract key from URL - handle both AWS and local S3 URLs
 	const url = new URL(imageUrl);
@@ -139,4 +174,20 @@ export const uploadAuthorImage = createServerFn({ method: "POST" })
 		await uploadImage(buffer, contentType, authorId);
 
 		return { imageUrl: getAuthorImageUrl(authorId) };
+	});
+
+interface UploadPediaImageInput {
+	fileName: string;
+	contentType: string;
+	base64Data: string;
+}
+
+// Server function to upload a Tanahpedia image asset — the caller stores the
+// returned URL on a `tanahpedia_image` row via `putImageAsset`.
+export const uploadPediaImageFile = createServerFn({ method: "POST" })
+	.validator((data: UploadPediaImageInput) => data)
+	.handler(async ({ data }) => {
+		const buffer = Buffer.from(data.base64Data, "base64");
+		const imageUrl = await uploadPediaImage(buffer, data.contentType);
+		return { imageUrl };
 	});

@@ -9,4 +9,5 @@ pub mod tanahpedia_aliases_resolver;
 pub mod tanahpedia_entity_resolver;
 pub mod tanahpedia_entries_resolver;
 pub mod tanahpedia_family_resolver;
+pub mod tanahpedia_images_resolver;
 pub mod tanahpedia_revisions_resolver;

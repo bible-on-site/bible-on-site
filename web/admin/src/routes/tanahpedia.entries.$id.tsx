@@ -13,6 +13,7 @@ import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { EntryAliasesPanel } from "~/components/tanahpedia/EntryAliasesPanel";
 import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
+import { EntryImagesPanel } from "~/components/tanahpedia/EntryImagesPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { MainAddressSection } from "~/components/tanahpedia/MainAddressSection";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
@@ -999,6 +1000,7 @@ function EntryEditPage() {
 								websiteBase={WEBSITE_BASE}
 							/>
 							<EntryStructuralPanel entryId={id} />
+							<EntryImagesPanel entryId={id} />
 						</>
 					)}
 				</>

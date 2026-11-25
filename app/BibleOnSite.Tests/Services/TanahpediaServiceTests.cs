@@ -141,6 +141,90 @@ public class TanahpediaServiceTests
     }
 
     [Fact]
+    public async Task GetEntryDetailAsync_maps_images_and_entity_images()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntry": {
+                  "id": "e1",
+                  "uniqueName": "שמשון",
+                  "title": "שמשון",
+                  "content": "<p>שופט</p>",
+                  "updatedAt": "2026-07-01T10:00:00",
+                  "images": [
+                    {
+                      "id": "l1",
+                      "ownerKind": "ENTRY",
+                      "ownerId": "e1",
+                      "sortOrder": 0,
+                      "isPrimary": true,
+                      "image": {
+                        "imageId": "img1",
+                        "url": "https://cdn.example.com/shimshon.jpg",
+                        "width": 800,
+                        "height": 600,
+                        "altText": "שמשון",
+                        "caption": "שמשון הגיבור",
+                        "creator": "אמן לדוגמה",
+                        "creditLine": "קרדיט",
+                        "sourceName": "Wikimedia Commons",
+                        "sourceUrl": "https://commons.example.com/f.jpg",
+                        "licenseName": "CC BY-SA 4.0",
+                        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "isPublicDomain": false,
+                        "modifications": null
+                      }
+                    }
+                  ],
+                  "entityImages": [
+                    {
+                      "id": "l2",
+                      "ownerKind": "ENTITY",
+                      "ownerId": "en1",
+                      "sortOrder": 0,
+                      "isPrimary": false,
+                      "image": {
+                        "imageId": "img2",
+                        "url": "https://cdn.example.com/entity.jpg",
+                        "width": null,
+                        "height": null,
+                        "altText": "דיוקן",
+                        "caption": null,
+                        "creator": null,
+                        "creditLine": null,
+                        "sourceName": null,
+                        "sourceUrl": null,
+                        "licenseName": null,
+                        "licenseUrl": null,
+                        "isPublicDomain": true,
+                        "modifications": null
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var detail = await service.GetEntryDetailAsync("שמשון", TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.Images.Should().ContainSingle();
+        detail.Images[0].Id.Should().Be("l1");
+        detail.Images[0].IsPrimary.Should().BeTrue();
+        detail.Images[0].Image.Url.Should().Be("https://cdn.example.com/shimshon.jpg");
+        detail.Images[0].Image.AltText.Should().Be("שמשון");
+        detail.Images[0].Image.LicenseName.Should().Be("CC BY-SA 4.0");
+        detail.EntityImages.Should().ContainSingle();
+        detail.EntityImages[0].OwnerKind.Should().Be("ENTITY");
+        detail.EntityImages[0].OwnerId.Should().Be("en1");
+        detail.EntityImages[0].Image.IsPublicDomain.Should().BeTrue();
+        transport.Requests[0].Should().Contain("entityImages");
+    }
+
+    [Fact]
     public async Task GetEntryDetailAsync_returns_null_for_unknown_name()
     {
         var transport = new GraphQLTransport("""

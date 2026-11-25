@@ -18,6 +18,7 @@ use crate::resolvers::tanahpedia_aliases_resolver;
 use crate::resolvers::tanahpedia_entity_resolver;
 use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
+use crate::resolvers::tanahpedia_images_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
 use crate::services::article_search::ArticleSearchIndex;
 
@@ -34,6 +35,7 @@ pub struct QueryRoot(
     tanahpedia_entries_resolver::TanahpediaEntriesQuery,
     tanahpedia_entity_resolver::TanahpediaEntityQuery,
     tanahpedia_family_resolver::TanahpediaFamilyQuery,
+    tanahpedia_images_resolver::TanahpediaImagesQuery,
     tanahpedia_revisions_resolver::TanahpediaRevisionsQuery,
 );
 
@@ -44,6 +46,7 @@ pub struct MutationRoot(
     moed_resolver::MoedMutation,
     tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
+    tanahpedia_images_resolver::TanahpediaImagesMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
 );
 

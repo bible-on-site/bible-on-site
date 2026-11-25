@@ -592,3 +592,46 @@ export interface PlaceMapMarker {
 	lng: number;
 	entryUniqueName: string | null;
 }
+
+// ─── Images (#3769) ────────────────────────────────────────
+
+/**
+ * Public render view of a `tanahpedia_image` asset — everything an entry
+ * gallery, JSON-LD `ImageObject` or image viewer needs. The private
+ * `permission_evidence`/`is_public` editorial fields never leave the editor
+ * surfaces.
+ */
+export interface PediaImage {
+	imageId: string;
+	/** Served asset URL (CDN/S3 public object or external host). */
+	url: string;
+	width: number | null;
+	height: number | null;
+	altText: string;
+	caption: string | null;
+	/** Artist / photographer when known. */
+	creator: string | null;
+	/** Concise display credit line. */
+	creditLine: string | null;
+	/** Holding collection/site, e.g. Wikimedia Commons. */
+	sourceName: string | null;
+	/** Source item page URL. */
+	sourceUrl: string | null;
+	/** License / rights statement; null when public domain. */
+	licenseName: string | null;
+	licenseUrl: string | null;
+	isPublicDomain: boolean;
+	/** Changes from the source item, e.g. crops. */
+	modifications: string | null;
+}
+
+/** A public image link — `ENTRY` scopes `tanahpedia_entry_image`, `ENTITY`
+ * scopes `tanahpedia_entity_image`. Only `is_public` assets are returned. */
+export interface PediaImageLink {
+	id: string;
+	ownerKind: "ENTRY" | "ENTITY";
+	ownerId: string;
+	sortOrder: number;
+	isPrimary: boolean;
+	image: PediaImage;
+}

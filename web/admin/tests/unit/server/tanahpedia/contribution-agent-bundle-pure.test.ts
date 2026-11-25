@@ -21,9 +21,9 @@ import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-a
 it("builds immutable declarations without a database, model client or runtime", () => {
 	expect(buildContributionAgentBundle().version).toBe("tanahpedia-agents-v13");
 	expect(CONTRIBUTION_AGENT_REFERENCE_KINDS).toHaveLength(28);
-	expect(CONTRIBUTION_AGENT_TARGET_KINDS).toHaveLength(46);
-	expect(CONTRIBUTION_AGENT_READ_KINDS).toHaveLength(74);
-	expect(new Set(CONTRIBUTION_AGENT_READ_KINDS).size).toBe(74);
+	expect(CONTRIBUTION_AGENT_TARGET_KINDS).toHaveLength(47);
+	expect(CONTRIBUTION_AGENT_READ_KINDS).toHaveLength(75);
+	expect(new Set(CONTRIBUTION_AGENT_READ_KINDS).size).toBe(75);
 	expect(Object.isFrozen(CONTRIBUTION_AGENT_READ_KINDS)).toBe(true);
 	for (const kind of CONTRIBUTION_AGENT_READ_KINDS)
 		expect(isContributionAgentReadKind(kind)).toBe(true);

@@ -46,6 +46,7 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_commentator WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_war_side_participant_person WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_saying_speaker_person WHERE person_id = ?) +
@@ -55,10 +56,11 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
 ) AS dependency_count"#;
-const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 17;
+const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 18;
 
 const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_entity_image WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_place WHERE entity_id = ?) +
@@ -76,7 +78,7 @@ const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_saying WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_prophecy WHERE entity_id = ?)
 ) AS dependency_count"#;
-const ENTITY_DEPENDENCY_BIND_COUNT: usize = 17;
+const ENTITY_DEPENDENCY_BIND_COUNT: usize = 18;
 
 fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
     std::iter::once(entity_id.to_string().into())
@@ -1355,7 +1357,7 @@ mod tests {
             }
         }
 
-        assert_eq!(reference_tables.len(), 16);
+        assert_eq!(reference_tables.len(), 17);
         assert!(reference_tables.remove("tanahpedia_person_sex"));
         for table in reference_tables {
             assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");

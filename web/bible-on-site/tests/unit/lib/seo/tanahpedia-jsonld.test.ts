@@ -7,6 +7,7 @@ import {
 	entityRefId,
 	entityTypeToSchemaType,
 	entryPath,
+	pediaImageObject,
 	plainText,
 	TANAHPEDIA_PATH,
 	TANAHPEDIA_SET_ID,
@@ -14,6 +15,8 @@ import {
 import type {
 	EntityType,
 	EntryWithEntities,
+	PediaImage,
+	PediaImageLink,
 	PersonFamilySummary,
 	PlaceMapMarker,
 } from "../../../../src/lib/tanahpedia/types";
@@ -514,6 +517,201 @@ describe("seo/tanahpedia-jsonld", () => {
 				sameAsByEntityId: { "ent-avraham": [] },
 			});
 			expect(nodeByType(graph, "Person")?.sameAs).toBeUndefined();
+		});
+	});
+
+	describe("images (#3769)", () => {
+		function image(over: Partial<PediaImage> = {}): PediaImage {
+			return {
+				imageId: "img-1",
+				url: "https://cdn.example.com/avraham.jpg",
+				width: 800,
+				height: 600,
+				altText: "דיוקן אברהם אבינו",
+				caption: "אברהם אבינו",
+				creator: "יוצר לדוגמה",
+				creditLine: "קרדיט לדוגמה",
+				sourceName: "Wikimedia Commons",
+				sourceUrl: "https://commons.example.com/File:avraham.jpg",
+				licenseName: "CC BY-SA 4.0",
+				licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+				isPublicDomain: false,
+				modifications: null,
+				...over,
+			};
+		}
+
+		function link(over: Partial<PediaImageLink> = {}): PediaImageLink {
+			return {
+				id: "link-1",
+				ownerKind: "ENTRY",
+				ownerId: "entry-1",
+				sortOrder: 0,
+				isPrimary: false,
+				image: image(),
+				...over,
+			};
+		}
+
+		const baseInput = () => ({
+			entry: entry(),
+			personFamily: null as PersonFamilySummary | null,
+			placeMarkers: [] as PlaceMapMarker[],
+			category: { label: "אישים", entityType: "PERSON" as const },
+		});
+
+		it("emits an ImageObject with the Google-recognized attribution fields", () => {
+			const node = pediaImageObject(image());
+			expect(node["@type"]).toBe("ImageObject");
+			// absUrl passes an already-absolute asset URL through unchanged.
+			expect(node.contentUrl).toBe("https://cdn.example.com/avraham.jpg");
+			expect(node.url).toBe("https://cdn.example.com/avraham.jpg");
+			expect(node.name).toBe("דיוקן אברהם אבינו");
+			expect(node.width).toBe(800);
+			expect(node.height).toBe(600);
+			expect(node.caption).toBe("אברהם אבינו");
+			expect(node.creator).toEqual({ "@type": "Person", name: "יוצר לדוגמה" });
+			expect(node.creditText).toBe("קרדיט לדוגמה");
+			expect(node.copyrightNotice).toBe("CC BY-SA 4.0");
+			expect(node.license).toBe(
+				"https://creativecommons.org/licenses/by-sa/4.0/",
+			);
+			expect(node.acquireLicensePage).toBe(
+				"https://commons.example.com/File:avraham.jpg",
+			);
+			expect(node.provider).toEqual({
+				"@type": "Organization",
+				name: "Wikimedia Commons",
+			});
+		});
+
+		it("keeps public domain distinct from a license — notice without license fields", () => {
+			const node = pediaImageObject(
+				image({
+					isPublicDomain: true,
+					licenseName: null,
+					licenseUrl: null,
+				}),
+			);
+			expect(node.copyrightNotice).toBe("Public domain");
+			expect(node.license).toBeUndefined();
+			expect(node.acquireLicensePage).toBeUndefined();
+		});
+
+		it("sets the WebPage image to the primary entry-scope image", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entryImages: [
+					link({ id: "first", sortOrder: 0 }),
+					link({
+						id: "primary",
+						isPrimary: true,
+						sortOrder: 1,
+						image: image({ url: "https://cdn.example.com/primary.jpg" }),
+					}),
+				],
+			});
+			const pageImage = nodeByType(graph, "WebPage")?.image as
+				| Record<string, unknown>
+				| undefined;
+			expect(pageImage?.contentUrl).toBe(
+				"https://cdn.example.com/primary.jpg",
+			);
+		});
+
+		it("attaches the entity's selected image to its entity node", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entityImages: [
+					link({
+						ownerKind: "ENTITY",
+						ownerId: "ent-avraham",
+						image: image({ url: "https://cdn.example.com/entity.jpg" }),
+					}),
+					link({
+						ownerKind: "ENTITY",
+						ownerId: "ent-other",
+						image: image({ url: "https://cdn.example.com/other.jpg" }),
+					}),
+				],
+			});
+			const personImage = nodeByType(graph, "Person")?.image as
+				| Record<string, unknown>
+				| undefined;
+			expect(personImage?.contentUrl).toBe(
+				"https://cdn.example.com/entity.jpg",
+			);
+		});
+
+		it("falls back to the single subject's entity image on the WebPage only when the entry has none", () => {
+			const entityLink = link({
+				ownerKind: "ENTITY",
+				ownerId: "ent-avraham",
+				image: image({ url: "https://cdn.example.com/entity.jpg" }),
+			});
+
+			const fallback = buildEntryGraph({
+				...baseInput(),
+				entityImages: [entityLink],
+			});
+			const fallbackImage = nodeByType(fallback, "WebPage")?.image as
+				| Record<string, unknown>
+				| undefined;
+			expect(fallbackImage?.contentUrl).toBe(
+				"https://cdn.example.com/entity.jpg",
+			);
+
+			// An entry-scope image always wins over the entity fallback.
+			const ownImage = buildEntryGraph({
+				...baseInput(),
+				entryImages: [link()],
+				entityImages: [entityLink],
+			});
+			const ownImageNode = nodeByType(ownImage, "WebPage")?.image as
+				| Record<string, unknown>
+				| undefined;
+			expect(ownImageNode?.contentUrl).toBe(
+				"https://cdn.example.com/avraham.jpg",
+			);
+		});
+
+		it("does not fall back to an entity image when the entry has several subjects", () => {
+			const twoSubjects = entry({
+				entities: [
+					{
+						id: "ee-1",
+						entryId: "entry-1",
+						entityId: "ent-avraham",
+						entityType: "PERSON",
+						entityName: "אברהם",
+					},
+					{
+						id: "ee-2",
+						entryId: "entry-1",
+						entityId: "ent-hebron",
+						entityType: "PLACE",
+						entityName: "חברון",
+					},
+				],
+			});
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entry: twoSubjects,
+				entityImages: [
+					link({
+						ownerKind: "ENTITY",
+						ownerId: "ent-avraham",
+						image: image({ url: "https://cdn.example.com/entity.jpg" }),
+					}),
+				],
+			});
+			expect(nodeByType(graph, "WebPage")?.image).toBeUndefined();
+		});
+
+		it("emits no image fields when the entry has no images", () => {
+			const graph = buildEntryGraph(baseInput());
+			expect(nodeByType(graph, "WebPage")?.image).toBeUndefined();
+			expect(nodeByType(graph, "Person")?.image).toBeUndefined();
 		});
 	});
 

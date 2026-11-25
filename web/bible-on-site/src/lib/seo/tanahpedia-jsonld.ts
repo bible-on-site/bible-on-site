@@ -5,6 +5,8 @@ import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import type {
 	EntityType,
 	EntryWithEntities,
+	PediaImage,
+	PediaImageLink,
 	PersonFamilyRelatedPerson,
 	PersonFamilySummary,
 	PlaceMapMarker,
@@ -95,6 +97,53 @@ function relatedRef(person: PersonFamilyRelatedPerson): { "@id": string } {
 	return { "@id": entityRefId(person.entityId, person.entryUniqueName) };
 }
 
+/**
+ * The `ImageObject` node for a public pedia image (#3769), carrying the
+ * Google-recognized attribution metadata: `contentUrl`, `creator`,
+ * `creditText`, `copyrightNotice` and `license`/`acquireLicensePage` where
+ * applicable. A public-domain statement stays distinct from a license —
+ * `copyrightNotice` records it and no `license` is emitted.
+ */
+export function pediaImageObject(image: PediaImage): Record<string, unknown> {
+	const node: Record<string, unknown> = {
+		"@type": "ImageObject",
+		contentUrl: absUrl(image.url),
+		url: absUrl(image.url),
+		name: image.altText,
+	};
+	if (image.width != null) node.width = image.width;
+	if (image.height != null) node.height = image.height;
+	if (image.caption) node.caption = image.caption;
+	if (image.creator) {
+		node.creator = { "@type": "Person", name: image.creator };
+	}
+	if (image.creditLine) node.creditText = image.creditLine;
+	if (image.isPublicDomain) {
+		node.copyrightNotice = "Public domain";
+	} else if (image.licenseName) {
+		node.copyrightNotice = image.licenseName;
+		if (image.licenseUrl) node.license = absUrl(image.licenseUrl);
+		if (image.sourceUrl) node.acquireLicensePage = absUrl(image.sourceUrl);
+	}
+	if (image.sourceName) {
+		node.provider = { "@type": "Organization", name: image.sourceName };
+	}
+	return node;
+}
+
+/** The "selected" link of a scope — its `is_primary` row, else the first
+ * image the gallery displays. */
+function selectedLink(
+	links: PediaImageLink[],
+	ownerId?: string,
+): PediaImageLink | null {
+	const scoped =
+		ownerId === undefined
+			? links
+			: links.filter((link) => link.ownerId === ownerId);
+	return scoped.find((link) => link.isPrimary) ?? scoped[0] ?? null;
+}
+
 export interface EntryGraphInput {
 	entry: EntryWithEntities;
 	personFamily: PersonFamilySummary | null;
@@ -103,12 +152,23 @@ export interface EntryGraphInput {
 	category: { label: string; entityType: EntityType } | null;
 	/** Verified external references keyed by entityId (Phase 4 `sameAs`). */
 	sameAsByEntityId?: Record<string, string[]>;
+	/** Entry-scope public image links (#3769). */
+	entryImages?: PediaImageLink[];
+	/** Entity-scope public image links for the entry's entities. */
+	entityImages?: PediaImageLink[];
 }
 
 /** Build the `@graph` for a Tanahpedia entry page (`/pedia/[uniqueName]`). */
 export function buildEntryGraph(input: EntryGraphInput): Graph {
-	const { entry, personFamily, placeMarkers, category, sameAsByEntityId } =
-		input;
+	const {
+		entry,
+		personFamily,
+		placeMarkers,
+		category,
+		sameAsByEntityId,
+		entryImages = [],
+		entityImages = [],
+	} = input;
 	const path = entryPath(entry.uniqueName);
 	const pageUrl = absUrl(path);
 	const termId = `${pageUrl}#term`;
@@ -133,6 +193,13 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		const sameAs = sameAsByEntityId?.[ee.entityId];
 		if (sameAs && sameAs.length > 0) {
 			node.sameAs = sameAs;
+		}
+
+		// The entity's selected public image (#3769) — the same primary the
+		// rendered gallery surfaces.
+		const entityImage = selectedLink(entityImages, ee.entityId);
+		if (entityImage) {
+			node.image = pediaImageObject(entityImage.image);
 		}
 
 		if (ee.entityType === "PLACE") {
@@ -249,6 +316,17 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		webPage.about = {
 			"@id": entityRefId(focal.entityId, entry.uniqueName),
 		};
+	}
+	// The page's representative image: the selected entry-scope image, else —
+	// only when the entry has an unambiguous single subject — that entity's
+	// selected image (#3769). Every emitted image is one the page renders.
+	const pageLink =
+		selectedLink(entryImages) ??
+		(entry.entities.length === 1
+			? selectedLink(entityImages, entry.entities[0].entityId)
+			: null);
+	if (pageLink) {
+		webPage.image = pediaImageObject(pageLink.image);
 	}
 	if (modified) {
 		webPage.dateModified = modified;

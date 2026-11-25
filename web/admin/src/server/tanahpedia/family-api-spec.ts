@@ -40,6 +40,7 @@ export interface CreateFamilyPersonInput {
 	birthPlaceId?: string | null;
 	isProphet?: boolean;
 	isKing?: boolean;
+	isCommentator?: boolean;
 }
 
 export interface UpdateFamilyPersonInput {
@@ -52,6 +53,7 @@ export interface UpdateFamilyPersonInput {
 	birthPlaceId?: string | null;
 	isProphet?: boolean;
 	isKing?: boolean;
+	isCommentator?: boolean;
 }
 
 export interface DeleteFamilyPersonInput {
