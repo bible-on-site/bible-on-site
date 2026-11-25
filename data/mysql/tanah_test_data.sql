@@ -274,9 +274,11 @@ SELECT id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasu
 FROM (SELECT 90011 AS id, 9001 AS section_id, 1 AS position,
              1 AS perek_id_start, 1 AS pasuk_start, 1 AS perek_id_end, 3 AS pasuk_end
       UNION ALL
-      -- בראשית ב carries no fixture article, so the range of moed 92 matches
-      -- nothing and its article list is the explicit link alone.
-      SELECT 90021, 9002, 1, 2, 1, 2, 3) seed
+      -- בראשית ב carries no primary fixture article; article 1 only covers
+      -- its פסוק א for the לקריאה נוספת demo (#3752), so this range skips it
+      -- and moed 92 still matches nothing - the article list is the
+      -- explicit link alone.
+      SELECT 90021, 9002, 1, 2, 2, 2, 3) seed
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range WHERE tanah_moed_range.id = seed.id);
 
 INSERT INTO tanah_article_moed (article_id, moed_id)
