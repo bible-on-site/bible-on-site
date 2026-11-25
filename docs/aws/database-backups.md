@@ -168,7 +168,7 @@ backup freshness SLA.
 
 ## Independent restoration drill
 
-Use an isolated host with MySQL CLI tools, Python 3.14, the pinned
+Use an isolated host with MySQL CLI tools, Python 3.15, the pinned
 [backup requirements](../../devops/backups/requirements.txt), and the recovery
 operator's SSO session. The backup writer deliberately has no object-read grant.
 Obtain the manifest's **version ID** with `aws s3api list-object-versions`,

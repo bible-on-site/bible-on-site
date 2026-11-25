@@ -25,11 +25,10 @@ Sensitive values are masked with placeholders. To retrieve actual values:
 
 ## Lambda Python Runtimes
 
-The Python Lambdas (`bible-on-site-db-populator`, `ecr-to-ecs-deploy`) target
-`python3.14` (Amazon Linux 2023, deprecation scheduled for 2029-06-30).
-[Python 3.15 is generally available for Lambda Event Functions](https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-python-315/).
-The data deployment rehearsal in `ci-data-deploy.yml` uses Python 3.14 to match
-the db-populator runtime pending [the Python 3.15 rollout](https://github.com/bible-on-site/bible-on-site/issues/3800).
+The `bible-on-site-db-populator` Lambda targets `python3.15` (Amazon Linux
+2023). The `ecr-to-ecs-deploy` Lambda remains on `python3.14` (deprecation
+scheduled for 2029-06-30). The data deployment rehearsal in
+`ci-data-deploy.yml` uses Python 3.15 to match the db-populator runtime.
 
 The live functions are created outside CloudFormation. After explicit approval
 of the AWS change, upgrade each one in `il-central-1`, recording the previous
@@ -37,7 +36,7 @@ runtime for rollback:
 
 ```bash
 aws lambda get-function-configuration --function-name <NAME> --query Runtime --region il-central-1
-aws lambda update-function-configuration --function-name <NAME> --runtime python3.14 --region il-central-1
+aws lambda update-function-configuration --function-name <NAME> --runtime python3.15 --region il-central-1
 aws lambda wait function-updated --function-name <NAME> --region il-central-1
 ```
 
@@ -185,7 +184,7 @@ Lambda function for deploying SQL data to RDS MySQL.
 
 **Components:**
 - S3 Bucket: `bible-on-site-data-deploy` (SQL file staging)
-- Lambda Function: `bible-on-site-db-populator` (Python 3.14)
+- Lambda Function: `bible-on-site-db-populator` (Python 3.15)
 - Security Group: `data-deploy-lambda-sg` (VPC access)
 - IAM Role: `DataDeployLambdaRole` (SSM read, S3 read)
 

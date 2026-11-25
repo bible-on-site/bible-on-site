@@ -55,7 +55,7 @@ and serves files through the admin service from a private S3 bucket.
   dead-letter queue. Channel audiences and subscriber consent govern sends.
   [Daily bulletin schedule](../daily-bulletin-schedule.md)
 - **Data deployment.** GitHub Actions stages SQL in `bible-on-site-data-deploy`
-  and invokes the Python 3.14 `bible-on-site-db-populator` Lambda to apply it
+  and invokes the Python 3.15 `bible-on-site-db-populator` Lambda to apply it
   to RDS. Database connection secrets are held in SSM Parameter Store.
   [Data deployment runbook](../../../devops/deploy/README.md#2-data-deployment-database-population)
 
