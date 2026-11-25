@@ -340,10 +340,12 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
                 Console.WriteLine($"[Push] opt-in kept but permission is {permission}");
                 return;
             }
-            _appliedThisLaunch = true;
             await _platform.SubscribeToTopicAsync(DailyPerekTopic, ct);
             await _stateStore.RemoveAsync(PendingUnsubscribeKey, ct);
             await SyncRegistrationAsync(ct);
+            // Only a fully applied opt-in counts: a transient subscribe or sync
+            // failure leaves this unset so the next attempt retries.
+            _appliedThisLaunch = true;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: a startup apply failure is log-only — the opt-in persists
         catch (Exception ex) //NOSONAR — a startup apply failure is log-only; the opt-in persists.
@@ -417,7 +419,13 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         }
         lock (_initLock)
         {
-            _initializeTask ??= _platform.InitializeAsync(ct);
+            // A faulted or cancelled attempt must not be cached forever —
+            // only an in-flight or succeeded task is shared, so the next call
+            // after a transient failure retries.
+            if (_initializeTask is null or { IsCompleted: true, IsCompletedSuccessfully: false })
+            {
+                _initializeTask = _platform.InitializeAsync(ct);
+            }
             return _initializeTask;
         }
     }
