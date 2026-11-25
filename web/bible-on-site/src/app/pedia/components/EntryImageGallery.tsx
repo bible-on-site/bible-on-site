@@ -32,6 +32,10 @@ function ProvenanceDetails({ image }: { image: PediaImage }) {
 		) : (
 			image.licenseName
 		)
+	) : image.licenseUrl ? (
+		<a href={image.licenseUrl} target="_blank" rel="noopener noreferrer">
+			קישור לרישיון
+		</a>
 	) : null;
 
 	const rows: { label: string; value: ReactNode }[] = [];

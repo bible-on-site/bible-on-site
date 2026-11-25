@@ -209,6 +209,24 @@ public class TanahpediaModelsTests
         new TanahpediaImageLink().AttributionText.Should().BeNull();
     }
 
+    [Fact]
+    public void ImageLink_AttributionText_LicenseUrlOnly_KeepsLinkDiscoverable()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                LicenseUrl = "https://creativecommons.org/licenses/by-sa/4.0/",
+            },
+        };
+
+        // The URL itself is the actionable evidence, but the expandable row
+        // and the disclosure visibility need a non-empty Hebrew caption.
+        link.Image.HasLicenseLink.Should().BeTrue();
+        link.Image.LicenseDisplay.Should().Be("קישור לרישיון");
+        link.AttributionText.Should().Be("רישיון: קישור לרישיון");
+    }
+
     private static TanahpediaEntryStub Stub(string uniqueName, string title) => new()
     {
         Id = uniqueName,

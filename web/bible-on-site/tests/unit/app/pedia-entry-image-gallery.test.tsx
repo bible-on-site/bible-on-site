@@ -170,6 +170,27 @@ describe("EntryImageGallery (#3769)", () => {
 		expect(screen.queryByText("נחלת הכלל")).not.toBeInTheDocument();
 	});
 
+	it("keeps a URL-only license reachable with a fallback link label", () => {
+		render(
+			<EntryImageGallery
+				entryImages={[
+					link({
+						image: image({
+							licenseUrl:
+								"https://creativecommons.org/licenses/by-sa/4.0/",
+						}),
+					}),
+				]}
+				entityImages={[]}
+			/>,
+		);
+
+		expect(screen.getByRole("link", { name: "קישור לרישיון" })).toHaveAttribute(
+			"href",
+			"https://creativecommons.org/licenses/by-sa/4.0/",
+		);
+	});
+
 	it("renders an explicit entry cross-link once when the entity inherits the same asset", () => {
 		render(
 			<EntryImageGallery

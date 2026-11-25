@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
 	putImageLink: vi.fn(),
 	removeImageLink: vi.fn(),
 	clearPrimaryImage: vi.fn(),
-	uploadPediaImageFile: vi.fn(),
+	createPediaImageUpload: vi.fn(),
+	uploadPediaImageChunk: vi.fn(),
 }));
 
 vi.mock("~/server/tanahpedia/images", () => ({
@@ -20,7 +21,8 @@ vi.mock("~/server/tanahpedia/images", () => ({
 }));
 
 vi.mock("~/server/s3", () => ({
-	uploadPediaImageFile: mocks.uploadPediaImageFile,
+	createPediaImageUpload: mocks.createPediaImageUpload,
+	uploadPediaImageChunk: mocks.uploadPediaImageChunk,
 }));
 
 vi.mock("~/components/UndoToast", () => ({
@@ -115,6 +117,23 @@ describe("EntryImagesPanel", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mocks.putImageAsset.mockResolvedValue({ imageId: "img-new" });
+		mocks.createPediaImageUpload.mockResolvedValue({
+			uploadId: "upload-1",
+			chunkBytes: 2,
+			chunkCount: 2,
+		});
+		mocks.uploadPediaImageChunk.mockImplementation(
+			({ data }: { data: { chunkIndex: number } }) =>
+				Promise.resolve(
+					data.chunkIndex === 1
+						? {
+								complete: true,
+								receivedBytes: 3,
+								imageUrl: "https://cdn.example.com/uploaded.jpg",
+							}
+						: { complete: false, receivedBytes: 2 },
+				),
+		);
 	});
 
 	it("renders entry and entity scopes with publication and primary state", async () => {
@@ -231,6 +250,39 @@ describe("EntryImagesPanel", () => {
 		expect(mocks.putImageLink).toHaveBeenCalledWith({
 			data: { ownerKind: "ENTRY", ownerId: "entry-1", imageId: "img-new" },
 		});
+	});
+
+	it("uploads a file through every chunk and fills the image URL", async () => {
+		const { container } = renderPanel({ entryLinks: [], entityGroups: [] });
+		await screen.findByText("אין תמונות מקושרות.");
+		fireEvent.click(screen.getByText("+ הוסף תמונה"));
+		const fileInput = container.querySelector<HTMLInputElement>(
+			'input[type="file"]',
+		);
+		expect(fileInput).not.toBeNull();
+		const file = new File([new Uint8Array([1, 2, 3])], "scan.jpg", {
+			type: "image/jpeg",
+		});
+
+		fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+		await waitFor(() =>
+			expect(mocks.uploadPediaImageChunk).toHaveBeenCalledTimes(2),
+		);
+		expect(mocks.createPediaImageUpload).toHaveBeenCalledWith({
+			data: { contentType: "image/jpeg", totalSize: 3 },
+		});
+		expect(mocks.uploadPediaImageChunk).toHaveBeenNthCalledWith(1, {
+			data: { uploadId: "upload-1", chunkIndex: 0, base64Data: "AQI=" },
+		});
+		expect(mocks.uploadPediaImageChunk).toHaveBeenNthCalledWith(2, {
+			data: { uploadId: "upload-1", chunkIndex: 1, base64Data: "Aw==" },
+		});
+		await waitFor(() =>
+			expect(
+				(screen.getByPlaceholderText("https://…") as HTMLInputElement).value,
+			).toBe("https://cdn.example.com/uploaded.jpg"),
+		);
 	});
 
 	it("surfaces mutation errors and cancels the editor", async () => {

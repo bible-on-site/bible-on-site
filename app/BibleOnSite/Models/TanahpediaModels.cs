@@ -141,7 +141,11 @@ public class TanahpediaImage
     /// <summary>Changes from the source item, e.g. crops.</summary>
     public string? Modifications { get; set; }
 
-    public string? LicenseDisplay => IsPublicDomain ? "נחלת הכלל" : LicenseName;
+    /// <summary>License label; a URL-only license still needs a readable,
+    /// non-empty link caption so readers can reach the rights evidence.</summary>
+    public string? LicenseDisplay => IsPublicDomain
+        ? "נחלת הכלל"
+        : LicenseName ?? (HasLicenseLink ? "קישור לרישיון" : null);
     public bool HasSourceLink => !string.IsNullOrWhiteSpace(SourceUrl);
     public bool HasPlainSource => !HasSourceLink && !string.IsNullOrWhiteSpace(SourceName);
     public bool HasLicenseLink => !IsPublicDomain && !string.IsNullOrWhiteSpace(LicenseUrl);
@@ -211,7 +215,7 @@ public partial class TanahpediaImageLink : ObservableObject
             }
             // License absent + public-domain flag means נחלת הכלל — the same
             // distinction the website draws.
-            var license = Image.IsPublicDomain ? "נחלת הכלל" : Image.LicenseName;
+            var license = Image.LicenseDisplay;
             if (license is { Length: > 0 })
             {
                 parts.Add($"רישיון: {license}");
