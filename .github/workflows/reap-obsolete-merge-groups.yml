@@ -12,9 +12,12 @@ on:
     branches: [master]
     types: [closed]
   workflow_run:
-    workflows: [Continuous Integration, CodeQL, Dependency review, Dependency submission, Data Deployment Tests, Perek Image Tools]
+    # Only CI merge-group runs are reap candidates; every pass reconciles the
+    # whole queue and all merged-PR validation regardless of its trigger.
+    workflows: [Continuous Integration]
     # Re-runs do not emit requested; catch them when they start too.
-    types: [requested, in_progress, completed]
+    # A finished run needs no pass: queue exits also fire delete.
+    types: [requested, in_progress]
   delete:
 permissions:
   contents: read
