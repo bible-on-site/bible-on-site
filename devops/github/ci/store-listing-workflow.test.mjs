@@ -28,3 +28,12 @@ test("serializes every sync on one shared group", () => {
 	);
 	assert.equal(workflow.concurrency?.["cancel-in-progress"], false);
 });
+
+// A queued or replaced run must still publish the newest copy, so the sync
+// checks out the current master tip rather than its triggering commit.
+test("publishes the master tip, not the triggering commit", () => {
+	const checkout = workflow.jobs.sync_google_play.steps.find(
+		(step) => step.uses === "actions/checkout@v7",
+	);
+	assert.equal(checkout?.with?.ref, "master");
+});

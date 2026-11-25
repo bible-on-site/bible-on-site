@@ -30,6 +30,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Publish the current tip, not the triggering commit: a queued or
+          # replaced run still pushes the newest listing copy.
+          ref: master
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
