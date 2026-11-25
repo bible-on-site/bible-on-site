@@ -59,4 +59,30 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
             ArticleSelected?.Invoke(this, article);
         }
     }
+
+    protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
+    {
+        base.OnPropertyChanged(propertyName);
+        if (propertyName is nameof(ItemsSource) or nameof(IsGrouped))
+        {
+            ApplyGroupHeaderTemplate();
+        }
+    }
+
+    /// <summary>
+    /// iOS emits a section supplementary view whenever a group template is
+    /// present; resolving it calls IItemsViewSource.Group, which throws
+    /// "IItemsViewSource is empty" on an empty source and crashes the layout
+    /// pass (parasha reader crash in the mobile e2e, #3752). Apply the group
+    /// header template only while a grouped, non-empty source can serve it —
+    /// flat or empty sources keep the untitled look.
+    /// </summary>
+    private void ApplyGroupHeaderTemplate()
+    {
+        var hasItems = ItemsSource is System.Collections.IEnumerable items
+            && items.GetEnumerator().MoveNext();
+        GroupHeaderTemplate = IsGrouped && hasItems
+            ? (DataTemplate)Resources["ArticleGroupHeaderTemplate"]
+            : null;
+    }
 }

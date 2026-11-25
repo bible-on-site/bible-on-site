@@ -77,8 +77,16 @@ public class FurtherReadingGroupingTests
     {
         var doc = XDocument.Load(Path.Join(AppRoot, "Controls", "ReaderArticlesView.xaml"));
 
-        var header = doc.Descendants().Single(e => e.Name.LocalName == "CollectionView.GroupHeaderTemplate");
-        header.Descendants().Any(e =>
+        // The template lives in Resources and is applied from code-behind only
+        // while a grouped, non-empty source exists: iOS emits a group
+        // supplementary view whenever the template property is set, and
+        // EmptySource.Group throws IndexOutOfRangeException on an empty list —
+        // crashing the reader's layout pass on first render.
+        var xaml = XNamespace.Get("http://schemas.microsoft.com/winfx/2009/xaml");
+        var template = doc.Descendants().Single(e =>
+            e.Name.LocalName == "DataTemplate"
+            && e.Attribute(xaml + "Key")?.Value == "ArticleGroupHeaderTemplate");
+        template.Descendants().Any(e =>
                 e.Attribute("Text")?.Value.Contains("Title") == true)
             .Should().BeTrue("the section label binds ArticleListGroup.Title — the untitled group collapses it");
     }
