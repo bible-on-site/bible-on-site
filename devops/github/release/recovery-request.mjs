@@ -97,9 +97,22 @@ export function recoveryReleaseFilename(moduleName, version) {
 		DIRECTORIES[moduleName] && /^\d+\.\d+\.\d+$/.test(version ?? ""),
 		"Recovery package identity is invalid",
 	);
+	// Admin publishes its ARM64 archive alone since the amd64 retirement (#3794).
 	return moduleName === "admin"
-		? `bible-on-site-admin-v${version}.tar.gz`
+		? `bible-on-site-admin-v${version}-arm64.tar.gz`
 		: `bulletin-lambda-v${version}.zip`;
+}
+
+/**
+ * Canonical deployed-package name plus historical-era spellings a published
+ * receipt may still carry: paired-era admin recoveries name the unsuffixed
+ * archive, and those receipts stay redeployable (#3794).
+ */
+function recoveryReleaseFilenames(moduleName, version) {
+	const names = [recoveryReleaseFilename(moduleName, version)];
+	if (moduleName === "admin")
+		names.push(`bible-on-site-admin-v${version}.tar.gz`);
+	return names;
 }
 
 async function hashFile(filename) {
@@ -118,9 +131,12 @@ export async function verifyRecoveryPackageFile({
 	version,
 	expected,
 }) {
+	// New receipts name the ARM64-only admin archive; a paired-era recovery
+	// release can still be redeployed through its canonical amd64 name (#3794).
+	const names = recoveryReleaseFilenames(moduleName, version);
 	requireThat(
 		file(expected) &&
-			expected.name === recoveryReleaseFilename(moduleName, version) &&
+			names.includes(expected.name) &&
 			path.basename(filename) === expected.name &&
 			statSync(filename).isFile(),
 		"Recovery downloaded package name is invalid",
@@ -336,9 +352,10 @@ export function buildRecoveryReceipt(input) {
 		"Recovery receipt CI or artifact proof is invalid",
 	);
 	requireThat(
-		input.releaseFile.name ===
-			recoveryReleaseFilename(input.moduleName, input.moduleVersion),
-		"Recovery receipt must name the canonical deployed package",
+		recoveryReleaseFilenames(input.moduleName, input.moduleVersion).includes(
+			input.releaseFile.name,
+		),
+		"Recovery receipt must name a canonical deployed package",
 	);
 	return {
 		schemaVersion: 1,
@@ -486,7 +503,11 @@ export function verifyRecoveryDeployment(
 	const proof = validateRecoveryProof(provenance?.recovery, moduleName);
 	requireThat(
 		provenance.module_directory === moduleDirectory &&
-			provenance.released_artifact_name === proof.artifact.name,
+			// ARM64-only admin payloads carry the package under
+			// released_arm64_artifact_name (#3794); paired payloads use the
+			// canonical key.
+			(provenance.released_artifact_name ??
+				provenance.released_arm64_artifact_name) === proof.artifact.name,
 		"Recovery provenance does not name its selected package",
 	);
 	const workflowId = workflowIdentity(repo, request);
@@ -523,8 +544,19 @@ export function verifyRecoveryDeployment(
 	const candidates = release.assets.filter((item) =>
 		item.name.endsWith(moduleName === "admin" ? ".tar.gz" : ".zip"),
 	);
+	// Paired-era admin releases carried amd64+arm64 packages; ARM64-only
+	// releases carry the single arm64 archive (#3794). The receipt still
+	// pins which package deploys.
+	const packageNames = new Set([
+		`bible-on-site-admin-v${version}.tar.gz`,
+		`bible-on-site-admin-v${version}-arm64.tar.gz`,
+	]);
 	requireThat(
-		candidates.length === 1 && candidates[0].id === packageAsset.id,
+		moduleName === "admin"
+			? candidates.length >= 1 &&
+					candidates.every((item) => packageNames.has(item.name)) &&
+					candidates.some((item) => item.id === packageAsset.id)
+			: candidates.length === 1 && candidates[0].id === packageAsset.id,
 		"Recovery release has ambiguous deployable package assets",
 	);
 	assertNormalRun(

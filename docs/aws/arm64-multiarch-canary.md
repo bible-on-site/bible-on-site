@@ -25,6 +25,14 @@ approved step): account **250598594267**, region **il-central-1**, cluster
 desired/running 1. Website/API run on-demand `FARGATE`; admin runs
 `FARGATE_SPOT` since 2026-10-24 ([rollout record](admin-spot-rollout.md)).
 
+> **Current delivery state (#3794):** production website and admin run ARM64
+> in prod, so their CI legs and release archives are now ARM64-only — each
+> release carries a single `*-v<version>-arm64.tar.gz` whose OCI index wraps
+> the verified ARM64 child alone. The API keeps its paired amd64+arm64
+> delivery. The paired-contract sections below are historical for
+> website/admin; they still describe the API contract and how rollback-era
+> paired releases were consumed.
+
 ## Repository and registry feasibility
 
 ### Base images have ARM64 variants

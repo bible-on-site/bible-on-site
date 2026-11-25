@@ -70,6 +70,8 @@ test("latest release deploys from the artifact's exact commit", () => {
 		ref: sha,
 		version: "1.0.10",
 		runAttempt: 1,
+		// A legacy release without native provenance keeps the amd64 path.
+		nativeAmd64: true,
 	});
 });
 test("a late older dispatch cannot replace a newer release", () => {
@@ -1407,4 +1409,65 @@ test("admin platform selection requires its own immutable published artifact pai
 			/published CI provenance|tag\/source/,
 		);
 	}
+});
+
+// Website/admin releases carry the ARM64 archive alone since the amd64
+// retirement (#3794); the API still requires its paired payload.
+test("ARM64-only website/admin payloads deploy the single native archive", () => {
+	for (const [moduleName, moduleDirectory, flag] of [
+		["website", "web/bible-on-site", "websiteArm64"],
+		["admin", "web/admin", "adminArm64"],
+	]) {
+		const image =
+			moduleName === "website" ? "bible-on-site" : "bible-on-site-admin";
+		const payload = {
+			ref: sha,
+			ci_run_id: 10,
+			module_name: moduleName,
+			module_version: "1.0.10",
+			released_arm64_artifact_name: `${image}-docker-10-arm64`,
+		};
+		const release = {
+			...published,
+			tag_name: `${moduleName}-v1.0.10`,
+			body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+		};
+		const result = checkDeployment(
+			{ ...input, moduleName, moduleDirectory },
+			request({ releases: [release] }),
+		);
+		assert.equal(result[flag], true);
+		assert.equal(result.nativeAmd64, false);
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" })} -->`,
+		};
+		assert.throws(
+			() =>
+				checkDeployment(
+					{ ...input, moduleName, moduleDirectory },
+					request({ releases: [wrong] }),
+				),
+			/published CI provenance/,
+		);
+	}
+	const apiArm64Only = {
+		...published,
+		tag_name: "api-v1.0.10",
+		body: `<!-- release-delivery:${JSON.stringify({
+			ref: sha,
+			ci_run_id: 10,
+			module_name: "api",
+			module_version: "1.0.10",
+			released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64",
+		})} -->`,
+	};
+	assert.throws(
+		() =>
+			checkDeployment(
+				{ ...input, moduleName: "api", moduleDirectory: "web/api" },
+				request({ releases: [apiArm64Only] }),
+			),
+		/published CI provenance/,
+	);
 });

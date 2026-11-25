@@ -6,34 +6,35 @@ the [AWS architecture guide](architecture/aws-architecture.md).
 
 ## Native build and release contract
 
-Both native runners build the same admin Dockerfile and source version from the
-same CI run: `package_admin` on the amd64 runner and `package_admin_arm64` on
-the native `ubuntu-24.04-arm` runner, each with its own `admin`/`admin-arm64`
-build cache scope. Every packaged image must pass the native verifier before it
-is stored: genuine runner architecture, Linux image metadata, runtime
-`uname`, Cognito SSO redirect and server-function protection probes, plus a
-real read of a seeded bulletin PDF through the anonymous document endpoint
-against the verifier-owned disposable MySQL server — never production data.
+Since the amd64 retirement (#3794), a single `package_admin` job on the native
+ARM runner builds the admin Dockerfile and source version, with the
+`admin-arm64` build cache scope. Every packaged image must pass the native
+verifier before it is stored: genuine runner architecture, Linux image
+metadata, runtime `uname`, Cognito SSO redirect and server-function protection
+probes, plus a real read of a seeded bulletin PDF through the anonymous
+document endpoint against the verifier-owned disposable MySQL server — never
+production data.
 
-The amd64 archive retains its existing name
-`bible-on-site-admin-v<version>.tar.gz`; the ARM64 archive adds
-`bible-on-site-admin-v<version>-arm64.tar.gz`. The release job requires both
-package jobs to succeed with the same nonempty version; a failed, skipped or
-cancelled ARM build, a missing archive, or a source/version mismatch fails
-closed and produces no release. Published release provenance binds both
-artifacts to the exact source CI run, source commit, module and version.
+The ARM64 archive is the only release archive:
+`bible-on-site-admin-v<version>-arm64.tar.gz`. The release job requires the
+package job to succeed with a nonempty version; a failed, skipped or cancelled
+build, a missing archive, or a source/version mismatch fails closed and
+produces no release. Published release provenance binds the artifact to the
+exact source CI run, source commit, module and version. Historical paired
+releases keep their amd64 archive readable for rollback.
 
-On deploy, `check-deployment` emits `admin_arm64` only when published
-provenance proves the immutable artifact pair of the current CI run. The CD
-job then re-downloads both archives, verifies their SHA256 digests, lengths and
-source binding, and hands the deployer the verified pair. Verified native
-images receive immutable `v<version>-amd64` and `v<version>-arm64` tags.
+On deploy, `check-deployment` emits `admin_arm64` when published provenance
+carries the ARM64 artifact of the current CI run, and `native_amd64` only
+when the payload still ships the canonical amd64 archive (paired-era
+releases). The CD job re-downloads the published archive, verifies its SHA256
+digest, length and source binding, and hands the deployer the verified ARM64
+archive. Verified native images receive the immutable `v<version>-arm64` tag.
 
 Production sets `ADMIN_MULTIARCH_RELEASES=true`. The canonical `v<version>`
-and `latest` tags point to an OCI index over both verified children. Once
-`latest` is an index, every subsequent release requires both native archives
-and index publication. The publisher rejects a single-platform overwrite of an
-immutable release version or a downgrade of `latest`.
+and `latest` tags point to an OCI index over the single verified ARM64 child.
+Once `latest` is an index, every subsequent release requires the native
+archive and index publication. The publisher rejects a single-platform
+overwrite of an immutable release version or a downgrade of `latest`.
 
 ## ECR policy
 

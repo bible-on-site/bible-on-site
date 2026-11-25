@@ -345,7 +345,8 @@ jobs:
           # separately streams/hashes the extracted package bytes.
           test "$(jq '[.[] | select(.name != null and .name != "")] | length' <<< "$RELEASE_ARTIFACTS")" = 1
           case "$RELEASE_MODULE" in
-            admin) FILE_NAME="bible-on-site-admin-v${MODULE_VERSION}.tar.gz" ;;
+            # Admin publishes the ARM64 archive alone (#3794).
+            admin) FILE_NAME="bible-on-site-admin-v${MODULE_VERSION}-arm64.tar.gz" ;;
             bulletin) FILE_NAME="bulletin-lambda-v${MODULE_VERSION}.zip" ;;
             *) exit 1 ;;
           esac

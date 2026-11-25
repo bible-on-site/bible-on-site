@@ -29,9 +29,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Shared router classification: docs-only PRs cannot alter dependency
-  # manifests, so the MAUI snapshot restore and review scan are skipped while
-  # the required submit-nuget check still reports (#3621).
+  # Shared router classification: docs-only and Renovate-config-only PRs
+  # cannot alter dependency manifests, so the MAUI snapshot restore and review
+  # scan are skipped while the required submit-nuget check still reports
+  # (#3621, #3795).
   detect_docs:
     timeout-minutes: 10
     name: Docs-only change detection
@@ -40,6 +41,7 @@ jobs:
       contents: read
     outputs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
+      renovate_config_only: ${{ steps.detect.outputs.renovate_config_only }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,7 +54,7 @@ jobs:
         run: node devops/github/ci/determine-changes.ts
   nuget-snapshots:
     needs: detect_docs
-    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' && needs.detect_docs.outputs.renovate_config_only != 'true' }}
     permissions:
       contents: write
       id-token: write
@@ -69,16 +71,21 @@ jobs:
         env:
           SUBMISSION_RESULT: ${{ needs.nuget-snapshots.result }}
           DOCS_ONLY: ${{ needs.detect_docs.outputs.docs_only }}
+          RENOVATE_CONFIG_ONLY: ${{ needs.detect_docs.outputs.renovate_config_only }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
             echo "Docs-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          if [ "$RENOVATE_CONFIG_ONLY" = "true" ]; then
+            echo "Renovate-config-only change: dependency graph is unchanged; nothing to submit."
             exit 0
           fi
           test "$SUBMISSION_RESULT" = success
   dependency-review:
     timeout-minutes: 60
     needs: [submit-nuget, detect_docs]
-    if: ${{ needs.detect_docs.outputs.docs_only != 'true' }}
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' && needs.detect_docs.outputs.renovate_config_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout repository'

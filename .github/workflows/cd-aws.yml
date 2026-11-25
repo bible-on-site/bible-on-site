@@ -62,24 +62,24 @@ jobs:
             exit 1
           fi
 
+      # Website/admin releases carry the ARM64 archive alone (#3794); index
+      # publication wraps that single native child while an unset
+      # *_MULTIARCH_RELEASES var publishes the arm64 manifest directly.
       - name: Validate website publication mode
         if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
         run: |
           case "$WEBSITE_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid WEBSITE_MULTIARCH_RELEASES value'; exit 1 ;; esac
           if [ "$WEBSITE_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.website_arm64 }}" != true ]; then
-            echo 'Index publication requires both archives from published website provenance'
+            echo 'Index publication requires the published website ARM64 provenance'
             exit 1
           fi
 
-      # An unset ADMIN_MULTIARCH_RELEASES keeps the existing single-platform
-      # x86 canonical/latest behavior; index publication needs a fresh release
-      # whose published provenance carried both native archives.
       - name: Validate admin publication mode
         if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' }}
         run: |
           case "$ADMIN_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid ADMIN_MULTIARCH_RELEASES value'; exit 1 ;; esac
           if [ "$ADMIN_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.admin_arm64 }}" != true ]; then
-            echo 'Index publication requires both archives from published admin provenance'
+            echo 'Index publication requires the published admin ARM64 provenance'
             exit 1
           fi
 
@@ -142,8 +142,10 @@ jobs:
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_ARM64_TAR_GZ_PATH=${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}-arm64.tar.gz" >> $GITHUB_OUTPUT
 
+      # The canonical amd64 archive exists for api/legacy paired payloads; the
+      # recovery branch downloads whatever single package its receipt names.
       - name: Restore Docker Image
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ steps.guard.outputs.deploy == 'true' && (steps.guard.outputs.recovery_file_id != '' || steps.guard.outputs.native_amd64 == 'true') }}
         env:
           GH_TOKEN: ${{ github.token }}
           RECOVERY_FILE_ID: ${{ steps.guard.outputs.recovery_file_id }}
@@ -154,7 +156,10 @@ jobs:
           set -euo pipefail
           if [ -n "$RECOVERY_FILE_ID" ]; then
             [[ "$RECOVERY_FILE_ID" =~ ^[1-9][0-9]*$ ]]
-            test "$RECOVERY_FILE_NAME" = "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz"
+            case "$RECOVERY_FILE_NAME" in
+              "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz"|"${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}-arm64.tar.gz") ;;
+              *) echo "Unexpected recovery package name"; exit 1 ;;
+            esac
             gh api "repos/$GITHUB_REPOSITORY/releases/assets/$RECOVERY_FILE_ID" -H 'Accept: application/octet-stream' > "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
             node devops/github/release/recovery-request.mjs --verify-file --file "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
           else
@@ -186,7 +191,7 @@ jobs:
           --pattern "bible-on-site-v$MODULE_VERSION-arm64.tar.gz"
           --dir "$DOCKER_IMAGE_OUTPUT_DIR"
 
-      - name: Verify both website release archive digests and source
+      - name: Verify website release archive digests and source
         if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' && steps.guard.outputs.website_arm64 == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -197,12 +202,12 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' && steps.guard.outputs.admin_arm64 == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release download "admin-v$MODULE_VERSION"
-          --pattern "bible-on-site-admin-v$MODULE_VERSION-arm64.tar.gz"
-          --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+        run: |
+          # An ARM64-only recovery already restored this exact verified file.
+          test -f "$DOCKER_IMAGE_OUTPUT_DIR/bible-on-site-admin-v${MODULE_VERSION}-arm64.tar.gz" && exit 0
+          gh release download "admin-v$MODULE_VERSION" --pattern "bible-on-site-admin-v$MODULE_VERSION-arm64.tar.gz" --dir "$DOCKER_IMAGE_OUTPUT_DIR"
 
-      - name: Verify both admin release archive digests and source
+      - name: Verify admin release archive digests and source
         if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' && steps.guard.outputs.admin_arm64 == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -216,12 +221,18 @@ jobs:
         env:
           RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
           API_HAS_ARM64: ${{ steps.guard.outputs.api_arm64 }}
+          RELEASE_AMD64_ARCHIVE: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           RELEASE_ARM64_ARCHIVE: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_ARM64_TAR_GZ_PATH }}
           WEBSITE_HAS_ARM64: ${{ steps.guard.outputs.website_arm64 }}
           ADMIN_HAS_ARM64: ${{ steps.guard.outputs.admin_arm64 }}
+          NATIVE_AMD64: ${{ steps.guard.outputs.native_amd64 }}
           API_ROLLOUT_JOURNAL: ${{ runner.temp }}/api-handover.ndjson
         run: |
           PLATFORM_ARGS=()
+          # ARM64-only website/admin payloads carry no canonical amd64 archive.
+          if [ "$NATIVE_AMD64" = true ]; then
+            PLATFORM_ARGS+=(--docker-image "$GITHUB_WORKSPACE/$RELEASE_AMD64_ARCHIVE")
+          fi
           if [ "$MODULE_NAME" = api ] && [ "$API_HAS_ARM64" = true ]; then
             PLATFORM_ARGS+=(--docker-image-arm64 "$GITHUB_WORKSPACE/$RELEASE_ARM64_ARCHIVE" --source-ref "$RELEASE_SOURCE")
             if [ "$API_PUBLISH_INDEX" = true ]; then PLATFORM_ARGS+=(--publish-index); fi
@@ -237,7 +248,6 @@ jobs:
           bun run deploy:ecr -- \
             --module-name ${{ env.MODULE_NAME }} \
             --module-version "${{ env.MODULE_VERSION }}" \
-            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}" \
             "${PLATFORM_ARGS[@]}"
         # API publication owns its protected ECS handover. Website/admin retain
         # their existing EventBridge trigger; the API rule is disabled.

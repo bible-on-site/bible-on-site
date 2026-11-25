@@ -21,9 +21,14 @@ See [version and deployment concurrency](../../version-verification.md#concurren
 
 Triggered by `shared-release.yml` after Website or API release.
 
+Website/admin releases carry a single native ARM64 archive since the amd64
+retirement (#3794); API keeps the paired amd64+arm64 delivery. Published
+provenance decides which archives the deploy verifies and pushes.
+
 **Flow:**
-1. Restore Docker image artifact from CI run
-2. Push to AWS ECR with version tag + `latest`
+1. Restore Docker image artifact(s) from the published release
+2. Push to AWS ECR with version tag + `latest` (an OCI index when the
+   module's `*_MULTIARCH_RELEASES` var enables index publication)
 3. ECS auto-deploys via EventBridge (watches `latest` tag)
 
 **Deployment resilience:** With a single ECS task (`DesiredCount: 1`), rolling updates may briefly interrupt traffic. If zero-downtime deployments become necessary, consider running the service with **at least 2 tasks** so one stays up while the other is replaced. See [Deployment incident analysis 2026-02-10](../../../aws/deployment-downtime-2026-02-10.md) for background and options.

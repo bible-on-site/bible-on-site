@@ -48,6 +48,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { RENOVATE_CONFIG_PATHS } from "./renovate-config.mjs";
 
 export const ISSUE_URL = "https://github.com/bible-on-site/bible-on-site/issues/2826";
 export const ALLOWLIST_REL = "devops/github/ci/cargo-make-archive-allowlist.json";
@@ -589,16 +590,22 @@ export function checkWorkflowPins(root) {
 
 export function checkRenovate(root) {
 	const findings = [];
-	const p = join(root, "renovate.json");
-	if (!existsSync(p)) {
-		findings.push({ check: "renovate", message: "renovate.json is missing" });
+	// The Renovate side of the pin has to be found wherever the config lives —
+	// the router treats every spelling in RENOVATE_CONFIG_PATHS as the config.
+	const name = RENOVATE_CONFIG_PATHS.find((p) => existsSync(join(root, p)));
+	if (!name) {
+		findings.push({
+			check: "renovate",
+			message: "no Renovate configuration file is present",
+		});
 		return findings;
 	}
+	const p = join(root, name);
 	let config;
 	try {
 		config = JSON.parse(readFileSync(p, "utf8"));
 	} catch (err) {
-		findings.push({ check: "renovate", message: `renovate.json is not valid JSON: ${err.message}` });
+		findings.push({ check: "renovate", message: `${name} is not valid JSON: ${err.message}` });
 		return findings;
 	}
 	const manager = (config.customManagers ?? []).find((m) =>
@@ -607,7 +614,7 @@ export function checkRenovate(root) {
 	if (!manager)
 		findings.push({
 			check: "renovate",
-			message: `renovate.json lost the cargo-make custom regex manager — the CLI pin must stay discoverable for upgrade review (${ISSUE_URL})`,
+			message: `${name} lost the cargo-make custom regex manager — the CLI pin must stay discoverable for upgrade review (${ISSUE_URL})`,
 		});
 	const rule = (config.packageRules ?? []).find(
 		(r) =>
@@ -620,7 +627,7 @@ export function checkRenovate(root) {
 	if (!rule)
 		findings.push({
 			check: "renovate",
-			message: `renovate.json lost the automerge:false cargo-make package rule — regular updates must stay manual while the ZIP gap is open (${ISSUE_URL})`,
+			message: `${name} lost the automerge:false cargo-make package rule — regular updates must stay manual while the ZIP gap is open (${ISSUE_URL})`,
 		});
 	return findings;
 }

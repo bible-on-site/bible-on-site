@@ -50,12 +50,23 @@ export function nativeImageArtifacts(payload) {
 	if (
 		!image ||
 		!/^\d+$/.test(String(payload.ci_run_id)) ||
-		payload.released_artifact_name !== amd64 ||
-		payload.released_arm64_artifact_name !== arm64
+		payload.released_arm64_artifact_name !== arm64 ||
+		(payload.released_artifact_name !== undefined &&
+			payload.released_artifact_name !== amd64)
 	) {
 		throw new Error(
 			"Native platform artifacts do not match published CI provenance",
 		);
+	}
+	// API still ships the amd64+arm64 pair; website/admin carry the ARM64
+	// archive alone since the amd64 retirement (#3794). Older paired
+	// website/admin releases keep their amd64 member for rollback.
+	if (payload.released_artifact_name === undefined) {
+		if (payload.module_name === "api")
+			throw new Error(
+				"Native platform artifacts do not match published CI provenance",
+			);
+		return { arm64 };
 	}
 	return { amd64, arm64 };
 }
