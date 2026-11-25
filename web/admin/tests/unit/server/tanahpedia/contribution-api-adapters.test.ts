@@ -143,12 +143,21 @@ it("fills the v6 place-text alternative into legacy birthplace states", async ()
 it("fills the v6 place-text alternative into a legacy birthplace sourceTarget", async () => {
 	const contract = currentContributionApiContract({} as never);
 	const operation = {
-		kind: "metadata",
+		kind: "source_reference",
 		targetId: id,
-		before: { displayName: "Old" },
-		after: { displayName: "New" },
+		before: null,
+		after: {
+			targetKind: "person_birth_place",
+			targetId: nameId,
+			sourceType: "other",
+			sourceText: "Source",
+			perekId: null,
+			pasukNumber: null,
+			perushId: null,
+		},
 		sourceTarget: {
 			kind: "person_birth_place",
+			id: nameId,
 			state: { personId: id, placeId: nameId, altGroupId: null },
 		},
 		labels: {},
@@ -164,6 +173,7 @@ it("fills the v6 place-text alternative into a legacy birthplace sourceTarget", 
 			...operation,
 			sourceTarget: {
 				kind: "person_birth_place",
+				id: nameId,
 				state: {
 					personId: id,
 					placeId: nameId,
@@ -173,6 +183,7 @@ it("fills the v6 place-text alternative into a legacy birthplace sourceTarget", 
 			},
 		},
 	]);
+	expect(() => validateApiSequence(result.payload)).not.toThrow();
 	expect(mocks.read).not.toHaveBeenCalled();
 });
 it.each([null, Array(41).fill({ kind: "person_birth_place" })])(

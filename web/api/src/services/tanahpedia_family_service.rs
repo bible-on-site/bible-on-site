@@ -2243,9 +2243,15 @@ mod tests {
     }
 
     /// A genuine database failure on the combined dependency guard is not a
-    /// missing-schema signal: it must surface instead of falling back.
+    /// missing-schema signal: it must surface instead of falling back. The
+    /// happy-path tail keeps a swallowed error visible — mistaking it for a
+    /// missing table would complete the delete instead of erroring.
     #[tokio::test]
     async fn delete_orphan_person_node_surfaces_dependency_query_failure() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -2259,6 +2265,16 @@ mod tests {
                     person_sex_model("sex-1", "person-1"),
                 ]])
                 .append_query_errors([sea_orm::DbErr::Custom("Connection lost".to_string())])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
 
@@ -2278,9 +2294,14 @@ mod tests {
 
     /// An empty aggregate row is impossible on a real database (EXISTS always
     /// returns one row), but a silent pass would delete a person whose
-    /// dependencies were never counted — fail loudly instead.
+    /// dependencies were never counted — fail loudly instead. The delete
+    /// execs below keep a swallowed empty-row visible as a wrong success.
     #[tokio::test]
     async fn delete_orphan_person_node_fails_on_empty_dependency_count() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -2296,6 +2317,7 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![],
                 ])
+                .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
 
@@ -2317,6 +2339,10 @@ mod tests {
     /// aggregate row cannot stand in for "no dependencies".
     #[tokio::test]
     async fn delete_orphan_person_node_fails_on_empty_fallback_count() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -2336,6 +2362,13 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![],
                 ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
 
@@ -2357,6 +2390,10 @@ mod tests {
     /// table is absent, so the delete must still fail.
     #[tokio::test]
     async fn delete_orphan_person_node_fails_on_empty_place_probe() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -2379,6 +2416,10 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![],
                 ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
 
@@ -2400,6 +2441,10 @@ mod tests {
     /// propagate instead of counting the table as absent.
     #[tokio::test]
     async fn delete_orphan_person_node_surfaces_place_probe_failure() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -2420,6 +2465,10 @@ mod tests {
                     vec![dependency_count_row(0)],
                 ])
                 .append_query_errors([sea_orm::DbErr::Custom("Connection lost".to_string())])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
 
@@ -3731,6 +3780,14 @@ mod tests {
                 vec![],
             ])
             .append_query_errors([sea_orm::DbErr::Custom("Connection lost".to_string())])
+            // A swallowed death-place error would continue onto these
+            // results and surface as a wrong success, not an error.
+            .append_query_results::<person_activity_place::Model, Vec<person_activity_place::Model>, _>(
+                [vec![]],
+            )
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
             .into_connection();
         let db = Database::from_connection(mock_db);
 
@@ -3775,6 +3832,11 @@ mod tests {
                 vec![],
             ])
             .append_query_errors([sea_orm::DbErr::Custom("Connection lost".to_string())])
+            // A swallowed activity-place error would finish on this result
+            // and surface as a wrong success, not an error.
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
             .into_connection();
         let db = Database::from_connection(mock_db);
 
