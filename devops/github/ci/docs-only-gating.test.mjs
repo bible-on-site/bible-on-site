@@ -343,10 +343,13 @@ test("required status checks still resolve on docs-only merges", () => {
 	}
 	// CodeQL must keep scanning: the code-scanning ruleset requires real
 	// results for the updated commit, so a docs-only change cannot skip it.
+	// The analyze guard only overrides the needs-skipped propagation — on a PR
+	// it reduces to needs.detect.result == 'success', which never depends on
+	// the diff's shape (detect always resolves a nonempty language scope).
 	const analyze = load("codeql.yml").jobs.analyze;
 	assert.equal(
 		analyze.if,
-		undefined,
+		"${{ !cancelled() && (github.event_name != 'pull_request' || needs.detect.result == 'success') }}",
 		"CodeQL analyze must run on docs-only changes — a skipped analysis " +
 			"leaves the required code-scanning check pending forever",
 	);
