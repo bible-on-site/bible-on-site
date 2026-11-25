@@ -115,13 +115,13 @@ export abstract class ECRDeployerBase extends DeployerBase {
 			publishIndex?: boolean;
 		},
 	): void {
-		if (
-			!options.arm64ArchivePath ||
-			!options.sourceRef ||
-			!this.dockerImagePath
-		)
+		if (!options.arm64ArchivePath || !options.sourceRef)
 			throw new Error(
-				`${moduleLabel} dual publication requires docker-image, docker-image-arm64 and source-ref`,
+				`${moduleLabel} native publication requires docker-image-arm64 and source-ref`,
+			);
+		if (moduleLabel === "API" && !this.dockerImagePath)
+			throw new Error(
+				"API dual publication requires docker-image, docker-image-arm64 and source-ref",
 			);
 		this.nativeImageOptions = {
 			arm64ArchivePath: options.arm64ArchivePath,
@@ -250,7 +250,9 @@ export abstract class ECRDeployerBase extends DeployerBase {
 
 		if (this.nativeImageOptions) {
 			const version = await this.getLocalVersion();
-			if (!this.dockerImagePath)
+			// Website/admin publish ARM64-only archives (#3794); API still
+			// requires the canonical amd64 archive alongside arm64.
+			if (this.moduleName === "api" && !this.dockerImagePath)
 				throw new Error("The canonical amd64 archive is required");
 			const prepared = await prepareAPIArchives({
 				amd64ArchivePath: this.dockerImagePath,

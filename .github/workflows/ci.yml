@@ -136,7 +136,9 @@ env:
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
   ADMIN_DIRECTORY: web/admin
-  ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
+  # Admin ships a single ARM64 release archive; the arm64-suffixed artifact
+  # name is kept so historical paired amd64+arm64 releases stay
+  # distinguishable and recoverable (#3794).
   ADMIN_DOCKER_ARM64_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}-arm64
   ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
   ADMIN_NODE_CACHE_PATH: web/admin/bun.lock
@@ -179,9 +181,10 @@ jobs:
     name: Workflow timeout policy
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Docs-only changes cannot alter workflows; skip the policy checks (#3621).
+    # Docs-only and Renovate-config-only changes cannot alter workflows;
+    # skip the policy checks (#3621, #3795).
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -200,9 +203,11 @@ jobs:
     timeout-minutes: 5
     name: Root evidence guard
     runs-on: ubuntu-latest
-    # Docs-only changes cannot add repository-root files; skip the scan (#3621).
+    # Docs-only changes cannot add repository-root files, and a
+    # Renovate-config-only change is itself an allowed root file; skip the
+    # scan in both cases (#3621, #3795).
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -401,6 +406,10 @@ jobs:
       # Every touched path is inert documentation and no module check fired:
       # downstream jobs skip while required checks still resolve (#3621).
       docs_only: ${{ steps.determine.outputs.docs_only }}
+      # Every touched path is Renovate configuration and no module check
+      # fired: module builds, backups and unrelated suites skip while the
+      # dedicated validation and required statuses still run (#3795).
+      renovate_config_only: ${{ steps.determine.outputs.renovate_config_only }}
       release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}
       release_recovery_modules: ${{ steps.recovery.outputs.recovery_modules }}
       normal_master_ci: ${{ steps.recovery.outputs.normal_master_ci }}
@@ -507,6 +516,8 @@ jobs:
       - name: Verify calendar-PDF artifacts
         run: bun run check:calendar-pdf
 
+  # Production ships website/admin on ARM64 only, so the native validation
+  # covers that single production arch (#3794); the API keeps both legs.
   validate_website_architectures:
     name: Validate Website Architectures
     needs: determine_changes
@@ -516,6 +527,7 @@ jobs:
     uses: ./.github/workflows/architecture-validation.yml
     with:
       service: website
+      arch_matrix: '{"include":[{"arch":"arm64","runner":"ubuntu-24.04-arm","machine":"aarch64"}]}'
 
   validate_api_architectures:
     name: Validate API Architectures
@@ -536,26 +548,13 @@ jobs:
     uses: ./.github/workflows/architecture-validation.yml
     with:
       service: admin
+      arch_matrix: '{"include":[{"arch":"arm64","runner":"ubuntu-24.04-arm","machine":"aarch64"}]}'
 
+  # Production runs ARM64 only (#3794): the single native ARM64 leg is the
+  # release contract. Historical paired amd64+arm64 releases stay readable by
+  # the recovery/provenance tools for rollback.
   package_website:
     name: Package Website
-    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
-    permissions:
-      contents: write
-      actions: read
-      id-token: write # Required for AWS OIDC authentication to access RDS during SSG build
-    secrets: inherit
-    uses: ./.github/workflows/shared-dockerize.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      # Prefer the perushim SQL generated in this run; fall back to the master
-      # baseline. Empty means no artifact is available and the SSG build keeps
-      # querying prod RDS directly.
-      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
-
-  package_website_arm64:
-    name: Package Website ARM64
     needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
     if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
     permissions:
@@ -732,101 +731,13 @@ jobs:
           # artifact expiring (matches the website/api release artifacts at 90).
           retention-days: 90
 
-  # Same release/pre-merge split as package_api (#2292).
+  # Same release/pre-merge split as package_api (#2292). Production runs ARM64
+  # only, so the single native ARM64 leg is the release contract (#3794);
+  # historical paired amd64+arm64 releases stay readable by the
+  # recovery/provenance tools for rollback.
   package_admin:
     timeout-minutes: 60
     name: Package Admin
-    needs: [setup_env, determine_changes]
-    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
-    permissions:
-      contents: read
-      actions: read
-    runs-on: ubuntu-latest
-    outputs:
-      module_version: ${{ steps.get_version.outputs.MODULE_VERSION }}
-      docker_artifact_name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
-    env:
-      SHARED_ROOT_DIR: web
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Get Module Version
-        id: get_version
-        working-directory: ${{ env.ADMIN_DIRECTORY }}
-        run: |
-          MODULE_VERSION=$(node -e "console.log(require('./package.json').version)")
-          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Prepare Dockerizing
-        id: prepare
-        run: |
-          mkdir -p ${{ env.ADMIN_DIRECTORY }}/.release
-          DOCKER_IMAGE_TAR_NAME="${{ env.ADMIN_DOCKER_IMAGE_NAME }}-v${{ steps.get_version.outputs.MODULE_VERSION }}.tar"
-          DOCKER_IMAGE_TAR_GZ_PATH="${{ env.ADMIN_DIRECTORY }}/.release/${DOCKER_IMAGE_TAR_NAME}.gz"
-          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
-          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver-opts: |
-            network=host
-            image=moby/buildkit:v0.22.0
-
-      - name: Dockerize Admin
-        env:
-          # Browser-facing asset CDN opt-in (#2576); unset/empty keeps S3 URLs.
-          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
-        run: |
-          docker buildx build --load \
-            --platform linux/amd64 \
-            --cache-from type=gha,scope=admin \
-            --cache-to type=gha,mode=max,scope=admin \
-            --progress=plain \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
-            --build-arg ASSETS_BASE_URL="$BROWSER_ASSETS_BASE_URL" \
-            -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
-            -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
-            ${{ env.SHARED_ROOT_DIR }}
-
-      - name: Pull the isolated admin fixture image
-        run: docker pull mysql:9.7.4
-
-      - name: Setup devops Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: devops/package.json
-
-      - name: Verify the packaged admin against its own disposable database
-        run: >-
-          node devops/github/ci/verify-native-image.mjs --service admin
-          --image "${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }}"
-          --arch amd64
-
-      - name: Export Docker Image
-        run: |
-          docker save ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
-            -o ${{ env.ADMIN_DIRECTORY }}/.release/${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}
-
-      - name: GZip Docker Image
-        working-directory: ${{ env.ADMIN_DIRECTORY }}/.release
-        run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
-
-      - name: Store Docker Image
-        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.admin_release_recovery == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
-          path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
-          retention-days: 1
-
-  # Same release/pre-merge split and source binding as package_admin, on the
-  # native ARM64 runner with its own cache scope — the paired release contract.
-  package_admin_arm64:
-    timeout-minutes: 60
-    name: Package Admin ARM64
     needs: [setup_env, determine_changes]
     if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
     permissions:
@@ -932,7 +843,7 @@ jobs:
         needs.determine_changes.outputs.data_ci_changed == 'true' ||
         needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false' ||
         (
-          (needs.determine_changes.outputs.docs_only != 'true' || needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true') &&
+          ((needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true') || needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true') &&
           (
             needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
             (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
@@ -3247,7 +3158,7 @@ jobs:
       ]
     if: >-
       ${{ always() && !cancelled() && !failure() && (
-        needs.determine_changes.outputs.docs_only != 'true' ||
+        (needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true') ||
         needs.determine_baseline_availability.outputs.baseline_recovery_required == 'true'
       ) && (
         needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
@@ -3468,8 +3379,9 @@ jobs:
   database_backups:
     name: Database backup recovery
     needs: determine_changes
-    # Backup/restore validation is CI work docs-only changes skip (#3621).
-    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+    # Backup/restore validation is CI work docs-only and Renovate-config-only
+    # changes skip (#3621, #3795).
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
     uses: ./.github/workflows/ci-db-backup.yml
 
   data_deploy_ci:
@@ -3481,8 +3393,9 @@ jobs:
   transcription_ci:
     name: Local transcription
     needs: determine_changes
-    # Transcription contract tests are CI work docs-only changes skip (#3621).
-    if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+    # Transcription contract tests are CI work docs-only and
+    # Renovate-config-only changes skip (#3621, #3795).
+    if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
     uses: ./.github/workflows/ci-transcription.yml
 
   cross_module_ci:
@@ -3506,10 +3419,8 @@ jobs:
         package_api,
         package_api_arm64,
         package_website,
-        package_website_arm64,
         package_bulletin,
         package_admin,
-        package_admin_arm64,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
@@ -3540,9 +3451,10 @@ jobs:
         # skipped gate to green. Suites that intentionally skip on docs-only
         # runs are gated inside the script by their exact triggers (#3621).
         run: |
-          # These suites stay skipped on docs-only runs; baseline recovery
-          # re-enables this gate without re-enabling them.
-          if [ "${{ needs.determine_changes.outputs.docs_only }}" != "true" ]; then
+          # These suites stay skipped on docs-only and Renovate-config-only
+          # runs; baseline recovery re-enables this gate without re-enabling
+          # them (#3795).
+          if [ "${{ needs.determine_changes.outputs.docs_only }}" != "true" ] && [ "${{ needs.determine_changes.outputs.renovate_config_only }}" != "true" ]; then
             if [ "${{ needs.workflow_timeouts.result }}" != "success" ]; then
               echo "Workflow timeout policy did not pass."
               exit 1
@@ -3647,16 +3559,16 @@ jobs:
             fi
           fi
 
-          # Match both native website package jobs. Fork PRs retain credential-free
+          # Match the native website package job. Fork PRs retain credential-free
           # native dependency checks; full SSG requires the trusted repository secrets.
           if { [ "${{ github.event_name }}" = push ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = true ] && [ "$WEBSITE_MODULE_CHANGED" = true ]; } ||
              { [ "${{ github.event_name }}" != push ] && { [ "${{ github.event_name }}" != pull_request ] || [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; } && { [ "$WEBSITE_MODULE_CHANGED" = true ] || [ "$WEBSITE_CI_CHANGED" = true ]; }; }; then
-            if [ "${{ needs.package_website.result }}" != success ] || [ "${{ needs.package_website_arm64.result }}" != success ]; then
-              echo "Both native website release images must pass or the build did not run"
+            if [ "${{ needs.package_website.result }}" != success ]; then
+              echo "The native website release image must pass or the build did not run"
               exit 1
             fi
-            if [ -z "${{ needs.package_website.outputs.module_version }}" ] || [ "${{ needs.package_website.outputs.module_version }}" != "${{ needs.package_website_arm64.outputs.module_version }}" ]; then
-              echo "Both website images must have the same nonempty release version"
+            if [ -z "${{ needs.package_website.outputs.module_version }}" ]; then
+              echo "The website image must have a nonempty release version"
               exit 1
             fi
           fi
@@ -3755,16 +3667,16 @@ jobs:
               exit 1
             fi
           fi
-          # Match both native admin package jobs. A triggered build that failed,
+          # Match the native admin package job. A triggered build that failed,
           # was skipped or was cancelled still blocks the merge or release.
           if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$ADMIN_MODULE_CHANGED" = "true" ]; } ||
             { [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; }; then
-            if [ "${{ needs.package_admin.result }}" != "success" ] || [ "${{ needs.package_admin_arm64.result }}" != "success" ]; then
-              echo "Both native admin release images must pass or the build did not run"
+            if [ "${{ needs.package_admin.result }}" != "success" ]; then
+              echo "The native admin release image must pass or the build did not run"
               exit 1
             fi
-            if [ -z "${{ needs.package_admin.outputs.module_version }}" ] || [ "${{ needs.package_admin.outputs.module_version }}" != "${{ needs.package_admin_arm64.outputs.module_version }}" ]; then
-              echo "Both admin images must have the same nonempty release version"
+            if [ -z "${{ needs.package_admin.outputs.module_version }}" ]; then
+              echo "The admin image must have a nonempty release version"
               exit 1
             fi
           fi
@@ -3976,8 +3888,9 @@ jobs:
 
       - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
-        # Devops test tooling is validation work docs-only runs skip (#3621).
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        # Devops test tooling is validation work docs-only runs skip (#3621);
+        # Renovate-config-only runs still need it for config validation (#3795).
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' || needs.determine_changes.outputs.renovate_config_only == 'true' }}
         uses: ./.github/actions/setup-js
         with:
           module: devops
@@ -3993,28 +3906,30 @@ jobs:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Restore database backup coverage
-        # Skipped on docs-only runs: the producer job did not upload the artifact.
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        # Skipped on docs-only/Renovate-only runs: the producer job did not
+        # upload the artifact (#3795).
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: database-backup-coverage-${{ github.run_id }}
           path: .coverage/db-backup
 
       - name: Restore transcription coverage
-        # Skipped on docs-only runs: the producer job did not upload the artifact.
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        # Skipped on docs-only/Renovate-only runs: the producer job did not
+        # upload the artifact (#3795).
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: transcription-coverage-${{ github.run_id }}
           path: .coverage/transcription
 
       - name: Measure release and image-publisher regression coverage
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: bun run coverage:release
 
       - name: Test release, deployment, and CI reporting guards
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
@@ -4031,7 +3946,23 @@ jobs:
           # reason as scan-catch: the pre-commit hook is local-only.
           bun run test:cargo-make-zip-guard
           bun run verify:cargo-make-zip
+          # Renovate config structure — the renovate_config_only path runs the
+          # same pair when it is the only changed input (#3795).
+          bun run test:renovate-config
+          bun run verify:renovate-config
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/bencher-thresholds.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+
+      # A Renovate-config-only diff skips every module suite but still needs
+      # an honest check: the structural config validator plus the Renovate
+      # assertions inside the cargo-make ZIP gate (#3795).
+      - name: Validate Renovate configuration
+        if: ${{ needs.determine_changes.outputs.renovate_config_only == 'true' }}
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          bun run test:renovate-config
+          bun run verify:renovate-config
+          bun run test:cargo-make-zip-guard
+          bun run verify:cargo-make-zip
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
@@ -4052,9 +3983,9 @@ jobs:
           path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
 
       - name: Restore App E2E coverage (master baseline, Android)
-        # On docs-only runs the layers only matter when an app baseline gap
-        # actually ran the suite's recovery (#3621).
-        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true' && (needs.determine_changes.outputs.docs_only != 'true' || needs.app_ci.result == 'success')
+        # On docs-only/Renovate-only runs the layers only matter when an app
+        # baseline gap actually ran the suite's recovery (#3621, #3795).
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true' && ((needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true') || needs.app_ci.result == 'success')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -4067,7 +3998,7 @@ jobs:
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
 
       - name: Restore App E2E coverage (master baseline, iOS)
-        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true' && (needs.determine_changes.outputs.docs_only != 'true' || needs.app_ci.result == 'success')
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true' && ((needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true') || needs.app_ci.result == 'success')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -4145,12 +4076,12 @@ jobs:
           fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         run: bun run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish Cross Module Coverage To Codacy
-        if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
+        if: ${{ needs.determine_changes.outputs.docs_only != 'true' && needs.determine_changes.outputs.renovate_config_only != 'true' }}
         env:
           CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
         run: |
@@ -4236,10 +4167,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -4251,15 +4182,17 @@ jobs:
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
       extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
+      # ARM64-only delivery (#3794): a single native archive bound to
+      # released_arm64_artifact_name; no canonical amd64 asset is published.
+      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -4276,10 +4209,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin, package_admin_arm64]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_api, package_api_arm64, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -4307,10 +4240,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin, package_admin_arm64]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_api, package_api_arm64, package_app, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.bulletin_release_recovery == 'true')) }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.bulletin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -4327,8 +4260,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_admin_arm64, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin_arm64.result == 'success' && needs.package_admin.outputs.module_version == needs.package_admin_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.admin_release_recovery == 'true')) }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.admin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -4340,7 +4273,9 @@ jobs:
       # Keep in sync with admin extraModulePaths in devops/github/ci/determine-changes.ts
       extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships"]'
       module_version: ${{ needs.package_admin.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
+      # ARM64-only delivery (#3794): a single native archive bound to
+      # released_arm64_artifact_name; no canonical amd64 asset is published.
+      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
       release_recovery_modules_json: ${{ needs.determine_changes.outputs.release_recovery_modules }}
       normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}

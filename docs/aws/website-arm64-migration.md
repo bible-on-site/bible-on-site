@@ -13,16 +13,15 @@ receive public traffic.
 
 ## Native build and release contract
 
-Both native runners build the same website Dockerfile and source version.
-Architecture-specific Bun caches and per-architecture dependency-cache
-artifacts (`website-deps-cache.master.amd64` and
-`website-deps-cache.master.arm64`) prevent cross-architecture cache reuse.
-The final standalone runner executes an actual sharp/libvips
-JPEG encode, resize and decode before the image can be published. Its Node
-architecture must match the build target. This supplements the existing native
-SWC/libvips dependency check.
+Since the amd64 retirement (#3794), a single `package_website` job on the
+native ARM runner builds the website Dockerfile and source version. The
+ARM64 dependency-cache artifact (`website-deps-cache.master.arm64`) keeps the
+native cache isolated. The final standalone runner executes an actual
+sharp/libvips JPEG encode, resize and decode before the image can be
+published. Its Node architecture must match the build target. This
+supplements the existing native SWC/libvips dependency check.
 
-Trusted repository PRs and merge groups run the full paired SSG release builds,
+Trusted repository PRs and merge groups run the full SSG release build,
 including the existing production-content and recitation/playback verifiers at
 the deployed CPU/memory limits. Owned temporary RDS build access is cleaned up
 on success or failure. Fork PRs cannot receive production secrets and keep the
@@ -30,20 +29,20 @@ existing credential-free architecture validation. Triggered packaging failures,
 cancellations, skipped builds and empty/mismatched versions block the quality
 gate. Published releases consume only their original master push artifacts.
 
-The amd64 archive retains its existing name:
-`bible-on-site-v<version>.tar.gz`. ARM adds
-`bible-on-site-v<version>-arm64.tar.gz`. Original source CI metadata binds both
-artifacts. Before publication, verify the published release's source SHA, archive
-lengths/SHA256 hashes, native Linux configs, source/version labels and every
-filesystem layer. A dispatch cannot supply a different platform pair.
+The ARM64 archive is the only release archive:
+`bible-on-site-v<version>-arm64.tar.gz`. Original source CI metadata binds the
+artifact. Before publication, verify the published release's source SHA,
+archive length/SHA256 hash, native Linux config, source/version labels and
+every filesystem layer. A dispatch cannot supply a different platform set.
+Historical paired releases keep their amd64 archive readable for rollback.
 
-Verified native images receive immutable `v<version>-amd64` and
-`v<version>-arm64` tags. `WEBSITE_MULTIARCH_RELEASES` defaults to `false`, retaining
-the amd64 canonical/latest behavior while both native children are staged.
-Production sets the flag to `true`. The canonical `v<version>` and `latest` contain
-the complete verified Linux amd64/arm64 index. Existing x86 tasks select the x86
-child. Once `latest` is an index, both the legacy publisher and flag-off dual
-publisher refuse to replace it with an x86-only image.
+Verified native images receive the immutable `v<version>-arm64` tag.
+`WEBSITE_MULTIARCH_RELEASES` defaults to `false`, which would publish the
+single ARM64 manifest as canonical/`latest`; production sets the flag to
+`true`, so the canonical `v<version>` and `latest` contain an OCI index over
+the verified Linux arm64 child. Once `latest` is an index, both the legacy
+publisher and flag-off native publisher refuse to replace it with a bare
+manifest.
 
 The website ECR repository must use `IMMUTABLE_WITH_EXCLUSION` with exactly
 `latest`, `deps-cache` and `deps-cache-arm64` mutable. The publisher verifies the

@@ -15,7 +15,7 @@ start
 note right
   From shared-release.yml:
   module_name, module_version,
-  released_artifact_name, ci_run_id
+  released_*_artifact_name, ci_run_id
   Modules: website, api, admin
 end note
 

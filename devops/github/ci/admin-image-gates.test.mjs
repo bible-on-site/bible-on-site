@@ -34,9 +34,7 @@ function check(overrides = {}) {
 		"github.event_name": "pull_request",
 		"needs.setup_env.outputs.is_master_branch": "false",
 		"needs.package_admin.result": "success",
-		"needs.package_admin_arm64.result": "success",
 		"needs.package_admin.outputs.module_version": "0.1.96",
-		"needs.package_admin_arm64.outputs.module_version": "0.1.96",
 		...overrides,
 	};
 	const compiled = script.replace(/\$\{\{ ([^}]+) \}\}/g, (_, key) => {
@@ -60,31 +58,23 @@ function check(overrides = {}) {
 	return result;
 }
 
+// Website/admin ship a single native ARM64 release image (#3794); the one
+// package job carries the whole release contract.
 for (const result of ["failure", "skipped", "cancelled"]) {
-	for (const job of ["package_admin", "package_admin_arm64"]) {
-		test(`${job} ${result} blocks a selected admin change`, () => {
-			const actual = check({ [`needs.${job}.result`]: result });
-			assert.equal(actual.status, 1, actual.stderr);
-			assert.match(actual.stdout, /must pass or the build did not run/);
-		});
-	}
-}
-for (const [amd64, arm64] of [
-	["0.1.96", "0.1.95"],
-	["", ""],
-	["", "0.1.96"],
-	["0.1.96", ""],
-]) {
-	test(`version pair ${JSON.stringify([amd64, arm64])} blocks publication`, () => {
-		const actual = check({
-			"needs.package_admin.outputs.module_version": amd64,
-			"needs.package_admin_arm64.outputs.module_version": arm64,
-		});
+	test(`package_admin ${result} blocks a selected admin change`, () => {
+		const actual = check({ "needs.package_admin.result": result });
 		assert.equal(actual.status, 1, actual.stderr);
-		assert.match(actual.stdout, /same nonempty release version/);
+		assert.match(actual.stdout, /must pass or the build did not run/);
 	});
 }
-test("matching successful builds pass for PR and master admin changes", () => {
+test("an empty version blocks publication", () => {
+	const actual = check({
+		"needs.package_admin.outputs.module_version": "",
+	});
+	assert.equal(actual.status, 1, actual.stderr);
+	assert.match(actual.stdout, /nonempty release version/);
+});
+test("a successful build passes for PR and master admin changes", () => {
 	assert.equal(check().status, 0);
 	assert.equal(
 		check({
@@ -94,29 +84,28 @@ test("matching successful builds pass for PR and master admin changes", () => {
 		0,
 	);
 });
-test("a PR selecting only admin CI still requires both architecture builds", () => {
+test("a PR selecting only admin CI still requires the ARM64 build", () => {
 	assert.equal(
 		check({
 			env: { ADMIN_MODULE_CHANGED: "false", ADMIN_CI_CHANGED: "true" },
-			"needs.package_admin_arm64.result": "skipped",
+			"needs.package_admin.result": "skipped",
 		}).status,
 		1,
 	);
 });
-test("a skipped arm64 build also blocks a selected master push", () => {
+test("a skipped ARM64 build also blocks a selected master push", () => {
 	assert.equal(
 		check({
 			"github.event_name": "push",
 			"needs.setup_env.outputs.is_master_branch": "true",
-			"needs.package_admin_arm64.result": "skipped",
+			"needs.package_admin.result": "skipped",
 		}).status,
 		1,
 	);
 });
-test("unselected or non-master pushes may skip both build jobs", () => {
+test("unselected or non-master pushes may skip the build job", () => {
 	const skipped = {
 		"needs.package_admin.result": "skipped",
-		"needs.package_admin_arm64.result": "skipped",
 	};
 	assert.equal(
 		check({

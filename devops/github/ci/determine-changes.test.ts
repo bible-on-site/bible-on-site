@@ -17,6 +17,7 @@ import {
 	type ModuleKey,
 	applyReleaseRecovery,
 	baseRevision,
+	codeqlLanguages,
 	detectChanges,
 	isDataDeployChange,
 	isDataDeployCiChange,
@@ -1558,7 +1559,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 6,
+				Object.keys(MODULES).length * 2 + 8,
 			);
 			return { changes, output };
 		} finally {
@@ -2034,6 +2035,102 @@ describe("main", () => {
 			assert.match(output, /^docs_only=false$/m);
 		});
 	});
+
+	describe("Renovate-config-only classification (#3795)", () => {
+		const noChecks = (changes: ReturnType<typeof detectChanges>) => {
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, {
+					module_changed: false,
+					ci_changed: false,
+				});
+		};
+
+		for (const path of [
+			"renovate.json",
+			"renovate.json5",
+			".renovaterc",
+			".renovaterc.json",
+			".github/renovate.json",
+		]) {
+			test(`push of ${path} reports renovate_config_only`, () => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				noChecks(changes);
+				assert.match(output, /^renovate_config_only=true$/m);
+				assert.match(output, /^docs_only=false$/m);
+			});
+		}
+
+		test("a Renovate-config-only pull request reports renovate_config_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"renovate.json",
+			);
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		test("a Renovate-config-only merge group does not force module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"renovate.json",
+			);
+			// Like docs_only, the queue must not inflate a config-only delta into
+			// the combined-candidate rehearsal (#3795).
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		for (const extra of [
+			// A real dependency update routes to its module — never config-only.
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/bun.lock",
+			"app/BibleOnSite/BibleOnSite.csproj",
+			// Any non-config file alongside, docs included, is not config-only.
+			"docs/guide.md",
+			// Module-local Renovate settings are not repo-level config.
+			"web/admin/renovate.json",
+		]) {
+			test(`renovate.json plus ${extra} is not renovate_config_only`, () => {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"renovate.json",
+					"write",
+					undefined,
+					{ extraPaths: [extra] },
+				);
+				assert.match(output, /^renovate_config_only=false$/m, extra);
+			});
+		}
+	});
+
+	describe("CodeQL language scoping (#3795)", () => {
+		for (const [files, expected] of [
+			[["renovate.json"], ["actions"]],
+			[["docs/guide.md"], ["actions"]],
+			[["web/api/src/main.rs"], ["actions"]],
+			[[".github/workflows/ci.yml"], ["actions"]],
+			[["app/BibleOnSite/AppShell.xaml.cs"], ["csharp"]],
+			[["web/admin/src/page.tsx"], ["javascript-typescript"]],
+			[["web/bible-on-site/bun.lock"], ["javascript-typescript"]],
+			[["devops/deploy/data-deploy/index.mts"], ["javascript-typescript"]],
+			[["devops/backups/backup.py"], ["python"]],
+			[
+				[".github/workflows/codeql.yml", "devops/transcription/run.py"],
+				["actions", "python"],
+			],
+		] as const) {
+			test(`codeqlLanguages(${JSON.stringify(files)}) scopes to ${JSON.stringify(expected)}`, () => {
+				assert.deepEqual(codeqlLanguages([...files]), [...expected]);
+			});
+		}
+	});
 });
 
 describe("merge-group workflow contract", () => {
@@ -2174,28 +2271,27 @@ describe("merge-group workflow contract", () => {
 							? "skipped"
 							: "success";
 					}
-					if (
-						expression === "needs.package_api.outputs.module_version" ||
-						expression === "needs.package_admin.outputs.module_version"
-					)
+					if (expression === "needs.package_api.outputs.module_version")
 						return versions.amd64;
 					if (
 						expression === "needs.package_api_arm64.outputs.module_version" ||
-						expression === "needs.package_admin_arm64.outputs.module_version"
+						expression === "needs.package_admin.outputs.module_version"
 					)
 						return versions.arm64;
-					if (
-						expression === "needs.package_website.outputs.module_version" ||
-						expression === "needs.package_website_arm64.outputs.module_version"
-					)
+					if (expression === "needs.package_website.outputs.module_version")
 						return "0.2.600";
 					if (expression.includes("_ci_changed")) return String(ciChanged);
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
 						return String(baselineAvailable);
-					// These scenarios exercise code/queue changes; docs_only stays
-					// false so the docs-gated suite checks still evaluate (#3621).
-					if (expression === "needs.determine_changes.outputs.docs_only")
+					// These scenarios exercise code/queue changes; docs_only and
+					// renovate_config_only stay false so the docs-gated suite
+					// checks still evaluate (#3621, #3795).
+					if (
+						expression === "needs.determine_changes.outputs.docs_only" ||
+						expression ===
+							"needs.determine_changes.outputs.renovate_config_only"
+					)
 						return "false";
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
@@ -2262,7 +2358,6 @@ fi
 			"package_api",
 			"package_bulletin",
 			"package_admin",
-			"package_admin_arm64",
 			"validate_website_architectures",
 			"validate_api_architectures",
 			"validate_admin_architectures",

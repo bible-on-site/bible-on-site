@@ -22,26 +22,55 @@ test("retains PR, protected-branch and scheduled scans", () => {
 	assert.deepEqual(workflow.on.schedule, [{ cron: "27 3 * * 1" }]);
 });
 
+test("pull requests scan only the languages the router resolves (#3795)", () => {
+	const detect = workflow.jobs.detect;
+	assert.ok(detect, "the router detection job must exist");
+	assert.equal(detect.if, "${{ github.event_name == 'pull_request' }}");
+	assert.equal(detect["timeout-minutes"], 10);
+	const step = detect.steps.find((step) =>
+		step.run?.includes("determine-changes.ts"),
+	);
+	assert.ok(step, "detection must reuse the shared module router");
+	const scope = detect.steps.find((step) => step.id === "scope");
+	assert.ok(scope?.run.includes("matrix="), "scope step emits the matrix");
+	assert.ok(
+		scope.env?.LANGUAGES ===
+			"${{ steps.detect.outputs.codeql_languages }}",
+		"the matrix must consume the router's language scope",
+	);
+	assert.equal(
+		detect.outputs.matrix,
+		"${{ steps.scope.outputs.matrix }}",
+	);
+
+	const job = workflow.jobs.analyze;
+	assert.deepEqual(job.needs, "detect");
+	const include = job.strategy.matrix.include;
+	assert.match(
+		include,
+		/github\.event_name == 'pull_request' && fromJSON\(needs\.detect\.outputs\.matrix\)/,
+		"PRs use the router-scoped matrix",
+	);
+	// Non-PR events keep the full four-language fallback inside the same
+	// expression.
+	for (const language of [
+		"actions",
+		"csharp",
+		"javascript-typescript",
+		"python",
+	])
+		assert.ok(
+			include.includes(`"language":"${language}"`),
+			`expected ${language} in ${include}`,
+		);
+});
+
 test("scans the default checked-out synthetic commit in each language", () => {
 	const job = workflow.jobs.analyze;
 	assert.equal(
 		job.if,
 		undefined,
 		"no PR-only job guard may exclude merge groups",
-	);
-	assert.deepEqual(
-		job.strategy.matrix.include.map(
-			({ language, "build-mode": buildMode }) => ({
-				language,
-				buildMode,
-			}),
-		),
-		[
-			{ language: "actions", buildMode: "none" },
-			{ language: "csharp", buildMode: "none" },
-			{ language: "javascript-typescript", buildMode: "none" },
-			{ language: "python", buildMode: "none" },
-		],
 	);
 	const checkout = job.steps.find((step) =>
 		step.uses?.startsWith("actions/checkout@"),

@@ -143,6 +143,29 @@ test("admin archives bind their own module, CI provenance and canonical filename
 	);
 });
 
+// Website/admin releases carry the ARM64 archive alone since the amd64
+// retirement (#3794); the API payload still requires the pair.
+test("an ARM64-only website/admin payload verifies the single published archive", (t) => {
+	for (const moduleName of ["website", "admin"]) {
+		const { release, payload, options } = fixture(t, moduleName);
+		delete payload.released_artifact_name;
+		release.body = `<!-- release-delivery:${JSON.stringify(payload)} -->`;
+		release.assets.splice(0, 1);
+		const image =
+			moduleName === "website" ? "bible-on-site" : "bible-on-site-admin";
+		assert.deepEqual(nativeImageArtifacts(payload), {
+			arm64: `${image}-docker-10-arm64`,
+		});
+		assert.deepEqual(
+			verifyAPIImageAssets(release, { ...options, moduleName }),
+			[release.assets[0].name],
+		);
+	}
+	const { payload } = fixture(t);
+	delete payload.released_artifact_name;
+	assert.throws(() => nativeImageArtifacts(payload), /published CI provenance/);
+});
+
 test("the CLI entry binds lookup to the canonical API version", (t) => {
 	const { release, options } = fixture(t);
 	const result = main(

@@ -54,7 +54,7 @@ function input(moduleName = "admin") {
 		releaseFile: {
 			name:
 				moduleName === "admin"
-					? "bible-on-site-admin-v1.0.10.tar.gz"
+					? "bible-on-site-admin-v1.0.10-arm64.tar.gz"
 					: "bulletin-lambda-v1.0.10.zip",
 			size: 4,
 			digest: digest("file"),
@@ -329,11 +329,11 @@ test("receipt writer hashes the actual contained release file, not its Actions Z
 		assert.ok(folder.startsWith(join(tmpdir(), "release-recovery-")));
 		rmSync(folder, { recursive: true, force: true });
 	});
-	const filePath = join(folder, "bible-on-site-admin-v1.0.10.tar.gz");
+	const filePath = join(folder, "bible-on-site-admin-v1.0.10-arm64.tar.gz");
 	writeFileSync(filePath, "exact package");
 	const value = input();
 	value.releaseFile = {
-		name: "bible-on-site-admin-v1.0.10.tar.gz",
+		name: "bible-on-site-admin-v1.0.10-arm64.tar.gz",
 		path: filePath,
 	};
 	const receiptPath = join(folder, "release-recovery-admin.json");
@@ -341,7 +341,7 @@ test("receipt writer hashes the actual contained release file, not its Actions Z
 	const bytes = readFileSync(receiptPath);
 	const receipt = JSON.parse(bytes);
 	assert.deepEqual(receipt.releaseFile, {
-		name: "bible-on-site-admin-v1.0.10.tar.gz",
+		name: "bible-on-site-admin-v1.0.10-arm64.tar.gz",
 		size: 13,
 		digest: digest("exact package"),
 	});
@@ -706,6 +706,8 @@ test("manual deployment guard returns only the verified canonical download proof
 			ref: sha,
 			version: "1.0.10",
 			runAttempt: 1,
+			// Recovery fixtures carry the canonical key, so the amd64 path stays.
+			nativeAmd64: true,
 			recoveryFile: { id: 301, ...f.receipt.releaseFile },
 		},
 	);

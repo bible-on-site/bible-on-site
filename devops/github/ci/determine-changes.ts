@@ -366,6 +366,39 @@ const MODULE_EVIDENCE_FILES = new Set([
 ]);
 const EVIDENCE_EXTENSION = /\.(?:avif|gif|jpe?g|md|png|webp)$/i;
 
+// Dependency-bot configuration is not deliverable code: a diff confined to the
+// Renovate config locations changes no module, dependency graph or runtime
+// input, so only Renovate validation should run (#3795). Package and lockfile
+// updates keep the ordinary module paths — the classification never matches
+// them. Local/custom config inside a module still routes to that module.
+const RENOVATE_CONFIG_PATTERN =
+	/^(?:renovate\.json5?|\.renovaterc(?:\.json5?)?|\.github\/renovate\.json5?)$/;
+
+// Language inputs for the repo-managed CodeQL workflow (#3795): a pull
+// request scans only the languages its diff can actually alter. Dependency
+// manifests stay in scope so a dependency change is still scanned. Anything
+// outside every map — config-only JSON, docs, Rust, data — resolves to the
+// cheapest language so the required code-scanning status still reports.
+const CODEQL_LANGUAGE_PATHS: Record<string, RegExp> = {
+	actions: /^\.github\/(?:workflows|actions)\//,
+	csharp:
+		/^app\/|\.(?:cs|csproj|sln|slnx|props|targets|razor|csx|resx|xaml)$|(?:^|\/)global\.json$|(?:^|\/)nuget\.config$/i,
+	"javascript-typescript":
+		/\.(?:m?ts|tsx|[cm]?js|jsx|d\.ts)$|(?:^|\/)(?:package\.json|bun\.lock|bunfig\.toml|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|tsconfig[^/]*\.json)$/i,
+	python:
+		/\.pyi?$|(?:^|\/)(?:requirements[^/]*\.txt|pyproject\.toml|Pipfile(?:\.lock)?|setup\.py|constraints[^/]*\.txt)$/i,
+};
+
+/** Languages whose inputs the diff can alter; never empty for PR scoping. */
+export function codeqlLanguages(changedFiles: string[]): string[] {
+	const languages = Object.entries(CODEQL_LANGUAGE_PATHS)
+		.filter(([, pattern]) => changedFiles.some((file) => pattern.test(file)))
+		.map(([language]) => language);
+	// The code-scanning ruleset needs a completed CodeQL result for the PR
+	// regardless of touched inputs; `actions` is the cheapest complete scan.
+	return languages.length ? languages : ["actions"];
+}
+
 function isModuleEvidenceDocumentation(file: string): boolean {
 	return (
 		MODULE_EVIDENCE_FILES.has(file) ||
@@ -662,7 +695,16 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		!Object.values(changes).some(
 			(flags) => flags.module_changed || flags.ci_changed,
 		);
-	if (mergeGroup && !docsOnly) {
+	// A diff confined to Renovate configuration validates the config itself
+	// only: no module flag may fire, and like docs_only the merge-group diff
+	// already spans the combined candidate (#3795).
+	const renovateConfigOnly =
+		files.length > 0 &&
+		files.every((file) => RENOVATE_CONFIG_PATTERN.test(file)) &&
+		!Object.values(changes).some(
+			(flags) => flags.module_changed || flags.ci_changed,
+		);
+	if (mergeGroup && !docsOnly && !renovateConfigOnly) {
 		// A preceding queue entry may still have unfinished checks. Validate
 		// the combined head conservatively, without any release intent.
 		for (const flags of Object.values(changes)) {
@@ -688,6 +730,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 			));
 	lines.push(`data_deploy_ci_changed=${dataDeployCiChanged}`);
 	lines.push(`docs_only=${docsOnly}`);
+	lines.push(`renovate_config_only=${renovateConfigOnly}`);
+	lines.push(
+		`codeql_languages=${JSON.stringify(codeqlLanguages(deliveryFiles))}`,
+	);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(
 		`bulletin_release_recovery=${recoveryModules.includes("bulletin")}`,

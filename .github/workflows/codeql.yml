@@ -36,9 +36,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Shared router classification (#3795): a pull request scans only the
+  # languages its diff can actually alter — dependency manifests stay in
+  # scope so dependency changes are still scanned, and the router always
+  # returns at least `actions` so the required code-scanning status still
+  # reports a completed analysis. Scheduled, push and merge-group scans keep
+  # the full matrix.
+  detect:
+    timeout-minutes: 10
+    name: Language scope detection
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Detect module changes
+        id: detect
+        run: node devops/github/ci/determine-changes.ts
+      - name: Scope the language matrix
+        id: scope
+        env:
+          LANGUAGES: ${{ steps.detect.outputs.codeql_languages }}
+        run: >-
+          node -e 'const include = JSON.parse(process.env.LANGUAGES)
+          .map((language) => ({ language, "build-mode": "none" }));
+          console.log(`matrix=${JSON.stringify(include)}`);'
+          >> "$GITHUB_OUTPUT"
+
   analyze:
     timeout-minutes: 60
     name: Analyze (${{ matrix.language }})
+    needs: detect
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -48,15 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - language: actions
-            build-mode: none
-          - language: csharp
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
-          - language: python
-            build-mode: none
+        include: ${{ github.event_name == 'pull_request' && fromJSON(needs.detect.outputs.matrix) || fromJSON('[{"language":"actions","build-mode":"none"},{"language":"csharp","build-mode":"none"},{"language":"javascript-typescript","build-mode":"none"},{"language":"python","build-mode":"none"}]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

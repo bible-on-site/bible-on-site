@@ -74,10 +74,11 @@ switch, which is unset.
 ## Release and monitoring
 
 GitHub Actions assumes AWS deployment roles using OIDC and publishes versioned
-images and `latest` to ECR. Each `latest` points to an OCI image index for
-amd64 and ARM64. Version tags are immutable. The website and admin lifecycle
-policies protect their newest tagged x86 rollback images. The API repository
-has no ECR lifecycle policy.
+images and `latest` to ECR. Each `latest` points to an OCI image index: amd64
+and ARM64 children for the API, the ARM64 child alone for website/admin since
+the amd64 retirement (#3794). Version tags are immutable. The website and
+admin lifecycle policies protect their newest tagged x86 rollback images. The
+API repository has no ECR lifecycle policy.
 
 | Service | ECR repository | ECS rollout owner |
 | --- | --- | --- |
