@@ -837,6 +837,51 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task CommentarySearch_AfterNormalizationBump_RecoversThroughExplicitDownload()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // An app update bumped the normalization: the working index is n1 and
+        // no current-build payload is cached (iOS below 26 after an update).
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var packDir = Path.Join(storage.Root, "pack");
+        Directory.CreateDirectory(packDir);
+        File.Copy(Path.Join(storage.Root, NotesDb), Path.Join(packDir, NotesDb));
+        var packIndex = await storage.CreateDatabaseAsync(Path.Join("pack", PerushimNotesService.SearchIndexDbName),
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await packIndex.CloseAsync();
+        string? padPath = null;
+        var pad = new Mock<IPadDeliveryService>();
+        pad.Setup(d => d.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => padPath);
+        pad.Setup(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                padPath = packDir;
+                return true;
+            });
+        var notes = PerushimNotesService.CreateForTesting(pad.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+
+        (await index.SearchAsync("סימן", filters, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty("the n1 index no longer matches the installed notes");
+        notes.IsAvailable.Should().BeTrue();
+
+        (await notes.TryDownloadNotesAsync(TestContext.Current.CancellationToken)).Should().BeTrue();
+        var hits = await index.SearchAsync("סימן", filters, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        pad.Verify(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()),
+            Times.Once, "the explicit download must refetch the pack even though its notes are still readable");
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        index.CommentaryAvailable.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SearchAsync_ReportsProgressDuringCommentaryInitialization()
     {
         await using var storage = new TestStorage();

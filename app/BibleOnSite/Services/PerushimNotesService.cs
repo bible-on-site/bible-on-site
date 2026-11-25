@@ -155,6 +155,11 @@ public class PerushimNotesService : IReaderNotesAvailability
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
+    /// <summary>Whether the installed notes have no matching search index on the device
+    /// (e.g. an app update bumped the index normalization), so commentary search needs a
+    /// fresh pack even though the notes stay readable. Reported by the search index.</summary>
+    public bool IsSearchIndexStale { get; internal set; }
+
     /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
     public bool IsInitialized => _initialized;
 
@@ -403,6 +408,10 @@ public class PerushimNotesService : IReaderNotesAvailability
             await InitializeCoreAsync();
             if (IsAvailable)
             {
+                if (IsSearchIndexStale && !await TryRefreshSearchIndexAsync(dbPath, progress, cancellationToken))
+                {
+                    return false;
+                }
                 File.Delete(RemovedMarkerPath);
                 return true;
             }
@@ -456,6 +465,34 @@ public class PerushimNotesService : IReaderNotesAvailability
 
         Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
+    }
+
+    /// <summary>
+    /// Refetches the pack for readable notes whose search index went stale. The notes are
+    /// upgraded alongside so the delivered index is staged against the generation it was
+    /// built from; the search index adopts the staged copy on its next commentary query.
+    /// </summary>
+    private async Task<bool> TryRefreshSearchIndexAsync(string dbPath, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        if (!await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
+        {
+            return false;
+        }
+        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+        if (padPath == null || PadIndexSourcePath(padPath) == null)
+        {
+            return false;
+        }
+        await _connection!.CloseAsync();
+        _connection = null;
+        await TryUpgradeFromPadAsync(dbPath);
+        _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+        if (!File.Exists(Path.Join(DataDirectory, SearchIndexDbName)))
+        {
+            await TryCopyPadIndexAsync(padPath);
+        }
+        IsSearchIndexStale = false;
+        return await ValidateLocalNotesAsync() && File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
     }
 
     /// <summary>

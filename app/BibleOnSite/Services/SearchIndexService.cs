@@ -527,6 +527,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                     var expected = await FingerprintAsync(connection, "build_timestamp");
                     CommentaryAvailable = await _index.ExecuteScalarAsync<string>(
                         "SELECT fingerprint FROM search_metadata WHERE name = 'notes'") == expected;
+                    _notes.IsSearchIndexStale = !CommentaryAvailable;
                     if (CommentaryAvailable)
                     {
                         _ready["notes"] = expected;

@@ -44,14 +44,16 @@ public partial class ExtensionPacksViewModel : ObservableObject
     /// <summary>Whether perushim notes are installed and available.</summary>
     public bool IsPerushimInstalled => _perushimNotesService.IsAvailable;
 
-    /// <summary>Whether to show the download controls (when NOT installed).</summary>
-    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable;
+    /// <summary>Whether to show the download controls (not installed, or its search index is stale).</summary>
+    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable || _perushimNotesService.IsSearchIndexStale;
 
     /// <summary>Status text for perushim notes.</summary>
     public string PerushimNotesStatusText =>
-        _perushimNotesService.IsAvailable
-            ? "חבילת הפירושים מותקנת ✓"
-            : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+        !_perushimNotesService.IsAvailable
+            ? "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים."
+            : _perushimNotesService.IsSearchIndexStale
+                ? "חבילת הפירושים מותקנת, אך החיפוש בפירושים דורש עדכון. הורידו שוב כדי לעדכן."
+                : "חבילת הפירושים מותקנת ✓";
 
     /// <summary>True while the perushim package is downloading.</summary>
     [ObservableProperty]

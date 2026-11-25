@@ -239,6 +239,30 @@ public sealed class PerushimNotesServiceTests : IDisposable
         ids.Should().Equal(9);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public async Task TryDownloadNotesAsync_WithStaleSearchIndex_FailsWithoutAFetchedIndex(bool fetchSucceeds, bool packHasIndex)
+    {
+        var dataDir = Path.Join(_tempRoot, $"stale-index-{fetchSucceeds}-{packHasIndex}");
+        var padDir = Path.Join(_tempRoot, $"stale-index-pad-{fetchSucceeds}");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
+        await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "pack note"));
+        var pad = new FakePadDeliveryService { AssetPathAfterFetch = padDir, FetchResult = fetchSucceeds };
+        var service = PerushimNotesService.CreateForTesting(pad, dataDir);
+        await service.InitializeAsync();
+        service.IsSearchIndexStale = true;
+
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        downloaded.Should().BeFalse("no index compatible with the installed notes arrived");
+        pad.FetchCalls.Should().Be(1);
+        service.IsAvailable.Should().BeTrue("the readable notes survive a failed index refresh");
+        service.IsSearchIndexStale.Should().BeTrue();
+    }
+
     [Fact]
     public async Task TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder()
     {
