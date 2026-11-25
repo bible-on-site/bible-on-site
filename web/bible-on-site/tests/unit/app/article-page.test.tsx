@@ -908,7 +908,10 @@ describe("[slug] page", () => {
 			const heading = screen.getByRole("heading", {
 				name: "לקריאה נוספת",
 			});
+			// Safe to assert non-null: the לקריאה נוספת heading always renders
+			// inside its wrapping <section>, so closest("section") cannot be null.
 			const section = heading.closest("section") as HTMLElement;
+			expect(section).not.toBeNull();
 			expect(
 				within(section).getByRole("link", { name: /הרב מפרק אחר/ }),
 			).toBeTruthy();
