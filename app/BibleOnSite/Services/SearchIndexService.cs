@@ -199,15 +199,15 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
     }
 
-    /// <summary>Runs the commentary index check a commentary search makes, so settings can
-    /// offer a pack refresh for a stale index before any search ran.</summary>
+    /// <summary>Runs the commentary index check a commentary search makes, once, so settings
+    /// can offer a pack refresh for a stale index before any search ran.</summary>
     public async Task<bool> CheckCommentaryIndexAsync()
     {
         Task build;
         lock (_buildSync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (!_buildTasks.TryGetValue("notes", out build!) || build.IsCompleted)
+            if (!_buildTasks.TryGetValue("notes", out build!) || build.IsFaulted || build.IsCanceled)
             {
                 _buildTasks["notes"] = build = Task.Run(() => EnsureIndexAsync("notes"));
             }

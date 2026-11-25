@@ -891,7 +891,8 @@ public class SearchIndexServiceTests
         var working = await storage.CreateDatabaseAsync("search.sqlite",
             DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
         await working.CloseAsync();
-        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var pad = NullPad();
+        var notes = PerushimNotesService.CreateForTesting(pad.Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var fileSystem = new Mock<IFileSystem>();
         var settings = new ExtensionPacksViewModel(notes,
@@ -902,6 +903,11 @@ public class SearchIndexServiceTests
 
         settings.IsPerushimInstalled.Should().BeTrue();
         settings.ShowPerushimDownloadButton.Should().BeTrue("the n1 index cannot serve the installed notes");
+
+        var deliveryLookups = pad.Invocations.Count;
+        await settings.LoadAsync();
+        pad.Invocations.Count.Should().Be(deliveryLookups,
+            "reopening settings reuses the finished check instead of redoing the index work");
     }
 
     [Fact]
