@@ -72,4 +72,52 @@ test.describe("Tanahpedia entity preview", () => {
 		});
 		await expect(tooltip).toBeVisible();
 	});
+
+	test("retries a failed preview fetch on the next focus", async ({
+		page,
+	}) => {
+		const previewEnabled = await page.evaluate(() =>
+			window.matchMedia("(hover: hover) and (pointer: fine)").matches,
+		);
+		test.skip(
+			!previewEnabled,
+			"entity previews are disabled on coarse-pointer devices",
+		);
+
+		let calls = 0;
+		await page.route("**/api/tanahpedia/preview/**", async (route) => {
+			calls++;
+			if (calls === 1) {
+				await route.fulfill({ status: 500, body: "boom" });
+				return;
+			}
+			await route.continue();
+		});
+
+		await page.goto("/929/1");
+		const link = page
+			.locator(`a[href="/pedia/${encodeURIComponent("אלהים")}"]`)
+			.first();
+		await expect(link).toBeVisible({ timeout: 10_000 });
+
+		// First focus: the preview endpoint 500s, so no tooltip shows.
+		await link.focus();
+		await expect
+			.poll(() => calls, { timeout: 10_000 })
+			.toBe(1);
+		// The 500 was already delivered; give the delegate a tick to settle.
+		await page.waitForTimeout(300);
+		await expect(page.locator(TOOLTIP)).toHaveCount(0);
+
+		// A transient failure must not disable the preview for the rest of
+		// the session: blurring past the delegate's hide delay, then
+		// refocusing, refetches and renders the real preview.
+		await page.locator("h1").first().click();
+		await page.waitForTimeout(400);
+		await link.focus();
+		const tooltip = page.locator(TOOLTIP);
+		await expect(tooltip).toBeVisible({ timeout: 10_000 });
+		await expect(tooltip).toContainText("אלהים");
+		expect(calls).toBe(2);
+	});
 });

@@ -841,9 +841,15 @@ describe("TanahpediaEntryPreview", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it("does not render a preview when the fetch fails or misses", async () => {
+	it("does not render a preview when the fetch fails, and retries on the next hover", async () => {
 		preventLinkNavigation();
-		const fetchMock = jest.fn().mockResolvedValue({ ok: false });
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce({ ok: false })
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({ title: "Recovered", snippet: "s" }),
+			});
 		global.fetch = fetchMock as unknown as typeof fetch;
 		render(
 			<>
@@ -858,12 +864,13 @@ describe("TanahpediaEntryPreview", () => {
 		);
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
-		// The miss is cached - a second hover does not refetch.
+		// The miss is not cached - a second hover refetches and can recover.
 		await act(async () => {
 			fireEvent.click(screen.getByRole("link", { name: "Missing" }));
 		});
 		await hover(screen.getByRole("link", { name: "Missing" }));
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(await screen.findByRole("tooltip")).toHaveTextContent("Recovered");
 	});
 
 	it("does not render a preview when the fetch rejects", async () => {

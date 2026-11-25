@@ -205,8 +205,11 @@ describe("PasukPreviewLink", () => {
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 	});
 
-	it("caches a network failure and does not refetch", async () => {
-		fetchMock.mockRejectedValue(new Error("offline"));
+	it("retries a rejected fetch on the next hover", async () => {
+		fetchMock.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "נסיון חוזר" }),
+		} as Response);
 		render(
 			<PasukPreviewLink href="/929/33#pasuk-4">בראשית לג ד</PasukPreviewLink>,
 		);
@@ -220,7 +223,39 @@ describe("PasukPreviewLink", () => {
 		await act(async () => {
 			fireEvent.mouseEnter(link);
 		});
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
+	});
+
+	it("retries a non-ok response on the next hover", async () => {
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: false,
+				json: async () => null,
+			} as Response)
+			.mockResolvedValue({
+				ok: true,
+				json: async () => ({ reference: "r", text: "נסיון חוזר" }),
+			} as Response);
+		render(
+			<PasukPreviewLink href="/929/36#pasuk-7">בראשית לו ז</PasukPreviewLink>,
+		);
+		const link = screen.getByRole("link", { name: "בראשית לו ז" });
+		await act(async () => {
+			fireEvent.mouseEnter(link);
+		});
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		fireEvent.mouseLeave(link);
+		await act(async () => {
+			fireEvent.mouseEnter(link);
+		});
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 	});
 
 	it("serves repeat hovers from the cache", async () => {

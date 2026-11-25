@@ -36,16 +36,14 @@ async function fetchPreview(uniqueName: string): Promise<PreviewData | null> {
 		const res = await fetch(
 			`/api/tanahpedia/preview/${encodeURIComponent(uniqueName)}`,
 		);
-		if (!res.ok) {
-			previewCache.set(uniqueName, null);
-			return null;
-		}
+		// Failures are not cached: a transient error must not disable the
+		// preview for the rest of the session - the next hover retries.
+		if (!res.ok) return null;
 		const data: PreviewData = await res.json();
 		previewCache.set(uniqueName, data);
 		return data;
 	} catch (error) {
 		console.warn("Tanahpedia preview fetch failed", { uniqueName, error });
-		previewCache.set(uniqueName, null);
 		return null;
 	}
 }
