@@ -1,7 +1,7 @@
 {
   "family": "Al Heperek Font UI",
-  "version": "0.9.7",
-  "tag": "v0.9.7",
+  "version": "0.9.8",
+  "tag": "v0.9.8",
   "defaultHebrewCut": "ss03",
   "cantillation": true,
   "choices": {
@@ -13,42 +13,42 @@
   },
   "finalTsadiFrom": "C28",
   "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
-  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.7",
-  "sourceRevision": "f488d3eefe42ac7e7e6833d2df1bc8a0a6a158a2",
+  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.8",
+  "sourceRevision": "c253be3a188f51987817ae9cf1e0359ab900715d",
   "archive": {
-    "file": "AlHeperekFont-v0.9.7.zip",
-    "sha256": "cc4475ce2e248c3313a50d259fdeb7b25718183cc296ce501a57a82e6e13ca53"
+    "file": "AlHeperekFont-v0.9.8.zip",
+    "sha256": "43dbe912786e48634e489d946816dbc0bf170051f9a5833b8b2e21488494ad15"
   },
   "files": [
     {
       "file": "AlHeperekUI-Regular.ttf",
       "weight": 400,
-      "sha256": "58e0bfab7fc826934ac9743dbc4beb3ffa218aa023ac2b495d9c27af384b1658"
+      "sha256": "6bcf1504e697760909988ac6fb29704719db2c08597e871a05dc6c855e70b1f7"
     },
     {
       "file": "AlHeperekUI-Regular.woff2",
       "weight": 400,
-      "sha256": "32dd6ac42c0a6d1ba805420d095751703a591956660dbe73c466d63e8457deea"
+      "sha256": "32816fd161c374a82d9ff54b6dee09402cba89715d98d713d947046d26e68121"
     },
     {
       "file": "AlHeperekUI-SemiBold.ttf",
       "weight": 600,
-      "sha256": "254ead5eacf5359a92b6395bf1b5dbe56d329e6771787fb10c1c1319610ae7e3"
+      "sha256": "79749e9e3b2173f060877b82cb5c32107cda14fe1701f180906714fb14682e11"
     },
     {
       "file": "AlHeperekUI-SemiBold.woff2",
       "weight": 600,
-      "sha256": "fd11e3da88c69cc0856e1a2332e6d013e1b606c723166c08951e7a43de11370f"
+      "sha256": "1ff26871e9c5e49f58ab560700c7a732f9955d9834f90b36c63ab1486becb044"
     },
     {
       "file": "AlHeperekUI-Bold.ttf",
       "weight": 700,
-      "sha256": "774ea62e010274500fcd9eea17fe05f58ae4f3fc8e14ba272f513c449d0f4cba"
+      "sha256": "a16789a16afc39552628f4cc2643555c3677b332ec58138d45695544dc13eb41"
     },
     {
       "file": "AlHeperekUI-Bold.woff2",
       "weight": 700,
-      "sha256": "ee9becb44b6794be0f64c309d39e30e6c28975fd5d0faee2d77b8ff26e9fb50b"
+      "sha256": "f40c496503726cf285d7e55a4d6dd18e6ca882db8a9ebd81cf3e7152e66b05bd"
     }
   ]
 }

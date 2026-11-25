@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.144"
+version = "0.1.152"
 edition = "2024"
 
 [dependencies]
@@ -52,6 +52,8 @@ percent-encoding = "2.3.2"
 hmac = "0.13.0"
 sha2 = "0.11.0"
 hex = "0.4.3"
+# The 32-hex editorial freshness token predates the MySQL 9.7 search digest.
+md-5 = "0.11.0"
 futures-util = { version = "0.3.34", default-features = false }
 
 [dev-dependencies]

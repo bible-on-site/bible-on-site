@@ -221,6 +221,22 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void FirstVisibleElementFiltersHittabilityFromTheSameSnapshot()
+    {
+        var blocked = Entry("blocked");
+        blocked["hittable"] = false;
+        var tappable = Entry("tappable");
+        tappable["hittable"] = true;
+        var executor = new SnapshotExecutor([]) { Respond = _ => new object[] { blocked, tappable } };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var adapter = new IosPlatformAdapter();
+        var row = new PerekPage(driver, adapter).FirstVisibleElement("PerushCheckBox", adapter.CanTap);
+        Assert.Equal("tappable", row?.Element.Id);
+        Assert.DoesNotContain(DriverCommand.IsElementEnabled, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementAttribute, executor.Commands);
+    }
+
+    [Fact]
     public void ScrollReturnRetriesAHeadingLookupStraggler()
     {
         var executor = new SnapshotExecutor(
@@ -393,6 +409,132 @@ public sealed class NativeSnapshotTests
         Assert.Equal(2, executor.Lookups);
         Assert.Equal(2, executor.Commands.Count(command => command == DriverCommand.GetElementRect));
         Assert.Single(executor.Commands, command => command == "actions");
+    }
+
+    [Fact]
+    public void DismissPerushimSheetDoesNotTapWhenTheSheetIsAlreadyHidden()
+    {
+        var executor = new SnapshotExecutor([]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet();
+        Assert.DoesNotContain("actions", executor.Commands);
+        Assert.Equal(3, executor.Lookups);
+        Assert.Equal("PerushimEmptyState", executor.LastParameters!["value"]);
+    }
+
+    [Fact]
+    public void DismissPerushimSheetLetsAnInProgressCloseFinish()
+    {
+        System.Diagnostics.Stopwatch? animation = null;
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria =>
+            {
+                animation ??= System.Diagnostics.Stopwatch.StartNew();
+                return criteria is "PerushimContentViewport" && animation.ElapsedMilliseconds < 250
+                    ? new object[] { Entry("closing sheet") }
+                    : Array.Empty<object>();
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet();
+        Assert.DoesNotContain("actions", executor.Commands);
+    }
+
+    [Fact]
+    public void DismissPerushimSheetRetriesAnInitialStaleObservationAfterSettling()
+    {
+        var firstObservation = true;
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = _ =>
+            {
+                if (firstObservation)
+                {
+                    firstObservation = false;
+                    Thread.Sleep(400);
+                    throw new StaleElementReferenceException("The sheet changed during the lookup.");
+                }
+                return Array.Empty<object>();
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet();
+        Assert.Equal(4, executor.Lookups);
+        Assert.DoesNotContain("actions", executor.Commands);
+    }
+
+    [Fact]
+    public void DismissPerushimSheetRetapsAfterTheFirstTapMisses()
+    {
+        SnapshotExecutor? executor = null;
+        executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                "PerushimEmptyState" => executor!.Commands.Count(command => command == "actions") < 2
+                    ? new object[] { Entry("empty state", displayed: false, x: 200) }
+                    : Array.Empty<object>(),
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet(TimeSpan.FromMilliseconds(300));
+        Assert.Equal(2, executor.Commands.Count(command => command == "actions"));
+    }
+
+    [Fact]
+    public void DismissPerushimSheetStopsAfterThreeMissedTaps()
+    {
+        var executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                "PerushimContentViewport" => new object[] { Entry("sheet") },
+                _ => Array.Empty<object>()
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var failure = Assert.Throws<WebDriverTimeoutException>(() =>
+            new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet(TimeSpan.FromMilliseconds(200)));
+        Assert.Contains("remained attached", failure.Message);
+        Assert.Equal(3, executor.Commands.Count(command => command == "actions"));
+    }
+
+    [Fact]
+    public void DismissPerushimSheetDoesNotRetapWhenTheObservationFails()
+    {
+        SnapshotExecutor? executor = null;
+        executor = new SnapshotExecutor([])
+        {
+            Respond = criteria => criteria switch
+            {
+                "PerushimChevronButton" => new object[] { Entry("chevron") },
+                "PerushimContentViewport" when !executor!.Commands.Contains("actions") =>
+                    new object[] { Entry("sheet") },
+                _ => throw new WebDriverTimeoutException("The element observation timed out.")
+            }
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var failure = Assert.Throws<InvalidOperationException>(() =>
+            new PerekPage(driver, new IosPlatformAdapter()).DismissPerushimSheet(TimeSpan.FromMilliseconds(300)));
+        Assert.IsType<WebDriverTimeoutException>(failure.InnerException);
+        Assert.Single(executor.Commands, command => command == "actions");
+    }
+
+    [Fact]
+    public void PresentWaitAcceptsAClippedAccessibilitySection()
+    {
+        // A clipped accessibility section is mounted but reports displayed=false
+        // with a center below the window — the gate every WaitFor applies (#3737).
+        var executor = new SnapshotExecutor([Entry("section", displayed: false, x: 200)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).WaitForPresent("CommentaryTextSection");
+        Assert.Equal(1, executor.Lookups);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
+        Assert.Equal("CommentaryTextSection", executor.LastParameters!["value"]);
     }
 
     [Fact]

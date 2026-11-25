@@ -27,10 +27,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     // Article from a cold-start app link, opened after the initial load.
     private int? _pendingArticleId;
-    private DateTime _lastLongPressTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 600;
+    private readonly ReaderGestureTiming _gestureTiming = new();
 
     // Articles view state is owned by the shared reader chrome (#2573).
     private ReaderChrome _chrome = null!;
@@ -47,15 +46,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     // are owned by the shared carousel coordinator (#2573).
     private ReaderCarousel _carousel = null!;
 
-    // Scroll state tracking - used to prevent long-press during scroll
-    private DateTime _lastScrollTime = DateTime.MinValue;
-    private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
-
     /// <summary>
     /// Returns true if the user is currently scrolling or just finished scrolling.
     /// Used by LongPressBehavior to prevent false triggers during scroll.
     /// </summary>
-    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => _gestureTiming.IsScrolling;
 
     public PerekPage()
     {
@@ -322,7 +317,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
         _doubleTap.Reset();
-        _lastScrollTime = DateTime.Now;
+        _gestureTiming.NoteScroll();
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
 #if !ANDROID
@@ -773,7 +768,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         LongPressBehavior.CancelAllPending();
 
         // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -801,7 +796,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return;
         }
         // Skip tap if long press just happened
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -833,7 +828,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if WINDOWS
         if (e.Parameter is int pasukNum)
         {
-            // Don't set _lastLongPressTime - right-click doesn't need debounce
+            // Don't note a long press - right-click doesn't need debounce
             // Entering selection must not kill in-flight playback or its moving
             // word marker (#2473).
             ResetRecitationContext(stopPlayback: false);
@@ -895,13 +890,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, token);
 
             // If we get here, the press was held long enough
             // Double-check we're not scrolling and pasuk is still pressed
             if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum && !IsScrolling)
             {
-                _lastLongPressTime = DateTime.Now;
+                _gestureTiming.NoteLongPress();
 
                 ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
@@ -931,7 +926,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
 #if ANDROID || IOS || MACCATALYST
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&

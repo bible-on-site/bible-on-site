@@ -655,6 +655,11 @@ describe("article-link domain diff", () => {
 			"href",
 			"/articles/17",
 		);
+		expect(screen.getByText("פרק ראשי - החלפה")).toBeInTheDocument();
+		const primaryPerek = screen.getByRole("row", { name: /פרק ראשי/ });
+		const [before, after] = within(primaryPerek).getAllByRole("cell");
+		expect(before).toHaveTextContent("בראשית א");
+		expect(after).toHaveTextContent("בראשית ב");
 		expect(screen.getByRole("table")).toHaveTextContent("בראשית א א");
 		expect(screen.getByRole("table")).toHaveTextContent("בראשית ב ג");
 		expect(screen.getByRole("table")).toHaveTextContent(
@@ -664,6 +669,41 @@ describe("article-link domain diff", () => {
 		expect(screen.getByRole("table")).toHaveTextContent("סוכות");
 		expect(screen.queryByText(base.contentHash)).not.toBeInTheDocument();
 		expect(screen.queryByText("commands")).not.toBeInTheDocument();
+	});
+	it("omits an unchanged primary chapter from a verse coverage update", () => {
+		showDiff([
+			{
+				relationshipKey: "coveringSources",
+				action: "add",
+				target: { pasukCoordinates: [{ perekId: 2, pasuk: 3 }] },
+			},
+			{
+				relationshipKey: "primaryPerek",
+				action: "replace",
+				target: { perekId: base.perekId },
+			},
+		]);
+		expect(screen.getByText("כיסוי פסוקים - הוספה")).toBeInTheDocument();
+		expect(screen.queryByText("פרק ראשי - החלפה")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("row", { name: /פרק ראשי/ }),
+		).not.toBeInTheDocument();
+		expect(screen.getByRole("row", { name: /כיסוי פסוקים/ })).toHaveTextContent(
+			"בראשית ב ג",
+		);
+	});
+	it("omits the proposed operations list when the chapter is the only operation and already matches", () => {
+		showDiff([
+			{
+				relationshipKey: "primaryPerek",
+				action: "replace",
+				target: { perekId: base.perekId },
+			},
+		]);
+		expect(screen.getByText(/מצב היעד כבר תואם להצעה/)).toBeInTheDocument();
+		expect(
+			screen.queryByRole("list", { name: "פעולות הקישור המוצעות" }),
+		).not.toBeInTheDocument();
 	});
 	it("distinguishes replacing catalogue targets with the same name and dedication expiry", () => {
 		const expiresAt = "2030-01-02 03:04:05";

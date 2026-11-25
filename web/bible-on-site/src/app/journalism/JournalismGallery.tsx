@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useModalDialogFocus } from "@/hooks/useModalDialogFocus";
 import styles from "./page.module.css";
 
 interface JournalismItem {
@@ -14,6 +15,9 @@ interface JournalismItem {
 
 export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+	const [opener, setOpener] = useState<HTMLElement | null>(null);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useModalDialogFocus(selectedIndex !== null, dialogRef, opener);
 
 	const close = useCallback(() => setSelectedIndex(null), []);
 
@@ -59,7 +63,10 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 						key={item.id}
 						type="button"
 						className={styles.masonryItem}
-						onClick={() => setSelectedIndex(index)}
+						onClick={(e) => {
+							setOpener(e.currentTarget);
+							setSelectedIndex(index);
+						}}
 					>
 						<Image
 							src={item.imageUrl}
@@ -79,14 +86,22 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 			{selected &&
 				createPortal(
 					<div
+						ref={dialogRef}
 						className={styles.modalBackdrop}
 						onClick={close}
 						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") close();
+							// Enter/Space close only when the backdrop itself is the
+							// target — keys raised on the dialog's controls belong to them.
+							if (
+								e.target === e.currentTarget &&
+								(e.key === "Enter" || e.key === " ")
+							)
+								close();
 						}}
 						role="dialog"
 						aria-modal="true"
 						aria-label={selected.title}
+						tabIndex={-1}
 					>
 						<div
 							className={styles.modalContent}
@@ -99,6 +114,7 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 								className={styles.modalClose}
 								onClick={close}
 								aria-label="סגור"
+								data-modal-action="close"
 							>
 								✕
 							</button>

@@ -1,21 +1,14 @@
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
-import { setTimeout as delay } from "node:timers/promises";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const apiDirectory = resolve(directory, "../web/api");
-const args = process.argv.slice(2);
-if (args.includes("--help")) {
-	console.log(
-		"bun run backend [-- --native]\nStarts the local API on port 3003. Docker uses the existing development MySQL database; --native uses Cargo directly. Existing healthy servers are reused.",
-	);
-	process.exit(0);
-}
-if (args.some((arg) => arg !== "--native"))
-	throw new Error("Only --native and --help are supported.");
+const composeMysqlUrl =
+	"mysql://root:test_123@mysql:3306/tanah-dev?ssl-mode=REQUIRED";
 
 async function healthy() {
 	try {
@@ -60,11 +53,7 @@ async function waitForApi(child) {
 	throw new Error("The backend did not become ready within ten minutes.");
 }
 
-if (await healthy()) {
-	console.log(
-		"Backend already ready: http://localhost:3003 (Android emulator: http://10.0.2.2:3003)",
-	);
-} else if (args.includes("--native")) {
+async function startNativeBackend() {
 	console.log(
 		"Starting the API with the installed MySQL service. First compilation may take a few minutes.",
 	);
@@ -105,7 +94,45 @@ if (await healthy()) {
 		throw error;
 	}
 	process.exitCode = await exited;
-} else {
+}
+
+export function startDockerBackend(runCommand, { composeMysql, dbUrl, env }) {
+	const profiles = ["--profile", "backend"];
+	let databaseUrl = composeMysqlUrl;
+	if (composeMysql) {
+		profiles.push("--profile", "mysql");
+		runCommand(
+			"docker",
+			["compose", ...profiles, "up", "--detach", "--wait", "mysql"],
+			{ env, stdio: "inherit" },
+		);
+	} else {
+		const database = new URL(dbUrl);
+		if (["localhost", "127.0.0.1", "[::1]"].includes(database.hostname))
+			database.hostname = "host.docker.internal";
+		databaseUrl = database.href;
+	}
+	runCommand(
+		"docker",
+		[
+			"compose",
+			...profiles,
+			"up",
+			"--build",
+			"--detach",
+			"--wait",
+			"--wait-timeout",
+			"120",
+			"api",
+		],
+		{
+			env: { ...env, LOCAL_BACKEND_DB_URL: databaseUrl },
+			stdio: "inherit",
+		},
+	);
+}
+
+async function startDocker(composeMysql) {
 	const ready = () =>
 		spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], {
 			timeout: 3000,
@@ -125,29 +152,44 @@ if (await healthy()) {
 				"Docker Engine is unavailable. Inspect the Docker Desktop error, or use bun run backend -- --native with the installed MySQL service. No Docker data has been reset.",
 			);
 	}
-	const local = {
-		...parseEnv(readFileSync(resolve(apiDirectory, ".dev.env"), "utf8")),
-		...process.env,
-	};
-	const database = new URL(local.DB_URL);
-	if (["localhost", "127.0.0.1", "[::1]"].includes(database.hostname))
-		database.hostname = "host.docker.internal";
-	const environment = { ...process.env, LOCAL_BACKEND_DB_URL: database.href };
-	run(
-		"docker",
-		[
-			"compose",
-			"--profile",
-			"backend",
-			"up",
-			"--build",
-			"--detach",
-			"--wait",
-			"--wait-timeout",
-			"120",
-			"api",
-		],
-		{ env: environment, stdio: "inherit" },
-	);
+	const dbUrl = composeMysql
+		? undefined
+		: (process.env.DB_URL ??
+			parseEnv(readFileSync(resolve(apiDirectory, ".dev.env"), "utf8")).DB_URL);
+	startDockerBackend(run, { composeMysql, dbUrl, env: process.env });
 	await waitForApi();
 }
+
+async function main(args) {
+	const flags = args[0] === "--" ? args.slice(1) : args;
+	if (flags.includes("--help")) {
+		console.log(
+			"bun run backend [-- --native | -- --compose-mysql]\nThe default uses Docker and your existing MySQL service. Use --native for Cargo or --compose-mysql to start a MySQL container and connect over TLS.",
+		);
+		return;
+	}
+	const native = flags.includes("--native");
+	const composeMysql = flags.includes("--compose-mysql");
+	if (flags.some((flag) => !["--native", "--compose-mysql"].includes(flag)))
+		throw new Error(
+			"Only --native, --compose-mysql, and --help are supported.",
+		);
+	if (native && composeMysql)
+		throw new Error("Choose either --native or --compose-mysql.");
+
+	if (!composeMysql && (await healthy())) {
+		console.log(
+			"Backend already ready: http://localhost:3003 (Android emulator: http://10.0.2.2:3003)",
+		);
+	} else if (native) {
+		await startNativeBackend();
+	} else {
+		await startDocker(composeMysql);
+	}
+}
+
+if (
+	process.argv[1] &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+	await main(process.argv.slice(2));

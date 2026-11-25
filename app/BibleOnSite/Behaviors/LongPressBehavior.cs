@@ -37,7 +37,7 @@ public class LongPressBehavior : Behavior<View>
     }
 
     public static readonly BindableProperty LongPressDurationProperty =
-        BindableProperty.Create(nameof(LongPressDuration), typeof(int), typeof(LongPressBehavior), 600);
+        BindableProperty.Create(nameof(LongPressDuration), typeof(int), typeof(LongPressBehavior), ReaderGestureTiming.LongPressDurationMs);
 
     public static readonly BindableProperty CommandProperty =
         BindableProperty.Create(nameof(Command), typeof(ICommand), typeof(LongPressBehavior));

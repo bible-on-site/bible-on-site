@@ -53,13 +53,45 @@ describe("Footer", () => {
 		);
 	});
 
+	describe("copyright Hebrew year", () => {
+		const originalMockDate = process.env.MOCK_DATE;
+
+		afterEach(() => {
+			if (originalMockDate === undefined) {
+				delete process.env.MOCK_DATE;
+			} else {
+				process.env.MOCK_DATE = originalMockDate;
+			}
+		});
+
+		it("shows the new Hebrew year after tzeit on erev Rosh Hashanah", () => {
+			// 29 Elul 5785, 20:30 in Jerusalem: civil dusk (~19:00) has passed,
+			// so the Hebrew date is already 1 Tishrei 5786.
+			process.env.MOCK_DATE = "2025-09-22T17:30:00.000Z";
+			render(<Footer />);
+			expect(screen.getByText(/תנ"ך על הפרק/)).toHaveTextContent(
+				"ה'תשפ\"ו",
+			);
+		});
+
+		it("shows the outgoing Hebrew year before tzeit on erev Rosh Hashanah", () => {
+			// 29 Elul 5785, 18:30 in Jerusalem: still before civil dusk.
+			process.env.MOCK_DATE = "2025-09-22T15:30:00.000Z";
+			render(<Footer />);
+			expect(screen.getByText(/תנ"ך על הפרק/)).toHaveTextContent(
+				"ה'תשפ\"ה",
+			);
+		});
+	});
+
 	it("handles Hebrew year below 5000", () => {
 		// Reset modules so we can mock HebrewDate
 		jest.resetModules();
+		jest.doMock("@/util/date", () => ({
+			getCurrentDate: () => new Date("2024-01-01T00:00:00.000Z"),
+		}));
 		jest.doMock("@/util/hebdates-util", () => ({
-			HebrewDate: {
-				fromGregorian: () => ({ year: 4999 }),
-			},
+			constructTsetAwareHDate: () => ({ year: 4999 }),
 		}));
 		jest.doMock("next/image", () => ({
 			__esModule: true,

@@ -35,7 +35,7 @@ describe("article relationship registry", () => {
 	it("keeps the freshness contract fields documented", () => {
 		expect(
 			ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedContentHash,
-		).toContain("content_hash");
+		).toContain("32-character lowercase hex review token");
 		expect(
 			ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedCoveringSources,
 		).toContain("perekId");

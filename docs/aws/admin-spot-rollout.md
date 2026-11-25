@@ -203,9 +203,8 @@ The full editor-save acceptance remains blocked by a separate schema gap:
 the editor reports `Unknown column 'c.base_revision_id' in 'where clause'`.
 The existing `tanahpedia_alter_entry_revision_history.sql` migration was
 missing from the production deploy manifest. Its manifest registration is
-prepared separately; no production database migration was performed during
-this approved configuration rollout. The error is captured in
-[the production editor screenshot](../evidence/issue-2763/editor-schema-blocker.png).
+prepared separately. The approved configuration rollout left the database
+schema as it was.
 Keep #2763 open until the approved migration and a real editor publishing
 check are complete.
 

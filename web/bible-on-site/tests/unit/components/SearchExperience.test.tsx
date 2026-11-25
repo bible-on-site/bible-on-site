@@ -414,6 +414,47 @@ describe("SearchExperience", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows a pasuk preview on hover over a perush result link", async () => {
+		mockFetch.mockImplementation(async (input) => {
+			const url = String(input);
+			if (url.startsWith("/api/tanah/pasuk/")) {
+				return {
+					ok: true,
+					json: async () => ({
+						reference: 'רשי בראשית א ג',
+						text: "וַיִּקְרָא",
+						noteHtml: "<p>הערת רשי</p>",
+					}),
+				} as Response;
+			}
+			return { ok: true, json: async () => RESULTS } as Response;
+		});
+		renderSearch({
+			initialQuery: "את",
+			initialResults: {
+				...RESULTS,
+				results: [
+					{
+						type: "perush",
+						title: 'רש"י בראשית א ג',
+						snippetHtml: "<mark>את</mark>",
+						href: `/929/1/${encodeURIComponent('רש"י')}?pasuk=3&note=0&q=${encodeURIComponent("את")}`,
+						score: 70,
+					},
+				],
+				counts: { perush: 1 },
+			},
+		});
+		fireEvent.mouseEnter(
+			screen.getByRole("link", { name: /רש"י בראשית א ג/ }),
+		);
+		await act(async () => {});
+		expect(mockFetch).toHaveBeenCalledWith(
+			`/api/tanah/pasuk/1/3?perush=${encodeURIComponent('רש"י')}&note=0`,
+		);
+		expect(screen.getByRole("tooltip")).toHaveTextContent("הערת רשי");
+	});
+
 	it("shows the error state for a non-Error rejection", async () => {
 		await expectFetchWarning("plain failure", async () => {
 			mockFetch.mockRejectedValue("plain failure");

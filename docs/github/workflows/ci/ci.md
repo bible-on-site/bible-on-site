@@ -9,7 +9,7 @@
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
-| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Data-deploy tooling tests (path-scoped, independent of `ci.yml`) |
+| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Reusable data deployment and MySQL rehearsal checks |
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
@@ -75,9 +75,9 @@ deployment-ledger freshness checks rather than requiring source SHA to
 remain the exact current master forever. Recovery additionally verifies
 the published receipt and the actual selected package bytes.
 
-`ci-data-deploy.yml` is separate: it validates the data-deployment tooling and
-triggers on its own path filter (`devops/deploy/data-deploy/**`,
-`devops/package.json`, itself) for PRs, master pushes and merge-queue checks.
+The main workflow calls `ci-data-deploy.yml` when data-deploy tooling,
+manual migrations, the Lambda handler or package pin, or its workflow inputs
+change. Cross Module CI requires the called workflow to succeed when selected.
 
 ## Pipeline Stages
 
@@ -111,9 +111,9 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
-  - `docs_only` (#3621) means every touched path sits under the
-    repository-root `docs/` tree with an inert documentation format
-    (`DOCUMENTATION_PATH` in the router) **and** no module check fired. When
+  - `docs_only` (#3621) means every touched path is an inert root
+    `docs/` file or a module documentation path listed in the router
+    **and** no module check fired. When
     it is true the validation surface skips — `workflow_timeouts`,
     `root_evidence_guard`, the independent suites (`database_backups`,
     `transcription_ci`, `perushim_data`) and every module job — so docs-only
@@ -252,19 +252,22 @@ The shared package job normally removes its temporary database ingress in an
 `always()` step. If its hosted runner disappears, that step cannot run.
 [`rds-build-access-cleanup.yml`](../../../../.github/workflows/rds-build-access-cleanup.yml)
 therefore also cleans access after CI completes, using trusted default-branch
-code and the existing deployment role. It verifies the exact repository,
-workflow, attempt and every completed job before using AWS credentials. It
-reads the actual `tanah-mysql` security groups, validates all matching leases,
-then rechecks each rule's ownership before revoking its exact ID and confirming
-absence. Only tagged website build leases for that completed attempt qualify;
-active attempts and other rules are preserved. No new IAM permission, database
-credential, service setting or public URL is needed.
+code and the existing deployment role. One serialized cleanup sweeps every
+tagged build lease on the `tanah-mysql` security groups: a newer completion
+supersedes the queued run without losing coverage, because each sweep revokes
+the leases of **all** completed attempts, not only its trigger's. It verifies
+the exact repository, workflow, attempt and every completed job of each owning
+build before using AWS credentials on its rules, then rechecks each rule's
+ownership before revoking its exact ID and confirming absence. Active attempts
+and foreign rules are preserved. No new IAM permission, database credential,
+service setting or public URL is needed.
 
 For an older completed run, manually dispatch **Clean completed CI database
-access** with its exact `run_id` and `run_attempt`. Repeating a completed cleanup
-is harmless. Incomplete metadata or changed ownership fails the job without
-guessing. Reverting the cleanup workflow disables independent recovery while
-retaining the package job's ordinary cleanup.
+access** with its exact `run_id` and `run_attempt` — or leave both empty to
+sweep every stale lease. Repeating a completed cleanup is harmless. Incomplete
+metadata or changed ownership fails the job without guessing. Reverting the
+cleanup workflow disables independent recovery while retaining the package
+job's ordinary cleanup.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|

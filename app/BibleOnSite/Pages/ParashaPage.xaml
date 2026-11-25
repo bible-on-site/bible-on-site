@@ -152,7 +152,7 @@
                                             <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
                                         </Label.GestureRecognizers>
                                         <Label.Behaviors>
-                                            <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                            <behaviors:LongPressBehavior LongPressed="OnHeaderLongPressed"/>
                                         </Label.Behaviors>
                                     </Label>
                                     <Label AutomationId="ParashaUnitSource"
@@ -258,7 +258,7 @@
                                                                               PointerReleased="OnPasukPointerReleased"/>
                                                 </Border.GestureRecognizers>
                                                 <Border.Behaviors>
-                                                    <behaviors:LongPressBehavior LongPressDuration="600"
+                                                    <behaviors:LongPressBehavior
                                                                                  LongPressed="OnPasukLongPressed"
                                                                                  NativeTapped="OnPasukNativeTapped"/>
                                                 </Border.Behaviors>

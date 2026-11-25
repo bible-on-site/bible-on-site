@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 export const UNDO_TOAST_DURATION_MS = 5000;
 
@@ -50,6 +51,10 @@ export function UndoToastProvider({
 	durationMs?: number;
 }) {
 	const [toasts, setToasts] = useState<PendingToast[]>([]);
+	// The toast region is a client-only portal: gating on mounted keeps the
+	// hydration tree identical to the SSR output, then mounts it after.
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
 	const nextIdRef = useRef(0);
 	const timersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 	const keysRef = useRef(new Map<string, number>());
@@ -76,8 +81,7 @@ export function UndoToastProvider({
 	useEffect(() => {
 		const last = toasts.at(-1);
 		if (last) {
-			previousFocusRef.current ??=
-				document.activeElement as HTMLElement | null;
+			previousFocusRef.current ??= document.activeElement as HTMLElement | null;
 			undoRefs.current.get(last.id)?.focus();
 			return;
 		}
@@ -119,31 +123,41 @@ export function UndoToastProvider({
 	return (
 		<UndoToastContext.Provider value={schedule}>
 			{children}
-			<div
-				aria-live="polite"
-				className="fixed bottom-4 start-4 z-[3000] flex max-w-sm flex-col gap-2"
-			>
-				{toasts.map((toast) => (
+			{/*
+				Portal-mounted and marked data-modal-keep-active so an open modal's
+				inert sweep cannot disable the undo button while its commit timer
+				ticks — a shortcut modal could otherwise eat the whole undo window.
+			*/}
+			{mounted &&
+				createPortal(
 					<div
-						key={toast.id}
-						role="status"
-						className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-sm text-white shadow-lg"
+						aria-live="polite"
+						data-modal-keep-active
+						className="fixed bottom-4 start-4 z-[3000] flex max-w-sm flex-col gap-2"
 					>
-						<span className="flex-1">{toast.message}</span>
-						<button
-							type="button"
-							ref={(el) => {
-								if (el) undoRefs.current.set(toast.id, el);
-								else undoRefs.current.delete(toast.id);
-							}}
-							onClick={() => release(toast.id)}
-							className="shrink-0 font-medium text-blue-300 hover:text-blue-200"
-						>
-							ביטול
-						</button>
-					</div>
-				))}
-			</div>
+						{toasts.map((toast) => (
+							<div
+								key={toast.id}
+								role="status"
+								className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-sm text-white shadow-lg"
+							>
+								<span className="flex-1">{toast.message}</span>
+								<button
+									type="button"
+									ref={(el) => {
+										if (el) undoRefs.current.set(toast.id, el);
+										else undoRefs.current.delete(toast.id);
+									}}
+									onClick={() => release(toast.id)}
+									className="shrink-0 font-medium text-blue-300 hover:text-blue-200"
+								>
+									ביטול
+								</button>
+							</div>
+						))}
+					</div>,
+					document.body,
+				)}
 		</UndoToastContext.Provider>
 	);
 }

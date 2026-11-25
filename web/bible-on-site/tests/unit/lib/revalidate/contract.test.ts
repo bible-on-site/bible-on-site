@@ -6,6 +6,7 @@
  * item rejects the whole request before a single invalidation side effect
  * runs.
  */
+import { ENTITY_CHANGE_EXAMPLES } from "../../../../../shared/revalidate/examples";
 import {
 	ChangeValidationError,
 	MAX_CHANGES_PER_REQUEST,
@@ -13,6 +14,12 @@ import {
 } from "../../../../src/lib/revalidate/contract";
 
 describe("parseEntityChanges", () => {
+	it("accepts every shared EntityChange example the admin can emit", () => {
+		expect(parseEntityChanges({ changes: ENTITY_CHANGE_EXAMPLES })).toEqual(
+			ENTITY_CHANGE_EXAMPLES,
+		);
+	});
+
 	describe("dedication changes", () => {
 		it("preserves every old and new scope in one validated event", () => {
 			const change = {

@@ -1,10 +1,10 @@
 /**
  * Determines, in one job, which CI modules changed between the event's base
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
- * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
- * data deployment routing decision and `docs_only` — true only when every
- * touched path sits under the repository-root `docs/` tree and no module's
- * checks fired, letting required checks resolve without heavy validation.
+ * to GITHUB_OUTPUT for every module in MODULES, plus the data deployment
+ * and validation routing decisions and `docs_only` — true only when every
+ * touched path is inert documentation and no module's checks fired,
+ * letting required checks resolve without heavy validation.
  *
  * Works on a shallow checkout. PRs compare the tested merge commit with its
  * first parent; the event payload's base can lag behind that tested base.
@@ -14,13 +14,18 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 import {
-	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
+	isPublishDocstringOnlyChange,
 } from "./publish-docstring.mts";
 
 interface ModuleRule {
 	directory: string;
-	/** Files or directories outside `directory` whose change also changes the module. */
+	/**
+	 * Files — or directory prefixes — outside `directory` whose change also
+	 * changes the module. Entries match like `directory` (exact path or
+	 * path prefix); every existing entry is a single file, so prefix
+	 * semantics only take effect for the shared contract trees below.
+	 */
 	extraModulePaths?: string[];
 	/** Files matching this pattern outside `directory` also change the module
 	 * — for versioned artifacts whose filename floats (e.g. `sefaria-dump-*`). */
@@ -70,6 +75,23 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
+/**
+ * Runtime contract sources under `web/shared/` compiled into each release
+ * app (#3710). A change to them must package and release the importers —
+ * CI-only coverage is not enough, or a fix that touches only a shared
+ * contract would deploy nothing. Test-only fixtures
+ * (`revalidate/examples.ts`, `tests-util/`) are deliberately absent so
+ * fixture edits stay CI-only.
+ */
+const WEBSITE_ADMIN_SHARED_CONTRACTS = [
+	"web/shared/bulletin-join/index.ts",
+	"web/shared/revalidate/index.ts",
+	"web/shared/tanahpedia/index.ts",
+	"web/shared/reading-metrics",
+];
+// The article-relationship DTOs bind the admin UI and the Rust API.
+const ADMIN_API_SHARED_CONTRACTS = ["web/shared/article-relationships"];
+
 const UBUNTU_MIRROR_CI_PATHS = [
 	"devops/github/ci/ubuntu-apt-mirrors.mjs",
 	"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
@@ -88,6 +110,7 @@ export const MODULES = {
 		extraModulePaths: [
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
+			...WEBSITE_ADMIN_SHARED_CONTRACTS,
 			"web/shared/branding",
 		],
 		ciPaths: [
@@ -131,6 +154,7 @@ export const MODULES = {
 	},
 	api: {
 		directory: "web/api",
+		extraModulePaths: ADMIN_API_SHARED_CONTRACTS,
 		ciPaths: [
 			...NATIVE_IMAGE_CI_PATHS,
 			"devops/github/ci/pending-api-release.mjs",
@@ -179,12 +203,17 @@ export const MODULES = {
 		// test-only change must not ship a store release or bump the version.
 		// BibleOnSite.DeviceTests is the in-process XHarness test app (#3349) —
 		// same test-only status as the BibleOnSite.Tests.* suites.
-		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
+		ciOnlyPattern:
+			/^app\/(BibleOnSite\.Tests[^/]*|BibleOnSite\.DeviceTests|mobile-e2e)\//,
 	},
 	admin: {
 		directory: "web/admin",
-		// Admin stages the shared webfonts and favicon at build time (#3708).
-		extraModulePaths: ["web/shared/branding"],
+		extraModulePaths: [
+			...WEBSITE_ADMIN_SHARED_CONTRACTS,
+			...ADMIN_API_SHARED_CONTRACTS,
+			// Admin stages the shared webfonts and favicon at build time (#3708).
+			"web/shared/branding",
+		],
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
 			"devops/github/release/recovery-request.mjs",
@@ -247,7 +276,7 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		ciOnlyPattern: DATA_CI_ONLY_PATTERN,
-		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// Data deployment tooling and manual migrations require checks.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
 		ciPaths: [
@@ -304,7 +333,35 @@ const isAt = (file: string, path: string) =>
 // CI plumbing (ci.yml, composite actions, this detector), which must never
 // enter Release Data: the perushim producer correctly skips those runs, so no
 // current-run SQL artifact exists to bind (#2730).
-const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+const DATA_DEPLOY_PATH = "devops/deploy/data-deploy";
+// Manual migrations and their test harnesses take the validation route.
+const MANUAL_DATA_MIGRATION_PATH = `${DATA_DEPLOY_PATH}/manual`;
+const MYSQL_97_FINGERPRINT_MIGRATION =
+	`${MANUAL_DATA_MIGRATION_PATH}/mysql-97-article-fingerprint.sql`;
+const ARTICLE_FINGERPRINT_BOOTSTRAP =
+	"data/mysql/tanah_article_content_hash_upgrade.sql";
+const MYSQL_97_DATA_FILES = new Set([
+	ARTICLE_FINGERPRINT_BOOTSTRAP,
+	"data/Cargo.lock",
+	"data/mysql/db-populator/Cargo.toml",
+	"data/mysql/db-populator/src/main.rs",
+	"data/mysql/tanah_dynamic_structure.sql",
+	"data/mysql/tanah_mention_test_data.sql",
+	"data/sefaria/pipelines/perushim-view/README.md",
+]);
+const DATA_DEPLOY_TEST_PATTERN =
+	/(?:^|\/)test_[^/]+\.py$|_test\.py$|\.test\.mts$/;
+const DATA_DEPLOY_REGRESSION_SCRIPTS = new Set([
+	`${DATA_DEPLOY_PATH}/mysql-fingerprint-regression.mjs`,
+	`${DATA_DEPLOY_PATH}/mysql_import_regression.py`,
+]);
+const DATA_DEPLOY_CI_FILES = new Set([
+	".github/workflows/ci-data-deploy.yml",
+	".github/workflows/ci.yml",
+	"devops/package.json",
+	"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+	"docs/aws/cloudformation/data-deploy/requirements.txt",
+]);
 
 // Root docs/ counts as documentation only for inert prose, media and data
 // formats. Source, script, manifest and config extensions never qualify —
@@ -316,10 +373,49 @@ const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
 const DOCUMENTATION_PATH =
 	/^docs\/(?!aws\/).+\.(?:md|markdown|mdx|txt|rst|adoc|pdf|csv|tsv|json|gz|dbml|puml|drawio|png|jpe?g|gif|svg|webp|ico|bmp|avif|mp4|mov|webm|mp3|wav|m4a|zip|patch|diff)$/i;
 
+// These module directories contain only review prose and screenshots in
+// the allowed formats. Runtime assets and benchmark inputs still route by
+// module, even when they sit near review notes.
+const MODULE_EVIDENCE_DIRECTORIES = [
+	"app/docs/evidence",
+	"web/admin/docs/evidence",
+	"web/bible-on-site/docs/evidence",
+	"data/recitation/docs",
+	"data/recitation/benchmarks/accumulated-listening-ui",
+	"data/recitation/benchmarks/listening-ui",
+	"data/recitation/benchmarks/review-version-handoff",
+];
+const MODULE_EVIDENCE_FILES = new Set([
+	"data/recitation/README.md",
+	"web/bulletin/docs/daily-bulletin.md",
+	"web/bulletin/docs/daily-bulletin-before-after.png",
+	"web/bulletin/docs/daily-bulletin-typography-before-after.png",
+	"web/bulletin/docs/daily-bulletin-typography-page2.png",
+]);
+const EVIDENCE_EXTENSION = /\.(?:avif|gif|jpe?g|md|png|webp)$/i;
+
+function isModuleEvidenceDocumentation(file: string): boolean {
+	return (
+		MODULE_EVIDENCE_FILES.has(file) ||
+		(EVIDENCE_EXTENSION.test(file) &&
+			MODULE_EVIDENCE_DIRECTORIES.some((directory) => isAt(file, directory)))
+	);
+}
+
 /** Release intent for data delivery tooling, separate from generic CI checks. */
 export function isDataDeployChange(changedFiles: string[]): boolean {
-	return changedFiles.some((file) =>
-		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	return changedFiles.some(
+		(file) =>
+			isAt(file, DATA_DEPLOY_PATH) &&
+			!isAt(file, MANUAL_DATA_MIGRATION_PATH) &&
+			!DATA_DEPLOY_TEST_PATTERN.test(file) &&
+			!DATA_DEPLOY_REGRESSION_SCRIPTS.has(file),
+	);
+}
+
+export function isDataDeployCiChange(changedFiles: string[]): boolean {
+	return changedFiles.some(
+		(file) => isAt(file, DATA_DEPLOY_PATH) || DATA_DEPLOY_CI_FILES.has(file),
 	);
 }
 
@@ -329,17 +425,35 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * also stay manual rather than triggering a full production bootstrap.
  */
 export function isSchemaOnlyDataChange(files: string[]): boolean {
-	const changedFiles = files.filter((file) => !DATA_CI_ONLY_PATTERN.test(file));
-	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	const changedFiles = files.filter(
+		(file) =>
+			!DATA_CI_ONLY_PATTERN.test(file) && !isModuleEvidenceDocumentation(file),
+	);
+	if (
+		changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		)
+	)
+		return false;
+
+	// Switch the existing production fingerprint after the API and admin are
+	// deployed. The bootstrap, client pins and fixtures still run their checks.
+	const allDataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	const hasFingerprintMigration =
+		files.includes(MYSQL_97_FINGERPRINT_MIGRATION) &&
+		allDataFiles.includes(ARTICLE_FINGERPRINT_BOOTSTRAP);
+	if (hasFingerprintMigration && isDataDeployChange(files)) return false;
+	const dataFiles = hasFingerprintMigration
+		? allDataFiles.filter((file) => !MYSQL_97_DATA_FILES.has(file))
+		: allDataFiles;
+	if (hasFingerprintMigration && dataFiles.length === 0) return true;
+
 	// Calendar exports are repaired through a guarded date-only database operation.
 	// Converter/fixture changes must not launch a replacement production bootstrap.
 	const calendarConverter =
 		"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs";
 	if (
 		dataFiles.includes(calendarConverter) &&
-		!changedFiles.some((file) =>
-			MODULES.perushim_pipeline.extraModulePaths.includes(file),
-		) &&
 		dataFiles.every(
 			(file) =>
 				file === calendarConverter ||
@@ -351,15 +465,13 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_engagement_upgrade.sql",
 	]);
 	const hasBulletinMigration = dataFiles.some((file) =>
 		bulletinMigrations.has(file),
 	);
 	return (
 		dataFiles.length > 0 &&
-		!changedFiles.some((file) =>
-			MODULES.perushim_pipeline.extraModulePaths.includes(file),
-		) &&
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
@@ -387,11 +499,9 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 				module_changed: changedFiles.some(
 					(file) =>
 						(isAt(file, rule.directory) &&
+							!isModuleEvidenceDocumentation(file) &&
 							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
-						(rule.extraModulePaths ?? []).some((path) =>
-							isAt(file, path),
-						) ||
-						(rule.extraModulePattern?.test(file) ?? false),
+						(rule.extraModulePaths ?? []).some((path) => isAt(file, path)),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>
@@ -564,16 +674,19 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const mergeGroup = GITHUB_EVENT_NAME === "merge_group";
-	// Changes confined to the repository-root docs/ tree request no automatic
-	// validation: every touched path (rename sources included) carries an inert
-	// documentation format under docs/ and nothing routed any module's checks
-	// (#3621). The merge-group diff already spans the combined candidate — a
+	// Inert documentation requests no automatic validation when every
+	// touched path (rename sources included) falls within a documentation
+	// boundary and nothing routed any module's checks (#3621).
+	// The merge-group diff already spans the combined candidate — a
 	// batched code entry keeps docs_only false — while a tail group's own
 	// docs-only delta may skip because ALLGREEN requires every earlier entry's
 	// checks green before this group can merge.
 	const docsOnly =
 		files.length > 0 &&
-		files.every((file) => DOCUMENTATION_PATH.test(file)) &&
+		files.every(
+			(file) =>
+				DOCUMENTATION_PATH.test(file) || isModuleEvidenceDocumentation(file),
+		) &&
 		!Object.values(changes).some(
 			(flags) => flags.module_changed || flags.ci_changed,
 		);
@@ -593,6 +706,15 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	// The queue event base can already contain an earlier unmerged entry.
+	// The required rehearsals must cover deployment inputs from that entry too.
+	const dataDeployCiChanged =
+		isDataDeployCiChange(files) ||
+		(mergeGroup &&
+			isDataDeployCiChange(
+				listChangedFiles({ kind: "branch", branch: "master" }, cwd),
+			));
+	lines.push(`data_deploy_ci_changed=${dataDeployCiChanged}`);
 	lines.push(`docs_only=${docsOnly}`);
 	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
 	lines.push(

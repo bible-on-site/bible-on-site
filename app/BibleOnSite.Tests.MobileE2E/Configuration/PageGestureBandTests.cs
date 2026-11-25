@@ -1,4 +1,5 @@
 using System.Drawing;
+using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using Xunit;
 
@@ -70,5 +71,77 @@ public sealed class PageGestureBandTests
         var everything = new Rectangle(0, 0, 540, 1200);
         Assert.Equal(960,
             AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [everything]));
+    }
+
+    [Fact]
+    public void UpDragStartPrefersTheUpperFifth()
+    {
+        Assert.Equal(240,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartStepsAboveAClaimingControl()
+    {
+        var slider = new Rectangle(0, 220, 540, 80);
+        Assert.Equal(219,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [slider], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartTurnsDownwardAtTheStatusBarStrip()
+    {
+        // Stepping above a control beginning inside the status-bar strip would
+        // land in it, so the scan turns downward instead.
+        var slider = new Rectangle(0, 150, 540, 140);
+        Assert.Equal(291,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [slider], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void UpDragStartFallsBackToTheUpperFifthWhenEveryPointIsClaimed()
+    {
+        var everything = new Rectangle(0, 0, 540, 1200);
+        Assert.Equal(240,
+            AndroidPlatformAdapter.ChooseDragStartClearOfControls(270, 1200, [everything], preferLowerHalf: false));
+    }
+
+    [Fact]
+    public void SeekKeepsScrollingDownWhileThePageMoves() =>
+        Assert.True(PerekPage.SeekScrollsDown(true, "before", "after"));
+
+    [Fact]
+    public void SeekReversesWhenAScrollLeavesThePageUntouched()
+    {
+        Assert.False(PerekPage.SeekScrollsDown(true, "same", "same"));
+        Assert.True(PerekPage.SeekScrollsDown(false, "same", "same"));
+    }
+
+    [Fact]
+    public void SeekKeepsDirectionOnTheFirstObservation() =>
+        Assert.True(PerekPage.SeekScrollsDown(true, null, "surface"));
+
+    [Fact]
+    public void ScrollBoundsClipsTheSurfaceToTheBand()
+    {
+        var band = MobilePlatformAdapter.PageGestureBand(new Size(540, 1200));
+        var surface = new Rectangle(0, 0, 540, 1200);
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, surface));
+        // A surface spilling past the band's lower edge scrolls only the
+        // overlap: intersect, not the whole surface and not the whole band.
+        var spilling = new Rectangle(0, 600, 540, 900);
+        Assert.Equal(Rectangle.Intersect(band, spilling),
+            IosPlatformAdapter.ChooseScrollBounds(band, spilling));
+    }
+
+    [Fact]
+    public void ScrollBoundsFallsBackToTheBandForAnOffBandSurface()
+    {
+        var band = MobilePlatformAdapter.PageGestureBand(new Size(540, 1200));
+        // Above the band entirely: Intersect yields an empty rectangle and the
+        // drag must not collapse to a press at one point.
+        var offBand = new Rectangle(0, 0, 540, 100);
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, offBand));
+        Assert.Equal(band, IosPlatformAdapter.ChooseScrollBounds(band, null));
     }
 }

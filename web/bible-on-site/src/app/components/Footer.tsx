@@ -1,7 +1,8 @@
 import { toLetters } from "gematry";
 import Image from "next/image";
 import Link from "next/link";
-import { HebrewDate } from "@/util/hebdates-util";
+import { getCurrentDate } from "@/util/date";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import styles from "./Footer.module.css";
 
 const START_YEAR = 5775; // ה'תשע"ה
@@ -13,7 +14,7 @@ function formatHebrewYear(year: number): string {
 }
 
 export function Footer() {
-	const currentYear = HebrewDate.fromGregorian(new Date()).year;
+	const currentYear = constructTsetAwareHDate(getCurrentDate()).year;
 	const startYearStr = formatHebrewYear(START_YEAR);
 	const currentYearStr = formatHebrewYear(currentYear);
 

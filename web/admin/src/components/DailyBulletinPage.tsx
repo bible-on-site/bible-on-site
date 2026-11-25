@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinEmailEngagement } from "~/components/BulletinEmailEngagement";
 import { BulletinEmailRollout } from "~/components/BulletinEmailRollout";
 import { BulletinJoinLinks } from "~/components/BulletinJoinLinks";
 import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
@@ -471,6 +472,12 @@ export function DailyBulletinPage() {
 					</section>
 				</>
 			)}
+			{/* Cross-edition engagement and the inactivity review are not tied to
+			    the selected date — admins must reach them even when this date
+			    has no prepared bulletin yet. */}
+			<BulletinEmailEngagement
+				disabled={busy || email.isFetching || !!email.error}
+			/>
 		</div>
 	);
 }

@@ -78,3 +78,9 @@ uRuPdShrBFm4ArGR2PPs4zCQuKgqAjEAi0TA3PVqAxKpoz+Ps8/054p9WTgDfBFZ
 i/lm2yTaPs0xjY6FNWoy7fsVw5oEKxOn
 -----END CERTIFICATE-----
 `;
+
+export const verifiedRdsTls = {
+	ca: rdsCa,
+	rejectUnauthorized: true,
+	verifyIdentity: true,
+};

@@ -87,7 +87,10 @@ async function databaseBaseline() {
 	if (!process.env.DB_URL)
 		throw new Error("DB_URL is required for the production content baseline");
 	const { default: mysql } = await import("mysql2/promise");
-	const connection = await mysql.createConnection(process.env.DB_URL);
+	const { parseDbUrl } = await import("../src/lib/db-config.ts");
+	const connection = await mysql.createConnection(
+		parseDbUrl(process.env.DB_URL),
+	);
 	try {
 		const [[authors]] =
 			await connection.execute(`SELECT COUNT(DISTINCT a.author_id) AS authorCount

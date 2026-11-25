@@ -4,8 +4,4 @@ These captures use only synthetic words and fixture playback state. They contain
 
 Before: the last unchanged word is not heard but has no indication; GOOD is disabled.
 
-![Before](before.jpg)
-
 After: the missing word is named and outlined, with a button to play only unplayed cuts. GOOD stays disabled until playback finishes.
-
-![After](after.jpg)

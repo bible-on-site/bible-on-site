@@ -82,6 +82,22 @@
 			"automerge": true
 		},
 		{
+			"description": "Keep AWS SDK and production Bun build updates out of Renovate auto-merge. A grouped update inherits this restriction.",
+			"matchPackageNames": [
+				"@aws-sdk/*",
+				"aws-config",
+				"aws-credential-types",
+				"aws-sdk-*",
+				"aws-sigv4",
+				"aws-smithy-*",
+				"boto3",
+				"botocore",
+				"bun",
+				"oven/bun"
+			],
+			"automerge": false
+		},
+		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
 			"matchManagers": [
 				"github-actions"
@@ -90,6 +106,19 @@
 				"macos"
 			],
 			"allowedVersions": "<26"
+		},
+		{
+			"description": "Match the data deployment rehearsal to the Lambda runtime until the Python 3.15 rollout in https://github.com/bible-on-site/bible-on-site/issues/3800",
+			"matchManagers": [
+				"github-actions"
+			],
+			"matchFileNames": [
+				".github/workflows/ci-data-deploy.yml"
+			],
+			"matchPackageNames": [
+				"actions/python-versions"
+			],
+			"allowedVersions": "<3.15.0"
 		},
 		{
 			"description": "Hold SDK feature-band updates pending MAUI/Xcode runner availability — 11.0.1xx servicing stays allowed; see https://github.com/bible-on-site/bible-on-site/issues/2566",
@@ -178,6 +207,22 @@
 			],
 			"groupName": "cargo-make CLI",
 			"automerge": false
+		},
+		{
+			"description": "Keep the local MySQL image aligned with the RDS engine version. Change this pin when upgrading RDS.",
+			"matchManagers": [
+				"docker-compose"
+			],
+			"matchDatasources": [
+				"docker"
+			],
+			"matchFileNames": [
+				"devops/docker-compose.yml"
+			],
+			"matchPackageNames": [
+				"mysql"
+			],
+			"allowedVersions": "/^9\\.7\\.4$/"
 		}
 	],
 	"vulnerabilityAlerts": {

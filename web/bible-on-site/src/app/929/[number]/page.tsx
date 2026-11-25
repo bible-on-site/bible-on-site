@@ -206,7 +206,7 @@ export default async function Perek({
 					perekDedications={perekDedications}
 				/>
 			</Suspense>
-			<div className={`${styles.perekContainer} seo-content`}>
+			<main className={`${styles.perekContainer} seo-content`}>
 				<ReadingProgress
 					units={perekProgressUnits}
 					scroller={`.${styles.perekContainer}`}
@@ -242,7 +242,7 @@ export default async function Perek({
 					articles={articles}
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>
-			</div>
+			</main>
 		</>
 	);
 }

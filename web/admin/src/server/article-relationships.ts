@@ -1,4 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import {
+	type ArticleReviewSource,
+	articleReviewToken,
+} from "./article-review-token.server";
 import { isCoveringSourceSchemaMissing } from "./covering-sources";
 import { query, queryOne } from "./db";
 
@@ -49,9 +53,8 @@ export interface ArticleMentionAnnotation {
 export interface ArticleRelationshipDetails {
 	articleId: number;
 	/**
-	 * Lowercase hex of the article's generated content_hash — the freshness
-	 * token the API's updateArticleRelationships expects back as
-	 * expectedContentHash. Empty when the column is not deployed.
+	 * Lowercase hex freshness token the API's updateArticleRelationships
+	 * expects back as expectedContentHash.
 	 */
 	contentHash: string;
 	dedications: ArticleDedicationLink[];
@@ -86,25 +89,16 @@ interface MentionRow {
 export const getArticleRelationshipDetails = createServerFn({ method: "GET" })
 	.validator((data: number) => data)
 	.handler(async ({ data: articleId }): Promise<ArticleRelationshipDetails> => {
-		const exists = await queryOne<{ id: number }>(
-			"SELECT id FROM tanah_article WHERE id = ?",
+		const article = await queryOne<ArticleReviewSource>(
+			`SELECT name, abstract, content, perek_id AS perekId, author_id AS authorId
+			 FROM tanah_article WHERE id = ?`,
 			[articleId],
 		);
-		if (!exists) {
+		if (!article) {
 			throw new Error("Article not found");
 		}
 
-		let contentHash = "";
-		try {
-			const row = await queryOne<{ h: string | null }>(
-				"SELECT HEX(content_hash) AS h FROM tanah_article WHERE id = ?",
-				[articleId],
-			);
-			contentHash = (row?.h ?? "").toLowerCase();
-		} catch (error) {
-			// Pre-upgrade database without the generated column.
-			if (!isCoveringSourceSchemaMissing(error)) throw error;
-		}
+		const contentHash = articleReviewToken(article);
 
 		const dedications = (
 			await query<{

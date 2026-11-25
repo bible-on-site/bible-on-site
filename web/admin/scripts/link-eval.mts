@@ -46,7 +46,7 @@ import {
 	reviewProposal,
 	runLinkGeneration,
 } from "~/server/article-link-pipeline";
-import { execute, pool, queryOne } from "~/server/db";
+import { execute, pool } from "~/server/db";
 import { callOpenAiJson } from "~/server/llm-json";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -194,22 +194,6 @@ function requireManifest(): Manifest {
 // then the corpus mirror itself. All idempotent.
 // ---------------------------------------------------------------------------
 
-/** Same expression as data/mysql/tanah_article_content_hash_upgrade.sql. */
-async function ensureContentHashColumn(): Promise<void> {
-	const found = await queryOne(
-		`SELECT 1 AS ok FROM information_schema.COLUMNS
-		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article'
-		   AND COLUMN_NAME = 'content_hash'`,
-	);
-	if (found) return;
-	await execute(
-		`ALTER TABLE tanah_article ADD COLUMN content_hash BINARY(16)
-		 GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01',
-		   IFNULL(\`name\`, ''), IFNULL(\`abstract\`, ''),
-		   IFNULL(\`content\`, ''), \`perek_id\`, \`author_id\`)))) STORED`,
-	);
-}
-
 /** Mirrors tanah_article_hebrew_date_upgrade.sql (the file wraps its CREATE
  *  in CONCAT only to dodge the deploy rewriter — a local run writes it
  *  plainly). */
@@ -229,7 +213,6 @@ async function ensureHebrewDateTable(): Promise<void> {
 }
 
 async function seed(): Promise<void> {
-	await ensureContentHashColumn();
 	await ensureHebrewDateTable();
 	await ensureLinkSchema();
 

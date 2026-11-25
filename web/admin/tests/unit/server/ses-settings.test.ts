@@ -640,7 +640,9 @@ describe("consent management", () => {
 		expect(mocks.execute.mock.invocationCallOrder[0]).toBeLessThan(
 			mocks.unsubscribe.mock.invocationCallOrder[0],
 		);
-		expect(mocks.unsubscribe).toHaveBeenCalledWith(consent.email, "test");
+		// The local update removes every audience row for the address, so the
+		// provider mirror is intentionally global — no audience argument.
+		expect(mocks.unsubscribe).toHaveBeenCalledExactlyOnceWith(consent.email);
 		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 

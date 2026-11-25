@@ -132,7 +132,8 @@ def included_snapshot_tables(workflow):
     expected = [
         "mysqldump", "-h", "$DB_HOST", "-P", "$DB_PORT", "-u", "$DB_USER",
         "--ssl-ca=$RDS_CA_BUNDLE", "--ssl-mode=VERIFY_IDENTITY", "--single-transaction",
-        "--quick", "--no-tablespaces", "--column-statistics=0", "--set-gtid-purged=OFF",
+        "--quick", "--no-tablespaces", "--loose-skip-masking-policies",
+        "--column-statistics=0", "--set-gtid-purged=OFF",
         "--default-character-set=utf8mb4", "--databases", "$DB_NAME",
     ]
     tables = ("parshan", "perush", "note")

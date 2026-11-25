@@ -76,4 +76,71 @@ describe("ConfirmDialog", () => {
 		props.rerender(<ConfirmDialog {...props} onCancel={vi.fn()} />);
 		expect(cancel).toHaveFocus();
 	});
+
+	it("traps Tab inside the dialog", () => {
+		renderDialog({ confirmLabel: "מחק" });
+		const cancel = screen.getByRole("button", { name: "ביטול" });
+		const confirm = screen.getByRole("button", { name: "מחק" });
+		expect(confirm).toHaveFocus();
+
+		// fireEvent.keyDown returns false when preventDefault fired — proof the
+		// handler intercepted the Tab instead of letting focus leave the dialog.
+		expect(fireEvent.keyDown(confirm, { key: "Tab" })).toBe(false);
+		expect(cancel).toHaveFocus();
+		expect(fireEvent.keyDown(cancel, { key: "Tab", shiftKey: true })).toBe(
+			false,
+		);
+		expect(confirm).toHaveFocus();
+
+		// Focus on the dialog container counts as an edge: wrap, never escape.
+		screen.getByRole("dialog").focus();
+		expect(
+			fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" }),
+		).toBe(false);
+		expect(cancel).toHaveFocus();
+
+		// Mid-list Tab is left for the browser: not intercepted, focus unmoved.
+		expect(fireEvent.keyDown(cancel, { key: "Tab" })).toBe(true);
+		expect(cancel).toHaveFocus();
+	});
+
+	it("inerts the page behind the dialog while open", () => {
+		const alreadyInert = document.createElement("div");
+		alreadyInert.setAttribute("inert", "");
+		document.body.appendChild(alreadyInert);
+		// Transient UI (the undo toast) is exempted from the inert sweep.
+		const keepActive = document.createElement("div");
+		keepActive.setAttribute("data-modal-keep-active", "");
+		document.body.appendChild(keepActive);
+
+		const props = renderDialog();
+		const dialog = screen.getByRole("dialog");
+		for (const sibling of document.body.children) {
+			if (sibling === dialog || sibling === keepActive) continue;
+			expect(sibling).toHaveAttribute("inert");
+		}
+		expect(dialog).not.toHaveAttribute("inert");
+		expect(keepActive).not.toHaveAttribute("inert");
+
+		props.rerender(<ConfirmDialog {...props} open={false} />);
+		for (const sibling of document.body.children) {
+			if (sibling === alreadyInert) continue;
+			expect(sibling).not.toHaveAttribute("inert");
+		}
+		// A sibling that was already inert keeps its own attribute.
+		expect(alreadyInert).toHaveAttribute("inert");
+		alreadyInert.remove();
+		keepActive.remove();
+	});
+
+	it("restores focus to the recorded opener element", () => {
+		const outside = document.createElement("button");
+		document.body.appendChild(outside);
+		const props = renderDialog({ opener: outside, confirmLabel: "מחק" });
+		expect(screen.getByRole("button", { name: "מחק" })).toHaveFocus();
+
+		props.rerender(<ConfirmDialog {...props} open={false} />);
+		expect(outside).toHaveFocus();
+		outside.remove();
+	});
 });

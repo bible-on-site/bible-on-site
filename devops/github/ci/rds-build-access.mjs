@@ -253,20 +253,63 @@ export async function cleanupAccess(env, { aws = awsCli } = {}) {
 	);
 }
 
-/** Read the exact completed attempt, including every job before allowing cleanup. */
-export async function completedBuildRun(env, { github = githubCli } = {}) {
+function buildRepository(env) {
 	const repository = env.GITHUB_REPOSITORY;
-	const run = env.RDS_BUILD_TARGET_RUN_ID;
-	const attempt = env.RDS_BUILD_TARGET_RUN_ATTEMPT;
 	if (
 		!/^[\w.-]+\/[\w.-]+$/.test(repository ?? "") ||
-		repository.split("/").some((part) => part === "." || part === "..") ||
-		!/^[1-9]\d*$/.test(run ?? "") ||
-		!/^[1-9]\d*$/.test(attempt ?? "")
+		repository.split("/").some((part) => part === "." || part === "..")
 	)
 		throw new Error("Invalid completed build identity");
+	return repository;
+}
+
+const positiveId = (value) =>
+	typeof value === "string" &&
+	value.length > 0 &&
+	value[0] !== "0" &&
+	[...value].every((char) => char >= "0" && char <= "9");
+
+function buildAttempt(run, attempt) {
+	if (!positiveId(run) || !positiveId(attempt))
+		throw new Error("Invalid completed build identity");
+	return { run, attempt };
+}
+
+function buildIdentity(env) {
+	return {
+		repository: buildRepository(env),
+		...buildAttempt(
+			env.RDS_BUILD_TARGET_RUN_ID,
+			env.RDS_BUILD_TARGET_RUN_ATTEMPT,
+		),
+	};
+}
+
+/** Read the exact completed attempt, including every job before allowing cleanup. */
+export async function completedBuildRun(env, { github = githubCli } = {}) {
+	const { repository, run, attempt } = buildIdentity(env);
+	return completedBuild(repository, run, attempt, { github });
+}
+
+async function completedBuild(
+	repository,
+	run,
+	attempt,
+	{ github = githubCli } = {},
+) {
 	const prefix = `repos/${repository}/actions/runs/${run}/attempts/${attempt}`;
-	const metadata = await github(prefix);
+	let metadata;
+	try {
+		metadata = await github(prefix);
+	} catch (error) {
+		// A deleted CI run cannot be verified and no longer needs access; the
+		// sweep keeps its leases reported rather than aborting other builds.
+		// Any other GitHub failure still fails the run like cleanup-run.
+		if (!/Not Found|HTTP 404/i.test(error.message)) throw error;
+		throw new Error(
+			`Completed CI attempt ${run}/${attempt} is no longer recorded`,
+		);
+	}
 	if (
 		String(metadata.id) !== run ||
 		String(metadata.run_attempt) !== attempt ||
@@ -402,26 +445,10 @@ async function completedBuildLeases(aws, groups, account, build) {
 			leases.push(recoveryLease(rule, group, account, build));
 		}
 	}
-	if (
-		leases.length > 2 ||
-		new Set(leases.map((lease) => lease.nonce)).size !== leases.length
-	)
-		throw new Error("Ambiguous website build access ownership");
-	return leases;
+	return uniqueLeases(leases);
 }
 
-/** Recover access even when a lost runner could not execute its post steps. */
-export async function cleanupCompletedBuild(
-	env,
-	{ aws = awsCli, github = githubCli } = {},
-) {
-	const build = await completedBuildRun(env, { github });
-	if (env.AWS_REGION !== REGION) throw new Error("Unexpected AWS region");
-	const account = deploymentAccount(env.RDS_BUILD_ACCESS_ROLE);
-	await checkAccount(aws, account);
-	const groups = await databaseGroups(aws, account);
-	// Validate the entire inventory before revoking any rule.
-	const leases = await completedBuildLeases(aws, groups, account, build);
+async function revokeOwnedLeases(aws, leases) {
 	const removed = [];
 	for (const lease of leases) {
 		const query = [
@@ -449,7 +476,117 @@ export async function cleanupCompletedBuild(
 			throw new Error("Build access rule still present after removal");
 		removed.push(lease.ruleId);
 	}
+	return removed;
+}
+
+/** Recover access even when a lost runner could not execute its post steps. */
+export async function cleanupCompletedBuild(
+	env,
+	{ aws = awsCli, github = githubCli } = {},
+) {
+	const build = await completedBuildRun(env, { github });
+	if (env.AWS_REGION !== REGION) throw new Error("Unexpected AWS region");
+	const account = deploymentAccount(env.RDS_BUILD_ACCESS_ROLE);
+	await checkAccount(aws, account);
+	const groups = await databaseGroups(aws, account);
+	// Validate the entire inventory before revoking any rule.
+	const leases = await completedBuildLeases(aws, groups, account, build);
+	const removed = await revokeOwnedLeases(aws, leases);
 	return { run: build.run, attempt: build.attempt, removed };
+}
+
+/** Every build-owned rule on the database groups, across all pages. */
+async function taggedBuildRules(aws, groups) {
+	const rules = [];
+	for (const group of groups) {
+		let token;
+		do {
+			const args = [
+				"ec2",
+				"describe-security-group-rules",
+				"--filters",
+				`Name=group-id,Values=${group}`,
+				`Name=tag:Source,Values=${SOURCE}`,
+			];
+			if (token) args.push("--next-token", token);
+			const response = await aws(args);
+			if (!Array.isArray(response?.SecurityGroupRules))
+				throw new Error("Missing build access rule inventory");
+			rules.push(...response.SecurityGroupRules);
+			token = response.NextToken;
+		} while (token);
+	}
+	return rules;
+}
+
+function uniqueLeases(leases) {
+	if (
+		leases.length > 2 ||
+		new Set(leases.map((lease) => lease.nonce)).size !== leases.length
+	)
+		throw new Error("Ambiguous website build access ownership");
+	return leases;
+}
+
+/**
+ * Recover access left by every completed CI attempt at once, so one sweep run
+ * covers completions whose own cleanup run was superseded or lost.
+ */
+export async function cleanupCompletedBuilds(
+	env,
+	{ aws = awsCli, github = githubCli } = {},
+) {
+	if (env.AWS_REGION !== REGION) throw new Error("Unexpected AWS region");
+	const repository = buildRepository(env);
+	const account = deploymentAccount(env.RDS_BUILD_ACCESS_ROLE);
+	await checkAccount(aws, account);
+	const groups = await databaseGroups(aws, account);
+	const byBuild = new Map();
+	const orphaned = [];
+	for (const rule of await taggedBuildRules(aws, groups)) {
+		const tags = new Map(
+			(rule.Tags ?? []).map(({ Key, Value }) => [Key, Value]),
+		);
+		let identity;
+		try {
+			identity = buildAttempt(tags.get("RunId"), tags.get("RunAttempt"));
+		} catch {
+			// Untagged rules cannot be attributed to a build; never guess at them.
+			orphaned.push(rule.SecurityGroupRuleId);
+			continue;
+		}
+		const key = `${identity.run}/${identity.attempt}`;
+		if (!byBuild.has(key)) byBuild.set(key, []);
+		byBuild.get(key).push(rule);
+	}
+	const removed = [];
+	const skipped = [];
+	for (const [key, rules] of byBuild) {
+		const [run, attempt] = key.split("/");
+		try {
+			const build = await completedBuild(repository, run, attempt, {
+				github,
+			});
+			const leases = uniqueLeases(
+				rules.map((rule) =>
+					recoveryLease(rule, rule.GroupId, account, build),
+				),
+			);
+			removed.push(...(await revokeOwnedLeases(aws, leases)));
+		} catch (error) {
+			// A still-active or incomplete attempt keeps its access; its own
+			// completion event sweeps it later. Any other failure (AWS, rule
+			// ownership, revoke confirmation) fails the run like cleanup-run.
+			if (
+				/completed CI attempt|active, incomplete|no longer recorded/.test(
+					error.message,
+				)
+			)
+				skipped.push(`${run}/${attempt}: ${error.message}`);
+			else throw error;
+		}
+	}
+	return { removed, skipped, orphaned };
 }
 
 export function databaseHost(value) {
@@ -497,9 +634,25 @@ if (
 				);
 				break;
 			}
+			case "cleanup-all": {
+				const result = await cleanupCompletedBuilds(process.env);
+				const parts = [
+					`removed ${result.removed.length} owned rules${result.removed.length ? ` (${result.removed.join(", ")})` : ""}`,
+				];
+				if (result.skipped.length)
+					parts.push(
+						`skipped ${result.skipped.length} builds (${result.skipped.join("; ")})`,
+					);
+				if (result.orphaned.length)
+					parts.push(
+						`left ${result.orphaned.length} unattributed rules (${result.orphaned.join(", ")})`,
+					);
+				console.log(`Cleanup sweep: ${parts.join("; ")}`);
+				break;
+			}
 			default:
 				throw new Error(
-					"Usage: rds-build-access.mjs grant|cleanup|host|check-run|cleanup-run",
+					"Usage: rds-build-access.mjs grant|cleanup|host|check-run|cleanup-run|cleanup-all",
 				);
 		}
 	} catch (error) {

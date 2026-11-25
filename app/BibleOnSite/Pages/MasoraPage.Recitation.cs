@@ -33,15 +33,12 @@ public partial class MasoraPage
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private ReaderRecitationEngine? _recitation;
-    private DateTime _lastLongPressTime = DateTime.MinValue;
     private (int PerekId, int PasukNum) _pressedPasuk = (-1, -1);
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 600;
-    private DateTime _lastScrollTime = DateTime.MinValue;
-    private const int ScrollCooldownMs = 500;
+    private readonly ReaderGestureTiming _gestureTiming = new();
 
     /// <summary>True while the user is scrolling — suppresses long-press arming.</summary>
-    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => _gestureTiming.IsScrolling;
 
     private ReaderRecitationEngine Recitation => _recitation ??= CreateRecitationEngine();
 
@@ -222,7 +219,7 @@ public partial class MasoraPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _unitRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
         SelectionHaptics.Trigger();
     }
@@ -240,7 +237,7 @@ public partial class MasoraPage
         var unit = (sender as Label)?.BindingContext as MasoraUnit;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (unit != null && unit == _viewModel.Unit)
             {
                 EnterUnitRecitation();
@@ -361,7 +358,7 @@ public partial class MasoraPage
         return;
 #else
         LongPressBehavior.CancelAllPending();
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -381,7 +378,7 @@ public partial class MasoraPage
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -442,10 +439,10 @@ public partial class MasoraPage
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, token);
             if (!token.IsCancellationRequested && _pressedPasuk == pasuk && !IsScrolling)
             {
-                _lastLongPressTime = DateTime.Now;
+                _gestureTiming.NoteLongPress();
                 ResetRecitationContext();
                 var wasEmpty = _viewModel.SelectedPasukCount == 0;
                 _viewModel.ToggleSelectedPasuk(pasuk.PerekId, pasuk.PasukNum);
@@ -469,7 +466,7 @@ public partial class MasoraPage
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
 #if ANDROID || IOS || MACCATALYST
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         if (sender is LongPressBehavior behavior &&
             behavior.AssociatedView?.BindingContext is MasoraPasukRow row)
         {
@@ -489,7 +486,7 @@ public partial class MasoraPage
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
         _doubleTap.Reset();
-        _lastScrollTime = DateTime.Now;
+        _gestureTiming.NoteScroll();
         _longPressTokenSource?.Cancel();
         _pressedPasuk = (-1, -1);
 #if !ANDROID

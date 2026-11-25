@@ -2,11 +2,11 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
+import { PersonFamilyTree } from "../../../src/app/pedia/components/PersonFamilyTree";
 import {
-	PersonFamilyTree,
 	SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
 	shouldCollapseSpouseMatrix,
-} from "../../../src/app/pedia/components/PersonFamilyTree";
+} from "../../../src/lib/tanahpedia/person-family-tree-layout";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilySpouseEdge,

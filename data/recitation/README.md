@@ -635,8 +635,6 @@ polls perform no writes, and only genuine new history tails are imported. Source
 actions have a separate append-only response stream; neither source selection nor
 a source-problem report invents word hearing, GOOD, or completion.
 
-Actual app before and after the full inventory was populated:
-
-![Earlier limited listening window](docs/complete-concern-before.png)
-
-![All concern actions and chapter progress](docs/complete-concern-after.png)
+The browser validation compared the earlier limited listening window with
+the fully populated inventory, where all concern actions and chapter progress
+were visible.

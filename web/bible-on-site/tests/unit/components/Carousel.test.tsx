@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Carousel } from "../../../src/app/929/[number]/components/Carousel";
 
 const CARD_WIDTH = 100;
@@ -140,6 +140,30 @@ describe("Carousel", () => {
 
 		expect(screen.getByRole("button", { name: "פרשן הבא" })).toBeEnabled();
 		expect(screen.queryByTestId("carousel-position")).toBeNull();
+	});
+
+	it("keeps the measured card geometry across scroll events", () => {
+		const scroller = renderCarousel(5);
+		layout(scroller, 5);
+		fireEvent.scroll(scroller); // picks up the mocked layout
+
+		let reads = 0;
+		const spy = (el: HTMLElement | Element) => {
+			const measured = el.getBoundingClientRect;
+			el.getBoundingClientRect = () => {
+				reads++;
+				return measured.call(el);
+			};
+		};
+		spy(scroller);
+		for (const card of Array.from(scroller.children)) spy(card);
+
+		scroller.scrollLeft = -CARD_WIDTH;
+		fireEvent.scroll(scroller);
+		expect(reads).toBe(0);
+		expect(screen.getByTestId("carousel-position")).toHaveTextContent(
+			"2-3 / 5",
+		);
 	});
 
 	it("re-measures through ResizeObserver when available", () => {
@@ -299,12 +323,14 @@ describe("Carousel", () => {
 			};
 		}
 
-		it("remembers the scrolled position and restores it on remount", () => {
+		it("remembers the scrolled position and restores it on remount", async () => {
 			const undo = installTrackLayout();
 			const scroller = renderStored(5);
 			scroller.scrollLeft = -2 * CARD_WIDTH;
 			fireEvent.scroll(scroller);
-			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
 
 			// A second mount (e.g. returning from a perush) picks it back up.
 			const remounted = renderStored(5);
@@ -323,7 +349,7 @@ describe("Carousel", () => {
 			undo();
 		});
 
-		it("keeps the position while a loading placeholder shrinks the scroller, then restores it when the items return", () => {
+		it("keeps the position while a loading placeholder shrinks the scroller, then restores it when the items return", async () => {
 			const undo = installTrackLayout();
 			const rendered = render(
 				<div dir="rtl">
@@ -347,7 +373,9 @@ describe("Carousel", () => {
 			) as HTMLElement;
 			scroller.scrollLeft = -2 * CARD_WIDTH;
 			fireEvent.scroll(scroller);
-			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
 
 			// Loading placeholder: the scroller shrinks and the browser clamps
 			// scrollLeft back to 0 — the remembered position must survive both.
@@ -365,7 +393,9 @@ describe("Carousel", () => {
 			);
 			scroller.scrollLeft = 0; // the browser's clamp on shrink
 			fireEvent.scroll(scroller);
-			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
 
 			// The cards return in the same instance (e.g. a failed load).
 			rendered.rerender(
@@ -401,7 +431,7 @@ describe("Carousel", () => {
 			undo();
 		});
 
-		it("restores the place after a widened viewport briefly fits every card", () => {
+		it("restores the place after a widened viewport briefly fits every card", async () => {
 			const dims = { viewport: VIEWPORT_WIDTH };
 			const undo = installTrackLayout({ dims });
 			const rendered = render(
@@ -426,14 +456,18 @@ describe("Carousel", () => {
 			) as HTMLElement;
 			scroller.scrollLeft = -2 * CARD_WIDTH;
 			fireEvent.scroll(scroller);
-			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
 
 			// Widening until every card fits clamps scrollLeft to the start —
 			// the remembered place must not be overwritten by that clamp.
 			dims.viewport = 5 * CARD_WIDTH;
 			scroller.scrollLeft = 0;
 			fireEvent.scroll(scroller);
-			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
 
 			// Narrowing back replays the remembered card instead of the clamp.
 			dims.viewport = VIEWPORT_WIDTH;
@@ -442,12 +476,14 @@ describe("Carousel", () => {
 			undo();
 		});
 
-		it("skips realignment when the stored position already matches", () => {
+		it("skips realignment when the stored position already matches", async () => {
 			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 0, itemGap: 0 }));
 			const undo = installTrackLayout();
 			const scroller = renderStored(5);
 			expect(scroller.scrollLeft).toBe(0);
-			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 }),
+			);
 			undo();
 		});
 
@@ -467,7 +503,7 @@ describe("Carousel", () => {
 			undo();
 		});
 
-		it("survives a stored position while the scroller reports no items", () => {
+		it("survives a stored position while the scroller reports no items", async () => {
 			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 2, itemGap: 0 }));
 			const undo = installTrackLayout();
 			const scroller = renderStored(0);
@@ -478,7 +514,51 @@ describe("Carousel", () => {
 			});
 			fireEvent.scroll(scroller);
 			expect(scroller.scrollLeft).toBe(0);
-			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 }),
+			);
+			undo();
+		});
+
+		it("debounces position writes until the scroll settles", async () => {
+			const undo = installTrackLayout();
+			const scroller = renderStored(5);
+			scroller.scrollLeft = -CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toBeNull();
+			await waitFor(() =>
+				expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 }),
+			);
+			undo();
+		});
+
+		it("writes the pending position when it unmounts", () => {
+			const undo = installTrackLayout();
+			const rendered = render(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						{Array.from({ length: 5 }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			);
+			// biome-ignore lint/style/noNonNullAssertion: .track is the rendered scroller
+			const scroller = rendered.container.querySelector(".track")!;
+			scroller.scrollLeft = -CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			rendered.unmount();
+			expect(storedPosition()).toEqual({ itemIndex: 1, itemGap: 0 });
 			undo();
 		});
 

@@ -15,14 +15,24 @@ async function perushNoteSnippet(
 	perushName: string,
 	perekId: number,
 	pasukNum: number,
+	noteIdx?: number,
 ): Promise<string | null> {
 	const pasukNotes = await getPerushNotesForPasuk(
 		perushName,
 		perekId,
 		pasukNum,
 	);
-	if (pasukNotes.length === 0) return null;
-	const html = pasukNotes.map((n) => n.noteContent).join("\n");
+	// A `note` param anchors the snippet at the matched hit — the combined
+	// snippet truncates at MAX_NOTE_SNIPPET_LENGTH, so starting from note 0
+	// could crowd out the note the link actually targets. `note` is a stored
+	// noteIdx, not an array offset — perushim numbering is not guaranteed
+	// gapless — so match on the field rather than position.
+	const ordered =
+		noteIdx == null
+			? pasukNotes
+			: pasukNotes.filter((n) => n.noteIdx >= noteIdx);
+	if (ordered.length === 0) return null;
+	const html = ordered.map((n) => n.noteContent).join("\n");
 	return truncatePreviewSnippet(toPreviewHtml(html), MAX_NOTE_SNIPPET_LENGTH);
 }
 
@@ -48,9 +58,17 @@ export async function GET(
 		return NextResponse.json(null, { status: 404 });
 	}
 	const pasukLetters = toLetters(pasukNum);
-	const perushName = new URL(request.url).searchParams.get("perush")?.trim();
+	const searchParams = new URL(request.url).searchParams;
+	const perushName = searchParams.get("perush")?.trim();
+	const noteRaw = searchParams.get("note");
+	const noteIdx = noteRaw ? Number.parseInt(noteRaw, 10) : undefined;
 	if (perushName) {
-		const noteHtml = await perushNoteSnippet(perushName, perekId, pasukNum);
+		const noteHtml = await perushNoteSnippet(
+			perushName,
+			perekId,
+			pasukNum,
+			noteIdx,
+		);
 		if (noteHtml) {
 			return NextResponse.json({
 				reference: `${perushName} ${perek.source} ${pasukLetters}`,

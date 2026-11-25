@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
 	type FormEvent,
 	type KeyboardEvent,
@@ -10,6 +9,7 @@ import {
 	useState,
 } from "react";
 import { Skeleton } from "@/app/components/Skeleton";
+import { PasukPreviewLink } from "@/app/pedia/components/PasukPreviewLink";
 import {
 	parseSearchTypes,
 	SEARCH_LIMIT_DEFAULT,
@@ -460,7 +460,7 @@ function SearchResults({
 						<ul className={styles.resultList}>
 							{items.map((item) => (
 								<li key={`${item.type}:${item.href}:${item.title}`}>
-									<Link
+									<PasukPreviewLink
 										href={item.href}
 										data-result-link=""
 										className={styles.resultLink}
@@ -477,7 +477,7 @@ function SearchResults({
 												}}
 											/>
 										) : null}
-									</Link>
+									</PasukPreviewLink>
 								</li>
 							))}
 						</ul>

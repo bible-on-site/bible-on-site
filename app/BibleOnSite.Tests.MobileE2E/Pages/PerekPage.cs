@@ -2,6 +2,7 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
+using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -161,6 +162,91 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public void Tap(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
         Tap(platform.AutomationId(automationId), element => condition(element) && platform.CanTap(element), timeout);
 
+    public void DismissPerushimSheet() => DismissPerushimSheet(TimeSpan.FromSeconds(5));
+
+    internal void DismissPerushimSheet(TimeSpan hiddenTimeout)
+    {
+        By[] markers =
+        [
+            platform.AutomationId("PerushimContentViewport"),
+            platform.AutomationId("PerushCheckBox"),
+            platform.AutomationId("PerushimEmptyState")
+        ];
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        // A row tap may have hit the chevron. Allow the 250ms closing
+        // animation to finish before deciding that the sheet needs a tap.
+        // Transient lookup failures can use the rest of the observation window.
+        var initialTimeout = RemainingTime(hiddenTimeout);
+        var settleTime = TimeSpan.FromMilliseconds(Math.Min(350, initialTimeout.TotalMilliseconds));
+        if (WaitForDetached(markers, initialTimeout, settleTime))
+        {
+            return;
+        }
+        for (var taps = 0; taps < 3 && DateTime.UtcNow < deadline; taps++)
+        {
+            Tap("PerushimChevronButton", _ => true, RemainingTime(TimeSpan.FromSeconds(10)));
+            var timeout = RemainingTime(hiddenTimeout);
+            if (WaitForDetached(markers, timeout, timeout))
+            {
+                return;
+            }
+        }
+        throw new WebDriverTimeoutException("The perushim sheet remained attached after dismissal.");
+
+        TimeSpan RemainingTime(TimeSpan maximum)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            return remaining < maximum ? remaining : maximum;
+        }
+    }
+
+    private bool WaitForDetached(IReadOnlyList<By> locators, TimeSpan timeout, TimeSpan settleTime)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return false;
+        }
+        var start = DateTime.UtcNow;
+        var deadline = start.Add(timeout);
+        var settledAt = start.Add(settleTime);
+        Exception? observationError = null;
+        while (true)
+        {
+            try
+            {
+                if (!locators.Any(IsPresent))
+                {
+                    return true;
+                }
+                if (DateTime.UtcNow >= settledAt)
+                {
+                    return false;
+                }
+                observationError = null;
+            }
+            catch (StaleElementReferenceException exception)
+            {
+                observationError = exception;
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                observationError = exception;
+            }
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+            Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(200, remaining.TotalMilliseconds)));
+        }
+        if (observationError != null)
+        {
+            // An inconclusive poll cannot authorize another toggle.
+            throw new InvalidOperationException("Could not verify that the perushim sheet was dismissed.", observationError);
+        }
+        return false;
+    }
+
     public void Tap(By locator) => Tap(locator, platform.CanTap, TimeSpan.FromSeconds(45));
 
     private void Tap(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
@@ -226,10 +312,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var found = driver is IosSnapshotDriver snapshots
-                    ? snapshots.FindSnapshots(locator).Count != 0
-                    : driver.FindElements(locator).Count != 0;
-                if (found)
+                if (IsPresent(locator))
                 {
                     return;
                 }
@@ -247,26 +330,92 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No element matching {locator} appeared in the accessibility tree within {timeout.TotalSeconds} seconds.");
     }
 
+    private bool IsPresent(By locator) => driver is IosSnapshotDriver snapshots
+        ? snapshots.FindSnapshots(locator).Count != 0
+        : driver.FindElements(locator).Count != 0;
+
     /// <summary>
-    /// Scrolls the page's own scroll surface down until the element's center is
+    /// Scrolls the page's own scroll surface until the element's center is
     /// inside the viewport. Deep settings sections (e.g. הסתר שם השם under
     /// תצוגה preferences) never render on a short viewport, so a plain WaitFor
     /// cannot reach them.
     /// </summary>
     public AppiumElement ScrollToVisible(string automationId)
+        => ScrollToVisible(automationId, down =>
+        {
+            if (down)
+            {
+                platform.ScrollPageDown(driver);
+            }
+            else
+            {
+                platform.ScrollPageUp(driver);
+            }
+        });
+
+    public AppiumElement ScrollFlyoutTo(string automationId)
+    {
+        var viewport = FlyoutViewport();
+        return ScrollToVisible(automationId, down => DragFlyout(viewport, down),
+            element => viewport.Contains(element.Location.X + element.Size.Width / 2,
+                element.Location.Y + element.Size.Height / 2) && platform.CanTap(element));
+    }
+
+    /// <summary>
+    /// One drawer drag on <see cref="ScrollFlyoutTo"/>'s surface. Tests drive
+    /// it to force an overshot drawer item.
+    /// </summary>
+    public void DragFlyoutSurface(bool down) => DragFlyout(FlyoutViewport(), down);
+
+    private Rectangle FlyoutViewport()
+    {
+        Rectangle drawer = default;
+        // Read the frame inside the poll: a replaced drawer view throws
+        // StaleElementReference on the read, which WaitFor retries.
+        WaitFor(platform.FlyoutScroller, element =>
+        {
+            drawer = new Rectangle(element.Location, element.Size);
+            return true;
+        });
+        return Rectangle.Intersect(drawer, new Rectangle(Point.Empty, DriverTelemetry.WindowSize(driver)));
+    }
+
+    private void DragFlyout(Rectangle viewport, bool down)
+    {
+        // Start inside the RTL drawer so the underlying reader cannot receive the drag.
+        var x = viewport.Left + viewport.Width / 2;
+        var finger = new PointerInputDevice(PointerKind.Touch, "flyout-scroll");
+        var gesture = new ActionSequence(finger, 0);
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height * 4 / 5 : viewport.Top + viewport.Height / 5,
+            TimeSpan.Zero));
+        gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            x, down ? viewport.Top + viewport.Height / 5 : viewport.Top + viewport.Height * 4 / 5,
+            TimeSpan.FromMilliseconds(350)));
+        gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([gesture]);
+    }
+
+    private AppiumElement ScrollToVisible(string automationId, Action<bool> scroll, Func<AppiumElement, bool>? condition = null)
     {
         var locator = platform.AutomationId(automationId);
         var deadline = DateTime.UtcNow.AddSeconds(45);
+        var scrollingDown = true;
+        string? lastSurface = null;
         for (var attempt = 0; attempt < 12 && DateTime.UtcNow < deadline; attempt++)
         {
             try
             {
-                var visible = FindVisible(locator).FirstOrDefault();
+                var visible = FindVisible(locator, condition).FirstOrDefault();
                 if (visible != null)
                 {
                     return visible.Element;
                 }
-                platform.ScrollPageDown(driver);
+                var surface = driver.PageSource;
+                scrollingDown = SeekScrollsDown(scrollingDown, lastSurface, surface);
+                lastSurface = surface;
+                scroll(scrollingDown);
             }
             catch (StaleElementReferenceException)
             {
@@ -277,13 +426,22 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 // An observation timeout can retry within this deadline.
             }
         }
-        var found = FindVisible(locator).FirstOrDefault();
+        var found = FindVisible(locator, condition).FirstOrDefault();
         if (found != null)
         {
             return found.Element;
         }
-        throw new WebDriverTimeoutException($"Scrolling the page down never revealed a visible element matching {locator} within 45 seconds.");
+        throw new WebDriverTimeoutException($"Scrolling the page never revealed a visible element matching {locator} within 45 seconds.");
     }
+
+    // A single scroll step can carry the target across the viewport — the
+    // injected drag releases with fling inertia — and a fully offscreen node
+    // is absent from the source tree, so a downward-only seek never recovers
+    // an overshot element (#3746's merge-queue ejection). A scroll that
+    // leaves the page untouched reached its edge, so the sweep reverses
+    // there.
+    internal static bool SeekScrollsDown(bool scrollingDown, string? previousSurface, string surface) =>
+        surface == previousSurface ? !scrollingDown : scrollingDown;
 
     /// <summary>
     /// A long commentary hit can land several screens below its heading. Scroll
@@ -381,6 +539,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
         RenderedElements(string automationId) =>
         RenderedElements(automationId, element => element.Text);
+
+    public (AppiumElement Element, (Point Location, Size Size) Frame)? FirstVisibleElement(
+        string automationId, Func<AppiumElement, bool> condition)
+    {
+        var match = FindVisible(platform.AutomationId(automationId), condition).FirstOrDefault();
+        return match is null ? null : (match.Element, (match.Frame.Location, match.Frame.Size));
+    }
 
     /// <summary>
     /// Same single-scan read as <see cref="RenderedElements(string)"/>, but

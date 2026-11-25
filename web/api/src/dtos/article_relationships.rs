@@ -141,7 +141,7 @@ pub struct ArticleRelationships {
     /// True: `coveringSources` is the verified coverage; false: coverage is
     /// unknown (readers fall back to the primary perek).
     pub coverage_verified: bool,
-    /// Lowercase hex of the generated `content_hash` — echo back as
+    /// Lowercase hex of the editorial freshness token. Echo it back as
     /// `expectedContentHash` for the stale-edit check.
     pub content_hash: String,
     /// `coveringSources` — the verified pasuk coordinates.

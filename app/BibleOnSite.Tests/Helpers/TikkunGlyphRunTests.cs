@@ -9,15 +9,14 @@ public class TikkunGlyphRunTests
     [Fact]
     public void marked_runs_keep_base_glyphs_where_the_bare_word_places_them()
     {
-        // Al Heperek attaches every mark as a zero-advance glyph (#3685):
-        // stripping a run's marks moves no base letter — exactly the repaint
-        // contract HideMarks relies on (#3265).
+        // The marks in this word have zero advance. Stripping them preserves
+        // the base glyph geometry that HideMarks relies on (#3265).
         var marked = TikkunFont.Shape("וַיַּ֧רְא", 18);
         var bare = TikkunFont.Shape("וירא", 18);
-        var markedVav = marked.Glyphs.Single(g => g.Name == "uni05D5.ss03");
-        var bareVav = bare.Glyphs.Single(g => g.Name == "uni05D5.ss03");
-        markedVav.X.Should().BeApproximately(bareVav.X, 0.001f);
-        marked.Width.Should().BeApproximately(33.192f, 0.001f);
+        marked.Glyphs.Where(g => g.Advance > 0)
+            .Select(g => (g.Name, g.X, g.Y, g.Advance))
+            .Should().Equal(bare.Glyphs.Select(g => (g.Name, g.X, g.Y, g.Advance)));
+        marked.Width.Should().Be(bare.Width);
         marked.Bases.Count.Should().BeGreaterThan(0);
         marked.Marks.Count.Should().BeGreaterThan(0);
         bare.Marks.Count.Should().Be(0);

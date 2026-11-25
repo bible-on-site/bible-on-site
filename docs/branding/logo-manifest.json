@@ -1,48 +1,48 @@
 {
   "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
-  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.7",
-  "fontVersion": "0.9.7",
-  "fontSha256": "78fa218dd395f7e36b1160c13a4a7ae07671bec56ef8116cde9a6ce9767f1f5c",
+  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.8",
+  "fontVersion": "0.9.8",
+  "fontSha256": "9207d946d8ff7a491b7b47138aadb41143411f4dc713787a3061f7c3510b999d",
   "weight": 700,
   "feature": "ss03",
   "generatedBy": "tools/yehuda_logos.py",
-  "fontSourceCommit": "f488d3eefe42ac7e7e6833d2df1bc8a0a6a158a2",
+  "fontSourceCommit": "c253be3a188f51987817ae9cf1e0359ab900715d",
   "canonicalAssets": [
     {
       "file": "web/shared/branding/logos/app-icon.svg",
-      "sha256": "bb65150ea6f1d69bff6fbb0ac059327069424e2a763848b6690f89adeab779c5"
+      "sha256": "a03c3b17eb5bbe99330378e7cd07c577245bd4b5d3e562633f76cf02ae95bf97"
     },
     {
       "file": "web/shared/branding/logos/compact.svg",
-      "sha256": "5344adb5a059c3a0eb7f69f9717b2362215121e6b0c8daef64cf5bf8847c37e9"
+      "sha256": "1dea3f1b5617397a11032b0bead3edb508fd493c79e7350f6de4b1f745f411d9"
     },
     {
       "file": "web/shared/branding/logos/compact-reversed.svg",
-      "sha256": "b21d04663e530974a94a71207e2c7b7de182f40d4dcc0a756a2d682886605ea9"
+      "sha256": "50797f422ad6c55c66f5ba623c7ac9fea126dd4c2af85885623d1c47ee7ed404"
     },
     {
       "file": "web/shared/branding/logos/favicon-16.svg",
-      "sha256": "9dca44429933441b705853f5f3f558e3c74ce45c84d8f74bf60a3ed2f997fe29"
+      "sha256": "0f25e5b4712c176c55b94a23e0a176508f57d27227c3c89743b2891d86f78f74"
     },
     {
       "file": "web/shared/branding/logos/favicon-24.svg",
-      "sha256": "c446c642f5580eec7cec72e5d146d9e42a51b113cc1c0678a13eee12f57aef22"
+      "sha256": "74ffc65f86a6462196871b982926e9d17eede98e86ecda37e2f79c4b6f4182ec"
     },
     {
       "file": "web/shared/branding/logos/favicon-32.svg",
-      "sha256": "4c07f84e303f879e01af78f3b2933816cbbfee13c65fa06dc77ad966cdc2b4a5"
+      "sha256": "92b1d8b301cb833a976fd09fde95f1cf35ffbb1379ee6b873b2260e18858cbd2"
     },
     {
       "file": "web/shared/branding/logos/favicon-48.svg",
-      "sha256": "00178c55c43023654a3a69390d080f45f5d71fe02eca2228db778bb51131721a"
+      "sha256": "0ea0405511af59ea379682f3e0a9acbaf86d9df2f70896ca8470142cee0c3ff5"
     },
     {
       "file": "web/shared/branding/logos/header-logo-reversed.svg",
-      "sha256": "5905be00ef11996cc60a438090cccf25eb55f15fca1e3733fe4a2bac7dc7d0a9"
+      "sha256": "20d4de0fc0c1dd1006c5dddd9a5f0e1a3a84e64eaabc7bc83f4b8feae171b261"
     },
     {
       "file": "web/shared/branding/logos/header-logo.svg",
-      "sha256": "67b87d809bd9241ed56829cb543b8245f8879918b0508ad5ee188ae7a3386d74"
+      "sha256": "1397c69302fa04fb3788f05181ff5cc8247f0532e5fa24c0318de332d1f34295"
     }
   ]
 }

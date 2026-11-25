@@ -85,8 +85,14 @@ const nextConfig = {
 		],
 	},
 	transpilePackages: ["html-flip-book-react"],
+	// The tracing root follows turbopack.root, so standalone output nests
+	// the app under `bible-on-site/` — the Dockerfile and the standalone
+	// asset copy account for the nested layout.
 	turbopack: {
-		root: import.meta.dirname,
+		// Files outside the root are not resolved, so the root must span the
+		// shared contract sources in `web/shared/` (#3710) that `src` modules
+		// now import directly (revalidate, bulletin-join, tanahpedia).
+		root: path.resolve(import.meta.dirname, ".."),
 		// Preserve the canonical JSON number literals: Turbopack's JSON parser
 		// can change the last digit of alignment diagnostics during bundling.
 		rules: {

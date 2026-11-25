@@ -395,9 +395,10 @@ jobs:
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
       data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
       data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
+      data_deploy_ci_changed: ${{ steps.determine.outputs.data_deploy_ci_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
-      # Every touched path sits under root docs/ and no module check fired:
+      # Every touched path is inert documentation and no module check fired:
       # downstream jobs skip while required checks still resolve (#3621).
       docs_only: ${{ steps.determine.outputs.docs_only }}
       release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}
@@ -794,7 +795,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -885,7 +886,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }}
 
       - name: Pull the isolated admin fixture image
-        run: docker pull mysql:8.4
+        run: docker pull mysql:9.7.4
 
       - name: Setup devops Node.js
         uses: actions/setup-node@v7
@@ -1115,7 +1116,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1376,7 +1377,7 @@ jobs:
         # exact same image on every run (packaging jobs are master-only).
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout.
-        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
@@ -1455,7 +1456,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -1792,7 +1793,7 @@ jobs:
         # exact same image on every run (packaging jobs are master-only).
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout.
-        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/typecheck/unit/build and is gated before E2E. On a
@@ -1874,7 +1875,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -2178,10 +2179,12 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+          my-cnf: |
+            require_secure_transport=ON
 
       # Mock connections cannot prove session-scoped MySQL advisory locks.
       # Run the ignored regression explicitly and add its production-code hits
@@ -2686,7 +2689,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -3102,7 +3105,7 @@ jobs:
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "8.4"
+          mysql-version: "9.7.4"
           root-password: test_123
           distribution: "mysql"
           auto-start: true
@@ -3483,6 +3486,12 @@ jobs:
     if: ${{ needs.determine_changes.outputs.docs_only != 'true' }}
     uses: ./.github/workflows/ci-db-backup.yml
 
+  data_deploy_ci:
+    name: Data deployment validation
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.data_deploy_ci_changed == 'true' }}
+    uses: ./.github/workflows/ci-data-deploy.yml
+
   transcription_ci:
     name: Local transcription
     needs: determine_changes
@@ -3521,6 +3530,7 @@ jobs:
         recitation_ci,
         deploy_verifier,
         database_backups,
+        data_deploy_ci,
         transcription_ci,
         perushim_data,
         determine_baseline_availability,
@@ -3572,6 +3582,13 @@ jobs:
             echo "Could not determine module changes."
             echo "Overall status: failure"
             exit 1
+          fi
+
+          if [ "${{ needs.determine_changes.outputs.data_deploy_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.data_deploy_ci.result }}" != "success" ]; then
+              echo "Data deployment validation and MySQL rehearsals did not pass."
+              exit 1
+            fi
           fi
 
           # Module jobs skip silently when these prerequisite lookups fail.
@@ -4246,7 +4263,7 @@ jobs:
       module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/branding"]'
+      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html", "web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/branding"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
@@ -4265,6 +4282,8 @@ jobs:
     with:
       module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      # Keep in sync with api extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["web/shared/article-relationships"]'
       module_version: ${{ needs.package_api.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_api_arm64.outputs.docker_artifact_name }}", "path": "web/api/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
@@ -4337,7 +4356,7 @@ jobs:
       module_name: admin
       module_directory: web/admin
       # Keep in sync with admin extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["web/shared/branding"]'
+      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships", "web/shared/branding"]'
       module_version: ${{ needs.package_admin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws

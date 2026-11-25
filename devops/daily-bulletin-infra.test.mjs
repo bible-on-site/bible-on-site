@@ -130,6 +130,24 @@ test("only the worker queue accepts the trusted SNS topic and both queues requir
 	}
 });
 
+test("the SES event destination publishes delivery, subscription and tracked engagement events to the worker topic", () => {
+	const destination =
+		template.Resources.BulletinEventDestination.Properties.EventDestination;
+	assert.equal(destination.Enabled, true);
+	assert.deepEqual(destination.MatchingEventTypes.sort(), [
+		"BOUNCE",
+		"CLICK",
+		"COMPLAINT",
+		"DELIVERY",
+		"OPEN",
+		"REJECT",
+		"RENDERING_FAILURE",
+		"SEND",
+		"SUBSCRIPTION",
+	]);
+	assert.equal(destination.SnsDestination.TopicARN, "BulletinEventsTopic");
+});
+
 test("DNS additions are limited to SES DKIM and a non-enforcing DMARC policy", () => {
 	const records = Object.values(template.Resources).filter(
 		(resource) => resource.Type === "AWS::Route53::RecordSet",

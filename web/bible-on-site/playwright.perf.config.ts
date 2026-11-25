@@ -23,8 +23,9 @@ export default defineConfig({
 		...(baseConfig.webServer as TestConfigWebServer),
 		// The shared launcher populates the per-checkout test database first —
 		// standalone perf runs cannot assume an earlier e2e run created it —
-		// then serves `.next/standalone/server.js` with PORT/HOSTNAME from
-		// webServer.env (`bun run start` would force PORT=3001).
+		// then serves the traced standalone server.js (nested under
+		// .next/standalone/bible-on-site/ since #3710) with PORT/HOSTNAME
+		// from webServer.env (`bun run start` would force PORT=3001).
 		command: "node ./launch-e2e-server.mts --standalone",
 		env: {
 			...(baseConfig.webServer as TestConfigWebServer).env,

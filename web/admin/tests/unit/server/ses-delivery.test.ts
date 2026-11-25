@@ -131,6 +131,7 @@ interface Job {
 	created_at: string;
 	idempotency_key: string;
 	last_error?: string | null;
+	tracked?: number;
 }
 interface Subscriber {
 	id: number;
@@ -150,12 +151,18 @@ interface Recipient {
 	message_id: string | null;
 	started_at: string | null;
 	event_at: string | null;
+	delivered_at: string | null;
 	last_error: string | null;
+	opened_at: string | null;
+	open_count: number;
+	clicked_at: string | null;
+	click_count: number;
 }
 interface State {
 	jobs: Job[];
 	subscribers: Subscriber[];
 	recipients: Recipient[];
+	notifications: Set<string>;
 	settings: { audience: Audience; revision: number };
 	rollout: string | null;
 	channel: string;
@@ -219,7 +226,12 @@ function seed(audience: Audience = "test", status = "queued"): Recipient {
 			status === "queued" || status === "sending" ? null : "message-1",
 		started_at: status === "queued" ? null : "2026-10-28 12:00:00.000",
 		event_at: null,
+		delivered_at: null,
 		last_error: null,
+		opened_at: null,
+		open_count: 0,
+		clicked_at: null,
+		click_count: 0,
 	};
 	state.recipients = [row];
 	return row;
@@ -246,6 +258,10 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 					).length,
 				},
 			];
+		if (sql.includes("WHERE email = ? OR id <=> ?"))
+			return state.subscribers
+				.filter((s) => s.email === params[0] || s.id === params[1])
+				.map((s) => ({ id: s.id }));
 		return state.subscribers
 			.filter(
 				(s) => s.audience === params[0] && s.consent_status === "confirmed",
@@ -323,6 +339,23 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 			return state.recipients
 				.filter((r) => r.job_id === params[0] && r.status === "queued")
 				.map((r) => ({ id: r.id }));
+		if (sql.includes("SUM(") && sql.includes("opened_at"))
+			return [
+				{
+					opened: state.recipients.filter(
+						(r) =>
+							r.job_id === params[0] &&
+							r.status === "delivered" &&
+							r.opened_at !== null,
+					).length,
+					clicked: state.recipients.filter(
+						(r) =>
+							r.job_id === params[0] &&
+							r.status === "delivered" &&
+							r.clicked_at !== null,
+					).length,
+				},
+			];
 		const row = state.recipients.find(
 			(r) =>
 				r.id === params[0] &&
@@ -357,6 +390,16 @@ function write(sqlRaw: string, p: unknown[] = []) {
 		affectedRows,
 		insertId: state.recipients.length,
 	});
+	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_notification")) {
+		// One durable row per consumed notification; the unique key rejects a
+		// redelivery exactly like the production constraint.
+		if (state.notifications.has(String(p[0])))
+			throw Object.assign(new Error("Duplicate entry"), {
+				code: "ER_DUP_ENTRY",
+			});
+		state.notifications.add(String(p[0]));
+		return result();
+	}
 	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_job")) {
 		state.jobs.push({
 			id: String(p[0]),
@@ -366,6 +409,7 @@ function write(sqlRaw: string, p: unknown[] = []) {
 			settings_revision: Number(p[4]),
 			status: "queued",
 			created_at: "2026-10-28T12:00:00Z",
+			tracked: sql.includes("tracked") ? Number(p[5]) : 0,
 		});
 		return result();
 	}
@@ -385,7 +429,12 @@ function write(sqlRaw: string, p: unknown[] = []) {
 				message_id: null,
 				started_at: null,
 				event_at: null,
+				delivered_at: null,
 				last_error: null,
+				opened_at: null,
+				open_count: 0,
+				clicked_at: null,
+				click_count: 0,
 			});
 		return result(enrolled.length);
 	}
@@ -507,6 +556,50 @@ function write(sqlRaw: string, p: unknown[] = []) {
 			}
 			return result();
 		}
+		// Tracked engagement: latest activity per metric plus the raw event
+		// count (GREATEST keeps the newest timestamp across out-of-order events).
+		if (sql.includes("GREATEST(COALESCE(")) {
+			const column = sql.includes("opened_at") ? "opened_at" : "clicked_at";
+			const counter = column === "opened_at" ? "open_count" : "click_count";
+			const engagement = state.recipients.find(
+				(r) => r.id === p[5] && r.attempt_token === p[6],
+			);
+			if (!engagement) return result(0);
+			if (!engagement[column] || engagement[column] < String(p[1]))
+				engagement[column] = String(p[1]);
+			engagement[counter] += 1;
+			engagement.message_id = String(p[2]);
+			const earliest =
+				engagement.delivered_at ??
+				(engagement.status === "delivered" ? engagement.event_at : null);
+			engagement.delivered_at =
+				earliest && earliest < String(p[3]) ? earliest : String(p[3]);
+			return result();
+		}
+		// A tracked open or click lifts a mid-flight row to delivered.
+		if (sql.includes("SET status = 'delivered', event_at = ?")) {
+			const lifted = state.recipients.find(
+				(r) =>
+					r.id === p[1] &&
+					r.attempt_token === p[2] &&
+					["sending", "accepted", "uncertain"].includes(r.status),
+			);
+			if (!lifted) return result(0);
+			lifted.status = "delivered";
+			lifted.event_at = String(p[0]);
+			lifted.last_error = null;
+			return result();
+		}
+		// A Delivery event records the earliest proven delivery instant.
+		if (sql.includes("SET delivered_at = LEAST")) {
+			const stamped = state.recipients.find(
+				(r) => r.id === p[2] && r.attempt_token === p[3],
+			);
+			if (!stamped) return result(0);
+			if (!stamped.delivered_at || stamped.delivered_at > String(p[0]))
+				stamped.delivered_at = String(p[0]);
+			return result();
+		}
 		const r = state.recipients.find(
 			(r) =>
 				r.id === p[2] &&
@@ -545,6 +638,7 @@ beforeEach(() => {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
 		recipients: [],
+		notifications: new Set(),
 		settings: { audience: "test", revision: 0 },
 		rollout: null,
 		channel: "pending",
@@ -579,6 +673,7 @@ beforeEach(() => {
 		for (const collection of [state.jobs, state.subscribers, state.recipients])
 			for (const item of collection) snapshot.set(item, { ...item });
 		const channel = state.channel;
+		const notifications = new Set(state.notifications);
 		try {
 			return await callback({});
 		} catch (error) {
@@ -587,6 +682,7 @@ beforeEach(() => {
 			state.recipients = state.recipients.filter((r) => snapshot.has(r));
 			for (const [live, saved] of snapshot) Object.assign(live, saved);
 			state.channel = channel;
+			state.notifications = notifications;
 			throw error;
 		} finally {
 			release();
@@ -1348,6 +1444,49 @@ describe("SES events", () => {
 		await applySesEvent({ ...delivery("bounce"), permanent: true });
 		expect(row.status).toBe("bounced");
 	});
+	it("applies a redelivered notification exactly once", async () => {
+		const row = seed("test", "accepted");
+		const event = delivery("delivery");
+		await applySesEvent(event);
+		await applySesEvent({ ...event });
+		expect(row.status).toBe("delivered");
+		// The job counters moved only once for every copy of the event —
+		// whether the same SQS message is redelivered or SNS publishes the
+		// notification twice, identical content dedupes identically.
+		expect(state.jobs[0].status).toBe("delivered");
+		expect(state.notifications.size).toBe(1);
+		// A genuinely different delivery event still applies.
+		await applySesEvent(delivery("delivery", "2026-10-28T12:02:00.000Z"));
+		expect(row.event_at).toBe("2026-10-28 12:02:00.000");
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+		expect(state.notifications.size).toBe(2);
+	});
+	it("locks the subscriber rows before the delivery attempt", async () => {
+		const row = seed("test", "accepted");
+		state.subscribers.push({ ...subscriber(9, "real"), email: row.email });
+		const order: string[] = [];
+		mocks.txQuery.mockImplementation(async (_c, sql, p) => {
+			if (compact(String(sql)).includes("tanah_daily_bulletin_subscriber"))
+				order.push("subscriber");
+			return read(sql, p);
+		});
+		mocks.txQueryOne.mockImplementation(async (_c, sql, p) => {
+			const compacted = compact(String(sql));
+			if (
+				compacted.includes("tanah_daily_bulletin_email_recipient") &&
+				compacted.includes("FOR UPDATE")
+			)
+				order.push("attempt");
+			return read(sql, p)[0] ?? null;
+		});
+		await applySesEvent(delivery());
+		expect(order).toEqual(["subscriber", "attempt"]);
+		expect(mocks.txQuery).toHaveBeenCalledWith(
+			{},
+			expect.stringContaining("ORDER BY id FOR UPDATE"),
+			[row.email, 1],
+		);
+	});
 	it("orders UTC event strings independently of the process timezone", async () => {
 		const previous = process.env.TZ;
 		process.env.TZ = "Asia/Jerusalem";
@@ -1479,6 +1618,282 @@ describe("SES events", () => {
 		await processEmailRecipient(row.id);
 		expect(row.status).toBe("suppressed");
 		expect(mocks.sendOne).not.toHaveBeenCalled();
+	});
+});
+
+describe("tracked engagement events", () => {
+	it("records a tracked open once per recipient while counting each event", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open"));
+		expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.open_count).toBe(1);
+		expect(row.status).toBe("delivered");
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
+		expect(row.open_count).toBe(2);
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: false,
+			opened: 1,
+			clicked: 0,
+		});
+	});
+	it("keeps the newest open timestamp across out-of-order events", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open", "2026-10-28T12:05:00.000Z"));
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
+		expect(row.opened_at).toBe("2026-10-28 12:05:00.000");
+		expect(row.open_count).toBe(2);
+	});
+	it("records a content click but never a subscription-management link", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent({
+			...delivery("click"),
+			link: "https://xn--febl3a.co.il/perek/1",
+		});
+		expect(row.clicked_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.click_count).toBe(1);
+		await applySesEvent({
+			...delivery("click", "2026-10-28T12:06:00.000Z"),
+			link: "https://abc.subscription.il-central-1.amazonses.com/",
+		});
+		await applySesEvent({
+			...delivery("click", "2026-10-28T12:07:00.000Z"),
+			link: "https://xn--febl3a.co.il/unsubscribe?id=1",
+		});
+		expect(row.clicked_at).toBe("2026-10-28 12:01:00.000");
+		expect(row.click_count).toBe(1);
+	});
+	it.each(["sending", "accepted", "uncertain"] as const)(
+		"lifts a %s row to delivered on tracked engagement",
+		async (status) => {
+			const row = seed("real", status);
+			await applySesEvent(delivery("open"));
+			expect(row.status).toBe("delivered");
+			expect(row.opened_at).toBe("2026-10-28 12:01:00.000");
+			expect(state.jobs[0].status).toBe("delivered");
+			expect(state.channel).toBe("sent");
+		},
+	);
+	it.each([
+		{ attemptId: "2_token-1" },
+		{ attemptId: "1_other-token" },
+		{ messageId: "another-message" },
+		{ email: "other@example.com" },
+	])("ignores engagement on mismatched delivery context %j", async (change) => {
+		const row = seed("test", "delivered");
+		await applySesEvent({ ...delivery("open"), ...change });
+		expect(row.opened_at).toBeNull();
+		expect(row.open_count).toBe(0);
+	});
+	it("counts a redelivered open once but separate instants fully", async () => {
+		const row = seed("test", "delivered");
+		const open = delivery("open");
+		await applySesEvent(open);
+		await applySesEvent({ ...open });
+		expect(row.open_count).toBe(1);
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
+	});
+	it("distinguishes same-instant opens by their raw notification", async () => {
+		const row = seed("test", "delivered");
+		const open = delivery("open");
+		const first = '{"open":{"ipAddress":"10.0.0.1","userAgent":"one"}}';
+		const second = '{"open":{"ipAddress":"10.0.0.2","userAgent":"two"}}';
+		await applySesEvent(open, first);
+		await applySesEvent({ ...open }, second);
+		// Provider details the parser drops still separate two real events
+		// that share every parsed field, down to the millisecond.
+		expect(row.open_count).toBe(2);
+		// A byte-identical copy of either notification still deduplicates.
+		await applySesEvent({ ...open }, first);
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
+	});
+	it("stamps the earliest proven delivery instant, never the edition date", async () => {
+		const row = seed("real", "accepted");
+		await applySesEvent(delivery("delivery"));
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+		// An earlier-dated late event keeps the earlier instant; a later one
+		// never moves it forward.
+		await applySesEvent(delivery("delivery", "2026-10-28T11:00:00.000Z"));
+		expect(row.delivered_at).toBe("2026-10-28 11:00:00.000");
+		await applySesEvent(delivery("delivery", "2026-10-28T12:05:00.000Z"));
+		expect(row.delivered_at).toBe("2026-10-28 11:00:00.000");
+	});
+	it("stamps delivery evidence when tracked engagement proves delivery", async () => {
+		const row = seed("real", "accepted");
+		await applySesEvent(delivery("open"));
+		expect(row.status).toBe("delivered");
+		expect(row.delivered_at).toBe("2026-10-28 12:01:00.000");
+	});
+	it("counts two opens at different instants as separate events", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("open"));
+		await applySesEvent(delivery("open", "2026-10-28T12:02:00.000Z"));
+		expect(row.open_count).toBe(2);
+	});
+	it("degrades summary engagement to nulls while the schema is not deployed", async () => {
+		seed("test", "delivered");
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return read(sql, p)[0] ?? null;
+		});
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: null,
+			opened: null,
+			clicked: null,
+		});
+	});
+	it("marks jobs tracked when the runtime enables engagement collection", async () => {
+		mocks.runtime.mockReturnValue({ ...config, trackingEnabled: true });
+		await enqueueBulletinEmail(date, key, expected);
+		expect(state.jobs[0].tracked).toBe(1);
+	});
+	it("falls back to an untracked insert while the job column is missing", async () => {
+		const engaged = config;
+		mocks.runtime.mockReturnValue({ ...engaged, trackingEnabled: true });
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes(", tracked) VALUES"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await enqueueBulletinEmail(date, key, expected);
+		expect(state.jobs[0].tracked).toBe(0);
+	});
+	it("propagates an unrelated job-insert failure instead of falling back", async () => {
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes(", tracked) VALUES"))
+				throw Object.assign(new Error("read-only replica"), {
+					code: "ER_OPTION_PREVENTS_STATEMENT",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(enqueueBulletinEmail(date, key, expected)).rejects.toThrow(
+			"read-only replica",
+		);
+		expect(state.jobs).toHaveLength(0);
+	});
+	it("counts zero engagement when the summary counters come back null", async () => {
+		seed("test", "delivered");
+		const inner = mocks.queryOne.getMockImplementation();
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				return { opened: null, clicked: null };
+			return inner?.(sql, p) ?? read(sql, p)[0] ?? null;
+		});
+		expect(await readLatestEmailJob(date, "test")).toMatchObject({
+			tracked: false,
+			opened: 0,
+			clicked: 0,
+		});
+	});
+	it("propagates a non-schema failure from the engagement summary", async () => {
+		seed("test", "delivered");
+		mocks.queryOne.mockImplementation(async (sql, p) => {
+			if (compact(String(sql)).includes("opened_at"))
+				throw new Error("deadlock");
+			return read(sql, p)[0] ?? null;
+		});
+		await expect(readLatestEmailJob(date, "test")).rejects.toThrow("deadlock");
+	});
+	it("applies an event without dedupe while the notification ledger is missing", async () => {
+		const row = seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (
+				compact(String(sql)).startsWith(
+					"INSERT INTO tanah_daily_bulletin_email_notification",
+				)
+			)
+				throw Object.assign(new Error("no such table"), {
+					code: "ER_NO_SUCH_TABLE",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("delivery"));
+		expect(row.status).toBe("delivered");
+		expect(state.notifications.size).toBe(0);
+	});
+	it("propagates an unrelated notification-ledger failure", async () => {
+		seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (
+				compact(String(sql)).startsWith(
+					"INSERT INTO tanah_daily_bulletin_email_notification",
+				)
+			)
+				throw Object.assign(new Error("deadlock"), {
+					code: "ER_LOCK_DEADLOCK",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("delivery"))).rejects.toThrow(
+			"deadlock",
+		);
+	});
+	it("never counts a click without a destination as content engagement", async () => {
+		const row = seed("test", "delivered");
+		await applySesEvent(delivery("click"));
+		expect(row.clicked_at).toBeNull();
+		expect(row.click_count).toBe(0);
+	});
+	it("skips engagement while the counter columns are missing", async () => {
+		const row = seed("test", "delivered");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("open_count"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("open"));
+		expect(row.open_count).toBe(0);
+		expect(row.status).toBe("delivered");
+	});
+	it("propagates an unrelated engagement-write failure", async () => {
+		seed("test", "delivered");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("open_count"))
+				throw new Error("deadlock");
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("open"))).rejects.toThrow("deadlock");
+	});
+	it("applies the delivery while the evidence column is missing", async () => {
+		const row = seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("delivered_at = LEAST"))
+				throw Object.assign(new Error("unknown column"), {
+					code: "ER_BAD_FIELD_ERROR",
+				});
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await applySesEvent(delivery("delivery"));
+		expect(row.status).toBe("delivered");
+		expect(row.delivered_at).toBeNull();
+	});
+	it("propagates an unrelated delivery-evidence failure", async () => {
+		seed("test", "accepted");
+		const inner = mocks.txExecute.getMockImplementation();
+		mocks.txExecute.mockImplementation(async (c, sql, p) => {
+			if (compact(String(sql)).includes("delivered_at = LEAST"))
+				throw new Error("deadlock");
+			return inner?.(c, sql, p) ?? write(sql, p);
+		});
+		await expect(applySesEvent(delivery("delivery"))).rejects.toThrow(
+			"deadlock",
+		);
 	});
 });
 
@@ -1656,6 +2071,34 @@ describe("summary and queue loop", () => {
 		expect(mocks.parse).toHaveBeenCalledWith(payload, config);
 		expect(row.status).toBe("delivered");
 		expect(mocks.sqs.mock.calls[1][0].kind).toBe("delete");
+	});
+	it("counts same-instant events under distinct notification bodies", async () => {
+		const row = seed("test", "delivered");
+		const c = new AbortController();
+		// Identical parsed fields down to the millisecond; only the raw
+		// notification differs, as when two opens land from distinct agents.
+		const bodies = [
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.1"}}',
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.2"}}',
+			'{"eventType":"Open","open":{"ipAddress":"10.0.0.1"}}',
+		];
+		let next = 0;
+		mocks.parse.mockReturnValue(delivery("open"));
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind !== "receive") return {};
+			if (next >= bodies.length) {
+				c.abort();
+				return {};
+			}
+			return {
+				Messages: [{ Body: bodies[next], ReceiptHandle: `receipt-${next++}` }],
+			};
+		});
+		await startEmailWorker(c.signal);
+		// The byte-identical third copy deduplicates; the two distinct
+		// notifications each count.
+		expect(row.open_count).toBe(2);
+		expect(state.notifications.size).toBe(2);
 	});
 	it("acknowledges the exact SES SNS validation control message without dispatching work", async () => {
 		const c = new AbortController();

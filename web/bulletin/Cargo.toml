@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.70"
+version = "0.1.74"
 edition = "2024"
 
 [lib]
@@ -29,6 +29,7 @@ sea-orm = { version = "2.0.4", default-features = false, features = [
     "runtime-tokio-native-tls",
 ] }
 entities = { path = "../api/entities" }
+url = "2.5.8"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

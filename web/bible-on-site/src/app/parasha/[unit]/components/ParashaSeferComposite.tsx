@@ -100,7 +100,8 @@ export const ParashaSeferComposite = (props: {
 	return (
 		<>
 			<ReadModeToggler toggled={toggled} onToggle={onToggleFromUser} />
-			<div
+			<main
+				hidden={display === "none"}
 				style={{ display }}
 				className={`${seferStyles.seferOverlay} ${
 					currentlyToggled ? seferStyles.visible : seferStyles.hidden
@@ -127,7 +128,7 @@ export const ParashaSeferComposite = (props: {
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />
 				) : null}
-			</div>
+			</main>
 		</>
 	);
 };

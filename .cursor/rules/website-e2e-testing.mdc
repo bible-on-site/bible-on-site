@@ -14,7 +14,7 @@ MySQL must be running locally (Windows service, port 3306). The launcher (`launc
 
 **Stale server pitfall**: `reuseExistingServer` stays `true` on CI and `WEB_PORT` runs, but is `false` for derived local ports — a leftover listener on a derived port fails fast ("already used") instead of being silently reused, because it cannot be distinguished from another worktree's colliding port. If a run dies leaving `next dev`/the launcher behind, find and kill the leftover on the suite's port (check `use.baseURL` in the config) before re-running.
 
-**Standalone mode**: `next start` does NOT work with `output: "standalone"` in `next.config.mjs`. The launcher uses `node .next/standalone/server.js` for production and `next dev` for coverage.
+**Standalone mode**: `next start` does NOT work with `output: "standalone"` in `next.config.mjs`. The launcher resolves the traced app dir (`scripts/standalone-app-dir.mjs` — the app nests at `.next/standalone/bible-on-site/` since `turbopack.root` widened to `web/` for `web/shared`, #3710) and runs `node server.js` from it for production, `next dev` for coverage.
 
 ## Commands
 

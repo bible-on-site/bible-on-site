@@ -1,4 +1,4 @@
 -r requirements.txt
-coverage==7.17.3
-cfn-lint==1.60.1
+coverage==7.17.5
+cfn-lint==1.61.0
 bandit==1.9.4

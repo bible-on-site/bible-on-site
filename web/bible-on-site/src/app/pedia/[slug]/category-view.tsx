@@ -135,7 +135,7 @@ export async function CategoryView({
 	});
 
 	return (
-		<div className={styles.tanahpediaPage}>
+		<main className={styles.tanahpediaPage}>
 			<JsonLd data={categoryGraph} />
 			<TanahpediaBreadcrumb currentCategory={currentCategory} />
 			<h1 className={styles.pageTitle}>{label}</h1>
@@ -215,6 +215,6 @@ export async function CategoryView({
 					חזרה לתנכפדיה
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

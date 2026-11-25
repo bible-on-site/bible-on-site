@@ -1,7 +1,7 @@
 FROM node:26.13.1-alpine AS base
 # Bun ships as a standalone binary — copy the pinned release matching
-# packageManager (bun@1.4.4) rather than installing a package manager.
-COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
+# packageManager rather than installing a package manager.
+COPY --from=oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b /usr/local/bin/bun /usr/local/bin/bun
 
 # Version-only releases must not invalidate the dependency layer.
 # bun.lock does not embed the manifest version, so only package.json needs
@@ -95,7 +95,9 @@ COPY --from=builder /app/bible-on-site/public ./public
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
+# The shared contract imports (#3710) widen turbopack.root to web/, so the
+# traced app nests under standalone/bible-on-site/.
+COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone/bible-on-site/ ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
 

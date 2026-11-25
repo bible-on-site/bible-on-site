@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useModalDialogFocus } from "~/lib/use-modal-dialog-focus";
 import {
 	SHORTCUT_EXTRAS_JSON_EXAMPLE,
 	SHORTCUT_SECTIONS,
@@ -13,6 +15,8 @@ interface EditorShortcutModalProps {
 	extrasDraft: string;
 	onExtrasDraftChange: (v: string) => void;
 	onSaveExtras: () => void;
+	/** Element whose click opened the modal; focus returns to it on close. */
+	opener?: HTMLElement | null;
 }
 
 export function EditorShortcutModal({
@@ -21,8 +25,20 @@ export function EditorShortcutModal({
 	extrasDraft,
 	onExtrasDraftChange,
 	onSaveExtras,
+	opener,
 }: EditorShortcutModalProps) {
 	const [query, setQuery] = useState("");
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useModalDialogFocus(open, dialogRef, opener ?? null);
+
+	useEffect(() => {
+		if (!open) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") onClose();
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [open, onClose]);
 
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase();
@@ -40,12 +56,26 @@ export function EditorShortcutModal({
 
 	if (!open) return null;
 
-	return (
+	return createPortal(
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 p-4"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="shortcut-help-title"
+			tabIndex={-1}
+			onClick={(e) => {
+				if (e.target === e.currentTarget) onClose();
+			}}
+			onKeyDown={(e) => {
+				// Enter/Space close only when the backdrop itself is the
+				// target — keys raised on the dialog's controls belong to them.
+				if (
+					e.target === e.currentTarget &&
+					(e.key === "Enter" || e.key === " ")
+				)
+					onClose();
+			}}
 		>
 			<div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
 				<div className="p-4 border-b border-gray-200 space-y-3 shrink-0">
@@ -60,6 +90,7 @@ export function EditorShortcutModal({
 							type="button"
 							onClick={onClose}
 							aria-label="סגירה"
+							data-modal-action="close"
 							className="text-gray-500 hover:text-gray-800 text-sm px-2"
 						>
 							<X size={16} aria-hidden="true" />
@@ -149,6 +180,7 @@ export function EditorShortcutModal({
 					</button>
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }

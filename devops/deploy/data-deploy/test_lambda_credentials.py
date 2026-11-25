@@ -10,6 +10,7 @@
 
 import importlib.util
 import os
+import ssl
 import sys
 import types
 import unittest
@@ -239,6 +240,35 @@ class DbCredentialsTests(unittest.TestCase):
         self.ssm_client(error=RuntimeError("ssm unavailable"))
         with self.assertRaisesRegex(RuntimeError, "ssm unavailable"):
             LAMBDA.db_credentials({})
+
+
+class DatabaseTlsTests(unittest.TestCase):
+    def test_remote_handler_requires_a_verified_tls_context(self):
+        context = ssl.create_default_context()
+        db_files = {"sql_files": [], "db_url": MYSQL_URL}
+        with patch.object(LAMBDA.boto3, "client", create=True), \
+                patch.object(LAMBDA.ssl, "create_default_context", return_value=context) as tls, \
+                patch.object(LAMBDA.pymysql, "connect", create=True) as connect:
+            result = LAMBDA.handler(db_files, None)
+        self.assertEqual(result["statusCode"], 200)
+        tls.assert_called_once_with(cafile=Path(LAMBDA.__file__).with_name("rds-ca.pem"))
+        connect.assert_called_once_with(
+            **EXPECTED_CREDENTIALS, connect_timeout=30, autocommit=True, ssl=context,
+        )
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+
+    def test_missing_ca_stops_before_connecting(self):
+        with patch.object(LAMBDA.boto3, "client", create=True), \
+                patch.object(LAMBDA.ssl, "create_default_context", side_effect=FileNotFoundError), \
+                patch.object(LAMBDA.pymysql, "connect", create=True) as connect, \
+                self.assertRaises(FileNotFoundError):
+            LAMBDA.handler({"db_url": MYSQL_URL}, None)
+        connect.assert_not_called()
+
+    def test_loopback_fixtures_use_the_connector_defaults(self):
+        for host in ("localhost", "127.0.0.1", "::1"):
+            self.assertIsNone(LAMBDA.database_tls(host))
 
 
 if __name__ == "__main__":

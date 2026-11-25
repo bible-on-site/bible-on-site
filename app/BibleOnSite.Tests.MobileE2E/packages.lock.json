@@ -24,15 +24,15 @@
       },
       "Selenium.WebDriver": {
         "type": "Direct",
-        "requested": "[4.53.0, )",
-        "resolved": "4.53.0",
-        "contentHash": "5drFnFaNcc5b3RoR5kYaRUx18uAyLZDecN0Z5QL6hDt+cunL8WqqDEBL34Q5OQZDUy4rHJhPJzNRK0bVaa7Qyg=="
+        "requested": "[4.54.0, )",
+        "resolved": "4.54.0",
+        "contentHash": "djqoNPLtvMpb3LFrOnD5bVJqHOP971psa93QmGPnSN0J9+imzvrvJBbsQNSM3DF7niSKq1YfNpw1Zxsd5UsQDA=="
       },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
-        "requested": "[10.36.0.15337, )",
-        "resolved": "10.36.0.15337",
-        "contentHash": "jGLAZUjheSURfe0T/dJYGUrMOrLt1fxaInpChq75YJvrywsxFoUKK/EM6PSfTjkt4pbaq2ywIQjgQzhrmmj5Ow=="
+        "requested": "[10.37.0.15768, )",
+        "resolved": "10.37.0.15768",
+        "contentHash": "73Qo5UF1HSCwUGqiZ9XOKXWNRAe3WN8dfsj3pWIi5oIuenY1Uo9WuMinGibs3up9zcJ5CFk5Ex/Ei/S17mcBvg=="
       },
       "StbImageSharp": {
         "type": "Direct",

@@ -8,6 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { isPasukCitationHash } from "@/lib/pasuk-anchor";
 import type { PerekViewMode } from "@/lib/perek-view-preference";
 
 /**
@@ -92,7 +93,7 @@ export function useSeferBookToggle(
 	useEffect(() => {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
-		if (/^#pasuk-[1-9]\d*(-\d+)?$/.test(window.location.hash)) return;
+		if (isPasukCitationHash(window.location.hash)) return;
 		const stored = prefsRef.current.getStored();
 		if (stored === "book" && searchParams.get("book") == null) {
 			const next = prefsRef.current.withBookQuery(
@@ -103,12 +104,6 @@ export function useSeferBookToggle(
 			router.replace(next, { scroll: false });
 		}
 	}, [isWideEnough, pathname, router, searchParams]);
-
-	useEffect(() => {
-		if (toggled) {
-			prefsRef.current.setStored("book");
-		}
-	}, [toggled]);
 
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
@@ -145,10 +140,19 @@ export function useSeferBookToggle(
 	}, [toggled, handleToggle, everToggled]);
 
 	useEffect(() => {
-		if (currentlyToggled && isWideEnough === true) {
+		const bookOpen = currentlyToggled && isWideEnough === true;
+		if (bookOpen) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
+		}
+		// html[data-book-view] already display:nones .seo-content; mirror the
+		// same state in the hidden attribute so the document never holds two
+		// un-hidden <main> elements (HTML allows one without `hidden`).
+		for (const el of document.querySelectorAll<HTMLElement>(
+			"main.seo-content",
+		)) {
+			el.hidden = bookOpen;
 		}
 		return () => {
 			delete document.documentElement.dataset.bookView;

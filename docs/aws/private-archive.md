@@ -140,20 +140,3 @@ and the saved router configuration, validates nginx and reloads. Remove archive
 environment values to disable its backend. Retain the additive tables, user pool and
 bucket to preserve files and identities. Do not delete storage or accounts during
 rollback. Re-enabling uses the same pool/database and preserves ownership.
-
-## Visual verification
-
-Before the module move, the initial implementation was embedded in the public
-website. This is an actual capture of that earlier implementation:
-
-![Before: website archive prototype](images/private-archive/website-prototype.png)
-
-After: the admin app has a dedicated archive login and role-specific directory
-views. These are actual Playwright captures with synthetic browser API responses;
-15 separate MySQL/encrypted RustFS tests verify real file storage, ownership,
-quota concurrency and deletion authorization.
-
-![Admin archive login](images/private-archive/login.png)
-![Administrator root](images/private-archive/admin-root.png)
-![Archiver personal directory](images/private-archive/directory.png)
-![Mobile administrator view](images/private-archive/mobile.png)

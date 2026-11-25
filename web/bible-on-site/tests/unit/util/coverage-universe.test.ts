@@ -298,6 +298,40 @@ process.stdout.write(JSON.stringify({
 		// Hits still land on canonical coordinates — coverage is preserved.
 		expect(result.hitStmts).toBeGreaterThan(0);
 	});
+
+	it("re-anchors tracing-root-relative record paths onto the package root (#3710)", () => {
+		// Since turbopack.root widened to web/, dev-server coverage records name
+		// files relative to that root (`bible-on-site/src/…`) instead of the
+		// package root (`src/…`). Without re-anchoring, every record resolves to
+		// `<pkg>/<pkg>/src/…` and sanitize drops the entire e2e map.
+		const packageDir = join(workDir, "pkg");
+		const srcDir = join(packageDir, "src");
+		mkdirSync(srcDir, { recursive: true });
+		writeFileSync(
+			join(srcDir, "alpha.ts"),
+			"export function twice(x: number) { return x > 0 ? x * 2 : -x; }\n",
+		);
+		const result = runHelper(
+			`import path from "node:path";
+import { getCoverageUniverse } from ${JSON.stringify(UNIVERSE_URL)};
+import { sanitizeCoverage } from ${JSON.stringify(SANITIZE_URL)};
+const srcDir = process.argv[2];
+const uni = getCoverageUniverse(srcDir);
+const canonical = uni.get(path.resolve(srcDir, "alpha.ts"));
+const record = structuredClone(canonical);
+record.path = "pkg/src/alpha.ts";
+const coverage = { "pkg/src/alpha.ts": record };
+sanitizeCoverage(coverage, srcDir, uni);
+process.stdout.write(JSON.stringify({
+	surviving: Object.keys(coverage),
+	entryPath: Object.values(coverage)[0]?.path,
+}));`,
+			srcDir,
+		) as { surviving: string[]; entryPath?: string };
+
+		expect(result.surviving).toEqual([join(srcDir, "alpha.ts")]);
+		expect(result.entryPath).toBe(join(srcDir, "alpha.ts"));
+	});
 });
 
 describeSwc("native coverage reporter module boundary", () => {
