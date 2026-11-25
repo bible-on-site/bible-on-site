@@ -131,7 +131,12 @@ async function reconcileDeferredContent(
 	conn: PoolConnection,
 	item: Contribution,
 ) {
-	if (!item.deferredContentMerge || migrationBlocked(item)) return;
+	if (
+		!item.deferredContentMerge ||
+		migrationBlocked(item) ||
+		item.articleLinkMerge
+	)
+		return;
 	const { refreshDeferredContributionBase } = await import(
 		"./contribution-rebases.server"
 	);
@@ -186,8 +191,22 @@ export async function migrateOpenContributionPrs(
 let startup: Promise<unknown> | undefined;
 export function ensureContributionMigrationsStarted(): void {
 	if (startup) return;
-	startup = migrateOpenContributionPrs()
+	startup = import("./contribution-article-import.server")
+		.then(({ importLegacyArticleLinkProposals }) =>
+			importLegacyArticleLinkProposals(),
+		)
+		.then(() => migrateOpenContributionPrs())
 		.then(async () => {
+			const { refreshRegisteredContributionAgents } = await import(
+				"./contribution-agent-registry.server"
+			);
+			await refreshRegisteredContributionAgents();
+			const {
+				reconcileContributionAgentAssignments,
+				ensureContributionAgentRuntimeStarted,
+			} = await import("./contribution-agent-runtime.server");
+			await reconcileContributionAgentAssignments();
+			ensureContributionAgentRuntimeStarted();
 			const { ensureContributionRebasesStarted } = await import(
 				"./contribution-rebase-runtime.server"
 			);

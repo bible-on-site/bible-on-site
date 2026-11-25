@@ -1,0 +1,45 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+	"$comment": "VENDORED SUBSET (issue #3497). The canonical $id does not resolve in practice, so this file pins the required properties/types of the Agent Skills Discovery RFC v0.2.0 (github.com/cloudflare/agent-skills-discovery-rfc, Updated 2026-03-12): top-level $schema + skills array; each entry requires name (Agent Skills naming rules: 1-64 chars, lowercase alphanumeric/hyphens, no leading/trailing/consecutive hyphens), type in {skill-md, archive}, description <= 1024 chars, url, and digest formatted sha256:{64 lowercase hex}.",
+	"title": "Agent Skills discovery index",
+	"type": "object",
+	"required": ["$schema", "skills"],
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"const": "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
+		},
+		"skills": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["name", "type", "description", "url", "digest"],
+				"properties": {
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 64,
+						"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+					},
+					"type": {
+						"enum": ["skill-md", "archive"]
+					},
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 1024
+					},
+					"url": {
+						"type": "string",
+						"format": "uri"
+					},
+					"digest": {
+						"type": "string",
+						"pattern": "^sha256:[0-9a-f]{64}$"
+					}
+				}
+			}
+		}
+	}
+}

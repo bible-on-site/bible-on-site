@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -12,7 +13,9 @@ import {
 	type Contribution,
 	type Evidence,
 	FIELD_LABELS,
+	type IssueScope,
 	validateChanges,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
@@ -22,6 +25,13 @@ import {
 	FAMILY_UNION_END_REASONS,
 	FAMILY_UNION_TYPES,
 } from "~/server/tanahpedia/family-api-spec";
+import {
+	ContributionArticleLinkFields,
+	type DiscoverContributionArticleLinks,
+	type PreviewContributionArticle,
+	type SearchContributionArticles,
+} from "./ContributionArticleLinks";
+import { ContributionIssueScopeFields } from "./ContributionIssueScope";
 import {
 	ContributionRecordFields,
 	draftField,
@@ -46,10 +56,12 @@ export function AssigneePicker({
 	value,
 	onChange,
 	disabled = false,
+	agents = [],
 }: {
 	value: Assignee;
 	onChange: (assignee: Assignee) => void;
 	disabled?: boolean;
+	agents?: ContributionAgentSummary[];
 }) {
 	return (
 		<div className="contribution-source-fields">
@@ -92,6 +104,37 @@ export function AssigneePicker({
 					/>
 				</label>
 			)}
+			{(value.kind === "local_llm" || value.kind === "aws_llm") && (
+				<label>
+					סוכן מטפל
+					<select
+						className="contribution-input"
+						aria-label="סוכן מטפל"
+						value={value.agentId ?? ""}
+						disabled={disabled}
+						onChange={(event) =>
+							onChange({
+								kind: value.kind,
+								...(event.target.value ? { agentId: event.target.value } : {}),
+							})
+						}
+					>
+						<option value="">סוכן ברירת המחדל</option>
+						{agents
+							.filter((agent) => agent.provider === value.kind)
+							.map((agent) => (
+								<option
+									key={agent.id}
+									value={agent.id}
+									disabled={!agent.enabled}
+								>
+									{agent.name}
+									{agent.enabled ? "" : " (מושבת)"}
+								</option>
+							))}
+					</select>
+				</label>
+			)}
 		</div>
 	);
 }
@@ -112,6 +155,7 @@ const NUMBERS = new Set([
 	"endDate",
 ]);
 const DEFAULTS: Record<ChangeInput["kind"], Record<string, string>> = {
+	article_links: { commands: "[]" },
 	...(Object.fromEntries(
 		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
 			kind,
@@ -218,10 +262,20 @@ function ChangeFields({
 	value,
 	onChange,
 	catalogue,
+	previewArticle,
+	searchArticles,
+	discoverLinks,
+	openPr,
+	allowArticleLinks,
 }: {
 	value: DraftChange;
 	onChange: (value: DraftChange) => void;
 	catalogue: ContributionCatalogue;
+	previewArticle?: PreviewContributionArticle;
+	searchArticles?: SearchContributionArticles;
+	discoverLinks?: DiscoverContributionArticleLinks;
+	openPr?: (id: string) => unknown;
+	allowArticleLinks: boolean;
 }) {
 	const targets = catalogue.targets.filter(
 		(target) => target.kind === value.kind,
@@ -260,7 +314,11 @@ function ChangeFields({
 								!isContributionRecordKind(key),
 						)
 						.map(([key, label]) => (
-							<option key={key} value={key}>
+							<option
+								key={key}
+								value={key}
+								disabled={key === "article_links" && !allowArticleLinks}
+							>
 								{label}
 							</option>
 						))}
@@ -321,7 +379,22 @@ function ChangeFields({
 					</select>
 				</label>
 			)}
-			{!["metadata", "entry"].includes(value.kind) && (
+			{value.kind === "article_links" && (
+				<ContributionArticleLinkFields
+					targetId={value.targetId}
+					commands={value.fields.commands}
+					references={catalogue.references}
+					previewArticle={previewArticle}
+					searchArticles={searchArticles}
+					discoverLinks={discoverLinks}
+					openPr={openPr}
+					onTargetChange={(targetId) => onChange({ ...value, targetId })}
+					onCommandsChange={(commands) =>
+						onChange({ ...value, fields: { commands } })
+					}
+				/>
+			)}
+			{!["metadata", "entry", "article_links"].includes(value.kind) && (
 				<>
 					<label>
 						{structured ? "רשומה קיימת" : "קשר או זיהוי קיים"}
@@ -410,7 +483,7 @@ function ChangeFields({
 					catalogue={catalogue}
 				/>
 			)}
-			{!value.deleting && !structured && (
+			{!value.deleting && !structured && value.kind !== "article_links" && (
 				<div className="contribution-form-grid">
 					{Object.entries(value.fields)
 						.filter(
@@ -517,6 +590,7 @@ export interface ComposeContribution {
 	changes: ChangeInput[];
 	issueId: string | null;
 	closeIssue: boolean;
+	scope?: IssueScope | null;
 }
 
 export function ContributionComposer({
@@ -527,6 +601,11 @@ export function ContributionComposer({
 	busy,
 	onSubmit,
 	onCancel,
+	agents,
+	previewArticle,
+	searchArticles,
+	discoverLinks,
+	openPr,
 }: {
 	kind: "issue" | "pr";
 	initial?: Contribution;
@@ -535,12 +614,20 @@ export function ContributionComposer({
 	busy: boolean;
 	onSubmit: (value: ComposeContribution) => Promise<void>;
 	onCancel: () => void;
+	agents?: ContributionAgentSummary[];
+	previewArticle?: PreviewContributionArticle;
+	searchArticles?: SearchContributionArticles;
+	discoverLinks?: DiscoverContributionArticleLinks;
+	openPr?: (id: string) => unknown;
 }) {
 	const formId = useId();
 	const [title, setTitle] = useState(
 		initial?.title ?? linkedIssue?.title ?? "",
 	);
 	const [description, setDescription] = useState(initial?.description ?? "");
+	const [scope, setScope] = useState<IssueScope | undefined>(
+		kind === "issue" ? initial?.scope : undefined,
+	);
 	const [assignee, setAssignee] = useState<Assignee>(
 		initial?.assignee ?? { kind: "unassigned" },
 	);
@@ -563,28 +650,37 @@ export function ContributionComposer({
 				event.preventDefault();
 				setError("");
 				try {
+					const preserveMigratedEmptySequence =
+						initial?.kind === "pr" &&
+						initial.apiMigration?.status === "succeeded" &&
+						initial.changes.length === 0 &&
+						changes.length === 0;
 					const inputs =
-						kind === "pr"
+						kind === "pr" && !preserveMigratedEmptySequence
 							? validateChanges(
 									changes.map((change) => ({
 										kind: change.kind,
 										targetId: change.targetId || undefined,
 										after: change.deleting
 											? null
-											: Object.fromEntries(
-													Object.entries(change.fields).map(([key, value]) => [
-														key,
-														isContributionRecordKind(change.kind) ||
-														change.kind === "alias_mapping" ||
-														change.kind === "source_reference"
-															? recordFieldValue(change.kind, key, value)
-															: NUMBERS.has(key)
-																? value === ""
-																	? null
-																	: Number(value)
-																: value,
-													]),
-												),
+											: change.kind === "article_links"
+												? { commands: JSON.parse(change.fields.commands) }
+												: Object.fromEntries(
+														Object.entries(change.fields).map(
+															([key, value]) => [
+																key,
+																isContributionRecordKind(change.kind) ||
+																change.kind === "alias_mapping" ||
+																change.kind === "source_reference"
+																	? recordFieldValue(change.kind, key, value)
+																	: NUMBERS.has(key)
+																		? value === ""
+																			? null
+																			: Number(value)
+																		: value,
+															],
+														),
+													),
 									})),
 								)
 							: [];
@@ -597,6 +693,13 @@ export function ContributionComposer({
 						changes: inputs,
 						issueId: initial?.issueId ?? linkedIssue?.id ?? null,
 						closeIssue,
+						...(kind === "issue"
+							? scope
+								? { scope: validateIssueScope(scope) }
+								: initial?.scope
+									? { scope: null }
+									: {}
+							: {}),
 					});
 				} catch (failure) {
 					setError(failure instanceof Error ? failure.message : "השמירה נכשלה");
@@ -637,7 +740,27 @@ export function ContributionComposer({
 					}
 				/>
 			</label>
-			<AssigneePicker value={assignee} onChange={setAssignee} disabled={busy} />
+			{kind === "issue" && (
+				<ContributionIssueScopeFields
+					value={scope}
+					onChange={setScope}
+					catalogue={catalogue}
+					disabled={busy}
+				/>
+			)}
+			<AssigneePicker
+				value={assignee}
+				onChange={setAssignee}
+				disabled={busy}
+				agents={agents}
+			/>
+			{(assignee.kind === "local_llm" || assignee.kind === "aws_llm") && (
+				<p className="contribution-muted" role="note">
+					שמירת השיוך מפעילה את הסוכן. הוא יקרא את{" "}
+					{kind === "pr" ? "ההצעה, השינויים והדיון" : "הפנייה, המקורות והדיון"}{" "}
+					ויכין שינויים לסקירה.
+				</p>
+			)}
 			<fieldset className="contribution-fieldset">
 				<legend>ראיות ומקורות</legend>
 				<div className="contribution-source-fields">
@@ -664,7 +787,13 @@ export function ContributionComposer({
 													setEvidence(
 														evidence.map((item) =>
 															item.key === source.key
-																? { ...item, [key]: event.target.value }
+																? {
+																		...item,
+																		[key]: event.target.value,
+																		...(key === "quote"
+																			? { articleSource: undefined }
+																			: {}),
+																	}
 																: item,
 														),
 													)
@@ -740,6 +869,11 @@ export function ContributionComposer({
 								<ChangeFields
 									value={change}
 									catalogue={catalogue}
+									previewArticle={previewArticle}
+									searchArticles={searchArticles}
+									discoverLinks={discoverLinks}
+									openPr={openPr}
+									allowArticleLinks={changes.length === 1}
 									onChange={(next) =>
 										setChanges(
 											changes.map((item) =>
@@ -767,7 +901,10 @@ export function ContributionComposer({
 						<button
 							className="contribution-button"
 							type="button"
-							disabled={changes.length >= 40}
+							disabled={
+								changes.length >= 40 ||
+								changes.some((change) => change.kind === "article_links")
+							}
 							onClick={() => setChanges([...changes, newChange()])}
 						>
 							+ הוספת שינוי

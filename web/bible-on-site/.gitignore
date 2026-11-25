@@ -62,6 +62,18 @@ tests/unit/components/err.txt
 # Build-time store snapshot; regenerate via scripts/collect-store-metadata.mts.
 /src/data/db/store-metadata-snapshot.generated.json
 
+# Build-time warm-up artifact; regenerate via scripts/generate-warm-derived.mts.
+/src/data/db/warm-derived.generated.json.br
+
 # Generated, content-addressed reader books
 /src/data/db/sefer-books/
 /public/generated/sefarim/
+
+# Staged from web/shared/branding (scripts/stage-brand-assets.mjs, #3708)
+/public/fonts/
+/public/font-license.txt
+/public/images/logos/
+/public/apple-touch-icon.png
+/src/app/favicon.ico
+/src/lib/download/fonts/
+/src/lib/download/logo_header.jpg

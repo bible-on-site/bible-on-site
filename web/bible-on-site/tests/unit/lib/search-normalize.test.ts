@@ -108,20 +108,22 @@ describe("htmlToPlainText", () => {
 	it("removes script and style contents entirely", () => {
 		expect(
 			htmlToPlainText("<p>טקסט</p><script>alert(1)</script><p>עוד</p>"),
-		).toBe("טקסט  עוד");
+		).toBe("טקסט עוד");
 	});
 
-	it("strips tags nested inside other tag fragments until stable", () => {
-		// Single-pass removal would leave a re-formed "<script>" behind.
-		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).not.toContain(
-			"<script",
+	it("consumes nested tag openers in a single pass", () => {
+		// The nested opener is consumed as a plain tag, so no "<script>"
+		// survives and the text between the tags stays, like the Rust ports.
+		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).toBe(
+			"ipt>alert(1)",
 		);
-		expect(htmlToPlainText("א<<b>b>ב")).not.toContain("<");
+		// A `<` that cannot open a tag stays literal, like HtmlAgilityPack.
+		expect(htmlToPlainText("א<<b>b>ב")).toBe("א<b>ב");
 	});
 
 	it("stops scanning a large plain remainder for tags once all openers are removed", () => {
 		const html = "<p>שלום </p>".repeat(10_000);
-		const plain = "שלום  ".repeat(10_000).trim();
+		const plain = "שלום ".repeat(10_000).trim();
 		const replace = String.prototype.replace;
 		const spy = jest
 			.spyOn(String.prototype, "replace")
@@ -159,7 +161,56 @@ describe("htmlToPlainText", () => {
 		expect(htmlToPlainText("א &amp; ב")).toBe("א & ב");
 	});
 
+	it("keeps text after a comment that mentions a tag", () => {
+		expect(htmlToPlainText("א <!-- <style> --> ב")).toBe("א  ב");
+	});
+
+	it("removes an unterminated script block to end of input", () => {
+		expect(htmlToPlainText("א<script>x")).toBe("א");
+	});
+
 	it("leaves unknown entities untouched", () => {
 		expect(htmlToPlainText("&notanentity;")).toBe("&notanentity;");
+	});
+
+	// The same cases are asserted in SearchTextTests.cs (app),
+	// search_text.rs (the delivered index builder) and
+	// article_search/text.rs (api): every open or close block-level tag is a
+	// word break in all four ports.
+	it.each([
+		["<td>foo</td><td>bar</td>", "foo bar"],
+		["<th>א</th><td>ב</td>", "א ב"],
+		["<h4>א</h4>ב", "א ב"],
+		["<ul><li>א</li><li>ב</li></ul>", "א ב"],
+		["<table><tr><td>א</td><td>ב</td></tr></table>", "א ב"],
+		["<blockquote>א</blockquote><section>ב</section>", "א ב"],
+		["<header>א</header><article>ב</article>", "א ב"],
+		["<footer>א</footer>ב", "א ב"],
+		["א<hr>ב", "א ב"],
+		["<div>א", "א"],
+		["<p>א</p><p>ב</p>", "א ב"],
+		["א<br>ב", "א ב"],
+		// A boundary emits one space unless preceding text ends in one.
+		// whitespace around tags stays literal in every port.
+		["א <br>ב", "א ב"],
+		["א  <br>ב", "א  ב"],
+		["א<br> ב", "א  ב"],
+		["א <br> <br>ב", "א  ב"],
+		["א<div></div>ב", "א ב"],
+		// A comment emits nothing; markup inside it never reaches the scanner.
+		["א<!-- <style> -->ב", "אב"],
+		// A commented-out opener must not pair with a real close tag.
+		["א<!-- <style> -->ב<style>x</style>ג", "אבג"],
+		// Comment markers inside a skipped script/style body are inert —
+		// the closing tag still ends the block.
+		["א<script><!--</script>ב", "אב"],
+		["א<style>x<!-- -->y</style>ב", "אב"],
+		// A script block starting before a comment marker still wins —
+		// whichever construct opens first is the one removed.
+		["א<script>x<!--y</script>ב", "אב"],
+		// An unterminated comment swallows to end of input.
+		["א<!--x", "א"],
+	])("splits %s into normalized words %s", (html, expected) => {
+		expect(htmlToPlainText(html)).toBe(expected);
 	});
 });

@@ -57,54 +57,96 @@ const INITIAL_STATE: CarouselState = {
 	total: 0,
 };
 
+/**
+ * Per-child layout that scroll does not change: scrolling moves the
+ * viewport, never the children. Rebuilt on renders whose children differ
+ * and on resizes; scroll events only re-derive against it.
+ */
+interface Geometry {
+	rtl: boolean;
+	/** The children at measure time, for identity checks on later renders. */
+	items: Element[];
+	/** Distance of each child's start edge from the content's start edge. */
+	offsets: number[];
+	/** Each child's inline size. */
+	widths: number[];
+	scrollWidth: number;
+	clientWidth: number;
+}
+
 interface Measurement extends CarouselState {
 	rtl: boolean;
-	box: DOMRect;
-	items: Element[];
+	offsets: number[];
 	/** First item whose start edge has not passed the viewport's start edge. */
 	anchorIndex: number;
 	/** That item's distance from the viewport's start edge. */
 	anchorGap: number;
 }
 
-function measure(el: HTMLElement): Measurement {
+function measureGeometry(el: HTMLElement): Geometry {
 	const box = el.getBoundingClientRect();
 	const rtl = getComputedStyle(el).direction === "rtl";
+	// RTL scrollLeft runs from 0 down to negative values; |scrollLeft| is
+	// the distance scrolled from the start edge in both directions.
+	const scrolled = Math.abs(el.scrollLeft);
 	const items = Array.from(el.children);
-	const visible = items.flatMap((item, i) => {
+	const offsets: number[] = [];
+	const widths: number[] = [];
+	for (const item of items) {
 		const r = item.getBoundingClientRect();
-		return r.left >= box.left - TOLERANCE_PX &&
-			r.right <= box.right + TOLERANCE_PX
-			? [i + 1]
-			: [];
-	});
-	// The position anchor: the first item at or past the start edge, and how
-	// far its start edge sits from the viewport's — an item-based position
-	// that survives card and viewport width changes.
+		widths.push(r.width);
+		// gap + scrolled is the child's position in content coordinates —
+		// invariant to further scrolling.
+		offsets.push((rtl ? box.right - r.right : r.left - box.left) + scrolled);
+	}
+	return {
+		rtl,
+		items,
+		offsets,
+		widths,
+		scrollWidth: el.scrollWidth,
+		clientWidth: el.clientWidth,
+	};
+}
+
+function sameItems(children: HTMLCollection, items: Element[]): boolean {
+	return (
+		children.length === items.length &&
+		Array.from(children).every((child, i) => child === items[i])
+	);
+}
+
+// Everything a scroll event needs, from cached geometry and scrollLeft.
+function derive(el: HTMLElement, g: Geometry): Measurement {
+	const scrolled = Math.abs(el.scrollLeft);
+	const clientWidth = g.clientWidth;
+	const max = g.scrollWidth - clientWidth;
+	let first = 0;
+	let last = 0;
 	let anchorIndex = -1;
 	let anchorGap = 0;
-	for (const [i, item] of items.entries()) {
-		const r = item.getBoundingClientRect();
-		const gap = rtl ? box.right - r.right : r.left - box.left;
-		if (gap >= -TOLERANCE_PX) {
+	for (const [i, start] of g.offsets.entries()) {
+		if (
+			start >= scrolled - TOLERANCE_PX &&
+			start + g.widths[i] <= scrolled + clientWidth + TOLERANCE_PX
+		) {
+			if (first === 0) first = i + 1;
+			last = i + 1;
+		}
+		if (anchorIndex === -1 && start - scrolled >= -TOLERANCE_PX) {
 			anchorIndex = i;
-			anchorGap = gap;
-			break;
+			anchorGap = start - scrolled;
 		}
 	}
-	// RTL scrollLeft runs from 0 down to negative values.
-	const scrolled = Math.abs(el.scrollLeft);
-	const max = el.scrollWidth - el.clientWidth;
 	return {
 		overflows: max > TOLERANCE_PX,
 		canPrev: scrolled > TOLERANCE_PX,
 		canNext: scrolled < max - TOLERANCE_PX,
-		first: visible[0] ?? 0,
-		last: visible[visible.length - 1] ?? 0,
-		total: items.length,
-		rtl,
-		box,
-		items,
+		first,
+		last,
+		total: g.items.length,
+		rtl: g.rtl,
+		offsets: g.offsets,
 		anchorIndex,
 		anchorGap,
 	};
@@ -125,12 +167,10 @@ function positionOf(m: Measurement): CarouselPosition {
 // Bring the remembered item back to its remembered distance from the start
 // edge; the browser clamps any overshoot to the scrollable range.
 function alignTo(el: HTMLElement, m: Measurement, target: CarouselPosition) {
-	const item =
-		m.items[Math.min(Math.max(target.itemIndex, 0), m.items.length - 1)];
-	if (!item) return;
-	const r = item.getBoundingClientRect();
-	const gap = m.rtl ? m.box.right - r.right : r.left - m.box.left;
-	const delta = gap - target.itemGap;
+	const start =
+		m.offsets[Math.min(Math.max(target.itemIndex, 0), m.offsets.length - 1)];
+	if (start === undefined) return;
+	const delta = start - Math.abs(el.scrollLeft) - target.itemGap;
 	if (Math.abs(delta) <= TOLERANCE_PX) return;
 	el.scrollLeft += m.rtl ? -delta : delta;
 }
@@ -161,6 +201,8 @@ function writeStoredPosition(key: string, position: CarouselPosition): void {
 		// Positions are a convenience; losing them must never break the UI.
 	}
 }
+
+const WRITE_DEBOUNCE_MS = 150;
 
 function Chevron({ className }: { className: string }) {
 	return (
@@ -208,64 +250,120 @@ export function Carousel({
 	const positionKeyRef = useRef<string | undefined>(undefined);
 	const rememberedPosition = useRef<CarouselPosition | null>(null);
 	const restoreOwed = useRef(false);
+	// Scroll-invariant child geometry; scroll events derive against it
+	// instead of re-measuring every card.
+	const geometry = useRef<Geometry | null>(null);
+	// Scroll events fire per frame, so position writes are debounced: the
+	// in-ref position stays exact each event while sessionStorage catches
+	// up when the gesture settles or the carousel unmounts.
+	const pendingWrite = useRef<{
+		key: string;
+		position: CarouselPosition;
+	} | null>(null);
+	const writeTimer = useRef<number | null>(null);
 
-	const update = useCallback(() => {
-		// A queued resize/scroll callback can arrive after navigation detaches the ref.
-		const el = ref.current;
-		if (!el) return;
-		let next = measure(el);
-
-		if (positionKeyRef.current !== scrollStorageKey) {
-			positionKeyRef.current = scrollStorageKey;
-			rememberedPosition.current = scrollStorageKey
-				? readStoredPosition(scrollStorageKey)
-				: null;
-			restoreOwed.current = true;
+	const flushStoredPosition = useCallback(() => {
+		if (writeTimer.current !== null) {
+			clearTimeout(writeTimer.current);
+			writeTimer.current = null;
 		}
+		const pending = pendingWrite.current;
+		pendingWrite.current = null;
+		if (pending) writeStoredPosition(pending.key, pending.position);
+	}, []);
 
-		if (!next.overflows) {
-			restoreOwed.current = true;
-		} else {
-			if (restoreOwed.current && rememberedPosition.current) {
-				alignTo(el, next, rememberedPosition.current);
-				// Re-measure: the scroll just moved every card.
-				next = measure(el);
+	const scheduleStoredPosition = useCallback(
+		(key: string, position: CarouselPosition) => {
+			pendingWrite.current = { key, position };
+			if (writeTimer.current !== null) clearTimeout(writeTimer.current);
+			writeTimer.current = window.setTimeout(() => {
+				writeTimer.current = null;
+				flushStoredPosition();
+			}, WRITE_DEBOUNCE_MS);
+		},
+		[flushStoredPosition],
+	);
+
+	const update = useCallback(
+		(reason: "scroll" | "render" | "resize") => {
+			// A queued resize/scroll callback can arrive after navigation detaches the ref.
+			const el = ref.current;
+			if (!el) return;
+			let g = geometry.current;
+			if (
+				!g ||
+				reason === "resize" ||
+				(reason === "render" && !sameItems(el.children, g.items)) ||
+				// Any card's size or position change moves a dimension: re-measure.
+				el.scrollWidth !== g.scrollWidth ||
+				el.clientWidth !== g.clientWidth
+			) {
+				g = measureGeometry(el);
+				geometry.current = g;
 			}
-			restoreOwed.current = false;
-			const current = positionOf(next);
-			rememberedPosition.current = current;
-			if (scrollStorageKey) writeStoredPosition(scrollStorageKey, current);
-		}
+			let next = derive(el, g);
 
-		const state: CarouselState = {
-			overflows: next.overflows,
-			canPrev: next.canPrev,
-			canNext: next.canNext,
-			first: next.first,
-			last: next.last,
-			total: next.total,
-		};
-		setState((prev) => (sameState(prev, state) ? prev : state));
-	}, [scrollStorageKey]);
+			if (positionKeyRef.current !== scrollStorageKey) {
+				positionKeyRef.current = scrollStorageKey;
+				rememberedPosition.current = scrollStorageKey
+					? readStoredPosition(scrollStorageKey)
+					: null;
+				restoreOwed.current = true;
+			}
 
-	// Re-measure after every render: children (loading/empty/cards) may change.
-	useEffect(update);
+			if (!next.overflows) {
+				restoreOwed.current = true;
+			} else {
+				if (restoreOwed.current && rememberedPosition.current) {
+					alignTo(el, next, rememberedPosition.current);
+					// The scroll just moved every card; the offsets are unchanged.
+					next = derive(el, g);
+				}
+				restoreOwed.current = false;
+				const current = positionOf(next);
+				rememberedPosition.current = current;
+				if (scrollStorageKey)
+					scheduleStoredPosition(scrollStorageKey, current);
+			}
+
+			const state: CarouselState = {
+				overflows: next.overflows,
+				canPrev: next.canPrev,
+				canNext: next.canNext,
+				first: next.first,
+				last: next.last,
+				total: next.total,
+			};
+			setState((prev) => (sameState(prev, state) ? prev : state));
+		},
+		[scrollStorageKey, scheduleStoredPosition],
+	);
+
+	// Re-derive after every render: children (loading/empty/cards) may change.
+	useEffect(() => update("render"));
 
 	useEffect(() => {
 		const el = ref.current as HTMLDivElement;
-		el.addEventListener("scroll", update, { passive: true });
+		const onScroll = () => update("scroll");
+		const onResize = () => update("resize");
+		el.addEventListener("scroll", onScroll, { passive: true });
 		const observer =
 			typeof ResizeObserver === "undefined"
 				? undefined
-				: new ResizeObserver(update);
+				: new ResizeObserver(onResize);
 		observer?.observe(el);
-		window.addEventListener("resize", update);
+		window.addEventListener("resize", onResize);
+		// React cleanup runs on SPA navigation; pagehide also catches a hard
+		// reload or tab close inside the debounce window.
+		window.addEventListener("pagehide", flushStoredPosition);
 		return () => {
-			el.removeEventListener("scroll", update);
+			el.removeEventListener("scroll", onScroll);
 			observer?.disconnect();
-			window.removeEventListener("resize", update);
+			window.removeEventListener("resize", onResize);
+			window.removeEventListener("pagehide", flushStoredPosition);
+			flushStoredPosition();
 		};
-	}, [update]);
+	}, [update, flushStoredPosition]);
 
 	function scrollByCard(step: 1 | -1) {
 		const el = ref.current as HTMLDivElement;

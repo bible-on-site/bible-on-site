@@ -12,6 +12,7 @@ import lighthouse, {
 import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
 import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
 import { largestObservedTopLevelTask } from "../../scripts/lighthouse-observed-task.mjs";
+import { warmUpAuditTarget } from "../../scripts/lighthouse-warmup.mjs";
 import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
@@ -127,9 +128,10 @@ const test = base.extend<
 							pageFunctions.computeBenchmarkIndex,
 						);
 
-						// Warm up the page
-						await page.goto(url, { waitUntil: "networkidle" });
-						await page.close();
+						// Warm up the page; about:blank before close keeps the
+						// warmed document's deferred teardown out of the audited
+						// navigation's trace (issue #3163).
+						await warmUpAuditTarget(page, url);
 
 						// Run Lighthouse
 						const audit = await runLighthouseAudit(
@@ -153,6 +155,30 @@ const test = base.extend<
 							console.warn(
 								`Largest observed task extraction failed for ${url} (${strategy}):`,
 								error,
+							);
+						}
+						// The observed largest top-level task is the gated
+						// task-blocking signal (#3605): real on-runner
+						// milliseconds against a 250ms tripwire, immune to the
+						// CPU-calibration noise that retired the modeled FID
+						// proxy below. Extraction failures are diagnostics-only
+						// and simply skip this benchmark.
+						if (observedTask) {
+							reportBenchmark(
+								lighthouseBenchmarkEntry(
+									{
+										name: lighthouseBenchmarkName(
+											path,
+											strategy,
+											"metric: largest-observed-task",
+										),
+										measure: "time_ms",
+										value: observedTask.duration,
+									},
+									"largest-observed-task",
+									// Unused: the audit id carries its own published bound.
+									Number.NaN,
+								),
 							);
 						}
 						const report = saveReport(lhr, strategy, {
@@ -339,6 +365,16 @@ function loadKnownIssues(): Map<string, KnownIssue> {
 
 // Load known issues at module load time
 const KNOWN_ISSUES = loadKnownIssues();
+
+// Audits retired from Bencher reporting by policy (#3605): `max-potential-fid`
+// is Google's deprecated FID proxy — its Lantern-modeled value scales an
+// observed ~29ms framework task (react-dom/scheduler evaluate + hydration)
+// into a volatile 160-260ms reading that straddles its 250ms budget on CPU
+// calibration alone, while the suite's real INP measurement is the
+// responsiveness gate. The audit still runs and lands in the LHR, summary and
+// opportunities diagnostics; the observed top-level task reported per audit
+// carries the task-blocking gate instead.
+const BENCHER_RETIRED_AUDITS = new Set(["max-potential-fid"]);
 
 function isKnownIssue(auditId: string, strategy: DeviceStrategy): boolean {
 	const issue = KNOWN_ISSUES.get(auditId);
@@ -710,21 +746,25 @@ test.describe("Lighthouse", () => {
 								: getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;
-						reportBenchmark(
-							lighthouseBenchmarkEntry(
-								{
-									name: lighthouseBenchmarkName(
-										path,
-										strategy,
-										`audit: ${auditId}`,
-									),
-									measure,
-									value: benchmarkValue,
-								},
-								auditId,
-								metricThresholds.tbt,
-							),
-						);
+						// Retired audits stay in the report but never reach
+						// Bencher — see BENCHER_RETIRED_AUDITS.
+						if (!BENCHER_RETIRED_AUDITS.has(auditId)) {
+							reportBenchmark(
+								lighthouseBenchmarkEntry(
+									{
+										name: lighthouseBenchmarkName(
+											path,
+											strategy,
+											`audit: ${auditId}`,
+										),
+										measure,
+										value: benchmarkValue,
+									},
+									auditId,
+									metricThresholds.tbt,
+								),
+							);
+						}
 
 						// Use test.step for per-audit visibility in the report
 						await test.step(`audit: ${auditId}`, async () => {

@@ -57,6 +57,17 @@ describe("perek-view-preference", () => {
 		).toBe("/929/5?x=2");
 	});
 
+	it("pathnameWithBookQuery drops the further-reading param on exit (#3752)", () => {
+		// ?further= only names an in-book selection; a flat URL carrying it
+		// would resurrect the article the next time the book view opens.
+		expect(
+			pathnameWithBookQuery("/929/2", "book&further=1&x=2", false),
+		).toBe("/929/2?x=2");
+		expect(
+			pathnameWithBookQuery("/929/2", "book&further=1", false),
+		).toBe("/929/2");
+	});
+
 	it("pathnameWithBookQuery omits ? when empty", () => {
 		expect(pathnameWithBookQuery("/929/1", "", false)).toBe("/929/1");
 	});

@@ -5,13 +5,38 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import {
+	ArrowLeft,
+	ArrowRight,
+	BookOpen,
+	CalendarDays,
+	FileText,
+	LoaderCircle,
+	NotebookText,
+	Pencil,
+	Plus,
+	Save,
+	Star,
+	Trash2,
+	UserRound,
+} from "lucide-react";
 import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { HebrewDatesEditor } from "~/components/HebrewDatesEditor";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	type WysiwygEditorHandle,
+	WysiwygEditor,
+} from "~/components/WysiwygEditor";
 import {
 	coverageFieldsForSave,
 	perekSourceLabel,
@@ -75,6 +100,34 @@ function ArticleEditPage() {
 
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
+	const editorRef = useRef<WysiwygEditorHandle>(null);
+	/* The editor debounces onChange, so formData.content can lag the editor by
+	   up to autoSaveDelay; contentRef always holds the newest content. */
+	const contentRef = useRef("");
+	const latestRef = useRef({ formData, hasChanges });
+	const mountedRef = useRef(true);
+	/* Saves serialize through this promise so a second write never overtakes
+	   an in-flight one (an older save landing last would overwrite newer
+	   edits, and a second create would duplicate a new article). */
+	const inFlightSaveRef = useRef<Promise<unknown> | null>(null);
+	/* Once an article exists, later saves update it — even ones queued while
+	   the create was still in flight. */
+	const savedIdRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		latestRef.current = { formData, hasChanges };
+	});
+	/* StrictMode replays mount/unmount in dev; the setup must restore
+	   mountedRef or the deferred unmount save and the isNew navigation are
+	   permanently disabled after the replayed cleanup. */
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+		};
+	}, []);
 
 	const { data: article, isLoading: articleLoading } = useQuery({
 		queryKey: ["article", articleId],
@@ -123,6 +176,7 @@ function ArticleEditPage() {
 	// Initialize form with article data
 	useEffect(() => {
 		if (article) {
+			contentRef.current = article.content ?? "";
 			setFormData({
 				perek_id: article.perek_id,
 				author_id: article.author_id,
@@ -148,12 +202,14 @@ function ArticleEditPage() {
 					data.coverageVerified === true,
 				),
 			};
-			if (isNew || articleId === null) {
+			const targetId = savedIdRef.current ?? articleId;
+			if (targetId === null) {
 				return createArticle({ data: payload });
 			}
-			return updateArticle({ data: { id: articleId, ...payload } });
+			return updateArticle({ data: { id: targetId, ...payload } });
 		},
 		onSuccess: async (savedArticle: Article) => {
+			savedIdRef.current = savedArticle.id;
 			queryClient.invalidateQueries({ queryKey: ["article", savedArticle.id] });
 			queryClient.invalidateQueries({
 				queryKey: ["articles", "perek", savedArticle.perek_id],
@@ -161,7 +217,9 @@ function ArticleEditPage() {
 			setLastSaved(new Date());
 			setHasChanges(false);
 
-			if (isNew) {
+			/* A save fired while unmounting (leaving the page inside the
+			   debounce window) must not hijack the user's navigation. */
+			if (isNew && mountedRef.current) {
 				navigate({
 					to: "/articles/$id",
 					params: { id: String(savedArticle.id) },
@@ -194,27 +252,65 @@ function ArticleEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
+		contentRef.current = content;
 		setFormData((prev) => ({ ...prev, content }));
 		setHasChanges(true);
 	}, []);
+
+	/* FIFO queue on the tail promise: saves run strictly one at a time, so
+	   several queued writes can't overtake or interleave. */
+	const saveLatest = (data: ArticleFormData) => {
+		const tail = inFlightSaveRef.current ?? Promise.resolve();
+		inFlightSaveRef.current = tail.then(() =>
+			saveMutation.mutateAsync(data).then(
+				() => true,
+				() => false,
+			),
+		);
+	};
+	const saveLatestRef = useRef(saveLatest);
+	saveLatestRef.current = saveLatest;
 
 	// Auto-save effect
 	useEffect(() => {
 		if (!hasChanges || saveMutation.isPending) return;
 
 		const timer = setTimeout(() => {
-			if (formData.name.trim()) {
-				saveMutation.mutate(formData);
+			editorRef.current?.flush();
+			const data = { ...formData, content: contentRef.current };
+			if (data.name.trim()) {
+				saveLatestRef.current(data);
 			}
 		}, 2000);
 
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => {
-		if (window.confirm("האם אתה בטוח שברצונך למחוק את המאמר?")) {
-			deleteMutation.mutate();
-		}
+	/* Leaving the page inside the editor's debounce window used to drop the
+	   last edit. React detaches the editor's imperative handle before this
+	   cleanup and runs it before the editor's own unmount flush, so the
+	   final-save decision is deferred until teardown delivers any pending
+	   content to contentRef. mountedRef skips the deferred save on
+	   StrictMode's dev remount. */
+	useEffect(() => {
+		return () => {
+			setTimeout(() => {
+				if (mountedRef.current) return;
+				const { formData: fd, hasChanges: dirty } = latestRef.current;
+				if (
+					(dirty || contentRef.current !== fd.content) &&
+					fd.name.trim()
+				) {
+					saveLatestRef.current({ ...fd, content: contentRef.current });
+				}
+			}, 0);
+		};
+	}, []);
+
+
+	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
+		setDeleteOpener(event.currentTarget);
+		setConfirmDelete(true);
 	};
 
 	if (articleLoading) {
@@ -235,11 +331,16 @@ function ArticleEditPage() {
 						params={{ perekId: String(formData.perek_id) }}
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לפרק {formData.perek_id}</span>
 					</Link>
-					<h1 className="text-3xl font-bold text-gray-900 mt-2">
-						{isNew ? "➕ מאמר חדש" : "✏️ עריכת מאמר"}
+					<h1 className="text-3xl font-bold text-gray-900 mt-2 flex items-center gap-2">
+						{isNew ? (
+							<Plus className="size-7" aria-hidden="true" />
+						) : (
+							<Pencil className="size-7" aria-hidden="true" />
+						)}
+						{isNew ? "מאמר חדש" : "עריכת מאמר"}
 					</h1>
 				</div>
 				<div className="flex items-center gap-4">
@@ -254,7 +355,7 @@ function ArticleEditPage() {
 							onClick={handleDelete}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
-							<span>🗑️</span>
+							<Trash2 size={16} aria-hidden="true" />
 							<span>מחק מאמר</span>
 						</button>
 					)}
@@ -287,7 +388,11 @@ function ArticleEditPage() {
 								htmlFor="author"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								👤 מחבר
+								<UserRound
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								מחבר
 							</label>
 							<select
 								id="author"
@@ -313,7 +418,11 @@ function ArticleEditPage() {
 								htmlFor="perek"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								📖 פרק (1-929)
+								<BookOpen
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								פרק (1-929)
 							</label>
 							<input
 								id="perek"
@@ -341,7 +450,11 @@ function ArticleEditPage() {
 								htmlFor="priority"
 								className="block text-sm font-semibold text-gray-700 mb-2"
 							>
-								⭐ עדיפות (1-10)
+								<Star
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								עדיפות (1-10)
 							</label>
 							<input
 								id="priority"
@@ -375,7 +488,11 @@ function ArticleEditPage() {
 							htmlFor="abstract"
 							className="block text-sm font-semibold text-gray-700 mb-2"
 						>
-							📝 תקציר
+							<NotebookText
+								className="inline-block size-4 align-[-0.125em]"
+								aria-hidden="true"
+							/>{" "}
+							תקציר
 						</label>
 						<textarea
 							id="abstract"
@@ -390,7 +507,11 @@ function ArticleEditPage() {
 					{formData.moedIds !== undefined && moadim && moadim.length > 0 && (
 						<div className="border-t border-gray-100 pt-6">
 							<div className="block text-sm font-semibold text-gray-700 mb-2">
-								🗓️ מועדים על הפרק
+								<CalendarDays
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								מועדים על הפרק
 							</div>
 							<div className="flex flex-wrap gap-3">
 								{moadim.map((moed) => (
@@ -420,8 +541,8 @@ function ArticleEditPage() {
 								))}
 							</div>
 							<p className="mt-1 text-xs text-gray-400">
-								קישור מפורש של המאמר למועד — נוסף לאיחוד ההתאמות לפי טווחי
-								המקרא של המועד
+								קישור מפורש של המאמר למועד - נוסף לאיחוד ההתאמות לפי טווחי המקרא
+								של המועד
 							</p>
 						</div>
 					)}
@@ -455,9 +576,14 @@ function ArticleEditPage() {
 					<div>
 						{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
 						<label className="block text-sm font-semibold text-gray-700 mb-2">
-							📄 תוכן המאמר
+							<FileText
+								className="inline-block size-4 align-[-0.125em]"
+								aria-hidden="true"
+							/>{" "}
+							תוכן המאמר
 						</label>
 						<WysiwygEditor
+							ref={editorRef}
 							content={formData.content}
 							onChange={handleContentChange}
 							placeholder="הכנס את תוכן המאמר..."
@@ -483,11 +609,33 @@ function ArticleEditPage() {
 					</Link>
 					<button
 						type="button"
-						onClick={() => saveMutation.mutate(formData)}
+						onClick={() => {
+							editorRef.current?.flush();
+							saveLatest({
+								...formData,
+								content: contentRef.current,
+							});
+						}}
 						disabled={saveMutation.isPending || !formData.name.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
-						{saveMutation.isPending ? "⏳ שומר..." : "💾 שמור עכשיו"}
+						{saveMutation.isPending ? (
+							<>
+								<LoaderCircle
+									className="inline-block size-4 animate-spin align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שומר...
+							</>
+						) : (
+							<>
+								<Save
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שמור עכשיו
+							</>
+						)}
 					</button>
 				</div>
 			</form>
@@ -501,7 +649,11 @@ function ArticleEditPage() {
 						search={{ articleId }}
 						className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
 					>
-						🔗 הצעות קישור למאמר זה ←
+						PRs לקישורי מאמר זה{" "}
+						<ArrowLeft
+							className="inline-block size-3.5 align-[-0.125em]"
+							aria-hidden="true"
+						/>
 					</Link>
 				</div>
 			)}
@@ -515,6 +667,19 @@ function ArticleEditPage() {
 					coverageVerified={formData.coverageVerified === true}
 				/>
 			)}
+
+			<ConfirmDialog
+				open={confirmDelete}
+				opener={deleteOpener}
+				title="מחיקת מאמר"
+				message="האם אתה בטוח שברצונך למחוק את המאמר?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setConfirmDelete(false);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setConfirmDelete(false)}
+			/>
 		</div>
 	);
 }

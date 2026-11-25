@@ -5,7 +5,7 @@ use async_graphql::{
 };
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
-use crate::common::auth::ApiAuth;
+use crate::common::auth::{ApiAuth, extract_bearer};
 use crate::providers::Database;
 use crate::resolvers::article_relationships_resolver;
 use crate::resolvers::articles_resolver;
@@ -63,16 +63,6 @@ pub fn build_schema(
     .data(database.to_owned())
     .data(index.to_owned())
     .finish()
-}
-
-/// Extracts a `Authorization: Bearer <token>` header value, if present.
-fn extract_bearer(req: &HttpRequest) -> Option<String> {
-    req.headers()
-        .get(actix_web::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty())
 }
 
 pub async fn graphql_request(

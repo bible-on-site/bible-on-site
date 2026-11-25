@@ -5,6 +5,50 @@ namespace BibleOnSite.Tests.Helpers;
 
 public class SearchTextTests
 {
+    public class PlainText
+    {
+        // The same cases are asserted in search-normalize.test.ts (website),
+        // search_text.rs (the delivered index builder) and article_search/text.rs
+        // (api): every open or close block-level tag is a word break in all four ports, and each emits the same plain text.
+        [Theory]
+        [InlineData("<td>foo</td><td>bar</td>", "foo bar")]
+        [InlineData("<th>א</th><td>ב</td>", "א ב")]
+        [InlineData("<h4>א</h4>ב", "א ב")]
+        [InlineData("<ul><li>א</li><li>ב</li></ul>", "א ב")]
+        [InlineData("<table><tr><td>א</td><td>ב</td></tr></table>", "א ב")]
+        [InlineData("<blockquote>א</blockquote><section>ב</section>", "א ב")]
+        [InlineData("<header>א</header><article>ב</article>", "א ב")]
+        [InlineData("<footer>א</footer>ב", "א ב")]
+        [InlineData("א<hr>ב", "א ב")]
+        [InlineData("<div>א", "א")]
+        [InlineData("<p>א</p><p>ב</p>", "א ב")]
+        [InlineData("א<br>ב", "א ב")]
+        // A boundary emits one space unless preceding text ends in one.
+        // whitespace around tags stays literal in every port.
+        [InlineData("א <br>ב", "א ב")]
+        [InlineData("א  <br>ב", "א  ב")]
+        [InlineData("א<br> ב", "א  ב")]
+        [InlineData("א <br> <br>ב", "א  ב")]
+        [InlineData("א<div></div>ב", "א ב")]
+        // A comment emits nothing; markup inside it never reaches the scanner.
+        [InlineData("א<!-- <style> -->ב", "אב")]
+        // A commented-out opener must not pair with a real close tag.
+        [InlineData("א<!-- <style> -->ב<style>x</style>ג", "אבג")]
+        // Comment markers inside a skipped script/style body are inert —
+        // the closing tag still ends the block.
+        [InlineData("א<script><!--</script>ב", "אב")]
+        [InlineData("א<style>x<!-- -->y</style>ב", "אב")]
+        // A script block starting before a comment marker still wins —
+        // whichever construct opens first is the one removed.
+        [InlineData("א<script>x<!--y</script>ב", "אב")]
+        // An unterminated comment swallows to end of input.
+        [InlineData("א<!--x", "א")]
+        public void breaks_words_on_every_block_tag_like_the_other_ports(string html, string expected)
+        {
+            SearchText.PlainText(html).Should().Be(expected);
+        }
+    }
+
     public class Snippet
     {
         [Fact]

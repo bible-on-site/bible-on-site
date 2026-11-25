@@ -1,14 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { EntryAliasesPanel } from "~/components/tanahpedia/EntryAliasesPanel";
 import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { MainAddressSection } from "~/components/tanahpedia/MainAddressSection";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	WysiwygEditor,
+	type WysiwygEditorHandle,
+} from "~/components/WysiwygEditor";
 import {
 	type ClassifiedSaveError,
 	classifySaveError,
@@ -91,6 +102,11 @@ function EntryEditPage() {
 	const [saveError, setSaveError] = useState<ClassifiedSaveError | null>(null);
 	// Informational outcome of a committed save (e.g. rename alias handling).
 	const [saveNotice, setSaveNotice] = useState<string | null>(null);
+	// The destructive action awaiting an explicit confirm-dialog answer.
+	const [confirmOpener, setConfirmOpener] = useState<HTMLElement | null>(null);
+	const [pendingConfirm, setPendingConfirm] = useState<
+		"delete" | "revert" | null
+	>(null);
 	// Rename flow: whether to keep the outgoing unique_name as an alias to
 	// this entry — default on, since it preserves inbound links.
 	const [keepOldAsAlias, setKeepOldAsAlias] = useState(true);
@@ -131,6 +147,20 @@ function EntryEditPage() {
 	const inFlightRef = useRef(false);
 	const queuedJobRef = useRef<SaveJob | null>(null);
 	const flushRef = useRef<() => void>(() => {});
+	const editorRef = useRef<WysiwygEditorHandle>(null);
+	// Latest editor state — flushed into saves and drafts so a pending
+	// debounced edit (and the attribution reset it triggers) is never
+	// committed stale. Resynced from state on every render.
+	const latestRef = useRef({
+		content: "",
+		source: REVISION_SOURCE_ADMIN,
+		notes: null as string | null,
+	});
+	latestRef.current = {
+		content: formData.content,
+		source: saveSource,
+		notes: pendingNotes,
+	};
 	// Once a create succeeds, later queued saves on the /new route must update
 	// the created entry — the route param still reads "new" until navigation.
 	// Reset on param change: the component isn't remounted when moving between
@@ -200,9 +230,9 @@ function EntryEditPage() {
 			sessionId: sessionIdRef.current,
 			baseRevisionId: baseRevisionIdRef.current,
 			savedAt: new Date().toISOString(),
-			form: formData,
-			source: saveSource,
-			notes: pendingNotes,
+			form: { ...formData, content: latestRef.current.content },
+			source: latestRef.current.source,
+			notes: latestRef.current.notes,
 		});
 		setDraftWriteFailed(!ok);
 		if (ok) {
@@ -524,6 +554,14 @@ function EntryEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
+		// Synchronous: a save may run before the next render. The manual edit
+		// resets AI attribution alongside the content.
+		latestRef.current = {
+			...latestRef.current,
+			content,
+			source: REVISION_SOURCE_ADMIN,
+			notes: null,
+		};
 		setFormData((prev) => ({ ...prev, content }));
 		editCounterRef.current += 1;
 		setHasChanges(true);
@@ -623,11 +661,18 @@ function EntryEditPage() {
 		}
 	};
 
+	const handleRevert = (event: ReactMouseEvent<HTMLElement>) => {
+		setConfirmOpener(event.currentTarget);
+		setPendingConfirm("revert");
+	};
+
 	// Explicit revert: drop every uncommitted edit AND its local draft, then
 	// re-anchor on whatever the server holds.
-	const handleRevert = () => {
-		if (!window.confirm("לבטל את כל השינויים שלא נשמרו? הטיוטה המקומית תימחק."))
-			return;
+	const applyRevert = () => {
+		// Drop pending editor state (debounce timer, source-mode draft) that
+		// formData alone cannot reset — synchronously, so a save in the same
+		// click can never commit the discarded text.
+		editorRef.current?.reset(isNew ? "" : (entry?.content ?? ""));
 		editCounterRef.current += 1;
 		cleanCounterRef.current = editCounterRef.current;
 		setHasChanges(false);
@@ -678,7 +723,7 @@ function EntryEditPage() {
 					to="/tanahpedia"
 					className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 				>
-					<span>→</span>
+					<ArrowRight size={16} aria-hidden="true" />
 					<span>חזרה לתנכפדיה</span>
 				</Link>
 				<div className="rounded-lg border border-red-300 bg-red-50 p-8 text-center space-y-3">
@@ -717,7 +762,7 @@ function EntryEditPage() {
 						to="/tanahpedia"
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לתנכפדיה</span>
 					</Link>
 					<h1 className="text-3xl font-bold text-gray-900 mt-2">
@@ -736,9 +781,9 @@ function EntryEditPage() {
 					{!isNew && (
 						<button
 							type="button"
-							onClick={() => {
-								if (window.confirm("האם אתה בטוח שברצונך למחוק ערך זה?"))
-									deleteMutation.mutate();
+							onClick={(e) => {
+								setConfirmOpener(e.currentTarget);
+								setPendingConfirm("delete");
 							}}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
@@ -785,10 +830,11 @@ function EntryEditPage() {
 							type="button"
 							onClick={() => {
 								setSaveError(null);
+								editorRef.current?.flush();
 								requestSave({
-									form: formData,
-									source: saveSource,
-									notes: pendingNotes,
+									form: { ...formData, content: latestRef.current.content },
+									source: latestRef.current.source,
+									notes: latestRef.current.notes,
 									editCount: editCounterRef.current,
 									keepOldNameAsAlias: keepOldAsAlias,
 								});
@@ -1014,6 +1060,7 @@ function EntryEditPage() {
 								תוכן הערך
 							</label>
 							<WysiwygEditor
+								ref={editorRef}
 								content={formData.content}
 								onChange={handleContentChange}
 								placeholder="הכנס את תוכן הערך..."
@@ -1049,10 +1096,11 @@ function EntryEditPage() {
 						type="button"
 						onClick={() => {
 							setSaveError(null);
+							editorRef.current?.flush();
 							requestSave({
-								form: formData,
-								source: saveSource,
-								notes: pendingNotes,
+								form: { ...formData, content: latestRef.current.content },
+								source: latestRef.current.source,
+								notes: latestRef.current.notes,
 								editCount: editCounterRef.current,
 								keepOldNameAsAlias: keepOldAsAlias,
 							});
@@ -1064,6 +1112,31 @@ function EntryEditPage() {
 					</button>
 				</div>
 			</form>
+
+			<ConfirmDialog
+				open={pendingConfirm === "delete"}
+				opener={confirmOpener}
+				title="מחיקת ערך"
+				message="האם אתה בטוח שברצונך למחוק ערך זה?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setPendingConfirm(null);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setPendingConfirm(null)}
+			/>
+			<ConfirmDialog
+				open={pendingConfirm === "revert"}
+				opener={confirmOpener}
+				title="ביטול שינויים"
+				message="לבטל את כל השינויים שלא נשמרו? הטיוטה המקומית תימחק."
+				confirmLabel="בטל שינויים"
+				onConfirm={() => {
+					setPendingConfirm(null);
+					applyRevert();
+				}}
+				onCancel={() => setPendingConfirm(null)}
+			/>
 		</div>
 	);
 }

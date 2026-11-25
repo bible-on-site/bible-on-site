@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using BibleOnSite.Tests.MobileE2E.Configuration;
@@ -9,8 +11,8 @@ using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
-// #2624: while scripture is already active, tapping the bottom bar's א ב ג
-// text tab animates the currently visible reading unit's vertical content
+// #2624: while scripture is already active, tapping the bottom bar's text
+// tab animates the currently visible reading unit's vertical content
 // back to its start — same perek, same reader, no horizontal jump. The
 // resolved surface must be the realized one of the unit on screen, both in
 // the regular pasuk list and in תיקון קוראים.
@@ -26,19 +28,21 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         // בראשית א is a long, deterministic perek — several screens of pesukim.
         NavigateToPerek("תורה", "בראשית", "א");
         var source = Page.Source;
-        var list = Page.WaitFor("PasukimCollection");
-        var listTop = MobilePlatformAdapter.ReadFrame(list).Location.Y;
+        var listFrame = Page.WaitForStableFrame("PasukimCollection");
+        var listTop = listFrame.Location.Y;
 
         Assert.StartsWith("א ", Page.FirstPasuk, StringComparison.Ordinal);
-        ScrollReaderDown(list);
+        ScrollReaderDown(listFrame);
         WaitForFirstPasukOffTop();
 
         Page.Tap("TextButton");
 
-        var first = Page.WaitFor("PasukText", element => element.Text.StartsWith("א ", StringComparison.Ordinal));
-        var firstTop = MobilePlatformAdapter.ReadFrame(first).Location.Y;
+        // The accepted poll's snapshot supplies the first pasuk's settled
+        // frame — a live ReadFrame after the wait raced cell recycling (#3421).
+        var firstTop = Page.WaitForStableFrame("PasukText",
+            element => element.Text.StartsWith("א ", StringComparison.Ordinal)).Location.Y;
         var nearTop = firstTop - listTop;
-        Assert.True(nearTop >= -8 && nearTop <= MobilePlatformAdapter.ReadFrame(list).Size.Height / 5,
+        Assert.True(nearTop >= -8 && nearTop <= listFrame.Size.Height / 5,
             $"the first pasuk must land at the top of the list, beneath the perek header (offset {nearTop})");
         Assert.Equal(source, Page.Source);
     });
@@ -47,7 +51,7 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
     public void ReselectingTextTabAfterChapterChangeScrollsOnlyTheCurrentPerek() => Scenario(() =>
     {
         NavigateToPerek("תורה", "בראשית", "א");
-        ScrollReaderDown(Page.WaitFor("PasukimCollection"));
+        ScrollReaderDown(Page.WaitForStableFrame("PasukimCollection"));
 
         // Move to the neighbour — the previously scrolled list goes off screen
         // and the swipe realizes the new perek's own list.
@@ -56,7 +60,7 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         Page.WaitFor("PerekSource", element => element.Text == "בראשית ב");
         Page.Tap("CircularMenuButton");
 
-        ScrollReaderDown(Page.WaitFor("PasukimCollection"));
+        ScrollReaderDown(Page.WaitForStableFrame("PasukimCollection"));
         WaitForFirstPasukOffTop();
 
         Page.Tap("TextButton");
@@ -73,18 +77,17 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         // gesture recognizer, which flips the flag and closes the dropdown.
         Page.Tap("ReaderMenuButton");
         Page.Tap("TikkunKorimCheckBox");
-        var scrollView = Page.WaitFor("TikkunScrollView");
-        var topFrame = TikkunFrame(scrollView);
+        var topFrame = TikkunFrame();
 
-        ScrollTikkunDown(scrollView, topFrame);
+        ScrollTikkunDown(topFrame);
 
         Page.Tap("TextButton");
 
         // The Debug build mirrors the live תיקון offset into the view's
         // accessibility description ("tsy:{dips}") — an exact position signal
         // instead of pixel equality, which a fading scrollbar can defeat.
-        WaitForTikkun(() => TikkunReturnedToStart(scrollView, topFrame),
-            "reselecting א ב ג must return the תיקון קוראים flow to its start");
+        WaitForTikkun(() => TikkunReturnedToStart(topFrame),
+            "reselecting the text tab must return the תיקון קוראים flow to its start");
         Assert.Equal("בראשית א", Page.Source);
     });
 
@@ -98,22 +101,21 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         NavigateToPerek("תורה", "בראשית", "א");
         Page.Tap("ReaderMenuButton");
         Page.Tap("TikkunKorimCheckBox");
-        var scrollView = Page.WaitFor("TikkunScrollView");
-        var topFrame = TikkunFrame(scrollView);
+        var topFrame = TikkunFrame();
 
-        ScrollTikkunDown(scrollView, topFrame);
-        var offset = SettledTikkunOffset(scrollView);
+        ScrollTikkunDown(topFrame);
+        var offset = SettledTikkunOffset();
         Assert.True(offset is null or > 200,
             $"the flow must be scrolled before the toggle (tsy={offset})");
 
-        var shownFrame = TikkunFrame(scrollView);
-        Platform.Tap(Driver!, scrollView);
+        var shownFrame = TikkunFrame();
+        TapTikkun();
 
-        WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(shownFrame),
+        WaitForTikkun(() => !TikkunFrame().SequenceEqual(shownFrame),
             "hiding marks must repaint the flow");
         if (offset is { } scrolled)
         {
-            Assert.Equal(scrolled, SettledTikkunOffset(scrollView));
+            Assert.Equal(scrolled, SettledTikkunOffset());
         }
 
         // Capture the hidden frame BEFORE the restore tap: the hide-wait above
@@ -121,20 +123,20 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         // the hidden state. Taking it after the tap races the repaint — on a
         // fast restore the capture already equals the restored frame and the
         // wait can never observe a difference.
-        var hiddenFrame = TikkunFrame(scrollView);
-        Platform.Tap(Driver!, scrollView);
-        WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(hiddenFrame),
+        var hiddenFrame = TikkunFrame();
+        TapTikkun();
+        WaitForTikkun(() => !TikkunFrame().SequenceEqual(hiddenFrame),
             "restoring marks must repaint the flow");
         if (offset is { } restored)
         {
-            Assert.Equal(restored, SettledTikkunOffset(scrollView));
+            Assert.Equal(restored, SettledTikkunOffset());
         }
         else
         {
             // Without the probe the restored pixels are the only position
             // signal: marks repaint over the unchanged marked geometry, so
             // the frame must come back identical to the pre-hide capture.
-            WaitForTikkun(() => TikkunFrame(scrollView).SequenceEqual(shownFrame),
+            WaitForTikkun(() => TikkunFrame().SequenceEqual(shownFrame),
                 "restoring marks must repaint the identical flow");
         }
     });
@@ -157,23 +159,19 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         Assert.NotEmpty(Page.FirstPasuk);
     }
 
-    private void TapItem(string automationId, string text)
-    {
-        var item = Page.WaitFor(automationId, element => element.Text == text);
-        Platform.Tap(Driver!, item);
-    }
+    private void TapItem(string automationId, string text) =>
+        Page.Tap(automationId, element => element.Text == text);
 
     /// <summary>
     /// Three deliberate drags move the content several screens in one command
     /// set — enough to push the first pasuk out of the viewport — without the
     /// lift-free flick inertia that keeps an iOS collection churning.
     /// </summary>
-    private void ScrollReaderDown(AppiumElement list)
+    private void ScrollReaderDown((Point Location, Size Size) frame)
     {
-        var (location, size) = MobilePlatformAdapter.ReadFrame(list);
-        var x = location.X + size.Width / 2;
-        var topY = location.Y + size.Height / 5;
-        var bottomY = location.Y + size.Height * 4 / 5;
+        var x = frame.Location.X + frame.Size.Width / 2;
+        var topY = frame.Location.Y + frame.Size.Height / 5;
+        var bottomY = frame.Location.Y + frame.Size.Height * 4 / 5;
         var finger = new PointerInputDevice(PointerKind.Touch, "finger");
         var sequence = new ActionSequence(finger, 0);
         for (var i = 0; i < 3; i++)
@@ -217,42 +215,63 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
     /// did not move the view. UiAutomator2 reports a scrollable's children
     /// with viewport-clipped bounds — the flow view's top edge never leaves
     /// the viewport — so position evidence comes from the offset probe, or
-    /// from pixels on builds without it.
+    /// from pixels on builds without it. Every gesture and probe re-resolves
+    /// the scroll view inside the attempt: a view recycled mid-loop stales a
+    /// held handle for every later read (#3421).
     /// </summary>
-    private void ScrollTikkunDown(AppiumElement scrollView, byte[] topFrame)
+    private void ScrollTikkunDown(byte[] topFrame)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
         var attempt = 0;
         while (DateTime.UtcNow < deadline)
         {
-            if (Configuration.Platform == MobilePlatform.Android && attempt % 2 == 0)
+            try
             {
-                // The driver-level scroll gesture drives the scrollable surface
-                // itself, independent of where its clipped child bounds sit.
-                // It returns false when the accessibility scroll action cannot
-                // move this surface — MauiScrollView does not answer it — in
-                // which case the injected drag takes over immediately.
-                var scrolled = Driver!.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+                if (Configuration.Platform == MobilePlatform.Android && attempt % 2 == 0)
                 {
-                    ["elementId"] = scrollView.Id,
-                    ["direction"] = "down",
-                    ["percent"] = 0.9,
-                });
-                if (scrolled is not bool ok || !ok)
+                    // The driver-level scroll gesture drives the scrollable surface
+                    // itself, independent of where its clipped child bounds sit.
+                    // It returns false when the accessibility scroll action cannot
+                    // move this surface — MauiScrollView does not answer it — in
+                    // which case the injected drag takes over immediately.
+                    var scrolled = Driver!.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+                    {
+                        ["elementId"] = Page.WaitFor("TikkunScrollView").Id,
+                        ["direction"] = "down",
+                        ["percent"] = 0.9,
+                    });
+                    if (scrolled is not bool ok || !ok)
+                    {
+                        ScrollReaderDown(Page.WaitForStableFrame("TikkunScrollView"));
+                    }
+                }
+                else
                 {
-                    ScrollReaderDown(scrollView);
+                    ScrollReaderDown(Page.WaitForStableFrame("TikkunScrollView"));
                 }
             }
-            else
+            catch (StaleElementReferenceException)
             {
-                ScrollReaderDown(scrollView);
+                // The flow view was recycled between resolve and gesture; the
+                // next attempt resolves it again.
             }
             var settled = DateTime.UtcNow.AddSeconds(4);
             while (DateTime.UtcNow < settled)
             {
-                if (TikkunMovedFromStart(scrollView, topFrame))
+                try
                 {
-                    return;
+                    if (TikkunMovedFromStart(topFrame))
+                    {
+                        return;
+                    }
+                }
+                catch (StaleElementReferenceException)
+                {
+                    // The probe re-resolves on the next poll.
+                }
+                catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+                {
+                    // An observation timeout retries inside the same budget.
                 }
                 Thread.Sleep(250);
             }
@@ -264,29 +283,29 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
 
     /// <summary>True once the תיקון flow reports a real offset — or, without
     /// the probe, once its pixels differ from the start capture.</summary>
-    private bool TikkunMovedFromStart(AppiumElement scrollView, byte[] topFrame) =>
-        TikkunOffsetY(scrollView) is { } offset
+    private bool TikkunMovedFromStart(byte[] topFrame) =>
+        TikkunOffsetY() is { } offset
             ? offset > 200
-            : !TikkunFrame(scrollView).SequenceEqual(topFrame);
+            : !TikkunFrame().SequenceEqual(topFrame);
 
-    private bool TikkunReturnedToStart(AppiumElement scrollView, byte[] topFrame) =>
-        TikkunOffsetY(scrollView) is { } offset
+    private bool TikkunReturnedToStart(byte[] topFrame) =>
+        TikkunOffsetY() is { } offset
             ? offset <= 2
-            : TikkunFrame(scrollView).SequenceEqual(topFrame);
+            : TikkunFrame().SequenceEqual(topFrame);
 
     /// <summary>
     /// Reads the תיקון offset once two consecutive samples agree — the probe
     /// value must be read after the scroll animation fully settles or a
     /// still-moving view looks like a geometry change (#3265).
     /// </summary>
-    private int? SettledTikkunOffset(AppiumElement scrollView)
+    private int? SettledTikkunOffset()
     {
         var deadline = DateTime.UtcNow.AddSeconds(8);
-        var previous = TikkunOffsetY(scrollView);
+        var previous = TikkunOffsetY();
         while (DateTime.UtcNow < deadline)
         {
             Thread.Sleep(300);
-            var current = TikkunOffsetY(scrollView);
+            var current = TikkunOffsetY();
             if (current == previous)
             {
                 return current;
@@ -299,45 +318,108 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
     /// <summary>
     /// Reads the תיקון scroll offset that Debug builds mirror into the view's
     /// accessibility description as "tsy:{dips}" (#2624); null when the probe
-    /// has not reported yet or the build predates it.
+    /// has not reported yet or the build predates it. The scroll view is
+    /// resolved fresh for each read — a recycled handle reports null rather
+    /// than wedging the probe loop.
     /// </summary>
-    private int? TikkunOffsetY(AppiumElement scrollView)
+    private int? TikkunOffsetY()
     {
         var names = Configuration.Platform == MobilePlatform.Android
             ? new[] { "contentDescription", "content-desc" }
             : new[] { "label", "value", "name" };
-        foreach (var name in names)
+        string? raw;
+        try
         {
-            string? raw;
-            try
+            // The probe reads inside the wait's own poll so a view recycled
+            // between lookup and attribute read retries there instead of
+            // staling the held handle (#3421). The iOS poll's snapshot text
+            // already carries the label, so that check costs no round-trip.
+            raw = Page.WaitForObservation("TikkunScrollView", element =>
             {
-                raw = scrollView.GetAttribute(name);
-            }
-            catch (WebDriverException)
-            {
-                continue;
-            }
-            var match = Regex.Match(raw ?? string.Empty, @"tsy:(\d+)");
-            if (match.Success)
-            {
-                return int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            }
+                var text = element.Text;
+                if (text.Contains("tsy:", StringComparison.Ordinal))
+                {
+                    return text;
+                }
+                foreach (var name in names)
+                {
+                    string? value;
+                    try
+                    {
+                        value = element.GetAttribute(name);
+                    }
+                    catch (WebDriverException exception) when (exception is not StaleElementReferenceException)
+                    {
+                        // The attribute does not exist on this view — try the
+                        // next; staleness escapes so the poll retries a fresh
+                        // element instead of caching a dead read.
+                        continue;
+                    }
+                    // Only the probe value matters — a different nonempty
+                    // attribute must not shadow a later tsy: carrier.
+                    if (!string.IsNullOrEmpty(value) && value.Contains("tsy:", StringComparison.Ordinal))
+                    {
+                        return value;
+                    }
+                }
+                return null;
+            }, TimeSpan.FromSeconds(5));
         }
-        return null;
+        catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+        {
+            return null;
+        }
+        var match = Regex.Match(raw ?? string.Empty, @"tsy:(\d+)");
+        return match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : null;
     }
 
     /// <summary>The scroll view's current visible pixels.</summary>
-    private static byte[] TikkunFrame(AppiumElement scrollView) =>
-        ((ITakesScreenshot)scrollView).GetScreenshot().AsByteArray;
+    private byte[] TikkunFrame()
+    {
+        // The screenshot needs the live element, so it resolves right before
+        // the command; a view recycled in between resolves again inside the
+        // same 45-second budget instead of staling the held handle (#3421).
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            try
+            {
+                return ((ITakesScreenshot)Page.WaitFor("TikkunScrollView", _ => true,
+                    remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero)).GetScreenshot().AsByteArray;
+            }
+            catch (StaleElementReferenceException) when (attempt < 2 && remaining > TimeSpan.Zero)
+            {
+                // The flow is mid-recycle; the next lookup sees a fresh tree.
+            }
+        }
+        throw new UnreachableException();
+    }
+
+    private void TapTikkun() =>
+        // Page.Tap resolves the target right before the gesture and retries a
+        // recycled view inside its own deadline instead of staling a handle.
+        Page.Tap("TikkunScrollView");
 
     private static void WaitForTikkun(Func<bool> reached, string timeoutMessage)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (DateTime.UtcNow < deadline)
         {
-            if (reached())
+            try
             {
-                return;
+                if (reached())
+                {
+                    return;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // A view recycled mid-probe re-resolves on the next poll.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout retries inside the same budget.
             }
             Thread.Sleep(250);
         }

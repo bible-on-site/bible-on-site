@@ -1,5 +1,6 @@
 #if IOS || MACCATALYST
 using System.Runtime.InteropServices;
+using CoreGraphics;
 using Foundation;
 using UIKit;
 
@@ -13,6 +14,14 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 internal static class HtmlAttributedStringFactory
 {
+    /// <summary>Indent applied per quote level — the equivalent of the
+    /// website's quote padding, in em of the view's font size (#3443).</summary>
+    private const double QuoteIndentEm = 1.0;
+
+    /// <summary>Gap between a quote paragraph's text and its accent bar,
+    /// in em of the view's font size (#3443).</summary>
+    private const double QuotePaddingEm = 0.55;
+
     /// <summary>
     /// Converts HTML to an attributed string using the managed HtmlRuns parser.
     /// Empty markup produces an empty attributed string. Returns null on a
@@ -21,10 +30,15 @@ internal static class HtmlAttributedStringFactory
     /// ordinary text, <paramref name="accentColor"/> for runs flagged
     /// <see cref="HtmlRun.Accent"/> — the generated note-list markers share the
     /// inline reference's link color without a link target (#2723).
+    /// <paramref name="baseStyle"/> is applied to the whole string and cloned
+    /// per quote range so blockquotes keep the view's alignment/direction
+    /// while gaining their accent blocks (#3443).
     /// </summary>
     public static NSMutableAttributedString? FromHtml(
         string html, double fontSize, double h1Scale, double h2Scale, double h3Scale,
-        UIColor textColor, UIColor accentColor)
+        UIColor textColor, UIColor accentColor,
+        NSMutableParagraphStyle baseStyle, bool rtl,
+        UIFont regularFont, UIFont boldFont)
     {
         try
         {
@@ -40,7 +54,7 @@ internal static class HtmlAttributedStringFactory
                     _ => 1.0
                 };
                 var size = (NFloat)(fontSize * run.FontScale * headingScale);
-                var font = ResolveFont(size, run.Bold, run.Italic);
+                var font = ResolveFont(size, run.Bold ? boldFont : regularFont, run.Italic);
 
                 var keys = new List<NSString>
                 {
@@ -84,6 +98,9 @@ internal static class HtmlAttributedStringFactory
                 attributed.Append(new NSAttributedString(
                     run.Text, new NSDictionary<NSString, NSObject>(keys.ToArray(), values.ToArray())));
             }
+            var fullRange = new NSRange(0, attributed.Length);
+            attributed.AddAttribute(UIStringAttributeKey.ParagraphStyle, baseStyle, fullRange);
+            ApplyQuoteStyles(attributed, runs, baseStyle, accentColor, rtl, fontSize);
             return attributed;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: attributed-string parse failure falls back to plain text
@@ -95,24 +112,58 @@ internal static class HtmlAttributedStringFactory
         }
     }
 
-    private static UIFont ResolveFont(NFloat size, bool bold, bool italic)
+    /// <summary>
+    /// Paints each block-quote range as a nested <see cref="NSTextBlock"/> per
+    /// level — the same mechanism WebKit's attributed-string import used for
+    /// &lt;blockquote&gt; before the managed parser replaced it (#3443). The
+    /// accent bar sits on the paragraph's leading edge: MaxX under RTL (the
+    /// right side, mirroring the website's border-inline-start), MinX under
+    /// LTR. Blocks are decorative paragraph dressing: no extra text reaches
+    /// copy, accessibility or reading metrics.
+    /// </summary>
+    private static void ApplyQuoteStyles(
+        NSMutableAttributedString attributed, IReadOnlyList<HtmlRun> runs,
+        NSMutableParagraphStyle baseStyle, UIColor accentColor, bool rtl, double fontSize)
     {
-        // SystemFontOfSize is annotated nullable but only fails on bad input.
-        var font = UIFont.SystemFontOfSize(size)!;
-        UIFontDescriptorSymbolicTraits traits = 0;
-        if (bold)
+        var quoteBlocks = HtmlRuns.QuoteBlocks(runs);
+        if (quoteBlocks.Count == 0)
         {
-            traits |= UIFontDescriptorSymbolicTraits.Bold;
+            return;
         }
-        if (italic)
+        var edge = rtl ? CGRectEdge.MaxXEdge : CGRectEdge.MinXEdge;
+        foreach (var block in quoteBlocks)
         {
-            traits |= UIFontDescriptorSymbolicTraits.Italic;
+            var quoteStyle = (NSMutableParagraphStyle)baseStyle.MutableCopy();
+            var indent = (NFloat)(fontSize * QuoteIndentEm * block.Depth);
+            quoteStyle.HeadIndent = indent;
+            quoteStyle.FirstLineHeadIndent = indent;
+            var decorations = new NSTextBlock[block.Depth];
+            for (var i = 0; i < decorations.Length; i++)
+            {
+                var textBlock = new NSTextBlock();
+                textBlock.SetWidth((NFloat)3.0, NSTextBlockValueType.Absolute,
+                    NSTextBlockLayer.Border, edge);
+                textBlock.SetBorderColor(accentColor.ColorWithAlpha((NFloat)0.55), edge);
+                textBlock.SetWidth((NFloat)(fontSize * QuotePaddingEm),
+                    NSTextBlockValueType.Absolute, NSTextBlockLayer.Padding, edge);
+                textBlock.BackgroundColor = accentColor.ColorWithAlpha((NFloat)0.06);
+                decorations[i] = textBlock;
+            }
+            quoteStyle.TextBlocks = decorations;
+            attributed.AddAttribute(UIStringAttributeKey.ParagraphStyle, quoteStyle,
+                new NSRange(block.Start, block.End - block.Start));
         }
-        if (traits == 0)
+    }
+
+    private static UIFont ResolveFont(NFloat size, UIFont face, bool italic)
+    {
+        var font = face.WithSize(size) ?? face;
+        if (!italic)
         {
             return font;
         }
-        var descriptor = font.FontDescriptor.CreateWithTraits(traits);
+        var descriptor = font.FontDescriptor.CreateWithTraits(
+            font.FontDescriptor.SymbolicTraits | UIFontDescriptorSymbolicTraits.Italic);
         return descriptor != null ? (UIFont.FromDescriptor(descriptor, size) ?? font) : font;
     }
 }

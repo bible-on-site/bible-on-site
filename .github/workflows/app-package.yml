@@ -84,7 +84,7 @@ env:
   APP_DIRECTORY: app
   PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes-slim
 
 jobs:
   package_windows:
@@ -138,7 +138,15 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-windows
+        # The image's sdk-manifests carry manifests for every baked SDK band;
+        # a foreign-band manifest claiming the same workload pack aborts the
+        # install — drop every band except the SDK's own 11.0.100.
+        run: |
+          Get-ChildItem "$env:DOTNET_ROOT\sdk-manifests" -Directory | Where-Object Name -ne '11.0.100' | Remove-Item -Recurse -Force
+          # Populate the 11-band advertising manifests — without them the SDK
+          # cannot map workload IDs (maui-windows not recognized).
+          dotnet workload update
+          dotnet workload install maui-windows --version 11.0.100.1
 
       - name: Decode signing certificate
         if: ${{ !inputs.compile_only }}
@@ -215,7 +223,7 @@ jobs:
 
       # Preserve verified downloads even if a later packaging/store step fails.
       - name: Save verified recitation audio cache
-        if: ${{ !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.mp3
@@ -226,7 +234,7 @@ jobs:
       - name: Compile Windows Release
         if: ${{ inputs.compile_only }}
         working-directory: ${{ env.APP_DIRECTORY }}
-        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -f net10.0-windows10.0.19041.0
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -f net11.0-windows10.0.19041.0
 
       - name: Package MSIX
         if: ${{ !inputs.compile_only }}
@@ -328,7 +336,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "17"
+          java-version: "25"
           verify-signature: true
 
       - name: Hash NuGet dependency inputs
@@ -345,11 +353,15 @@ jobs:
             ${{ runner.os }}-nuget-maui-android-
             ${{ runner.os }}-nuget-
 
-      # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
-      # release honoring AndroidR8ObfuscationMode and emitting the r8.json build
-      # metadata Play reads for code-optimization scoring (#2708).
+      # Workload set 11.0.100.1 pins Android SDK 37.2.x — honors
+      # AndroidR8ObfuscationMode and emits the r8.json build metadata Play
+      # reads for code-optimization scoring (#2708).
       - name: Install MAUI workload
-        run: dotnet workload install maui-android --version 10.0.402.1
+        # Foreign-band sdk-manifests claiming the same packs abort the install.
+        run: |
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install maui-android --version 11.0.100.1
 
       - name: Restore perushim notes SQLite for AAB asset pack
         if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -424,16 +436,30 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
+      # #3444: public debug ELFs are cached on disk by GNU build ID. The save
+      # key is a hash of the cache contents, so a new immutable entry is only
+      # created when the downloaded symbol set changes — never per app commit
+      # or version bump. Identical builds reuse the restored entry.
+      - name: Restore public native symbol cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1
+          restore-keys: android-native-symbols-v1-
+
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
         env:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+          # #3440: supplier debug ELFs (e.g. SourceGear libe_sqlite3) are hosted
+          # as release assets addressed by build ID; unset/empty var skips it.
+          ANDROID_VENDOR_SYMBOLS_BASE_URL: ${{ vars.ANDROID_VENDOR_SYMBOLS_BASE_URL }}
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             dotnet run --project devops -- Package --platform Android --configuration Release \
@@ -444,6 +470,12 @@ jobs:
           else
             dotnet run --project devops -- Package --platform Android --configuration Release
           fi
+
+      - name: Save public native symbol cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.APP_DIRECTORY }}/.cache/android-native-symbols
+          key: android-native-symbols-v1-${{ hashFiles('app/.cache/android-native-symbols/*') }}
 
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
@@ -480,6 +512,18 @@ jobs:
       - name: Verify AAB DEX optimization metadata
         run: python app/devops/verify_android_dex_metadata.py --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
+      # #3309: gate the artifact Play receives — optional payloads must stay in
+      # their on-demand packs, the search index must keep the slim layout, and
+      # the base module must not cross its compressed budget. The JSON report
+      # keeps a machine-readable breakdown for the next size complaint.
+      - name: Setup Node.js for AAB audit
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Audit AAB module sizes and asset-pack layout
+        run: node devops/github/ci/audit-android-aab-size.mjs --package "$(find app/.artifacts -name '*.aab' -print -quit)" --json-out app/.artifacts/aab-size-report.json
+
       # #2970: the archive Play receives is this zip — its entries must be
       # symbol-bearing arm64 ELFs named after, and build-ID-matched to, the
       # bundled libraries. Verify the stored artifact, not just intermediates.
@@ -501,6 +545,7 @@ jobs:
           path: |
             ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
             ${{ env.APP_DIRECTORY }}/.artifacts/*-native-symbols.zip
+            ${{ env.APP_DIRECTORY }}/.artifacts/aab-size-report.json
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true
@@ -591,10 +636,13 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Pin the iOS 27.0 workload set for Xcode 27.0; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          # 10.0.402.1 selects iOS 27.1 needing Xcode 27.1, which the xcode-27
-          # image lacks — deferred until the image ships it; see #2566.
-          dotnet workload install maui-ios --version 10.0.401.1
+          # .NET 11 set 11.0.100.1 selects iOS 27.2, whose SDK accepts exactly
+          # Xcode 27.2; #2566 tracked the earlier deferral while the image
+          # lagged. Foreign-band sdk-manifests
+          # claiming the same packs abort the install — drop them first.
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install maui-ios --version 11.0.100.1
           # Show installed workloads
           dotnet workload list
 
@@ -604,19 +652,20 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The current MAUI iOS workload requires Xcode 27.
-          XCODE_PATH=/Applications/Xcode_27.app
-          if [ ! -d "$XCODE_PATH" ]; then
-            XCODE_PATH=""
-          fi
+          # The .NET 11 iOS workload (27.2.x) builds only against Xcode 27.2 —
+          # probe each Xcode_27 app for its real version; a newest-27* glob
+          # would grab the image's 27.3 beta (also aliased as Xcode_27.3.app),
+          # which the workload rejects.
+          XCODE_PATH=""
+          for app in /Applications/Xcode_27*.app; do
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}')"
+            case "$ver" in
+              27.2|27.2.*) XCODE_PATH="$app"; break ;;
+            esac
+          done
           if [ -z "$XCODE_PATH" ]; then
-            echo "Xcode 27.0 not found, trying the newest available 27.x"
-            XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            # Fallback to default Xcode
-            echo "Xcode 27.x not found, using default Xcode"
-            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+            echo "::error::No Xcode 27.2 installation under /Applications — required by the iOS 27.2 workload"
+            exit 1
           fi
 
           echo "Selecting Xcode: $XCODE_PATH"
@@ -636,7 +685,7 @@ jobs:
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios11.0.100.1" >> "$GITHUB_OUTPUT"
 
       # .NET's DerivedData equivalent: the obj tree holds the mtouch/AOT output
       # that dominates the publish step. Restoring the last master build turns
@@ -750,7 +799,7 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg

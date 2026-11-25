@@ -51,12 +51,16 @@ public static class MauiProgram
 #pragma warning restore CA1416
             .ConfigureFonts(fonts =>
             {
-                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-                fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                // Al Heperek is the brand face and — since v0.9.5 covers the
+                // whole Hebrew mark block — the native pasuk face (#3685).
+                fonts.AddFont("AlHeperekUI-Regular.ttf", ScriptureFonts.Family);
+                fonts.AddFont("AlHeperekUI-SemiBold.ttf", "AlHeperekSemibold");
+                fonts.AddFont("AlHeperekUI-Bold.ttf", "AlHeperekBold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
-                // The native pasuk face (#2623) — packaged offline via MauiFont
+                // The previous pasuk face stays registered as the bundled
+                // taamim alternative — packaged offline via MauiFont
                 // (Resources\Fonts\*.ttf glob), license beside the file.
-                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.Family);
+                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.TaameyDFamily);
             })
             .ConfigureMauiHandlers(handlers =>
             {
@@ -85,7 +89,17 @@ public static class MauiProgram
             });
 
 #if WINDOWS
-        // Readable Narrator names for every CollectionView row (#2766).
+        // Readable Narrator names for every CollectionView row (#2766). .NET 11
+        // defaults Windows CollectionView to the Items2 handler whose platform
+        // view is a WinUI ItemsView; CarouselView (and CollectionView with the
+        // handler-2 feature switch off) still hosts a ListViewBase.
+        Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ItemsView itemsView)
+            {
+                ListItemAutomationNames.Attach(itemsView);
+            }
+        });
         Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
         {
             if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
@@ -102,6 +116,21 @@ public static class MauiProgram
         });
 #endif
 #if ANDROID
+        // MAUI 11 workaround (dotnet/maui#13185 resurfacing): ScrollViewHandler's
+        // new InsertInsetView AddViews the content's platform view, which crashes
+        // with "child already has a parent" when the view is still attached to a
+        // discarded handler tree — the Shell flyout re-render hits exactly that
+        // (its templated ScrollView subtree keeps a stale handler). Detach the
+        // stale native content before the framework's Content mapper runs.
+        Microsoft.Maui.Handlers.ScrollViewHandler.Mapper.PrependToMapping("Content", (handler, scrollView) =>
+        {
+            if (scrollView?.PresentedContent?.Handler?.PlatformView is Android.Views.View nativeContent &&
+                nativeContent.Parent is Android.Views.ViewGroup staleParent)
+            {
+                staleParent.RemoveView(nativeContent);
+            }
+        });
+
         // Increase CarouselView's internal RecyclerView cache so pre-rendered views
         // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
         // a perek for the first time.
@@ -235,9 +264,6 @@ public static class MauiProgram
         // Register ViewModels
         builder.Services.AddTransient<PerekViewModel>();
         builder.Services.AddTransient<PreferencesViewModel>();
-
-        // Register Pages
-        builder.Services.AddTransient<MainPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

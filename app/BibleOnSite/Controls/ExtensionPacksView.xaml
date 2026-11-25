@@ -107,9 +107,10 @@
                                LineBreakMode="WordWrap"
                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
 
-                        <!-- Per-book lifecycle rows -->
+                        <!-- Per-book lifecycle rows. The stack stays enabled during a
+                             download (#3705): rows remain readable/scrollable and each
+                             row guards its own actions instead of the list dimming. -->
                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding Packs.Books}"
-                                             IsEnabled="{Binding Packs.IsIdle}"
                                              Spacing="4">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
@@ -125,29 +126,53 @@
                                                    LineBreakMode="WordWrap"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                                         </VerticalStackLayout>
+                                        <!-- On-row progress (#3705): the bar appears once the platform
+                                             reports a fraction; before that the spinner below signals
+                                             the download is running. -->
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              IsVisible="{Binding ShowProgressBar}">
+                                            <ProgressBar Progress="{Binding DownloadProgress}"
+                                                         VerticalOptions="Center"/>
+                                            <Label Grid.Column="1"
+                                                   Text="{Binding ProgressText}"
+                                                   FontSize="12"
+                                                   Margin="8,0,0,0"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                                                   VerticalOptions="Center"/>
+                                        </Grid>
                                         <!-- Shared action slot: every lifecycle action of a ספר keeps the
                                              same end-side margin so הסרה lands exactly where הורדה sat -
                                              the per-book action must not travel when the state flips (#3264). -->
                                         <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="End" HorizontalOptions="End">
-                                            <Label Text="מוריד…"
-                                                   FontSize="13"
-                                                   FontAttributes="Bold"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                                   VerticalOptions="Center"
-                                                   Margin="8,0"
-                                                   IsVisible="{Binding ShowProgress}"/>
+                                            <ActivityIndicator IsVisible="{Binding ShowProgress}"
+                                                               IsRunning="{Binding ShowProgress}"
+                                                               AutomationId="BookDownloadSpinner"
+                                                               WidthRequest="18"
+                                                               HeightRequest="18"
+                                                               VerticalOptions="Center"
+                                                               Margin="8,0"
+                                                               SemanticProperties.Description="מוריד את הקלטות הספר"/>
+                                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ביטול"
+                                                    Clicked="OnCancelBookDownloadClicked"
+                                                    CommandParameter="{Binding}"
+                                                    AutomationId="CancelBookDownloadButton"
+                                                    IsVisible="{Binding ShowCancel}"
+                                                    Margin="8,4"
+                                                    SemanticProperties.Description="{Binding Name, StringFormat='ביטול הורדת הקלטות {0}'}"/>
                                             <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="{Binding DownloadLabel}"
                                                     Clicked="OnDownloadBookClicked"
                                                     CommandParameter="{Binding}"
                                                     AutomationId="DownloadBookButton"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הורדת הקלטות {0}'}"
                                                     IsVisible="{Binding ShowDownload}"
+                                                    IsEnabled="{Binding ActionsEnabled}"
                                                     Margin="8,4"/>
                                             <Button Style="{x:Static controls:AppButtonStyles.Destructive}" Text="הסרה"
                                                     Clicked="OnRemoveBookClicked"
                                                     CommandParameter="{Binding}"
                                                     AutomationId="RemoveBookButton"
                                                     IsVisible="{Binding ShowRemove}"
+                                                    IsEnabled="{Binding ActionsEnabled}"
                                                     Margin="8,4"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הסרת הקלטות {0}'}"/>
                                         </FlexLayout>
@@ -168,7 +193,10 @@
                                                  Size="18"/>
                             </Button.ImageSource>
                         </Button>
-                        <VerticalStackLayout Spacing="6" IsVisible="{Binding Packs.IsDownloading}">
+                        <!-- Aggregate progress block: only a multi-sefer scope
+                             reports here — a single sefer's progress and cancel
+                             live on its own row (#3705). -->
+                        <VerticalStackLayout Spacing="6" IsVisible="{Binding Packs.ShowAggregateProgress}">
                             <ProgressBar Progress="{Binding Packs.Progress}"/>
                             <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ביטול ההורדה"
                                     Command="{Binding Packs.CancelDownloadCommand}"

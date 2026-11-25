@@ -4,9 +4,11 @@
 .coverage/
 **/TestResults/
 
-# Generated at build time by MSBuild (API URL override / Mapbox public token)
+# Generated at build time by MSBuild (API URL override / Mapbox public token /
+# API signing credential — the signing key itself lives only in CI secrets)
 BibleOnSite/Resources/Raw/api-config.txt
 BibleOnSite/Resources/Raw/mapbox-token.txt
+BibleOnSite/Resources/Raw/api-signing-key.txt
 
 # Large generated asset (on-demand delivery) — run: cd data && cargo make generate-perushim-view-sqlite
 # The .sqlite is gitignored (150 MB); the .sqlite.gz is tracked (~35 MB).
@@ -17,6 +19,7 @@ BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite
 !BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz
 # iOS: decompressed into the managed asset-pack folder next to Manifest.json.
 BibleOnSite/Platforms/iOS/AssetPacks/perushim-notes/*.sqlite
+BibleOnSite/Platforms/iOS/AssetPacks/perushim-notes-slim/*.sqlite
 
 # xcodebuild derived data for the managed asset-pack downloader extension.
 extensions/AssetPackDownloader/build/

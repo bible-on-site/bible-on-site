@@ -4,15 +4,164 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import packageJson from "../../../package.json";
 import { appPlatforms } from "./appPlatforms";
 import styles from "./navbar.module.css";
 
-export const NavBar = () => {
+type NavSubItem = {
+	href: string;
+	label: string;
+	icon: string;
+	title?: string;
+	/** Visible secondary line inside the same link (#3731). */
+	subtitle?: string;
+};
+
+type NavItem = NavSubItem & { sub?: NavSubItem[] };
+
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+	{
+		title: "לימוד על הפרק",
+		items: [
+			{
+				href: "/929",
+				label: "על הפרק",
+				icon: "/icons/open-book.svg",
+				subtitle: "הלימוד בחלוקה המוכרת",
+			},
+		],
+	},
+	{
+		title: "חלוקות נוספות",
+		items: [
+			{
+				href: "/מסורה",
+				label: "מסורה על הפרק",
+				icon: "/icons/separator-horizontal.svg",
+				subtitle: "חלוקת המסורה היהודית הקדומה",
+			},
+			{
+				href: "/פרשה",
+				label: "פרשה על הפרק",
+				icon: "/icons/scroll.svg",
+				subtitle: "לימוד לפי סדר הפרשות",
+			},
+			{
+				href: "/מועדים",
+				label: "מועדים על הפרק",
+				icon: "/icons/party-popper.svg",
+				subtitle: "לימוד במעגל השנה",
+			},
+			{
+				href: "/929/authors",
+				label: "הרבנים",
+				icon: "/icons/rabbi.svg",
+				subtitle: "איתור מאמרים לפי המחברים",
+			},
+		],
+	},
+	{
+		title: "אפשרויות לימוד נוספות",
+		items: [
+			{
+				href: "/dailyBulletin",
+				label: "עלון יומי",
+				icon: "/icons/daily-bulletin.svg",
+				subtitle: "הפרק היומי והמאמרים ישירות אליכם",
+			},
+			{
+				href: "/app",
+				label: "יישומון",
+				icon: "/icons/smartphone.svg",
+				sub: appPlatforms.map((platform) => ({
+					href: platform.href ?? "",
+					label: platform.name,
+					icon: platform.icon,
+					title: platform.description,
+				})),
+			},
+		],
+	},
+	{
+		title: "כלי לימוד",
+		items: [
+			{
+				href: "/pedia",
+				label: "תנכפדיה",
+				icon: "/icons/library.svg",
+				subtitle: 'אנציקלופדיה תנ"כית',
+			},
+			{
+				href: "/לוח",
+				label: "לוח לימוד יומי",
+				icon: "/icons/calendar-today.svg",
+				subtitle: "לוח עזר פרקים לפי תאריך",
+			},
+		],
+	},
+	{
+		title: "שונות",
+		items: [
+			{
+				href: "/tos",
+				label: "תנאי שימוש",
+				icon: "/icons/handshake.svg",
+				subtitle: "והצהרות פרטיות ונגישות",
+			},
+			{ href: "/donation", label: "תרומות", icon: "/icons/donation.svg" },
+			{ href: "/contact", label: "צור קשר", icon: "/icons/contact.svg" },
+		],
+	},
+];
+
+// next.config rewrites serve the Hebrew canonical URLs from ASCII route
+// dirs, so the prerendered pathname (/masora) differs from the browser one
+// (/מסורה). Normalizing both to the menu key keeps the active item identical
+// between server HTML and hydration.
+const INTERNAL_TO_MENU: [RegExp, string][] = [
+	[/^\/calendar/, "/לוח"],
+	[/^\/masora/, "/מסורה"],
+	[/^\/moadim/, "/מועדים"],
+	[/^\/parasha/, "/פרשה"],
+	[/^\/929\/rabbis/, "/929/authors"],
+];
+
+const normalizePathname = (pathname: string): string => {
+	let path = pathname;
+	try {
+		path = decodeURIComponent(pathname);
+	} catch {
+		console.warn(`NavBar: could not decode pathname "${pathname}"`);
+	}
+	for (const [pattern, canonical] of INTERNAL_TO_MENU) {
+		path = path.replace(pattern, canonical);
+	}
+	return path;
+};
+
+const activeMenuHref = (pathname: string): string | null => {
+	const normalized = normalizePathname(pathname);
+	let best: string | null = null;
+	for (const group of NAV_GROUPS) {
+		for (const item of group.items) {
+			for (const href of [item.href, ...(item.sub ?? []).map((s) => s.href)]) {
+				if (
+					(normalized === href || normalized.startsWith(`${href}/`)) &&
+					(best === null || href.length > best.length)
+				) {
+					best = href;
+				}
+			}
+		}
+	}
+	return best;
+};
+
+export const NavBar = ({ version }: { version: string }) => {
 	const [open, setOpen] = useState(false);
 	const pathname = usePathname();
 	const [lastPathname, setLastPathname] = useState(pathname);
 	const triggerRef = useRef<HTMLButtonElement>(null);
+	const current = activeMenuHref(pathname);
 
 	if (pathname !== lastPathname) {
 		setLastPathname(pathname);
@@ -35,6 +184,17 @@ export const NavBar = () => {
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [open]);
+
+	// Sub items are always external store links (appPlatforms).
+	const subLink = (sub: NavSubItem) => (
+		<a
+			href={sub.href || undefined} // nosemgrep -- repo-owned appPlatforms store links, not user input
+			target="_blank"
+			rel="noopener noreferrer"
+		>
+			<span>{sub.label}</span>
+		</a>
+	);
 
 	return (
 		<div className={`${styles.hamburgerMenu} ${open ? styles.open : ""}`}>
@@ -79,193 +239,68 @@ export const NavBar = () => {
 					</Link>
 				</header>
 				<ul className={styles.menuList}>
-					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image
-							src="/icons/book.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/929">
-							<span>על הפרק</span>
-						</Link>
-					</li>
-					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image
-							src="/icons/book.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/מסורה">
-							<span>מסורה על הפרק</span>
-						</Link>
-					</li>
-					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image
-							src="/icons/book.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/פרשה">
-							<span>פרשה על הפרק</span>
-						</Link>
-					</li>
-					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image
-							src="/icons/calendar-today.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/מועדים">
-							<span>מועדים על הפרק</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/calendar-today.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/לוח">
-							<span>לוח לימוד יומי</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/rabbi.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/929/authors">
-							<span>הרבנים</span>
-						</Link>
-					</li>
-					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
-						<Image
-							src="/icons/book.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/pedia">
-							<span>תנכפדיה</span>
-						</Link>
-					</li>
-					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
-						<Image
-							src="/icons/daily-bulletin.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/dailyBulletin">
-							<span>עלון יומי</span>
-						</Link>
-						<ul>
-							<li className={styles.menuItem}>
-								<Image
-									src="/icons/whatsapp.svg"
-									alt=""
-									unoptimized
-									width={16}
-									height={16}
-								/>
-								<Link href="/whatsappGroup">
-									<span>קבוצת ווטסאפ</span>
-								</Link>
-							</li>
-						</ul>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/handshake.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/tos">
-							<span>תנאי שימוש</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/smartphone.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/app">
-							<span>יישומון</span>
-						</Link>
-						<ul>
-							{appPlatforms.map((platform) => (
-								<li
-									key={platform.id}
-									className={styles.menuItem}
-									title={platform.description}
-								>
-									<Image
-										src={platform.icon}
-										alt=""
-										unoptimized
-										width={16}
-										height={16}
-									/>
-									<a
-										href={platform.href ?? undefined}
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										<span>{platform.name}</span>
-									</a>
-								</li>
-							))}
-						</ul>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/contact.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/contact">
-							<span>צור קשר</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
-						<Image
-							src="/icons/donation.svg"
-							alt=""
-							unoptimized
-							width={16}
-							height={16}
-						/>
-						<Link href="/donation">
-							<span>תרומות</span>
-						</Link>
-					</li>
+					{NAV_GROUPS.map((group) => (
+						<li key={group.title} className={styles.menuGroup}>
+							<h2 className={styles.groupTitle}>{group.title}</h2>
+							<ul className={styles.groupItems}>
+								{group.items.map((item) => (
+									<li key={item.href} className={styles.menuItem}>
+										<Link
+											href={item.href}
+											aria-current={
+												item.href === current ? "page" : undefined
+											}
+										>
+											{/* Icon and label share the first line so the icon
+											    centers on the label's line box even when a
+											    subtitle adds a second line (#3731). */}
+											<span className={styles.itemRow}>
+												<Image
+													src={item.icon}
+													alt=""
+													unoptimized
+													width={16}
+													height={16}
+												/>
+												<span>{item.label}</span>
+											</span>
+											{" "}
+											{item.subtitle && (
+												<small className={styles.itemSubtitle}>
+													{item.subtitle}
+												</small>
+											)}
+										</Link>
+										{item.sub && (
+											<ul>
+												{item.sub.map((sub) => (
+													<li
+														key={sub.label}
+														className={styles.menuItem}
+														title={sub.title}
+													>
+														<Image
+															src={sub.icon}
+															alt=""
+															unoptimized
+															width={16}
+															height={16}
+														/>
+														{subLink(sub)}
+													</li>
+												))}
+											</ul>
+										)}
+									</li>
+								))}
+							</ul>
+						</li>
+					))}
 					<li
 						className={styles.versionItem}
 						style={
 							{
-								"--version-content": `"- ${packageJson.version} -"`,
+								"--version-content": `"- ${version} -"`,
 							} as React.CSSProperties
 						}
 					/>

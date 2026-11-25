@@ -187,6 +187,27 @@ public class SharedTopBarTests : IDisposable
     }
 
     [Fact]
+    public void SharedTopBar_Capsule_HasNoInnerInset_SoSegmentFillsReachTheEdge()
+    {
+        // #3683: a 2-unit horizontal border inset left a pill-colored sliver
+        // between the active segment fill (pressed/hover/disabled) and the
+        // capsule's rounded edge. The buttons' bounds must hug the border's
+        // inner edge; the border's own shape clip keeps the fill inside the
+        // outer curve.
+        var bar = new SharedTopBar { ShowBack = true };
+
+        bar.NavCapsule.Parent.Should().BeOfType<Border>().Which.Padding
+            .Should().Be(Thickness.Zero);
+
+        // The segments keep the capsule's exact footprint: the folded inset
+        // makes each hit target EdgeWidth+2 wide with no spacing, so the
+        // divider and outer edges sit exactly where they did before #3683.
+        bar.NavCapsule.Spacing.Should().Be(0);
+        bar.NavigationButton.WidthRequest.Should().Be(SharedTopBar.CapsuleSegmentWidth);
+        bar.BackButton.WidthRequest.Should().Be(SharedTopBar.CapsuleSegmentWidth);
+    }
+
+    [Fact]
     public void SharedTopBar_BackButton_IsARecognizableLocalizedIcon()
     {
         var bar = new SharedTopBar { ShowBack = true };
@@ -562,6 +583,57 @@ public class SharedTopBarTests : IDisposable
         var bar = new SharedTopBar { NavigationAutomationId = "AuthorsNavigationButton" };
 
         bar.NavigationButton.AutomationId.Should().Be("AuthorsNavigationButton");
+    }
+
+    [Fact]
+    public void SharedTopBar_FocusNavigationButton_WithoutBar_ReturnsFalse()
+    {
+        // No usable bar in the tree — the caller keeps its page-specific
+        // fallback instead of pretending focus landed (#2766).
+        var page = new ContentPage { Content = new Label { Text = "no bar" } };
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void SharedTopBar_FocusNavigationButton_UnusableBar_ReturnsFalse(
+        bool isEnabled, bool isVisible)
+    {
+        // A disabled or hidden hamburger is not a keyboard entry point.
+        var bar = new SharedTopBar();
+        var page = new ContentPage { Content = bar };
+        bar.NavigationButton.IsEnabled = isEnabled;
+        bar.NavigationButton.IsVisible = isVisible;
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SharedTopBar_FocusNavigationButton_UsableBar_FocusesTheHamburger()
+    {
+        var bar = new SharedTopBar();
+        var page = new ContentPage { Content = bar };
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeTrue(
+            "an enabled, visible hamburger is the shared keyboard entry point");
+    }
+
+    [Fact]
+    public void SharedTopBar_FocusNavigationButton_SkipsDisabledBarForAUsableOne()
+    {
+        // The first SharedTopBar in tree order is not always the usable one —
+        // the query keeps walking until an enabled, visible hamburger appears.
+        var disabledBar = new SharedTopBar();
+        var usableBar = new SharedTopBar();
+        var page = new ContentPage
+        {
+            Content = new VerticalStackLayout { Children = { disabledBar, usableBar } },
+        };
+        disabledBar.NavigationButton.IsEnabled = false;
+
+        SharedTopBar.FocusNavigationButton(page).Should().BeTrue();
     }
 
     [Fact]

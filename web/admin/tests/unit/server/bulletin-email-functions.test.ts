@@ -6,11 +6,19 @@ const mocks = vi.hoisted(() => ({
 	queue: vi.fn(),
 	audience: vi.fn(),
 	subscriber: vi.fn(),
+	rollout: vi.fn(),
+	engagement: vi.fn(),
+	confirm: vi.fn(),
+	identity: vi.fn(),
 }));
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: ({ method }: { method: string }) => {
 		mocks.methods.push(method);
 		return {
+			handler:
+				(handler: (context: { data: unknown }) => Promise<unknown>) =>
+				async (context?: { data: unknown }) =>
+					handler({ data: context?.data }),
 			validator: (validate: (data: unknown) => unknown) => ({
 				handler:
 					(handler: (context: { data: unknown }) => Promise<unknown>) =>
@@ -28,12 +36,25 @@ vi.mock("~/server/ses-settings.server", () => ({
 vi.mock("~/server/ses-delivery.server", () => ({
 	enqueueBulletinEmail: mocks.queue,
 }));
+vi.mock("~/server/rollout-state.server", () => ({
+	setRolloutState: mocks.rollout,
+}));
+vi.mock("~/server/bulletin-engagement.server", () => ({
+	readEmailEngagementPanel: mocks.engagement,
+	confirmInactivityUnsubscribe: mocks.confirm,
+}));
+vi.mock("~/server/editor-identity", () => ({
+	resolveEditorIdentity: mocks.identity,
+}));
 
 import {
 	changeDailyBulletinSubscriber,
+	confirmDailyBulletinInactivityUnsubscribe,
 	getDailyBulletinEmail,
+	getDailyBulletinEmailEngagement,
 	queueDailyBulletinEmail,
 	setDailyBulletinEmailAudience,
+	setDailyBulletinEmailRollout,
 } from "~/server/bulletin-email";
 
 const request = {
@@ -48,9 +69,20 @@ describe("bulletin email server functions", () => {
 		mocks.queue.mockReset();
 		mocks.audience.mockReset();
 		mocks.subscriber.mockReset();
+		mocks.engagement.mockReset();
+		mocks.confirm.mockReset();
+		mocks.identity.mockReset().mockResolvedValue({ id: "admin-sub-1" });
 	});
 	it("exposes state as GET and all changes as explicit POSTs", () => {
-		expect(mocks.methods).toEqual(["GET", "POST", "POST", "POST"]);
+		expect(mocks.methods).toEqual([
+			"GET",
+			"POST",
+			"POST",
+			"POST",
+			"POST",
+			"GET",
+			"POST",
+		]);
 	});
 	it("forwards only validated subscriber fields to the consent service", async () => {
 		const invoke = changeDailyBulletinSubscriber as (request: {
@@ -123,6 +155,23 @@ describe("bulletin email server functions", () => {
 			}),
 		).rejects.toThrow("המנוי חסום לדיוור");
 		expect(mocks.subscriber).toHaveBeenCalledOnce();
+	});
+	it("forwards a validated rollout control to the state service", async () => {
+		mocks.rollout.mockResolvedValue({ state: "running", revision: 5 });
+		await expect(
+			setDailyBulletinEmailRollout({
+				data: { action: "enable", revision: 4 },
+			}),
+		).resolves.toEqual({ state: "running", revision: 5 });
+		expect(mocks.rollout).toHaveBeenCalledExactlyOnceWith({
+			action: "enable",
+			revision: 4,
+		});
+		await expect(
+			setDailyBulletinEmailRollout({
+				data: { action: "wipe", revision: 4 },
+			}),
+		).rejects.toThrow();
 	});
 	it("forwards only a validated calendar date to the state service", async () => {
 		const state = { settings: { audience: "test", revision: 4 }, job: null };
@@ -220,5 +269,24 @@ describe("bulletin email server functions", () => {
 			"מצב השליחה השתנה",
 		);
 		expect(mocks.queue).toHaveBeenCalledTimes(1);
+	});
+	it("serves the engagement panel and forwards the acting admin identity", async () => {
+		const panel = { editions: [], inactive: [] };
+		mocks.engagement.mockResolvedValue(panel);
+		await expect(getDailyBulletinEmailEngagement()).resolves.toEqual(panel);
+		await expect(
+			confirmDailyBulletinInactivityUnsubscribe({
+				data: { subscriberId: 7 },
+			}),
+		).resolves.toBeUndefined();
+		expect(mocks.confirm).toHaveBeenCalledExactlyOnceWith(7, "admin-sub-1");
+	});
+	it("rejects a malformed inactivity unsubscribe before invoking the service", async () => {
+		for (const data of [{}, { subscriberId: "7" }, { subscriberId: -1 }]) {
+			await expect(
+				confirmDailyBulletinInactivityUnsubscribe({ data }),
+			).rejects.toThrow("בקשת ההסרה אינה תקינה");
+		}
+		expect(mocks.confirm).not.toHaveBeenCalled();
 	});
 });

@@ -52,11 +52,13 @@ export type PreparedAPIArchives = {
 	directory: string;
 	version: string;
 	sourceRef: string;
-	images: [APIArchive, APIArchive];
+	images: APIArchive[];
 	dispose(): Promise<void>;
 };
 export type APIImageOptions = {
-	amd64ArchivePath: string;
+	// ARM64-only modules (website/admin, #3794) carry no amd64 archive; api
+	// still requires the validated pair.
+	amd64ArchivePath?: string;
 	arm64ArchivePath: string;
 	sourceRef: string;
 	version: string;
@@ -73,8 +75,8 @@ export function validateAPIImageOptions(options: APIImageOptions): void {
 		semver.valid(options.version) !== options.version
 	)
 		throw new Error("Image version must be plain major.minor.patch");
-	if (!options.amd64ArchivePath || !options.arm64ArchivePath)
-		throw new Error("Both Docker archives are required");
+	if (!options.arm64ArchivePath)
+		throw new Error("The ARM64 Docker archive is required");
 }
 
 function limitedStream() {
@@ -300,10 +302,11 @@ export async function prepareAPIArchives(
 	try {
 		await chmod(directory, 0o700);
 		const images: APIArchive[] = [];
-		for (const [architecture, source] of [
-			["amd64", options.amd64ArchivePath],
-			["arm64", options.arm64ArchivePath],
-		] as const) {
+		const archives: [Architecture, string][] = [];
+		if (options.amd64ArchivePath !== undefined)
+			archives.push(["amd64", options.amd64ArchivePath]);
+		archives.push(["arm64", options.arm64ArchivePath]);
+		for (const [architecture, source] of archives) {
 			const destination = join(directory, `${architecture}.tar`);
 			await copyArchive(source, destination);
 			images.push(
@@ -319,7 +322,7 @@ export async function prepareAPIArchives(
 			directory,
 			version: options.version,
 			sourceRef: options.sourceRef,
-			images: images as [APIArchive, APIArchive],
+			images,
 			dispose,
 		};
 	} catch (error) {
@@ -684,14 +687,21 @@ export async function publishAPIImages(
 	} = options;
 	if (options.indexManifests && !publishIndex)
 		throw new Error("Custom index descriptors require index publication");
+	// Paired modules (api) stage amd64+arm64; ARM64-only modules (website,
+	// admin — #3794) stage exactly the single ARM64 archive.
+	const expectedImages =
+		prepared.images.length === 1
+			? ["arm64"]
+			: ["amd64", "arm64"];
 	if (
 		version !== prepared.version ||
-		prepared.images.length !== 2 ||
-		prepared.images[0].architecture !== "amd64" ||
-		prepared.images[1].architecture !== "arm64"
+		prepared.images.length !== expectedImages.length ||
+		prepared.images.some(
+			(image, index) => image.architecture !== expectedImages[index],
+		)
 	)
 		throw new Error(
-			"Publication must use the exact validated version and architecture pair",
+			"Publication must use the exact validated version and architecture set",
 		);
 	await assertAPIRepositoryPolicy(client, repositoryName, options.mutableTags);
 	await assertAPILatestMode(client, repositoryName, publishIndex);
@@ -716,7 +726,7 @@ export async function publishAPIImages(
 		if (image) staged.set(archive.architecture, verifiedChild(image, archive));
 	}
 	let push = options.pushArchive;
-	if (!push && staged.size !== 2) {
+	if (!push && staged.size !== prepared.images.length) {
 		const auth = await getAuthorizationToken(client);
 		const host = new URL(auth.proxyEndpoint).host;
 		if (!repositoryUri.startsWith(`${host}/`))
@@ -764,19 +774,21 @@ export async function publishAPIImages(
 	if (options.indexManifests) {
 		children = await options.indexManifests(children, staged);
 	}
-	const amd64 = staged.get("amd64");
-	if (!amd64) throw new Error("Missing canonical amd64 child");
+	// Paired publications keep amd64 as the canonical child; an ARM64-only
+	// publication promotes its sole child (#3794).
+	const canonicalChild = staged.get("amd64") ?? staged.get("arm64");
+	if (!canonicalChild) throw new Error("Missing canonical image child");
 	const manifest = publishIndex
 		? JSON.stringify({
 				schemaVersion: 2,
 				mediaType: OCI_INDEX,
 				manifests: children,
 			})
-		: amd64.manifest;
+		: canonicalChild.manifest;
 	const canonical = {
 		manifest,
 		digest: sha256(manifest),
-		mediaType: publishIndex ? OCI_INDEX : amd64.mediaType,
+		mediaType: publishIndex ? OCI_INDEX : canonicalChild.mediaType,
 	};
 	await immutableImage(client, repositoryName, versionTag, canonical);
 	// Workflow concurrency serializes releases; recheck immediately before moving latest.

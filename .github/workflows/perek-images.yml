@@ -20,8 +20,32 @@ permissions:
   contents: read
 
 jobs:
+  # Merge groups have no path filters: the shared router decides whether the
+  # combined head is docs-only or Renovate-config-only and skips this
+  # validation for it (#3621, #3795).
+  detect_docs:
+    timeout-minutes: 10
+    name: Docs-only change detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+      renovate_config_only: ${{ steps.detect.outputs.renovate_config_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Detect docs-only change
+        id: detect
+        run: node devops/github/ci/determine-changes.ts
   prepare-images:
     name: Encode and validate images
+    needs: detect_docs
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' && needs.detect_docs.outputs.renovate_config_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -35,9 +35,10 @@ export class AdminECRDeployer extends ECRDeployerBase {
 
 	override async getDockerImageArchivePath(): Promise<string> {
 		const version = await this.getLocalVersion();
+		// ARM64-only release layout (#3794).
 		return path.resolve(
 			__dirname,
-			`../../../web/admin/.release/bible-on-site-admin-v${version}.tar.gz`,
+			`../../../web/admin/.release/bible-on-site-admin-v${version}-arm64.tar.gz`,
 		);
 	}
 

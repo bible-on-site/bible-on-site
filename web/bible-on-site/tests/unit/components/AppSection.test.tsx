@@ -10,11 +10,6 @@ jest.mock("next/image", () => ({
 	),
 }));
 
-// Covered by its own suite; it fetches on mount.
-jest.mock("@/app/components/PushNotificationsToggle", () => ({
-	PushNotificationsToggle: () => null,
-}));
-
 import { AppSection } from "@/app/components/AppSection";
 
 describe("AppSection", () => {

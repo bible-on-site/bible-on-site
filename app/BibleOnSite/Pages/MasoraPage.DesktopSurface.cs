@@ -7,10 +7,11 @@ namespace BibleOnSite.Pages;
 /// Platforms/Windows/DesktopWindowChrome (#2766): Alt+Left/Esc peel this
 /// page's transient surfaces through the existing reader Back chain.
 /// The masora reader has no in-page search surface, so it does not
-/// implement <see cref="IWindowsSearchSurface"/>.
+/// implement <see cref="IWindowsSearchSurface"/>; PgUp/PgDn still step
+/// masora units when no transient surface owns input.
 /// </summary>
 #pragma warning disable S2333 // partial required: MasoraPage is split across 3 declaration parts.
-public partial class MasoraPage : IWindowsDesktopSurface, IWindowsFullscreenSurface
+public partial class MasoraPage : IWindowsDesktopSurface, IWindowsFullscreenSurface, IWindowsUnitNavSurface
 #pragma warning restore S2333
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
@@ -30,4 +31,7 @@ public partial class MasoraPage : IWindowsDesktopSurface, IWindowsFullscreenSurf
 			_chrome.ToggleFullScreen();
 		}
 	}
+
+	bool IWindowsUnitNavSurface.TryNavigateUnit(int direction) => DesktopUnitNavigation.TryStep(
+		ResolveBackOwner(), _viewModel.LoadNextCommand, _viewModel.LoadPreviousCommand, direction);
 }

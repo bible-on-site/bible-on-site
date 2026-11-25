@@ -10,23 +10,25 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, type TestContext, test } from "node:test";
+import { type TestContext, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-	applyReleaseRecovery,
-	baseRevision,
-	detectChanges,
-	isDataDeployChange,
-	isSchemaOnlyDataChange,
-	listChangedFiles,
 	MODULES,
 	type ModuleKey,
+	applyReleaseRecovery,
+	baseRevision,
+	codeqlLanguages,
+	detectChanges,
+	isDataDeployChange,
+	isDataDeployCiChange,
+	isSchemaOnlyDataChange,
+	listChangedFiles,
 	main,
 } from "./determine-changes.ts";
 import {
 	DOCSTRING_PYTHON,
-	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
+	isPublishDocstringOnlyChange,
 } from "./publish-docstring.mts";
 
 const changed = (files: string[], ...keys: ModuleKey[]) =>
@@ -283,6 +285,40 @@ describe("detectChanges", () => {
 		}
 	});
 
+	for (const file of [
+		"devops/github/ci/audit-android-aab-size.mjs",
+		"devops/github/ci/audit-android-aab-size.test.mjs",
+	]) {
+		test(`${file} selects app validation without a release`, () => {
+			for (const [key, flags] of Object.entries(detectChanges([file]))) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "app" },
+					key,
+				);
+			}
+		});
+	}
+
+	for (const path of [
+		"devops/github/ci/ubuntu-apt-mirrors.mjs",
+		"devops/github/ci/ubuntu-apt-mirrors.test.mjs",
+	]) {
+		test(`${path} selects the package mirror consumers without a release`, () => {
+			const consumers = new Set(["website", "app", "admin"]);
+			for (const [module, flags] of Object.entries(detectChanges([path]))) {
+				assert.deepEqual(
+					flags,
+					{
+						module_changed: false,
+						ci_changed: consumers.has(module),
+					},
+					module,
+				);
+			}
+		});
+	}
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
@@ -397,6 +433,108 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("shared runtime contract edits release their importer apps", () => {
+		// #3710: web/shared sources are compiled into the release artifacts —
+		// a contract-only fix must package website+admin, not just run checks.
+		for (const file of [
+			"web/shared/revalidate/index.ts",
+			"web/shared/bulletin-join/index.ts",
+			"web/shared/tanahpedia/index.ts",
+			// Directory-level entry: every runtime file under reading-metrics counts.
+			"web/shared/reading-metrics/text.ts",
+			"web/shared/reading-metrics/policy.ts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "admin"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: true, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			// The API does not import these contracts; the shared CI umbrella
+			// still runs its checks.
+			assert.deepEqual(
+				changes.api,
+				{ module_changed: false, ci_changed: true },
+				`${file} -> api`,
+			);
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: false },
+				`${file} -> app`,
+			);
+		}
+		// The article-relationship DTOs bind admin and the Rust API only.
+		const pediaDto = detectChanges([
+			"web/shared/article-relationships/index.ts",
+		]);
+		for (const key of ["admin", "api"] as const) {
+			assert.deepEqual(
+				pediaDto[key],
+				{ module_changed: true, ci_changed: true },
+				`article-relationships -> ${key}`,
+			);
+		}
+		assert.deepEqual(
+			pediaDto.website,
+			{ module_changed: false, ci_changed: true },
+			"article-relationships -> website",
+		);
+	});
+
+	test("shared test-only fixtures run checks without a release", () => {
+		// Revalidation examples are fixtures imported by both test suites;
+		// tests-util serves the Playwright harnesses. Neither ships.
+		for (const file of [
+			"web/shared/revalidate/examples.ts",
+			"web/shared/tests-util/e2e-impact.ts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "admin", "api"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: false },
+				`${file} -> app`,
+			);
+		}
+	});
+
+	test("release-notes extra_module_paths mirror extraModulePaths", () => {
+		// shared-release.yml feeds `extra_module_paths` to release-notes.mjs;
+		// a released commit touching only an extra path must land in the notes,
+		// so the ci.yml literals must mirror extraModulePaths exactly.
+		const ciYml = readFileSync(
+			join(dirname(fileURLToPath(import.meta.url)), "../../../.github/workflows/ci.yml"),
+			"utf8",
+		);
+		const released = new Map<string, string[]>();
+		for (const block of ciYml
+			.split("uses: ./.github/workflows/shared-release.yml")
+			.slice(1)) {
+			const name = block.match(/module_name:\s*(\w+)/)?.[1];
+			assert.ok(name, "shared-release job without module_name");
+			const extras = block.match(/extra_module_paths:\s*'([^']*)'/)?.[1];
+			released.set(name, extras ? JSON.parse(extras) : []);
+		}
+		for (const [module, rule] of Object.entries(MODULES)) {
+			// perushim_pipeline and data ship through release_data, which
+			// produces no shared-release notes and takes no extras input.
+			if (module === "perushim_pipeline" || module === "data") continue;
+			assert.deepEqual(
+				[...(released.get(module) ?? [])].sort(),
+				[...(rule.extraModulePaths ?? [])].sort(),
+				`release notes extras for ${module}`,
+			);
+		}
+	});
+
 	for (const path of [
 		"web/bible-on-site/package.json",
 		"web/bible-on-site/bun.lock",
@@ -469,6 +607,7 @@ describe("detectChanges", () => {
 		assert.deepEqual(JSON.parse(match[1]), [
 			"data/recitation/recitation.sqlite",
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
+			"web/shared/branding",
 		]);
 	});
 
@@ -493,10 +632,79 @@ describe("detectChanges", () => {
 		]);
 	});
 
+	test("shared brand files release every consumer (#3708)", () => {
+		for (const path of [
+			"web/shared/branding/fonts/AlHeperekUI-Regular.ttf",
+			"web/shared/branding/fonts/AlHeperekUI-Bold.woff2",
+			"web/shared/branding/logos/header-logo.svg",
+			"web/shared/branding/derived/logo_header.jpg",
+			"web/shared/branding/derived/favicon.ico",
+		]) {
+			assert.deepEqual(
+				changed([path], "website", "admin", "app", "bulletin"),
+				[
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: true },
+					{ module_changed: true, ci_changed: false },
+					{ module_changed: true, ci_changed: false },
+				],
+				path,
+			);
+		}
+		// Unrelated shared files stay check-only for the web consumers.
+		assert.deepEqual(
+			changed(["web/shared/tests-util/e2e-impact.ts"], "website", "app", "bulletin"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+		// Directory boundaries: a sibling path must not release consumers —
+		// it still matches the generic web/shared check selector for website.
+		assert.deepEqual(
+			changed(["web/shared/branding-x/font.ttf"], "website", "app"),
+			[
+				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+			],
+		);
+	});
+
+	test("the pinned corpus releases the bulletin through the version stem (#3709)", () => {
+		for (const corpus of [
+			"web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			// A bumped dump keeps selecting the bulletin even though the exact
+			// release-notes pin still names the previous file.
+			"web/bible-on-site/src/data/db/sefaria-dump-5785-tishrei-1.tanah_view.json",
+		]) {
+			assert.deepEqual(changed([corpus], "website", "bulletin"), [
+				{ module_changed: true, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
+			]);
+		}
+	});
+
+	test("a native-only corpus rename runs the bulletin parity check without releasing it (#3709)", () => {
+		for (const sqlite of [
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			// The stem floats with the dump — detection must not pin it.
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5785-tishrei-1.tanah_view.sqlite",
+		]) {
+			assert.deepEqual(
+				changed([sqlite], "bulletin"),
+				[{ module_changed: false, ci_changed: true }],
+				sqlite,
+			);
+		}
+	});
+
 	for (const path of [
 		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
 		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",
 		"app/BibleOnSite.Tests.MobileE2E/PerekPilotTests.cs",
+		// The in-process XHarness test app is test-only too (#3349).
+		"app/BibleOnSite.DeviceTests/Tests/DeviceTests.cs",
 		"app/mobile-e2e/run.mjs",
 	]) {
 		test(`${path} runs app checks without a store release`, () => {
@@ -617,13 +825,7 @@ describe("detectChanges", () => {
 
 	test("release workflow changes validate only released modules", () => {
 		const changes = detectChanges([".github/workflows/shared-release.yml"]);
-		for (const key of [
-			"website",
-			"api",
-			"app",
-			"bulletin",
-			"admin",
-		] as const) {
+		for (const key of ["website", "api", "app", "bulletin", "admin"] as const) {
 			assert.equal(changes[key].ci_changed, true, key);
 		}
 		for (const key of ["data", "perushim_pipeline"] as const) {
@@ -783,6 +985,105 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the MySQL 9.7 preparation keeps the fingerprint change manual", () => {
+		const migration =
+			"devops/deploy/data-deploy/manual/mysql-97-article-fingerprint.sql";
+		const bootstrap = "data/mysql/tanah_article_content_hash_upgrade.sql";
+		const files = [
+			migration,
+			bootstrap,
+			"data/Cargo.lock",
+			"data/mysql/db-populator/Cargo.toml",
+			"data/mysql/db-populator/src/main.rs",
+			"data/mysql/tanah_dynamic_structure.sql",
+			"data/mysql/tanah_mention_test_data.sql",
+			"data/sefaria/pipelines/perushim-view/README.md",
+			"devops/deploy/data-deploy/mysql-fingerprint-regression.mjs",
+			"devops/deploy/data-deploy/lambda_mysql_package_test.py",
+			"web/admin/src/server/article-relationships.ts",
+		];
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isDataDeployCiChange(files), true);
+		assert.equal(detectChanges(files).data.module_changed, true);
+		assert.equal(detectChanges(files).perushim_pipeline.module_changed, true);
+
+		assert.equal(
+			isSchemaOnlyDataChange([...files, "data/mysql/private_archive_upgrade.sql"]),
+			true,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange(files.filter((file) => file !== migration)),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange(files.filter((file) => file !== bootstrap)),
+			false,
+		);
+		for (const delivery of [
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			"devops/deploy/data-deploy/sql-files.json",
+		]) {
+			assert.equal(
+				isSchemaOnlyDataChange([...files, delivery]),
+				false,
+				delivery,
+			);
+		}
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/private_archive_upgrade.sql",
+				"devops/deploy/data-deploy/sql-files.json",
+			]),
+			false,
+		);
+	});
+
+	test("the contribution upgrade retains checks without full data delivery", () => {
+		const migration = "data/mysql/tanahpedia_contribution_upgrade.sql";
+		for (const files of [
+			[migration],
+			[
+				migration,
+				"web/admin/src/server/contributions.server.ts",
+				"docs/tanahpedia/contribution-workflow.md",
+			],
+		]) {
+			assert.equal(isSchemaOnlyDataChange(files), true);
+			assert.deepEqual(detectChanges(files).data, {
+				module_changed: true,
+				ci_changed: false,
+			});
+			assert.equal(isDataDeployChange(files), false);
+		}
+		for (const content of [
+			"data/mysql/tanah_static_structure.sql",
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			"data/mysql/db-populator/src/main.rs",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]) {
+			assert.equal(
+				isSchemaOnlyDataChange([migration, content]),
+				false,
+				content,
+			);
+			assert.equal(
+				detectChanges([migration, content]).data.module_changed,
+				true,
+			);
+		}
+		for (const otherPath of [
+			"data/mysql/nested/tanahpedia_contribution_upgrade.sql",
+			"data/mysql/tanahpedia_contribution_upgrade.sql.bak",
+			"data/mysql/tanahpedia_unrelated_upgrade.sql",
+		])
+			assert.equal(isSchemaOnlyDataChange([otherPath]), false, otherPath);
+	});
+
 	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
 		const files = [
 			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
@@ -1063,7 +1364,7 @@ test("bulletin infrastructure changes select data checks without releasing conte
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",
-		"app/BibleOnSite/Resources/Images/logo_header.jpg",
+		"web/shared/branding/derived/logo_header.jpg",
 		"web/bible-on-site/public/icons/envelope.svg",
 		"web/bible-on-site/public/icons/phone.svg",
 		"web/bible-on-site/public/icons/whatsapp.svg",
@@ -1078,12 +1379,46 @@ test("bulletin infrastructure changes select data checks without releasing conte
 
 describe("isDataDeployChange", () => {
 	test("data-deploy tooling changes signal delivery intent", () => {
+		for (const file of [
+			"index.mts",
+			"deploy-payload.mts",
+			"lambda-invocation.mts",
+			"sql-files.json",
+			"validate_lambda_parser.py",
+		])
+			assert.equal(
+				isDataDeployChange([`devops/deploy/data-deploy/${file}`]),
+				true,
+				file,
+			);
+	});
+
+	test("manual migrations and their validation run data checks without requesting delivery", () => {
+		const migration =
+			"devops/deploy/data-deploy/manual/mysql-97-article-fingerprint.sql";
+		const tests = [
+			"deploy-payload.test.mts",
+			"lambda_mysql_package_test.py",
+			"mysql-fingerprint-regression.mjs",
+			"mysql_import_regression.py",
+			"test_lambda_credentials.py",
+			"test_lambda_parser.py",
+		].map((file) => `devops/deploy/data-deploy/${file}`);
+		for (const file of [migration, ...tests]) {
+			assert.deepEqual(detectChanges([file]).data, {
+				module_changed: false,
+				ci_changed: true,
+			});
+			assert.equal(isDataDeployChange([file]), false, file);
+			assert.equal(isDataDeployCiChange([file]), true, file);
+		}
+		assert.equal(isDataDeployChange([migration, ...tests]), false);
 		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/index.mts"]),
-			true,
-		);
-		assert.equal(
-			isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]),
+			isDataDeployChange([
+				migration,
+				...tests,
+				"devops/deploy/data-deploy/sql-files.json",
+			]),
 			true,
 		);
 	});
@@ -1100,6 +1435,26 @@ describe("isDataDeployChange", () => {
 		])
 			assert.equal(isDataDeployChange(files), false, JSON.stringify(files));
 	});
+});
+
+test("deployment rehearsal inputs request CI without expressing release intent", () => {
+	for (const file of [
+		".github/workflows/ci-data-deploy.yml",
+		".github/workflows/ci.yml",
+		"devops/package.json",
+		"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+		"docs/aws/cloudformation/data-deploy/requirements.txt",
+	]) {
+		assert.equal(isDataDeployCiChange([file]), true, file);
+		assert.equal(isDataDeployChange([file]), false, file);
+	}
+	for (const file of [
+		"docs/guide.md",
+		"web/bible-on-site/src/page.tsx",
+		"devops/deploy/data-deploy-old.mts",
+		"docs/aws/cloudformation/data-deploy/requirements-dev.txt",
+	])
+		assert.equal(isDataDeployCiChange([file]), false, file);
 });
 
 describe("baseRevision", () => {
@@ -1151,7 +1506,9 @@ describe("main", () => {
 
 	function commit(cwd: string, path: string) {
 		mkdirSync(dirname(join(cwd, path)), { recursive: true });
-		writeFileSync(join(cwd, path), `${path}\n`);
+		// A later commit may rewrite the same path (e.g. a README edit):
+		// unique content keeps every commit a real change.
+		writeFileSync(join(cwd, path), `${path} ${process.hrtime.bigint()}\n`);
 		git(cwd, "add", ".");
 		git(cwd, "commit", "--quiet", "-m", path);
 		return git(cwd, "rev-parse", "HEAD");
@@ -1172,8 +1529,9 @@ describe("main", () => {
 			head: string;
 		}) => object,
 		changedPath = "web/bible-on-site/src/page.tsx",
-		changeKind: "write" | "delete" = "write",
+		changeKind: "write" | "delete" | "rename" = "write",
 		ancestorPath = "web/api/src/main.rs",
+		options: { extraPaths?: string[]; renameFrom?: string } = {},
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -1195,10 +1553,13 @@ describe("main", () => {
 			if (eventName === "merge_group") {
 				git(work, "checkout", "--quiet", "-b", "gh-readonly-queue/master/tail");
 			}
-			const base = commit(work, ancestorPath);
+			// For renames the measured base creates the source path itself, so
+			// the tested diff stays a pure rename.
+			const base = commit(work, options.renameFrom ?? ancestorPath);
 			if (eventName === "pull_request") {
 				git(work, "checkout", "--quiet", "-b", "feature");
-				commit(work, "web/bible-on-site/src/page.tsx");
+				for (const path of [changedPath, ...(options.extraPaths ?? [])])
+					commit(work, path);
 				git(work, "checkout", "--quiet", "master");
 				commit(work, "web/admin/package.json");
 				commit(work, "web/bulletin/Cargo.toml");
@@ -1215,11 +1576,16 @@ describe("main", () => {
 				rmSync(join(work, changedPath));
 				git(work, "add", ".");
 				git(work, "commit", "--quiet", "-m", "Remove migration");
+			} else if (changeKind === "rename") {
+				mkdirSync(dirname(join(work, changedPath)), { recursive: true });
+				git(work, "mv", options.renameFrom ?? "", changedPath);
+				git(work, "commit", "--quiet", "-m", "Rename");
 			} else {
-				commit(work, changedPath);
+				for (const path of [changedPath, ...(options.extraPaths ?? [])])
+					commit(work, path);
 			}
 			const head = git(work, "rev-parse", "HEAD");
-			if (eventName === "merge_group") {
+			if (eventName === "merge_group" && !options.extraPaths?.length) {
 				assert.equal(git(work, "rev-parse", "master"), root);
 				assert.equal(git(work, "rev-parse", "HEAD^"), base);
 				assert.equal(git(work, "diff", "--name-only", base, head), changedPath);
@@ -1261,7 +1627,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 4,
+				Object.keys(MODULES).length * 2 + 8,
 			);
 			return { changes, output };
 		} finally {
@@ -1356,6 +1722,17 @@ describe("main", () => {
 		assert.match(output, /^data_deploy_changed=false$/m);
 	});
 
+	test("a contribution migration push cannot publish the full data payload", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/tanahpedia_contribution_upgrade.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+	});
+
 	test("a deleted schema migration stays manual without asserting the SQL still exists", () => {
 		const { changes, output } = run(
 			"push",
@@ -1409,6 +1786,20 @@ describe("main", () => {
 		}
 		assert.match(output, /^data_schema_only_changed=false$/m);
 		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=false$/m);
+	});
+
+	test("a merge-group tail rehearses data deployment inputs in an earlier entry", () => {
+		const { output } = run(
+			"merge_group",
+			({ base }) => ({ merge_group: { base_sha: base } }),
+			"docs/guide.md",
+			"write",
+			"docs/aws/cloudformation/data-deploy/requirements.txt",
+		);
+		assert.match(output, /^docs_only=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_deploy_ci_changed=true$/m);
 	});
 
 	for (const path of [
@@ -1448,6 +1839,365 @@ describe("main", () => {
 			});
 		assert.match(output, /^admin_release_recovery=true$/m);
 		assert.match(output, /^bulletin_release_recovery=true$/m);
+	});
+
+	describe("docs-only classification (#3621)", () => {
+		const noChecks = (changes: ReturnType<typeof detectChanges>) => {
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, {
+					module_changed: false,
+					ci_changed: false,
+				});
+		};
+
+		for (const path of [
+			// Prose at the boundary's top level and in nested trees.
+			"docs/guide.md",
+			"docs/github/workflows/ci/ci.md",
+			// Nested non-prose assets still count as documentation.
+			"docs/website/bookshelf-first-render.evidence.json",
+			"docs/devops/ios-2635/ab-legs.csv",
+			"docs/architecture/service-map.puml",
+			"docs/website/images/screenshot.png",
+		]) {
+			test(`push of ${path} reports docs_only`, () => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				noChecks(changes);
+				assert.match(output, /^docs_only=true$/m);
+			});
+		}
+
+		test("a deleted documentation file stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/guide.md",
+				"delete",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("an evidence screenshot deletion stays docs_only on master", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"data/recitation/docs/complete-concern-before.png",
+				"delete",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+			assert.match(output, /^data_deploy_changed=false$/m);
+		});
+
+		test("audited module evidence and its review notes stay docs_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"app/docs/evidence/issue-1/before.png",
+				"write",
+				undefined,
+				{
+					extraPaths: [
+						"web/admin/docs/evidence/issue-1/README.md",
+						"web/bible-on-site/docs/evidence/issue-1/after.jpg",
+						"web/bulletin/docs/daily-bulletin.md",
+						"web/bulletin/docs/daily-bulletin-before-after.png",
+						"web/bulletin/docs/daily-bulletin-typography-before-after.png",
+						"web/bulletin/docs/daily-bulletin-typography-page2.png",
+						"data/recitation/README.md",
+						"data/recitation/benchmarks/accumulated-listening-ui/before.png",
+						"data/recitation/benchmarks/listening-ui/README.md",
+						"data/recitation/benchmarks/review-version-handoff/after.jpg",
+					],
+				},
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("module evidence leaves release input paths routed to their modules", () => {
+			for (const [module, path] of [
+				["app", "app/BibleOnSite/Resources/Images/after.png"],
+				["admin", "web/admin/docs/evidence/harness.ts"],
+				["website", "web/bible-on-site/public/images/before.jpg"],
+				["bulletin", "web/bulletin/assets/email/footer.png"],
+				["data", "data/recitation/benchmarks/listening-ui/fixture.json"],
+			] as const) {
+				const changes = detectChanges([
+					"web/admin/docs/evidence/issue-1/before.png",
+					path,
+				]);
+				assert.equal(changes[module].module_changed, true, path);
+			}
+		});
+
+		test("recitation evidence alongside a migration preserves schema-only routing", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"data/mysql/tanahpedia_alter_example.sql",
+				"write",
+				undefined,
+				{ extraPaths: ["data/recitation/docs/cut-editor-after.png"] },
+			);
+			assert.equal(changes.data.module_changed, true);
+			assert.match(output, /^data_schema_only_changed=true$/m);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("a multi-commit docs-only push stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["docs/devops/e2e-test-selection.md"] },
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a docs-only pull request reports docs_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"docs/guide.md",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a docs-only merge group does not force module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"docs/guide.md",
+			);
+			// Without the docs-only bypass the queue forces every ci_changed on;
+			// the docs delta must keep them all off so heavy jobs stay skipped.
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("an evidence-only merge group skips heavy module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"web/admin/docs/evidence/issue-1/after.webp",
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a merge group mixing docs with source still validates the combined candidate", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["web/bible-on-site/src/page.tsx"] },
+			);
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, { module_changed: false, ci_changed: true });
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("a mixed docs plus source pull request is not docs_only", () => {
+			const { output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"docs/guide.md",
+				"write",
+				undefined,
+				{ extraPaths: ["web/bible-on-site/src/page.tsx"] },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("docs plus a workflow, manifest or shared action keeps validation", () => {
+			for (const extra of [
+				".github/workflows/ci.yml",
+				"web/bible-on-site/package.json",
+				".github/actions/setup-js/action.yml",
+				"devops/github/ci/determine-changes.ts",
+			]) {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"docs/guide.md",
+					"write",
+					undefined,
+					{ extraPaths: [extra] },
+				);
+				assert.match(output, /^docs_only=false$/m, extra);
+			}
+		});
+
+		for (const path of [
+			// The operational AWS source tree is never documentation (#3621):
+			// CloudFormation, Lambda and nginx inputs keep their routed checks.
+			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+			// Even prose or media under the operational tree stays validated.
+			"docs/aws/README.md",
+			"docs/aws/architecture/architecture.drawio",
+			// Source and manifest formats under docs/ are not documentation.
+			"docs/tests/app/device-tests-poc/MauiProgram.cs",
+			"docs/tests/app/device-tests-poc/DeviceTestApp.csproj",
+			"docs/tests/app/device-tests-poc/NuGet.config",
+			// An unknown extension fails safe toward validation.
+			"docs/tooling/helper.sh",
+			// A module-local docs directory is outside the boundary.
+			"web/bible-on-site/docs/guide.md",
+			// The repository-root README policy is a separate concern.
+			"README.md",
+		]) {
+			test(`push of ${path} is not docs_only`, () => {
+				const { output } = run("push", ({ base }) => ({ before: base }), path);
+				assert.match(output, /^docs_only=false$/m);
+			});
+		}
+
+		test("a rename inside docs/ stays docs_only", () => {
+			const { changes, output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/renamed-guide.md",
+				"rename",
+				undefined,
+				{ renameFrom: "docs/guide.md" },
+			);
+			noChecks(changes);
+			assert.match(output, /^docs_only=true$/m);
+		});
+
+		test("a rename into docs/ keeps the leaving source path's checks", () => {
+			const { output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"docs/moved-page.md",
+				"rename",
+				undefined,
+				{ renameFrom: "web/bible-on-site/src/page.tsx" },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+
+		test("a rename out of docs/ keeps the destination's checks", () => {
+			const { output } = run(
+				"push",
+				({ base }) => ({ before: base }),
+				"web/bible-on-site/src/page.tsx",
+				"rename",
+				undefined,
+				{ renameFrom: "docs/page.md" },
+			);
+			assert.match(output, /^docs_only=false$/m);
+		});
+	});
+
+	describe("Renovate-config-only classification (#3795)", () => {
+		const noChecks = (changes: ReturnType<typeof detectChanges>) => {
+			for (const flags of Object.values(changes))
+				assert.deepEqual(flags, {
+					module_changed: false,
+					ci_changed: false,
+				});
+		};
+
+		for (const path of [
+			"renovate.json",
+			"renovate.json5",
+			".renovaterc",
+			".renovaterc.json",
+			".github/renovate.json",
+		]) {
+			test(`push of ${path} reports renovate_config_only`, () => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					path,
+				);
+				noChecks(changes);
+				assert.match(output, /^renovate_config_only=true$/m);
+				assert.match(output, /^docs_only=false$/m);
+			});
+		}
+
+		test("a Renovate-config-only pull request reports renovate_config_only", () => {
+			const { changes, output } = run(
+				"pull_request",
+				({ base }) => ({ pull_request: { base: { sha: base } } }),
+				"renovate.json",
+			);
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		test("a Renovate-config-only merge group does not force module checks", () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				"renovate.json",
+			);
+			// Like docs_only, the queue must not inflate a config-only delta into
+			// the combined-candidate rehearsal (#3795).
+			noChecks(changes);
+			assert.match(output, /^renovate_config_only=true$/m);
+		});
+
+		for (const extra of [
+			// A real dependency update routes to its module — never config-only.
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/bun.lock",
+			"app/BibleOnSite/BibleOnSite.csproj",
+			// Any non-config file alongside, docs included, is not config-only.
+			"docs/guide.md",
+			// Module-local Renovate settings are not repo-level config.
+			"web/admin/renovate.json",
+		]) {
+			test(`renovate.json plus ${extra} is not renovate_config_only`, () => {
+				const { output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"renovate.json",
+					"write",
+					undefined,
+					{ extraPaths: [extra] },
+				);
+				assert.match(output, /^renovate_config_only=false$/m, extra);
+			});
+		}
+	});
+
+	describe("CodeQL language scoping (#3795)", () => {
+		for (const [files, expected] of [
+			[["renovate.json"], ["actions"]],
+			[["docs/guide.md"], ["actions"]],
+			[["web/api/src/main.rs"], ["actions"]],
+			[[".github/workflows/ci.yml"], ["actions"]],
+			[["app/BibleOnSite/AppShell.xaml.cs"], ["csharp"]],
+			[["web/admin/src/page.tsx"], ["javascript-typescript"]],
+			[["web/bible-on-site/bun.lock"], ["javascript-typescript"]],
+			[["devops/deploy/data-deploy/index.mts"], ["javascript-typescript"]],
+			[["devops/backups/backup.py"], ["python"]],
+			[
+				[".github/workflows/codeql.yml", "devops/transcription/run.py"],
+				["actions", "python"],
+			],
+		] as const) {
+			test(`codeqlLanguages(${JSON.stringify(files)}) scopes to ${JSON.stringify(expected)}`, () => {
+				assert.deepEqual(codeqlLanguages([...files]), [...expected]);
+			});
+		}
 	});
 });
 
@@ -1589,25 +2339,28 @@ describe("merge-group workflow contract", () => {
 							? "skipped"
 							: "success";
 					}
-					if (
-						expression === "needs.package_api.outputs.module_version" ||
-						expression === "needs.package_admin.outputs.module_version"
-					)
+					if (expression === "needs.package_api.outputs.module_version")
 						return versions.amd64;
 					if (
 						expression === "needs.package_api_arm64.outputs.module_version" ||
-						expression === "needs.package_admin_arm64.outputs.module_version"
+						expression === "needs.package_admin.outputs.module_version"
 					)
 						return versions.arm64;
-					if (
-						expression === "needs.package_website.outputs.module_version" ||
-						expression === "needs.package_website_arm64.outputs.module_version"
-					)
+					if (expression === "needs.package_website.outputs.module_version")
 						return "0.2.600";
 					if (expression.includes("_ci_changed")) return String(ciChanged);
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
 						return String(baselineAvailable);
+					// These scenarios exercise code/queue changes; docs_only and
+					// renovate_config_only stay false so the docs-gated suite
+					// checks still evaluate (#3621, #3795).
+					if (
+						expression === "needs.determine_changes.outputs.docs_only" ||
+						expression ===
+							"needs.determine_changes.outputs.renovate_config_only"
+					)
+						return "false";
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
 			);
@@ -1673,7 +2426,6 @@ fi
 			"package_api",
 			"package_bulletin",
 			"package_admin",
-			"package_admin_arm64",
 			"validate_website_architectures",
 			"validate_api_architectures",
 			"validate_admin_architectures",
@@ -1975,7 +2727,8 @@ describe("publisher docstring release routing", () => {
 		assert.ok(liveDocEnd > 3);
 		const fixture = publisherFixture(t, {
 			before: livePublisherSource,
-			after: '"""Updated documentation for the current publisher."""' +
+			after:
+				'"""Updated documentation for the current publisher."""' +
 				livePublisherSource.slice(liveDocEnd),
 		});
 		assert.equal(

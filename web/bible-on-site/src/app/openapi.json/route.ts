@@ -1,5 +1,5 @@
 /**
- * `/openapi.json` — OpenAPI 3.1 description of the PUBLIC read surface
+ * `/openapi.json` - OpenAPI 3.1 description of the PUBLIC read surface
  * (issue #3257). Only anonymous GET endpoints appear here; nothing in
  * this document grants or implies access to management/write APIs.
  */
@@ -16,7 +16,7 @@ const DOCUMENT = {
 		version: "1.0.0",
 		description:
 			"Anonymous read-only endpoints over the public learning corpus. " +
-			"זיכוי הרבים project — content may be indexed and used in AI " +
+			"זיכוי הרבים project - content may be indexed and used in AI " +
 			"answers and model training, including learning in model weights " +
 			"without referrals (see /llms.txt and /robots.txt).",
 	},
@@ -179,6 +179,82 @@ const DOCUMENT = {
 					"200": {
 						description: "Linkset of public endpoints.",
 						content: { "application/linkset+json": {} },
+					},
+				},
+			},
+		},
+		"/.well-known/ard.json": {
+			get: {
+				summary: "ARD v0.91 agent capability manifest",
+				description:
+					"Machine-readable index of the real agent-facing resources this origin serves. Also served at the predecessor path /.well-known/ai-catalog.json.",
+				responses: {
+					"200": {
+						description: "Agent capability manifest.",
+						content: { "application/ard+json": {} },
+					},
+				},
+			},
+		},
+		"/.well-known/ai-catalog.json": {
+			get: {
+				summary: "AI Catalog manifest (predecessor ARD path)",
+				responses: {
+					"200": {
+						description: "Same manifest as /.well-known/ard.json.",
+						content: { "application/ai-catalog+json": {} },
+					},
+				},
+			},
+		},
+		"/.well-known/agent-skills/index.json": {
+			get: {
+				summary: "Agent Skills discovery index (v0.2.0)",
+				responses: {
+					"200": {
+						description:
+							"Index of skill-md artifacts with sha256 digests.",
+						content: { "application/json": {} },
+					},
+				},
+			},
+		},
+		"/.well-known/agent-skills/{name}/SKILL.md": {
+			get: {
+				summary: "A published Agent Skill",
+				parameters: [
+					{
+						name: "name",
+						in: "path",
+						required: true,
+						schema: {
+							type: "string",
+							enum: [
+								"tanah-corpus-map",
+								"tanah-corpus-search",
+								"tanah-corpus-citation",
+							],
+						},
+						description: "Skill name from the index; others 404.",
+					},
+				],
+				responses: {
+					"200": {
+						description: "SKILL.md artifact.",
+						content: { "text/markdown": {} },
+					},
+					"404": { description: "No skill by that name." },
+				},
+			},
+		},
+		"/auth.md": {
+			get: {
+				summary: "Anonymous-access statement",
+				responses: {
+					"200": {
+						description:
+							"No authentication exists for public reads - plain markdown note.",
+						content: { "text/markdown": {} },
 					},
 				},
 			},

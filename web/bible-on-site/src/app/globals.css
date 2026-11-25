@@ -22,8 +22,15 @@ html {
 	-webkit-text-size-adjust: 100%;
 	tab-size: 4;
 	font-family:
-		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-		"Segoe UI Symbol", "Noto Color Emoji";
+		var(--font-al-heperek), system-ui, sans-serif, "Apple Color Emoji",
+		"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
 }
 
 body {
@@ -106,6 +113,12 @@ body {
 
 html {
 	scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
 }
 
 body {
@@ -345,6 +358,16 @@ html[data-book-view] .top-nav {
    slot the search button occupies elsewhere. */
 .top-nav-accessibility--edge {
 	left: 1.25rem;
+}
+
+@media (max-width: 480px) {
+	.top-nav-search {
+		left: 0.75rem;
+	}
+
+	.top-nav-accessibility:not(.top-nav-accessibility--after-prefs):not(.top-nav-accessibility--edge) {
+		left: 3.75rem;
+	}
 }
 
 .top-nav-accessibility img {

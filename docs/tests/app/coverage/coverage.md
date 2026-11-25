@@ -274,7 +274,7 @@ unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
 In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `app_ci` job:
 
 1. Checks out the repository
-2. Sets up .NET 10.0
+2. Sets up .NET (SDK pinned in `app/global.json`)
 3. Restores dotnet tools and dependencies
 4. Runs unit tests with coverage via `CoverageUnit` target (generates LCOV directly)
 5. Runs integration tests against the API and merges the coverage reports

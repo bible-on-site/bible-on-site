@@ -90,7 +90,7 @@ public class AppButtonStyleContractTests
             .ToList();
 
         offenders.Should().BeEmpty(
-            "an empty FontFamily drops the shared OpenSansRegular face");
+            "an empty FontFamily drops the shared AlHeperekRegular face");
     }
 
     [Theory]
@@ -132,7 +132,7 @@ public class AppButtonStyleContractTests
 
         code.Should().Contain("AppButtonStyles.CompactIconSelected",
             "the active articles icon must keep its FluentIcons glyph and 44dp target — " +
-            "the text Selected variant carries OpenSansRegular and the 48dp floor");
+            "the text Selected variant carries AlHeperekRegular and the 48dp floor");
     }
 
     [Theory]

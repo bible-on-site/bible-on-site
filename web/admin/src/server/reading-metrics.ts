@@ -17,6 +17,7 @@ import {
 } from "../../../shared/reading-metrics/index";
 import { htmlToPlainText } from "../../../shared/reading-metrics/text";
 import { txExecute } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 
 /** sha256 hex of the normalized counted text — the stored `source_hash`. */
 export function metricSourceHash(countedText: string): string {
@@ -29,14 +30,10 @@ export function metricSourceHash(countedText: string): string {
  * a real write failure and must still propagate.
  */
 export function isReadingMetricsSchemaMissing(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
-	const { code, errno } = error as { code?: unknown; errno?: unknown };
-	return (
-		code === "ER_NO_SUCH_TABLE" ||
-		code === "ER_BAD_FIELD_ERROR" ||
-		errno === 1146 ||
-		errno === 1054
-	);
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"],
+		errnos: [1146, 1054],
+	});
 }
 
 interface MetricWrite {

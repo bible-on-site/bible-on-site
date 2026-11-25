@@ -1,51 +1,27 @@
 # Website ARM64 migration
 
-Status: prepared migration; no production architecture, registry policy or
-publication flag change has been applied. Dorad requested the website migration
-on November 1, 2026. Merge and live writes require approval of this specific PR's
-current AWS impact under the root `AGENTS.md`.
+Production website tasks run ARM64 on Fargate. The website ECR EventBridge
+rule deploys `bible-on-site:latest`. The current service and capacity settings
+are in the [AWS architecture guide](architecture/aws-architecture.md).
 
-## Baseline and intended scope
+## Production readiness
 
-Read-only inspection at 2026-11-01 13:01 UTC verified account 250598594267,
-region il-central-1, cluster `bible-on-site-cluster`, service
-`bible-on-site-website`, task definition revision 16. The website runs one healthy
-x86 task with 256 CPU units and 2048 MiB. The image follows
-`bible-on-site:latest`; the website EventBridge rule owns ordinary deployments.
-
-That is the dated architecture-migration baseline. The subsequent
-[completed CPU research](../performance/website-cpu-2026-11-02/README.md) selects
-512 CPU units with unchanged 2048 MiB. Architecture admission, canaries and
-rollout must use the current live CPU/memory and preserve it; do not restore
-the historical 256-unit setting during an architecture-only change.
-
-Migrate the website processor architecture to ARM64. Preserve capacity,
-roles and secret mappings, networking and discovery, public/crawled URLs,
-database content, application behavior, cache policy, the existing readiness
-limits and the 120-second container stop timeout. API, admin and RDS are outside
-this migration. Reference CloudFormation files document the target only; do not
-deploy these untested templates.
-
-The live revision 16 overrides the Dockerfile health check with only
-`/api/health/ready` (curl maximum 5 seconds). The reviewed migration also aligns
-that command with the already-tested Dockerfile/reference check: readiness,
-recitation catalog, and chapter 2, each with curl maximum 3 seconds. The three
-requests fit within the existing 10-second health timeout. Interval 30 seconds,
-start period 120 seconds and five retries remain unchanged. This warms the
-actual critical route bundles before the new task is eligible for public
-traffic. Verify the aligned command first on the pinned x86 fallback, then ARM.
+The website task definition checks `/api/health/ready`, `/api/recitation`, and
+`/api/recitation/2`, each with a three-second curl limit within the 10-second
+health timeout. This warms the critical routes before the task is eligible to
+receive public traffic.
 
 ## Native build and release contract
 
-Both native runners build the same website Dockerfile and source version.
-Architecture-specific Bun and ECR dependency caches prevent cross-architecture
-cache reuse; the existing x86 `deps-cache` name remains valid and ARM uses
-`deps-cache-arm64`. The final standalone runner executes an actual sharp/libvips
-JPEG encode, resize and decode before the image can be published. Its Node
-architecture must match the build target. This supplements the existing native
-SWC/libvips dependency check.
+Since the amd64 retirement (#3794), a single `package_website` job on the
+native ARM runner builds the website Dockerfile and source version. The
+ARM64 dependency-cache artifact (`website-deps-cache.master.arm64`) keeps the
+native cache isolated. The final standalone runner executes an actual
+sharp/libvips JPEG encode, resize and decode before the image can be
+published. Its Node architecture must match the build target. This
+supplements the existing native SWC/libvips dependency check.
 
-Trusted repository PRs and merge groups run the full paired SSG release builds,
+Trusted repository PRs and merge groups run the full SSG release build,
 including the existing production-content and recitation/playback verifiers at
 the deployed CPU/memory limits. Owned temporary RDS build access is cleaned up
 on success or failure. Fork PRs cannot receive production secrets and keep the
@@ -53,20 +29,20 @@ existing credential-free architecture validation. Triggered packaging failures,
 cancellations, skipped builds and empty/mismatched versions block the quality
 gate. Published releases consume only their original master push artifacts.
 
-The amd64 archive retains its existing name:
-`bible-on-site-v<version>.tar.gz`. ARM adds
-`bible-on-site-v<version>-arm64.tar.gz`. Original source CI metadata binds both
-artifacts. Before publication, verify the published release's source SHA, archive
-lengths/SHA256 hashes, native Linux configs, source/version labels and every
-filesystem layer. A dispatch cannot supply a different platform pair.
+The ARM64 archive is the only release archive:
+`bible-on-site-v<version>-arm64.tar.gz`. Original source CI metadata binds the
+artifact. Before publication, verify the published release's source SHA,
+archive length/SHA256 hash, native Linux config, source/version labels and
+every filesystem layer. A dispatch cannot supply a different platform set.
+Historical paired releases keep their amd64 archive readable for rollback.
 
-Verified native images receive immutable `v<version>-amd64` and
-`v<version>-arm64` tags. `WEBSITE_MULTIARCH_RELEASES` defaults to `false`, retaining
-the amd64 canonical/latest behavior while both native children are staged.
-With the reviewed flag set to `true`, canonical `v<version>` and `latest` contain
-the complete verified Linux amd64/arm64 index. Existing x86 tasks select the x86
-child. Once `latest` is an index, both the legacy publisher and flag-off dual
-publisher refuse to replace it with an x86-only image.
+Verified native images receive the immutable `v<version>-arm64` tag.
+`WEBSITE_MULTIARCH_RELEASES` defaults to `false`, which would publish the
+single ARM64 manifest as canonical/`latest`; production sets the flag to
+`true`, so the canonical `v<version>` and `latest` contain an OCI index over
+the verified Linux arm64 child. Once `latest` is an index, both the legacy
+publisher and flag-off native publisher refuse to replace it with a bare
+manifest.
 
 The website ECR repository must use `IMMUTABLE_WITH_EXCLUSION` with exactly
 `latest`, `deps-cache` and `deps-cache-arm64` mutable. The publisher verifies the
@@ -74,58 +50,44 @@ live policy before any child upload or canonical/latest write. No new IAM
 permission is proposed. Record the previous policy for rollback; apply a live
 policy change only within the specific approved scope.
 
-The current lifecycle rule selects any images beyond the newest 15, so a digest
-pin alone does not retain a fallback. Add a higher-priority rule selecting
-`rollback-website-arm64-x86-` tags and retaining its newest one image. Apply an
-immutable tag in that namespace to the verified native x86 fallback before the
-ARM cutover. The lower-priority existing 15-image rule cannot expire that newest
-protected image. This can retain one additional image and its layers; it adds
-no running task. Preview both rules and verify the exact fallback stays present.
-The [November 1 preview evidence](website-arm64-retention-preview.json) records
-AWS accepting the actual proposed policy and a shadow experiment preserving an
-older image despite an aggressive lower-priority cleanup rule. Neither preview
-changed the live policy or deleted an image.
+The live lifecycle policy protects the newest image tagged with the
+`rollback-website-arm64-x86-` prefix, ahead of the general 15-image policy.
+Verify that the exact fallback remains available before changing architecture.
 
-Do not convert an already-published canonical version between single-image and
-index modes. Its immutable collision guard requires a fresh ordinary release
-version. If the first migration release is to use an index, enable the reviewed
-flag before that release is published; do not toggle modes halfway through it.
+Publish new image content under a fresh release version. Existing canonical
+version tags are immutable, and ordinary CD requires the multi-architecture
+index.
 
-## Approval and qualification sequence
+## Architecture handover
 
-1. Complete current-head CI, six coverage gates, quality annotations, bot/issue
-   comments, submitted reviews and every review thread. Bind approval to the
-   specific PR/head and describe registry policy, flag and cutover impacts.
-2. Recheck the target account, healthy website state, latest/canonical tags and
-   current lifecycle policy. Preview the policy against the index/child layout;
-   verify that the known-good x86 rollback manifest and layers remain retained
-   throughout the migration. Save immutable image and complete service/task
-   configuration evidence without serializing credentials or environment values.
-3. Within the approved scope, apply only the reviewed website tag-mutability
-   policy, fallback-retention rule and publication flag, then merge. Follow both native master builds,
-   the exact published release and ordinary x86 index deployment through public
-   verification. Do not cut over to ARM after a failed build or deployment.
-4. Qualify the exact published native ARM image on isolated Fargate capacity
-   with the same website CPU/memory. Use isolated/read-only data and fixture
-   revalidation; preserve production content and assets. Exercise cold readiness,
-   SSR/static pages, articles/authors/places, image/download processing, both
-   public host contracts, recitation catalogs and actual MP3/Opus playback/ranges,
-   cache and revalidation behavior, sustained/burst traffic, and outage/recovery.
-   Keep existing deadlines; fix a regression rather than increasing its limit.
-5. Retain and verify a completed immutable x86 fallback. Serialize the cutover
-   with ordinary website releases using the deployment lock described below;
-   temporarily disable only the website ECR
-   event rule if the reviewed manual handover needs sole ownership. Preserve
-   an old healthy task until replacement readiness and discovery are verified.
-6. Clone the actual full task definition, changing only architecture, image and
-   the reviewed critical-route health command above.
-   Verify a qualified ARM native pin, then ordinary ARM `latest` resolving to
-   that same child. Verify healthy counts, exact runtime architecture/digest,
-   completed ECS deployment history, Cloud Map and public traffic. Restore the
-   ordinary website event rule before declaring delivery complete.
-7. Independently verify owned protection/markers cleared and all isolated tasks,
-   services, security groups and logs cleaned up. Preserve rollback artifacts,
-   shared fixtures and production logs. Record the final live revision and proof.
+1. Capture the live service and task settings, then verify the active and
+   fallback image references against the ECR index. Keep index publication and
+   its immutable native children available throughout the handover.
+2. Qualify the exact replacement image on isolated Fargate capacity sized
+   like production. Exercise cold readiness, SSR/static pages, media
+   generation, both public domains, recitation playback and ranges, cache
+   invalidation, and recovery. Use fixtures or read-only data.
+3. For an approved change, serialize the handover with ordinary website CD
+   using the queue lock below. Any temporary change to the website EventBridge
+   rule is part of that approved scope. Keep an old healthy task available
+   until the replacement is ready and Cloud Map discovery has propagated.
+4. Preserve CPU, memory, health checks, stop timeout, roles, secret mappings,
+   and networking. For each task definition deployed during the handover,
+   verify the replacement's digest, architecture, readiness, and Cloud Map
+   registration. Use the nginx release-probe log's upstream address to
+   attribute passing public health, readiness, and recitation probes to the
+   replacement task. After the replacement passes, release only outgoing
+   task protection owned by this handover so ECS can retire the old task.
+   Wait for steady state and verify the running digest, discovery, and public
+   routes again.
+5. Before releasing the queue lock, verify that `bible-on-site:latest` selects
+   the qualified child for the resulting architecture. If the handover used a
+   digest pin, deploy the equivalent release-tag task definition through the
+   readiness, protection release, and steady-state checks in step 4. Restore
+   the normal EventBridge rollout owner and clean up temporary qualification
+   resources after that deployment is steady. The rollout Lambda reuses the
+   service's task definition, so ordinary CD depends on the release-tag
+   definition.
 
 ## Deployment queue lock
 
@@ -140,7 +102,7 @@ After isolated qualification, create a dedicated GitHub deployment with task
 approved merged control-source SHA, and payload exactly containing `purpose`,
 `nonce`, `sourceRef`, `account`, `region`, and `service`. The purpose is
 `website-arm64-migration`, the nonce is 32 lowercase hexadecimal characters,
-and the AWS target matches the baseline above. Dispatch the lock with that ID,
+and the AWS target matches the live service. Dispatch the lock with that ID,
 nonce and source SHA. The workflow refuses a source not merged into master.
 Its run name includes the nonce so an interrupted dispatch acknowledgement can
 be reconciled without dispatching it again. A completed dedicated record is an
@@ -164,14 +126,16 @@ fallback if necessary. Do not extend the hold to conceal a slow/failing handover
 
 ## Rollback
 
-Before ARM cutover, restore the recorded previous registry mutability/lifecycle and revert
-the workflow change if necessary. A recorded immutable release tag is never
-overwritten to change modes. After index activation, retain the publication flag
-and both native archives for ordinary releases; turning the flag off cannot
-safely restore an ARM service.
+Use the [protected deployment and release-tag checks](#architecture-handover)
+in steps 3 through 5 with the captured task configuration and verified
+immutable fallback. An x86 fallback deploys by its pinned image reference —
+the immutable `v<version>-amd64` tag or the recorded digest — never by
+resolving `latest` or the canonical `v<version>` index, which now select
+Linux/ARM64 only (#3794). Keep the same queue lock through both the fallback
+deployment and restoration of the release-tag definition; the restored
+definition must carry the same pinned x86 reference so the rollout Lambda
+resumes on it. Ordinary CD resumes when the lock exits.
 
-For a failed ARM handover, restore the completed immutable x86 task definition
-using the reviewed, ownership-scoped handover. Verify public behavior and steady
-counts before releasing protection. Record the incident and reconcile any
-in-flight deployment before another attempt. No database rollback or public URL
-change is part of this recovery.
+If the hold expires during rollback, retain the verified fallback and treat
+the interrupted rollback as an incident. Reconcile the actual task definition,
+registry tags, EventBridge rule, and queued releases before another handover.

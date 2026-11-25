@@ -122,6 +122,12 @@ public class ReaderFanMenu : Grid
             {
                 foreach (View item in e.NewItems)
                 {
+                    // A satellite painted only with Opacity=0 stays a keyboard
+                    // tab stop and a UIA-invokable button while invisible —
+                    // hidden controls must not remain accidental tab stops
+                    // (#2766). It enters the focus tree only while the fan is
+                    // actually open.
+                    item.IsVisible = _isOpen;
                     _container.Children.Insert(0, item); // satellites sit under the toggle
                 }
             }
@@ -212,9 +218,12 @@ public class ReaderFanMenu : Grid
         // picks each button's target opacity.
         Opening?.Invoke(this, EventArgs.Empty);
 
-        // Enable clicks and set initial opacity (buttons at final positions via AbsoluteLayout)
+        // Enable clicks and set initial opacity (buttons at final positions via AbsoluteLayout).
+        // IsVisible comes first so the satellites re-enter the focus/UIA tree while
+        // still transparent — no flash of unpainted buttons.
         foreach (var satellite in _satellites)
         {
+            satellite.IsVisible = true;
             satellite.InputTransparent = false;
             satellite.Opacity = 0;
         }
@@ -278,10 +287,11 @@ public class ReaderFanMenu : Grid
 
         _scrim.IsVisible = false;
 
-        // Disable clicks on hidden buttons
+        // Hidden buttons leave both the hit-test and the keyboard/UIA trees.
         foreach (var satellite in _satellites)
         {
             satellite.InputTransparent = true;
+            satellite.IsVisible = false;
         }
         DebugLog.Write($"[CircularMenu] Close animation complete: open={_isOpen}");
     }
@@ -307,6 +317,7 @@ public class ReaderFanMenu : Grid
         {
             satellite.Opacity = 0;
             satellite.InputTransparent = true;
+            satellite.IsVisible = false;
         }
         ToggleButton.Text = Fonts.FluentUI.navigation_24_regular;
         if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("Primary", out var primary) == true

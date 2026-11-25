@@ -218,6 +218,22 @@ class BackupTests(unittest.TestCase):
             with self.assertRaises(backup.BackupError):
                 backup.catalog(self.source, self.directory, "phase")
 
+    def test_catalog_rejects_column_masking_policies(self):
+        rows = {
+            "TABLES": [{"type": "BASE TABLE", "engine": "InnoDB"}],
+            "COLUMNS": [{"extra": "MASKING POLICY"}],
+        }
+        self.source.query = MagicMock(
+            side_effect=lambda sql, directory, phase: [
+                json.dumps(row)
+                for table, values in rows.items()
+                if f".{table} " in sql
+                for row in values
+            ]
+        )
+        with self.assertRaisesRegex(backup.BackupError, "column masking policies"):
+            backup.catalog(self.source, self.directory, "phase")
+
     def test_export_uses_complete_nonlocking_dump_and_detects_failure(self):
         for code in [0, 1]:
             with patch.object(
@@ -235,6 +251,7 @@ class BackupTests(unittest.TestCase):
                 for flag in [
                     "--single-transaction",
                     "--no-tablespaces",
+                    "--loose-skip-masking-policies",
                     "--set-gtid-purged=OFF",
                     "--routines",
                     "--events",
@@ -257,11 +274,17 @@ class BackupTests(unittest.TestCase):
                     self.path,
                     self.directory,
                     "production",
+                    "8.4.9",
                     backup.digest(self.path),
                 )
         with self.assertRaisesRegex(backup.BackupError, "SHA-256"):
             backup.restore_archive(
-                self.scratch, self.path, self.directory, "production", "0" * 64
+                self.scratch,
+                self.path,
+                self.directory,
+                "production",
+                "8.4.9",
+                "0" * 64,
             )
 
     def test_restore_refuses_source_server_enabled_events_and_existing_schema(self):
@@ -270,6 +293,7 @@ class BackupTests(unittest.TestCase):
             ({"uuid": "scratch", "events": "ON"}, []),
             ({"uuid": "scratch", "events": "OFF", "version": "8.4.9"}, ["tanah"]),
             ({"uuid": "scratch", "events": "OFF", "version": "8.0.40"}, []),
+            ({"uuid": "scratch", "events": "OFF", "version": "9.7.4"}, []),
         ]:
             with patch.object(backup, "server_identity", return_value=identity):
                 self.scratch.query = MagicMock(return_value=rows)
@@ -279,6 +303,7 @@ class BackupTests(unittest.TestCase):
                         self.path,
                         self.directory,
                         "production",
+                        "8.4.9",
                         backup.digest(self.path),
                     )
 
@@ -303,6 +328,7 @@ class BackupTests(unittest.TestCase):
                         self.path,
                         self.directory,
                         "production",
+                        "8.4.9",
                         backup.digest(self.path),
                     )
         self.assertFalse(list(self.directory.glob("client-*.cnf")))
@@ -397,6 +423,101 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError):
             backup.backup(self.source, self.scratch, self.s3, "daily", self.directory)
 
+    @staticmethod
+    def article_hash_catalog(charset):
+        empty = rf"_{charset}\'\'"
+        return {
+            "TABLES": [
+                {
+                    "name": "tanah_article",
+                    "type": "BASE TABLE",
+                    "engine": "InnoDB",
+                    "collation": "utf8mb3_general_ci",
+                }
+            ],
+            "COLUMNS": [
+                {
+                    "table": "tanah_article",
+                    "name": "content_hash",
+                    "type": "binary(16)",
+                    "ordinal": 10,
+                    "nullable": "YES",
+                    "default": None,
+                    "extra": "STORED GENERATED",
+                    "collation": None,
+                    "generation": (
+                        f"unhex(left(sha2(concat_ws(0x01,ifnull(`name`,{empty}),"
+                        f"ifnull(`abstract`,{empty}),ifnull(`content`,{empty}),"
+                        "`perek_id`,`author_id`),256),32))"
+                    ),
+                }
+            ],
+        }
+
+    def test_backup_records_actual_restored_article_hash_catalog(self):
+        source = self.article_hash_catalog("utf8mb4")
+        restored = {
+            **self.restoration,
+            "schemaSha256": backup.fingerprint(self.article_hash_catalog("utf8mb3")),
+        }
+        self.mock_backup(
+            server_identity={"uuid": "production", "version": "9.7.4"},
+            catalog=source,
+            restore_archive=restored,
+        )
+        manifest = backup.backup(
+            self.source, self.scratch, self.s3, "weekly", self.directory
+        )
+        self.assertEqual(manifest["restoration"], restored)
+        self.assertNotEqual(restored["schemaSha256"], backup.fingerprint(source))
+        self.assertEqual(source, self.article_hash_catalog("utf8mb4"))
+
+    def test_article_hash_catalog_equivalence_rejects_other_schema_changes(self):
+        source = self.article_hash_catalog("utf8mb4")
+        restored = self.article_hash_catalog("utf8mb3")
+        changed = self.article_hash_catalog("utf8mb3")
+        changed["COLUMNS"][0]["generation"] = changed["COLUMNS"][0][
+            "generation"
+        ].replace("0x01", "0x02")
+        self.assertFalse(
+            backup.matches_restored_schema(source, backup.fingerprint(changed))
+        )
+        changed = self.article_hash_catalog("utf8mb3")
+        changed["TABLES"][0]["collation"] = "utf8mb3_unicode_ci"
+        self.assertFalse(
+            backup.matches_restored_schema(source, backup.fingerprint(changed))
+        )
+        for metadata_change in [
+            {"table": "another_table"},
+            {"name": "another_hash"},
+            {"extra": "VIRTUAL GENERATED"},
+            {"type": "binary(32)"},
+        ]:
+            with self.subTest(metadata_change=metadata_change):
+                for schema in (source, restored):
+                    schema["COLUMNS"][0].update(metadata_change)
+                self.assertFalse(
+                    backup.matches_restored_schema(source, backup.fingerprint(restored))
+                )
+                source = self.article_hash_catalog("utf8mb4")
+                restored = self.article_hash_catalog("utf8mb3")
+        for schema in (source, restored):
+            column = schema["COLUMNS"][0]
+            column["generation"] = column["generation"].replace(r"\'\'", r"\'value\'")
+        self.assertFalse(
+            backup.matches_restored_schema(source, backup.fingerprint(restored))
+        )
+
+    def test_source_drift_stays_strict_even_for_the_restore_equivalence(self):
+        source = self.article_hash_catalog("utf8mb4")
+        changed = self.article_hash_catalog("utf8mb3")
+        self.mock_backup(server_identity={"uuid": "production", "version": "9.7.4"})
+        backup.catalog.side_effect = [source, changed]
+        with self.assertRaisesRegex(backup.BackupError, "Schema changed during export"):
+            backup.backup(self.source, self.scratch, self.s3, "weekly", self.directory)
+        backup.restore_archive.assert_not_called()
+        self.assertEqual(self.s3.objects, {})
+
     def test_failed_manifest_is_not_reported_as_success(self):
         self.mock_backup()
         self.s3.put_object = MagicMock(return_value={})
@@ -420,6 +541,7 @@ class BackupTests(unittest.TestCase):
                 self.restoration,
             )
             self.assertEqual(restore.call_args.args[-1], result["sha256"])
+            self.assertEqual(restore.call_args.args[-2], result["serverVersion"])
         self.s3.objects[(result["key"], "archive-version")] = b"x"
         with self.assertRaises(backup.BackupError):
             recovery.restore(
@@ -440,6 +562,8 @@ class BackupTests(unittest.TestCase):
             ("sha256", "bad"),
             ("bytes", 0),
             ("restoration", {}),
+            ("serverVersion", "9.0.0"),
+            ("serverVersion", None),
         ]:
             invalid = {**result, field: value}
             self.s3.objects[(key, "manifest-version")] = json.dumps(invalid).encode()
@@ -505,9 +629,13 @@ class PreflightTests(unittest.TestCase):
         )
 
     def test_preflight_and_each_safety_rejection(self):
-        source, s3 = backup.preflight(self.session, self.temp)
+        source, s3, version = backup.preflight(self.session, self.temp)
         self.assertEqual(source.username, "bos_backup")
         self.assertIs(s3, self.clients["s3"])
+        self.assertEqual(version, "8.4.13")
+        self.instance["EngineVersion"] = "9.7.4.R2.20261118"
+        backup.urlopen.return_value = io.BytesIO(b"test certificate")
+        self.assertEqual(backup.preflight(self.session, self.temp)[-1], "9.7.4")
         cases = [
             (self.clients["sts"].get_caller_identity, {"Account": "0"}),
             (
@@ -557,7 +685,9 @@ class PreflightTests(unittest.TestCase):
                 ),
                 patch.object(sys, "argv", ["backup", "weekly"]),
                 patch.object(
-                    backup, "preflight", return_value=(MagicMock(), MagicMock())
+                    backup,
+                    "preflight",
+                    return_value=(MagicMock(), MagicMock(), "9.7.4"),
                 ),
                 patch.object(
                     backup,
@@ -575,15 +705,24 @@ class PreflightTests(unittest.TestCase):
             redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(backup.main(), 1)
+        workflow_output = Path(self.temp) / "workflow-output"
         with (
-            patch.dict(os.environ, {"AWS_REGION": backup.REGION}),
+            patch.dict(
+                os.environ,
+                {"AWS_REGION": backup.REGION, "GITHUB_OUTPUT": str(workflow_output)},
+            ),
             patch.object(sys, "argv", ["backup", "check"]),
-            patch.object(backup, "preflight", return_value=(MagicMock(), MagicMock())),
+            patch.object(
+                backup,
+                "preflight",
+                return_value=(MagicMock(), MagicMock(), "9.7.4"),
+            ),
             patch.object(backup, "backup") as export,
             redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(backup.main(), 0)
             export.assert_not_called()
+        self.assertEqual(workflow_output.read_text(), "mysql_version=9.7.4\n")
 
     def test_restore_cli_success_and_failure(self):
         with (

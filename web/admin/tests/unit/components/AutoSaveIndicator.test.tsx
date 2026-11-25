@@ -8,7 +8,7 @@ describe("AutoSaveIndicator", () => {
 			<AutoSaveIndicator isSaving={true} lastSaved={null} hasChanges={false} />,
 		);
 
-		expect(screen.getByText("⏳ שומר בשרת...")).toBeInTheDocument();
+		expect(screen.getByText("שומר בשרת...")).toBeInTheDocument();
 	});
 
 	it("shows uncommitted edits while a local draft protects them", () => {
@@ -35,7 +35,7 @@ describe("AutoSaveIndicator", () => {
 			/>,
 		);
 
-		expect(screen.getByText(/✓ נשמר בשרת ב-/)).toBeInTheDocument();
+		expect(screen.getByText(/נשמר בשרת ב-/)).toBeInTheDocument();
 	});
 
 	it("shows the persistent save failure", () => {

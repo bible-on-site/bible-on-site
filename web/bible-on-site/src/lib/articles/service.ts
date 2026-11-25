@@ -186,12 +186,125 @@ export async function getArticleSummariesByPerekIds(
 }
 
 /**
- * Whether a query rejection means the covering-source schema (#2189)
- * is not deployed yet — the missing `coverage_verified` column or the
- * missing `tanah_article_covering_source` table. Anything else is a
- * real failure.
+ * לקריאה נוספת (#3752): articles from OTHER perakim whose VERIFIED
+ * coverage (tanah_article_covering_source, #2189) maps a pasuk of the
+ * viewed perek — the secondary recommendations rendered below the
+ * perek's own article list. `coverage_verified` gates the match because
+ * a covering row is only authoritative once its article's coverage was
+ * verified; EXISTS yields one row per article no matter how many of its
+ * covering rows land in the viewed perek. The viewed perek's own primary
+ * articles stay excluded — they already fill the regular list.
+ *
+ * When the covering-source schema is not deployed yet there is simply no
+ * secondary coverage — the section hides (empty list); any other failure
+ * still rejects so a failed build/request cannot cache an empty article
+ * list.
  */
-const isCoveringSourceSchemaMissing = isMissingMysqlSchema;
+export async function getFurtherReadingSummariesByPerekId(
+	perekId: number,
+): Promise<ArticleSummary[]> {
+	try {
+		const rows = await query<ArticleSummaryRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE a.coverage_verified = TRUE
+				AND a.perek_id BETWEEN 1 AND 929
+				AND a.perek_id <> ?
+				AND EXISTS (
+					SELECT 1 FROM tanah_article_covering_source cs
+					WHERE cs.article_id = a.id AND cs.perek_id = ?)
+			 ORDER BY a.priority ASC`,
+			[perekId, perekId],
+		);
+
+		return withArticleMetrics(rows.map(toArticleSummary));
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Article covering-source schema is not deployed yet; " +
+					"no further-reading recommendations until the migration runs.",
+			);
+			return [];
+		}
+		console.warn(
+			"Failed to fetch further-reading summaries for perek %d:",
+			perekId,
+			error instanceof Error ? error.message : error,
+		);
+		throw error;
+	}
+}
+
+interface FurtherReadingSummaryRow extends ArticleSummaryRow {
+	/** The covered (viewed) perek this recommendation groups under. */
+	viewed_perek_id: number;
+}
+
+/**
+ * Batch variant of {@link getFurtherReadingSummariesByPerekId}: one grouped
+ * query for a whole set of viewed perakim (a sefer's book view) instead of
+ * one query per perek, followed by a single metrics read. Keys are the
+ * VIEWED perek ids — the covered chapter whose further-reading section
+ * lists the article; a viewed perek with no secondary matches has no key.
+ * DISTINCT collapses an article covering several pesukim of the same
+ * viewed perek into one recommendation; the same article may still appear
+ * under several viewed perakim.
+ */
+export async function getFurtherReadingSummariesByPerekIds(
+	perekIds: number[],
+): Promise<Map<number, ArticleSummary[]>> {
+	const byPerek = new Map<number, ArticleSummary[]>();
+	if (perekIds.length === 0) return byPerek;
+	const placeholders = perekIds.map(() => "?").join(", ");
+	try {
+		const rows = await query<FurtherReadingSummaryRow>(
+			`SELECT DISTINCT
+				cs.perek_id AS viewed_perek_id,
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 JOIN tanah_article_covering_source cs
+				ON cs.article_id = a.id AND cs.perek_id IN (${placeholders})
+			 WHERE a.coverage_verified = TRUE
+				AND a.perek_id BETWEEN 1 AND 929
+				AND a.perek_id <> cs.perek_id
+			 ORDER BY cs.perek_id ASC, a.priority ASC`,
+			perekIds,
+		);
+
+		const decorated = await withArticleMetrics(
+			rows.map((row) => ({
+				viewedPerekId: row.viewed_perek_id,
+				...toArticleSummary(row),
+			})),
+		);
+		for (const item of decorated) {
+			const { viewedPerekId, ...summary } = item;
+			const list = byPerek.get(viewedPerekId) ?? [];
+			list.push(summary);
+			byPerek.set(viewedPerekId, list);
+		}
+		return byPerek;
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Article covering-source schema is not deployed yet; " +
+					"no further-reading recommendations until the migration runs.",
+			);
+			return byPerek;
+		}
+		console.warn(
+			"Failed to fetch further-reading summaries for %d perakim:",
+			perekIds.length,
+			error instanceof Error ? error.message : error,
+		);
+		throw error;
+	}
+}
 
 /**
  * Fetch article summaries whose scripture coverage overlaps the given
@@ -267,7 +380,7 @@ export async function getArticleSummariesForRanges(
 			...covering.params,
 			...coveringRank.params,
 		]).catch((error: unknown) => {
-			if (!isCoveringSourceSchemaMissing(error)) throw error;
+			if (!isMissingMysqlSchema(error)) throw error;
 			console.warn(
 				"Article covering-source schema is not deployed yet; " +
 					"matching articles by primary perek until the migration runs.",
@@ -340,7 +453,7 @@ export async function getArticleSummariesForRangeGroups(
 			coveringSourceSql,
 			slicesTable.params,
 		).catch((error: unknown) => {
-			if (!isCoveringSourceSchemaMissing(error)) throw error;
+			if (!isMissingMysqlSchema(error)) throw error;
 			console.warn(
 				"Article covering-source schema is not deployed yet; " +
 					"matching articles by primary perek until the migration runs.",

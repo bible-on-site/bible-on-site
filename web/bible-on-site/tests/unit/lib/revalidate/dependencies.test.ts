@@ -68,6 +68,7 @@ function stubDb(handlers: {
 		pasuk_end: number;
 	}[];
 	linkedMoedSlugs?: string[];
+	moedNames?: { name: string; slug: string }[];
 }) {
 	mockQuery.mockImplementation(async (sql: string) => {
 		if (/FROM tanah_author/.test(sql))
@@ -106,6 +107,8 @@ function stubDb(handlers: {
 			return handlers.moedRanges ?? [];
 		if (/FROM tanah_article_moed am\s+JOIN tanah_moed/.test(sql))
 			return (handlers.linkedMoedSlugs ?? []).map((slug) => ({ slug }));
+		if (/FROM tanah_moed WHERE published/.test(sql))
+			return handlers.moedNames ?? [];
 		throw new Error(`unstubbed SQL: ${sql}`);
 	});
 }
@@ -153,6 +156,87 @@ describe("resolveEntityChanges", () => {
 		expect(out.urls).toEqual(out.paths);
 	});
 
+	it("expires the covered perek's לקריאה נוספת surface on an article change (#3752)", async () => {
+		stubDb({
+			articleCovering: [
+				{ perek_id: 9, pasuk: 3 },
+				{ perek_id: 9, pasuk: 4 },
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		// Perek 9's recommendation section lists article 12 — its tag and
+		// flat route expire, but NOT a bogus /929/9/12 detail route: the
+		// article's own page lives under its primary perek only.
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+		expect(out.paths).not.toContain("/929/9/12");
+		// Multiple covered pesukim of the same perek stay one invalidation.
+		expect(out.tags.filter((t) => t === "perek:9:articles")).toHaveLength(1);
+	});
+
+	it("skips further-reading deps for spans on the article's own primary perek (#3752)", async () => {
+		// A covering row can cite a pasuk of the article's primary perek —
+		// that perek's invalidation already comes from the primary loop, so
+		// addFurtherReadingDeps must not re-add it.
+		stubDb({
+			articleCovering: [
+				{ perek_id: 5, pasuk: 3 },
+				{ perek_id: 9, pasuk: 3 },
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		expect(out.tags.filter((t) => t === "perek:5:articles")).toHaveLength(1);
+		expect(out.paths.filter((p) => p === "/929/5")).toHaveLength(1);
+		expect(out.tags).toContain("perek:9:articles");
+	});
+
+	it("expires covered pereks from destroyed covering rows the live rows no longer show", async () => {
+		// Coverage removed pre-commit: the live lookup returns nothing, the
+		// event's destroyed spans still expire perek 9's recommendations.
+		stubDb({ articleCovering: [] });
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+	});
+
+	it("expires covered pereks on an author change — names render on recommendation cards", async () => {
+		stubDb({
+			authorName: "רשי",
+			authorArticles: [{ id: 7, perek_id: 5 }],
+			authorCovering: [{ perek_id: 9, pasuk: 3 }],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("perek:9:articles");
+		expect(out.paths).toContain("/929/9");
+		expect(out.paths).not.toContain("/929/9/7");
+	});
+
 	it("expires a moed's detail and the wheel on a moed change, including the old slug", async () => {
 		const out = await resolveEntityChanges([
 			{ kind: "moed", id: 3, slug: "חנוכה", oldSlug: "חנוכה-ישן" },
@@ -161,11 +245,7 @@ describe("resolveEntityChanges", () => {
 			expect.arrayContaining(["moadim", "moed:חנוכה", "moed:חנוכה-ישן"]),
 		);
 		expect(out.paths).toEqual(
-			expect.arrayContaining([
-				"/מועדים",
-				"/מועדים/חנוכה",
-				"/מועדים/חנוכה-ישן",
-			]),
+			expect.arrayContaining(["/מועדים", "/מועדים/חנוכה", "/מועדים/חנוכה-ישן"]),
 		);
 	});
 
@@ -334,9 +414,7 @@ describe("resolveEntityChanges", () => {
 		]);
 		expect(out.tags).toContain("author:3:articles");
 		expect(
-			mockQuery.mock.calls.some(([sql]) =>
-				/FROM tanah_article_moed/.test(sql),
-			),
+			mockQuery.mock.calls.some(([sql]) => /FROM tanah_article_moed/.test(sql)),
 		).toBe(false);
 	});
 
@@ -470,11 +548,7 @@ describe("resolveEntityChanges", () => {
 			{ kind: "author", id: 3, name: "רשי" },
 		]);
 		expect(out.tags).toEqual(
-			expect.arrayContaining([
-				"authors",
-				"author:רשי",
-				"author:3:articles",
-			]),
+			expect.arrayContaining(["authors", "author:רשי", "author:3:articles"]),
 		);
 		// Author pages are addressed by name only: no numeric-id page tag.
 		expect(out.tags).not.toContain("author:3");
@@ -591,7 +665,8 @@ describe("resolveEntityChanges", () => {
 		expect(out.tags).toContain("tanahpedia-mention-refs");
 	});
 
-	it("resolves a bulk pedia-entries change without touching the DB", async () => {
+	it("resolves a bulk pedia-entries change with one shared moed-name read", async () => {
+		stubDb({ moedNames: [{ name: "א", slug: "moed-a" }] });
 		const out = await resolveEntityChanges([
 			{
 				kind: "pedia-entries",
@@ -600,11 +675,118 @@ describe("resolveEntityChanges", () => {
 				refPerekIds: [5],
 			},
 		]);
-		expect(mockQuery).not.toHaveBeenCalled();
+		// The caller pre-resolved the entry relationships — the only DB
+		// read is the shared published-moed name map for the preview
+		// dependency (#3381).
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+		expect(mockQuery.mock.calls[0][0]).toContain("FROM tanah_moed");
 		expect(out.paths).toEqual(
 			expect.arrayContaining(["/pedia/א", "/pedia/ב", "/pedia/עמים"]),
 		);
 		expect(out.tags).toContain("perek:5:entity-refs");
+		// Unique name "א" is a published moed's name — its preview
+		// resolution can flip, so its detail expires too.
+		expect(out.tags).toContain("moed:moed-a");
+		expect(out.paths).toContain("/מועדים/moed-a");
+	});
+
+	// --- moed ↔ pedia name deps (#3381) ----------------------------------
+	it("expires the moed whose name equals a changed entry's unique_name", async () => {
+		stubDb({
+			entryId: "e1",
+			moedNames: [{ name: "פסח", slug: "פסח" }],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entry", uniqueName: "פסח" },
+		]);
+		expect(out.tags).toContain("moed:פסח");
+		expect(out.paths).toContain("/מועדים/פסח");
+	});
+
+	it("expires the moed reached through an old name or alias on rename/delete", async () => {
+		stubDb({
+			entryId: null,
+			moedNames: [
+				{ name: "פסח", slug: "פסח" },
+				{ name: "חג חירותנו", slug: "חג-חירותנו" },
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "pedia-entry",
+				uniqueName: "חג הפסח",
+				oldUniqueName: "פסח",
+				synonymNames: ["חג חירותנו"],
+			},
+		]);
+		// Both the pre-rename name and the destroyed alias name map to
+		// published moadim — both previews can flip.
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["moed:פסח", "moed:חג-חירותנו"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/מועדים/פסח", "/מועדים/חג-חירותנו"]),
+		);
+	});
+
+	it("leaves moed caches untouched when no pedia name is a moed name", async () => {
+		stubDb({
+			entryId: "e1",
+			moedNames: [{ name: "פסח", slug: "פסח" }],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entry", uniqueName: "משה" },
+		]);
+		expect(out.tags.some((tag) => tag.startsWith("moed:"))).toBe(false);
+		expect(out.paths.some((p) => p.startsWith("/מועדים/"))).toBe(false);
+	});
+
+	it("expires the moed preview through a pedia-entity's linked entry names", async () => {
+		stubDb({
+			entityEntries: ["פסח"],
+			moedNames: [{ name: "פסח", slug: "פסח" }],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entity", entityId: "ent-1" },
+		]);
+		expect(out.tags).toContain("moed:פסח");
+	});
+
+	it("skips the moed-name dep while the moed schema is not deployed", async () => {
+		stubDb({ entryId: "e1" });
+		const inner = mockQuery.getMockImplementation();
+		if (inner == null) throw new Error("stubDb must run first");
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_moed WHERE published/.test(sql))
+				throw Object.assign(new Error("no table"), {
+					code: "ER_NO_SUCH_TABLE",
+				});
+			return inner(sql);
+		});
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entry", uniqueName: "פסח" },
+		]);
+		expect(out.paths).toContain("/pedia/פסח");
+		expect(out.tags.some((tag) => tag.startsWith("moed:"))).toBe(false);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("Moed schema is not deployed"),
+		);
+		warn.mockRestore();
+	});
+
+	it("propagates a moed-name lookup failure instead of under-invalidating", async () => {
+		stubDb({ entryId: "e1" });
+		const inner = mockQuery.getMockImplementation();
+		if (inner == null) throw new Error("stubDb must run first");
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_moed WHERE published/.test(sql))
+				throw new Error("connection lost");
+			return inner(sql);
+		});
+		await expect(
+			resolveEntityChanges([{ kind: "pedia-entry", uniqueName: "פסח" }]),
+		).rejects.toThrow("connection lost");
 	});
 
 	it("coalesces repeated changes into one dependency set", async () => {

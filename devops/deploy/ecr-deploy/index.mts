@@ -77,12 +77,14 @@ async function main() {
 				throw new Error(
 					"Dual archives and publish-index are API, website or admin options",
 				);
-			if (
-				dual &&
-				(!args.dockerImage || !args.dockerImageArm64 || !args.sourceRef)
-			)
+			if (dual && (!args.dockerImageArm64 || !args.sourceRef))
 				throw new Error(
-					"Native dual publication requires docker-image, docker-image-arm64 and source-ref",
+					"Native publication requires docker-image-arm64 and source-ref",
+				);
+			// Website/admin are ARM64-only (#3794); API keeps the paired delivery.
+			if (dual && args.moduleName === "api" && !args.dockerImage)
+				throw new Error(
+					"API dual publication requires docker-image, docker-image-arm64 and source-ref",
 				);
 			if (
 				args.sourceRef !== undefined &&

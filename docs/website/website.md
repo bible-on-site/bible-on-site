@@ -209,14 +209,25 @@ never delays or fails the admin request.
 
 Readers can opt in to a browser notification with the daily perek (#1096).
 
-- **Opt-in UI**: `PushNotificationsToggle` in the app section of the home
-  page. It registers `public/sw.js` only when the reader opts in, asks for
-  notification permission, subscribes with the VAPID public key and stores
-  the subscription. Unchecking deletes it on the server and unsubscribes the
-  browser. Unsupported browsers get an accurate "not supported" state —
-  including iPhone/iPad ordinary tabs, where Web Push is limited to
-  installed web apps and the product decision is no installation funnel
-  (#2936). Blocked permission is explained instead of re-prompting.
+- **Opt-in UI** (#3732): a dedicated browser-reminder card
+  (`PushNotificationsToggle`, `#bulletin-push`) sits alongside the Telegram,
+  WhatsApp and email cards in the daily-bulletin section of the home page,
+  with a single state-aware toggle where the other cards' action buttons sit:
+  `הפעלת התראות` while off, `ביטול התראות` while on. The reader
+  settings dropdown carries the same subscription as a
+  `התראה יומית בדפדפן` checkbox; both surfaces share
+  `src/lib/push-notifications.ts` and a same-tab status event, so an action
+  on either is mirrored on the other and on reload. Permission is asked
+  only from a direct click on the card's enable control — the dropdown
+  disables directly, subscribes in place when permission is already
+  granted, and otherwise navigates to `#bulletin-push` instead of
+  prompting. Opting in registers `public/sw.js`, subscribes with the VAPID
+  public key and stores the subscription; opting out deletes it on the
+  server and unsubscribes the browser. Unsupported browsers get an
+  accurate "not supported" state — including iPhone/iPad ordinary tabs,
+  where Web Push is limited to installed web apps and the product decision
+  is no installation funnel (#2936). Blocked permission is explained
+  instead of re-prompting.
 - **Storage**: `tanah_web_push_subscription`
   (`data/mysql/tanah_web_push_upgrade.sql`, data-deploy manifest), keyed by
   the sha256 of the endpoint. A row is the opt-in, and there is no other
@@ -226,7 +237,10 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   error), `POST` stores a
   `PushSubscription.toJSON()` body, `DELETE {endpoint}` removes it. Only
   endpoints on known browser push services (FCM, Mozilla, WNS, Apple) are
-  accepted, so the sender never POSTs to arbitrary URLs.
+  accepted, so the sender never POSTs to arbitrary URLs. Anonymous `POST`s
+  are bounded (#3500): a per-client-address rate limit (429) shared with
+  `/api/push/device`, and `tanah_web_push_subscription` caps new endpoints
+  at 25,000 rows while existing endpoints always upsert.
 - **Trigger**: `.github/workflows/web-push-daily.yml` calls
   `POST /api/push/daily` at 05:00 UTC Sunday-Friday with
   `Authorization: Bearer $PUSH_SEND_SECRET`. The route resolves the day with
@@ -236,6 +250,10 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   check. Payloads link to `/929/<perekId>`, use topic `daily-perek` (an
   undelivered reminder is replaced, not stacked) and a 12-hour TTL.
   Subscriptions the push service reports as gone (404/410) are deleted.
+  Failure fails closed (#3499): every-send-failed answers 502 and a
+  targeted check that matched no live subscription answers 404, so the
+  scheduled `curl --fail-with-body` run goes red instead of passing on
+  `{ "sent": 0 }`.
 - **Service worker**: `public/sw.js` only renders pushes (RTL Hebrew) and
   focuses or opens the linked page on click, same-origin only. It has no
   fetch handler, so it never affects loading or caching.
@@ -311,15 +329,39 @@ correlate directly with nginx upstream logs. Each line carries `version`
 min/mean/max/p50/p90/p95/p99 in ms, sampled once per event-loop iteration so
 queueing delay ahead of a request handler is recorded), `eventLoopUtilization`
 (idle/active ms and the delta ratio), `cpu` (user/system ms deltas) and `gc`
-(count, total/max ms, per-kind counts). Accumulators reset every interval; the
-timer is unref'd so drain behavior is unchanged. Enabling in production is a
-separate deployment decision — the instrumentation PR does not turn it on.
+(count, total/max ms, per-kind counts). A runtime that cannot provide a
+primitive emits `{"unsupported": true}` for that field instead of zeros that
+would read as a perfectly healthy loop — under Bun, `eventLoopUtilization`
+returns a zero stub and `gc` is absent from
+`PerformanceObserver.supportedEntryTypes`, while `eventLoopDelay` and `cpu`
+report real values there. Accumulators reset every interval; the timer is
+unref'd so drain behavior is unchanged. Enabling in production is a separate
+deployment decision — the instrumentation PR does not turn it on.
+
+The Bun gaps behind the `unsupported` markers are tracked upstream
+(#3641). `web/bible-on-site/scripts/test-support/perf-hooks-runtime-probe.mjs`
+re-verifies them against any runtime (`node`/`bun <path>`), printing a
+per-primitive `real`/`zero-stub`/`entry-type-absent` verdict across idle,
+busy and worker phases — current results (Windows x64):
+
+| Bun behaviour (verified on Bun 1.4.4 stable and 1.4.5 canary) | Upstream tracking |
+| --- | --- |
+| `performance.eventLoopUtilization()` returns `{idle:0, active:0, utilization:0}` on every phase, every argument form and inside workers | [oven-sh/bun#34068](https://github.com/oven-sh/bun/issues/34068) (open); implementations pending in [oven-sh/bun#44627](https://github.com/oven-sh/bun/pull/44627) (main thread, macOS/Linux only) and [oven-sh/bun#34424](https://github.com/oven-sh/bun/pull/34424) (all platforms + workers); closed prior art [oven-sh/bun#32618](https://github.com/oven-sh/bun/pull/32618) |
+| `worker.performance.eventLoopUtilization()` warns `ERR_NOT_IMPLEMENTED` once, then returns zeros | [oven-sh/bun#32609](https://github.com/oven-sh/bun/issues/32609) (open); implemented by oven-sh/bun#34424 |
+| `gc` absent from `PerformanceObserver.supportedEntryTypes`; `observe({entryTypes:["gc"]})` accepts silently and never delivers entries | draft [oven-sh/bun#47961](https://github.com/oven-sh/bun/pull/47961), blocked on [oven-sh/WebKit#1013](https://github.com/oven-sh/WebKit/pull/1013) and Bun's WebKit pin |
+| `process.cpuUsage()`, `monitorEventLoopDelay()` | real measurements — no gap |
+
+Bun's own
+[Node-compatibility docs](https://bun.com/docs/runtime/nodejs-compat) already
+state the same limits. Keep emitting `{"unsupported": true}` until a shipped
+Bun reports verified counters for each field; adoption of a fixed runtime is a
+separate follow-up.
 
 Local verification against the real compiled server:
 
 ```bash
 bun run build                      # produces .next/standalone via postbuild
-cd .next/standalone
+cd .next/standalone/bible-on-site  # traced app nests under the package dir (#3710)
 # --import the helper by absolute file URL, so it resolves from this cwd
 NODE_OPTIONS="--import <absolute-file-url-to scripts/test-support/block-event-loop.mjs>" \
 BLOCK_EVENT_LOOP_AFTER_MS=8000 BLOCK_EVENT_LOOP_MS=3000 \

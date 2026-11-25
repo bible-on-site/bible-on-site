@@ -62,9 +62,8 @@ button.heading {
 	background: #fff;
 	box-shadow: 0 3px 10px #20396018;
 	color: #526789;
-	font:
-		0.75rem Arial,
-		sans-serif;
+	font-family: inherit;
+	font-size: 0.75rem;
 }
 .srOnly {
 	position: absolute;

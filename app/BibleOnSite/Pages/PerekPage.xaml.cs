@@ -27,10 +27,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     // Article from a cold-start app link, opened after the initial load.
     private int? _pendingArticleId;
-    private DateTime _lastLongPressTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 600;
+    private readonly ReaderGestureTiming _gestureTiming = new();
 
     // Articles view state is owned by the shared reader chrome (#2573).
     private ReaderChrome _chrome = null!;
@@ -47,15 +46,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     // are owned by the shared carousel coordinator (#2573).
     private ReaderCarousel _carousel = null!;
 
-    // Scroll state tracking - used to prevent long-press during scroll
-    private DateTime _lastScrollTime = DateTime.MinValue;
-    private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
-
     /// <summary>
     /// Returns true if the user is currently scrolling or just finished scrolling.
     /// Used by LongPressBehavior to prevent false triggers during scroll.
     /// </summary>
-    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => _gestureTiming.IsScrolling;
 
     public PerekPage()
     {
@@ -141,6 +136,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = PerekCarousel,
+                // The ⋮ menu follows the articles/text swap — articles show
+                // only הסתר שם השם (#3401).
+                MenuPanel = ReaderMenuOverlay,
                 // The perek hairline rides the reading content — the swap
                 // hides it while the articles view is up (#3364).
                 ReadingProgressIndicator = ReadingProgressBar,
@@ -160,6 +158,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 CurrentUnitId = () => _viewModel.PerekId,
                 NavigateToUnitAsync = perekId => _viewModel.NavigateToPerekAsync(perekId),
                 FullscreenStateChanged = OnReaderFullscreenStateChanged,
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForPerek(),
             });
     }
 
@@ -333,7 +332,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 #endif
         _doubleTap.Reset();
-        _lastScrollTime = DateTime.Now;
+        _gestureTiming.NoteScroll();
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
 #if !ANDROID
@@ -423,6 +422,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
+#if E2E_COVERAGE
+        // Keep the pre-weave assembly free of recorder references: AltCover
+        // treats their strong-name token as an already-instrumented marker.
+        AppContext.SetSwitch("BibleOnSite.E2eCoverage.StartupReady", true);
+#endif
         _platformChrome.ScheduleHistoryRefresh();
     }
 
@@ -468,10 +472,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // CarouselView resets Position to 0 when ItemsSource changes.
             // Force it to the correct position without animation.
             var targetPos = _viewModel.PerekId - 1;
+            DebugLog.Write("[PerekLoad] stage=initial-scroll-start");
             PerekCarousel.ScrollTo(targetPos, animate: false);
+            DebugLog.Write("[PerekLoad] stage=initial-scroll-complete");
 
             // Yield so the CarouselView processes the scroll + layout pass.
+            DebugLog.Write("[PerekLoad] stage=initial-layout-yield");
             await Task.Delay(50);
+            DebugLog.Write("[PerekLoad] stage=initial-layout-resumed");
 
             // A navigation during layout owns the reader now. Check before
             // writing the carousel position as well as the search landing.
@@ -481,7 +489,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             }
 
             // Sync the ViewModel position (two-way binding may lag)
+            DebugLog.Write("[PerekLoad] stage=initial-position-start");
             _viewModel.CarouselPosition = targetPos;
+            DebugLog.Write("[PerekLoad] stage=initial-position-complete");
         }
         finally
         {
@@ -489,12 +499,21 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         // Hide loading overlay — carousel is ready
+        DebugLog.Write("[PerekLoad] stage=initial-overlay-hide-start");
         CarouselLoadingOverlay.Hide();
+        DebugLog.Write("[PerekLoad] stage=initial-overlay-hide-complete");
         // Windows: a carousel realized mid Shell push can keep its items panel
         // anchored at a stale offset — re-anchor natively once settled.
+        DebugLog.Write("[PerekLoad] stage=initial-resnap-start");
         _carousel.ResnapAfterLoad();
+        DebugLog.Write("[PerekLoad] stage=initial-resnap-complete");
 
+        DebugLog.Write("[PerekLoad] stage=initial-search-landing-start");
         await ApplySearchReaderLocationAsync();
+        DebugLog.Write("[PerekLoad] stage=initial-search-landing-complete");
+        // The initial visit's screen_view: NavigatedTo fired before the perek
+        // resolved, so the resolved-identity emit lives here (#3378).
+        SetAnalyticsScreenForPerek();
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
         StartSearchIntroduction();
 
@@ -731,19 +750,29 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
 
     /// <summary>
-    /// The reader reports its own logical screen (AlHaperek/{perekId}) from
-    /// page lifecycle and carousel swipes — transitions a Shell-level
-    /// screen_view would double-count — so the Shell report is suppressed.
+    /// The reader reports its own logical screen from page lifecycle and
+    /// carousel swipes — transitions a Shell-level screen_view would
+    /// double-count — so the Shell report is suppressed.
     /// </summary>
-    public string? AnalyticsScreenName => null;
+    public AnalyticsScreen? AnalyticsScreen => null;
 
     /// <summary>
-    /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
+    /// Emits the visible surface's screen_view once the perek resolves
+    /// (#3378): the reader itself (AlHaperek/{id} + canonical source) or,
+    /// while the articles view is up, its perek-scoped list. A pre-load
+    /// NavigatedTo with id 0 never emits — the post-load call owns the
+    /// initial visit.
     /// </summary>
     private void SetAnalyticsScreenForPerek()
     {
-        var analytics = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-        analytics?.SetScreen($"AlHaperek/{_viewModel.PerekId}", "PerekPage");
+        if (_viewModel.PerekId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Perek,
+                _viewModel.PerekId, _viewModel.Source)
+            : AnalyticsScreens.ForPerek(_viewModel.PerekId, _viewModel.Source));
     }
 
     /// <summary>
@@ -768,7 +797,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         LongPressBehavior.CancelAllPending();
 
         // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -796,7 +825,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return;
         }
         // Skip tap if long press just happened
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -828,7 +857,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if WINDOWS
         if (e.Parameter is int pasukNum)
         {
-            // Don't set _lastLongPressTime - right-click doesn't need debounce
+            // Don't note a long press - right-click doesn't need debounce
             // Entering selection must not kill in-flight playback or its moving
             // word marker (#2473).
             ResetRecitationContext(stopPlayback: false);
@@ -838,7 +867,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -890,13 +919,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, token);
 
             // If we get here, the press was held long enough
             // Double-check we're not scrolling and pasuk is still pressed
             if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum && !IsScrolling)
             {
-                _lastLongPressTime = DateTime.Now;
+                _gestureTiming.NoteLongPress();
 
                 ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
@@ -909,7 +938,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                     // Vibrate when entering selection mode
                     if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
                     {
-                        TriggerHapticFeedback();
+                        SelectionHaptics.Trigger();
                     }
                 });
             }
@@ -926,7 +955,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
 #if ANDROID || IOS || MACCATALYST
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&
@@ -939,7 +968,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -977,21 +1006,26 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SelectionBar.SetRecitationVisible(RecitationAvailable);
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
+        var downloading = _recitationDownload.IsPending;
         // An active playback can always be paused — even for a perek whose word
-        // timings are still pending (chapter playback needs no alignment).
-        var recitationEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
-            track != null && (_recitationCursor.PlayingKey != null ||
+        // timings are still pending (chapter playback needs no alignment). A
+        // published recording without installed audio stays tappable (#3704):
+        // the tap downloads the sefer's pack in place and then plays.
+        var recitationEnabled = !downloading && !_recitationBusy && perek != null && track != null &&
+            (_recitationCursor.PlayingKey != null ||
                 (track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready")));
+        var hasAudio = perek != null && RecitationService.Instance.HasAudio(perek.PerekId);
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // chapter at the bookmark), like the website's preview state.
-        var recitationVisual =
+        var recitationVisual = downloading ? ReaderSelectionBar.RecitationVisual.Downloading :
             RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
+                : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused or CommunityToolkit.Maui.Core.MediaElementState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
-        var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
-            !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
+        var hint = _recitationBusy ? "טוען את הקלטת הפרק..." :
+            downloading ? "מוריד את הקלטות הספר..." : track == null ? "אין הקלטה לפרק זה" :
+            !hasAudio ? (recitationEnabled ? "הורדת הקלטות הספר והשמעה" : "ההקלטה אינה תואמת לטקסט המותקן") :
             !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים אינה זמינה" :
             recitationEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
@@ -1017,7 +1051,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
             // SharedTopBar, not VisualElement — the iOS-specific using alias
-            // shadows VisualElement on net10.0-ios.
+            // shadows VisualElement on net11.0-ios.
             ReaderToolbar.SetAppThemeColor(SharedTopBar.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
         }
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
@@ -1048,7 +1082,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void ClearAllSelections()
     {
         // Closing the focused pasuk keeps playback going (the bar is still
-        // visible); leaving selection or chapter mode stops it.
+        // visible); leaving selection or chapter mode stops it. A download→play
+        // the focused view itself started is dropped with it so no pasuk
+        // suddenly starts on the perek screen after Back (#3704); a bar-owned
+        // request stays — its spinner is still showing there.
+        if (_focusedPasuk is { } dismissing)
+        {
+            _recitationDownload.CancelOwner($"pasuk:{_viewModel.PerekId}:{dismissing.PasukNum}");
+        }
         ResetRecitationContext(stopPlayback: _focusedPasuk == null);
         _viewModel.ClearSelected();
         UpdateSelectionBar();
@@ -1077,7 +1118,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         await Clipboard.SetTextAsync(text);
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
         await SelectionBar.FlashCopiedAsync();
     }
 
@@ -1102,27 +1143,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     #endregion
-
-    /// <summary>
-    /// Triggers haptic feedback (vibration) for selection mode entry.
-    /// </summary>
-    private static void TriggerHapticFeedback()
-    {
-        try
-        {
-#if ANDROID
-            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
-#elif IOS
-            HapticFeedback.Perform(HapticFeedbackType.LongPress);
-#endif
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
-        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
-        }
-    }
 
     #region Circular Menu Methods
 
@@ -1162,7 +1182,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         if (_viewModel.Perek is { } perek)
         {
-            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+            await PlayRecitationAsync($"chapter:{perek.PerekId}", downloadIfMissing: true);
         }
     }
 
@@ -1261,14 +1281,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            ArticlesCollection.ItemsSource = StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum);
+            ArticlesCollection.ItemsSource = ArticleListGroup.Build(
+                StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum),
+                StarterService.Instance.GetFurtherReadingArticles(_viewModel.PerekId));
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
         catch (Exception ex) //NOSONAR — articles list degrades to empty.
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error loading articles: {ex.Message}");
-            ArticlesCollection.ItemsSource = new List<Article>();
+            ArticlesCollection.ItemsSource = new List<ArticleListGroup>();
         }
     }
 

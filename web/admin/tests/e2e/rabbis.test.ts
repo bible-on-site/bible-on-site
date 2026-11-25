@@ -18,7 +18,7 @@ test.describe("Rabbis Management", () => {
 	test("can navigate to new rabbi form", async ({ page }) => {
 		await page.goto("/rabbis");
 
-		await page.getByRole("link", { name: "+ רב חדש" }).click();
+		await page.getByRole("link", { name: "רב חדש" }).click();
 		await expect(page).toHaveURL("/rabbis/new");
 		await expect(page.locator("h1")).toContainText("רב חדש");
 	});
@@ -37,12 +37,10 @@ test.describe("Rabbis Management", () => {
 	test("can edit existing rabbi", async ({ page }) => {
 		await page.goto("/rabbis");
 
-		// Click edit on first rabbi (if exists)
 		const editLink = page.getByRole("link", { name: "עריכה" }).first();
-		if (await editLink.isVisible()) {
-			await editLink.click();
-			await expect(page).toHaveURL(/\/rabbis\/\d+/);
-			await expect(page.locator("h1")).toContainText("עריכת רב");
-		}
+		await expect(editLink).toBeVisible();
+		await editLink.click();
+		await expect(page).toHaveURL(/\/rabbis\/\d+/);
+		await expect(page.locator("h1")).toContainText("עריכת רב");
 	});
 });

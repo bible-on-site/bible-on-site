@@ -71,7 +71,7 @@ export default async function AuthorsPage() {
 	const authors = await getCachedAuthors();
 
 	return (
-		<div className={styles.authorsPage}>
+		<main className={styles.authorsPage}>
 			<JsonLd
 				data={buildAuthorsListGraph({
 					authors: authors.map((author) => ({
@@ -119,6 +119,6 @@ export default async function AuthorsPage() {
 			) : (
 				<div className={styles.emptyState}>אין רבנים להצגה</div>
 			)}
-		</div>
+		</main>
 	);
 }

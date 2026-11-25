@@ -38,10 +38,12 @@ public class ReleasePayloadDownloadTests
         public void Report(double value) => target.Add(value);
     }
 
-    [Fact]
-    public void ReleasePayloadFiles_NotesPackCarriesIndex_OtherPacksJustTheZip()
+    [Theory]
+    [InlineData("perushim_notes")]
+    [InlineData(PadDeliveryService.IosPerushimNotesPackName)]
+    public void ReleasePayloadFiles_NotesPackCarriesIndex_OtherPacksJustTheZip(string packName)
     {
-        PadDeliveryService.ReleasePayloadFiles("perushim_notes")
+        PadDeliveryService.ReleasePayloadFiles(packName)
             .Should().Equal(Notes, Index);
         PadDeliveryService.ReleasePayloadFiles("recitation_5")
             .Should().Equal("recitation_5.zip");
@@ -125,8 +127,10 @@ public class ReleasePayloadDownloadTests
         Directory.GetFiles(cacheDir).Should().BeEmpty("a failed download must leave no payload or temp files");
     }
 
-    [Fact]
-    public async Task Download_MissingSearchIndex_FailsTheFetch_AndCachesNothingServable()
+    [Theory]
+    [InlineData("perushim_notes")]
+    [InlineData(PadDeliveryService.IosPerushimNotesPackName)]
+    public async Task Download_MissingSearchIndex_FailsTheFetch_AndCachesNothingServable(string packName)
     {
         await using var storage = new TestStorage();
         var notes = new byte[] { 9, 8, 7 };
@@ -138,7 +142,7 @@ public class ReleasePayloadDownloadTests
         using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            client, App().Object, "perushim_notes", cacheDir,
+            client, App().Object, packName, cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
         // The commentary index is required: a notes-only cache is the exact
@@ -149,7 +153,7 @@ public class ReleasePayloadDownloadTests
             "the landed primary payload stays for the next attempt to complete");
         File.Exists(Path.Join(cacheDir, Index)).Should().BeFalse();
         File.Exists(Path.Join(cacheDir, Index + ".download")).Should().BeFalse();
-        PadDeliveryService.PackPayloadComplete(cacheDir, "perushim_notes").Should().BeFalse(
+        PadDeliveryService.PackPayloadComplete(cacheDir, packName).Should().BeFalse(
             "a missing index leaves the pack unservable");
     }
 

@@ -184,18 +184,41 @@ public class AssetPackCacheTests
         return app;
     }
 
-    [Fact]
-    public void PayloadFileName_UsesNotesDatabaseForTheNotesPack_AndZipOtherwise()
+    [Theory]
+    [InlineData("perushim_notes")]
+    [InlineData(PadDeliveryService.IosPerushimNotesPackName)]
+    public void PayloadFileName_UsesNotesDatabaseForTheNotesPack_AndZipOtherwise(string packName)
     {
-        PadDeliveryService.PayloadFileName("perushim_notes")
+        PadDeliveryService.PayloadFileName(packName)
             .Should().Be("sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
         PadDeliveryService.PayloadFileName("other_pack").Should().Be("other_pack.zip");
     }
 
     [Fact]
+    public async Task SlimApplePack_DoesNotReuseOrOverwriteTheLegacyPackExtraction()
+    {
+        await using var storage = new TestStorage();
+        var app = App("5.1.19", "100");
+        var legacy = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, "perushim-notes");
+        await File.WriteAllTextAsync(Path.Join(legacy, Notes), "legacy bytes", TestContext.Current.CancellationToken);
+
+        var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object,
+            PadDeliveryService.IosPerushimNotesPackName);
+
+        current.Should().NotBe(legacy);
+        File.Exists(Path.Join(current, Notes)).Should().BeFalse();
+        await File.WriteAllTextAsync(Path.Join(current, Notes), "slim notes", TestContext.Current.CancellationToken);
+        PadDeliveryService.PackPayloadComplete(current, PadDeliveryService.IosPerushimNotesPackName).Should().BeFalse();
+        await File.WriteAllTextAsync(Path.Join(current, PerushimNotesService.SearchIndexDbName), "slim index", TestContext.Current.CancellationToken);
+        PadDeliveryService.PackPayloadComplete(current, PadDeliveryService.IosPerushimNotesPackName).Should().BeTrue();
+        (await File.ReadAllTextAsync(Path.Join(legacy, Notes), TestContext.Current.CancellationToken))
+            .Should().Be("legacy bytes");
+    }
+
+    [Fact]
     public async Task UnsupportedPlatform_DeliveryIsANoOp()
     {
-        // The net10.0 test host compiles the no-PAD/ODR branch of the service.
+        // The net11.0 test host compiles the no-PAD/ODR branch of the service.
         var service = PadDeliveryService.Instance;
 
         (await service.TryGetAssetPathAsync(Pack, TestContext.Current.CancellationToken)).Should().BeNull();

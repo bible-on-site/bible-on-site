@@ -1,7 +1,9 @@
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
+	getArticleHebrewDateOverride: jest.fn(),
 	getArticleSummariesByPerekId: jest.fn(),
 	getArticleSummariesByPerekIds: jest.fn(),
+	getFurtherReadingSummariesByPerekIds: jest.fn(),
 }));
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotes: jest.fn(),
@@ -60,6 +62,7 @@ import {
 	getArticleById,
 	getArticleSummariesByPerekId,
 	getArticleSummariesByPerekIds,
+	getFurtherReadingSummariesByPerekIds,
 } from "../../../src/lib/articles";
 import { decorateArticleContent } from "../../../src/lib/tanahpedia/article-mention-refs";
 import { getArticleDedications } from "../../../src/lib/dedications/loaders";
@@ -102,6 +105,10 @@ const mockGetArticleSummariesByPerekId =
 const mockGetArticleSummariesByPerekIds =
 	getArticleSummariesByPerekIds as jest.MockedFunction<
 		typeof getArticleSummariesByPerekIds
+	>;
+const mockGetFurtherReadingSummariesByPerekIds =
+	getFurtherReadingSummariesByPerekIds as jest.MockedFunction<
+		typeof getFurtherReadingSummariesByPerekIds
 	>;
 const mockGetPerushimByPerekIds = getPerushimByPerekIds as jest.MockedFunction<
 	typeof getPerushimByPerekIds
@@ -313,6 +320,28 @@ describe("getPerekSummariesBatch", () => {
 			[6, [{ id: 11, name: "Rashi 6", parshanName: "Rashi", noteCount: 4 }]],
 		]);
 		mockGetArticleSummariesByPerekIds.mockResolvedValue(articleSummaries);
+		// #3752: verified secondary-coverage recommendations, batched per
+		// covering perek like the primary article map.
+		const furtherReading = new Map([
+			[
+				5,
+				[
+					{
+						id: 50,
+						perekId: 12,
+						authorId: 3,
+						abstract: "abs far",
+						name: "further 5",
+						priority: 1,
+						authorName: "rav far",
+						authorImageUrl: "url-far",
+					},
+				],
+			],
+		]);
+		mockGetFurtherReadingSummariesByPerekIds.mockResolvedValue(
+			furtherReading,
+		);
 		mockGetPerushimByPerekIds.mockResolvedValue(perushSummaries);
 		const pasukUnits5 = [
 			{ key: "1", wordCount: 10, cumulativeWords: 10 },
@@ -334,12 +363,14 @@ describe("getPerekSummariesBatch", () => {
 		expect(result).toEqual({
 			"5": {
 				articles: articleSummaries.get(5),
+				furtherReading: furtherReading.get(5),
 				perushim: perushSummaries.get(5),
 				pasukUnits: pasukUnits5,
 				perekMetric: null,
 			},
 			"6": {
 				articles: articleSummaries.get(6),
+				furtherReading: [],
 				perushim: perushSummaries.get(6),
 				pasukUnits: [],
 				perekMetric: perekMetric6,
@@ -347,6 +378,10 @@ describe("getPerekSummariesBatch", () => {
 		});
 		expect(mockGetArticleSummariesByPerekIds).toHaveBeenCalledTimes(1);
 		expect(mockGetArticleSummariesByPerekIds).toHaveBeenCalledWith([5, 6]);
+		expect(mockGetFurtherReadingSummariesByPerekIds).toHaveBeenCalledTimes(1);
+		expect(mockGetFurtherReadingSummariesByPerekIds).toHaveBeenCalledWith([
+			5, 6,
+		]);
 		expect(mockGetPerushimByPerekIds).toHaveBeenCalledTimes(1);
 		expect(mockGetPerushimByPerekIds).toHaveBeenCalledWith([5, 6]);
 		expect(mockGetPerekProgressUnitsBatch).toHaveBeenCalledWith([5, 6]);
@@ -355,6 +390,7 @@ describe("getPerekSummariesBatch", () => {
 
 	it("defaults to empty summaries for perakim absent from the grouped maps", async () => {
 		mockGetArticleSummariesByPerekIds.mockResolvedValue(new Map());
+		mockGetFurtherReadingSummariesByPerekIds.mockResolvedValue(new Map());
 		mockGetPerushimByPerekIds.mockResolvedValue(new Map());
 		mockGetPerekProgressUnitsBatch.mockResolvedValue(new Map());
 		mockGetPerekMetrics.mockResolvedValue(new Map());
@@ -363,6 +399,7 @@ describe("getPerekSummariesBatch", () => {
 
 		expect(result["5"]).toEqual({
 			articles: [],
+			furtherReading: [],
 			perushim: [],
 			pasukUnits: [],
 			perekMetric: null,

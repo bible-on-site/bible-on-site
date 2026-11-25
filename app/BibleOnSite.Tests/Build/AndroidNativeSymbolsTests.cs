@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Sockets;
 using Xunit;
 
 public class AndroidNativeSymbolsTests : IDisposable
@@ -46,15 +48,16 @@ public class AndroidNativeSymbolsTests : IDisposable
     private static void U64(byte[] bytes, int at, ulong value) => BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(at), value);
 
     // AArch64 ELF64 with a GNU build ID and an optional static symbol table.
-    private static byte[] Elf(bool symbols = true, byte id = 1)
+    private static byte[] Elf(bool symbols = true, byte id = 1, byte[]? buildId = null)
     {
         var bytes = new byte[512];
         "\u007fELF\u0002\u0001\u0001"u8.CopyTo(bytes);
         U16(bytes, 16, 3); U16(bytes, 18, 183); U32(bytes, 20, 1);
         U64(bytes, 40, 64); U16(bytes, 52, 64); U16(bytes, 58, 64); U16(bytes, 60, 3);
-        U32(bytes, 128 + 4, 7); U64(bytes, 128 + 24, 256); U64(bytes, 128 + 32, 20);
-        U32(bytes, 256, 4); U32(bytes, 260, 1); U32(bytes, 264, 3);
-        "GNU\0"u8.CopyTo(bytes.AsSpan(268)); bytes[272] = id;
+        buildId ??= [id];
+        U32(bytes, 128 + 4, 7); U64(bytes, 128 + 24, 256); U64(bytes, 128 + 32, (ulong)(16 + ((buildId.Length + 3) & ~3)));
+        U32(bytes, 256, 4); U32(bytes, 260, (uint)buildId.Length); U32(bytes, 264, 3);
+        "GNU\0"u8.CopyTo(bytes.AsSpan(268)); buildId.CopyTo(bytes.AsSpan(272));
         if (symbols)
         {
             U32(bytes, 192 + 4, 2); U64(bytes, 192 + 24, 384);
@@ -338,5 +341,558 @@ public class AndroidNativeSymbolsTests : IDisposable
             ("arm64-v8a/libc.so", Elf(symbols: false, id: 3)));
         Symbols(("arm64-v8a/liba.so", Elf(id: 1)));
         Assert.Equal(["arm64-v8a/libb.so", "arm64-v8a/libc.so"], AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Offline_packaging_validates_local_symbols_without_consulting_symbol_stores()
+    {
+        var buildId = Convert.FromHexString("0123456789ABCDEF");
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libmonodroid.so", Elf(id: 5)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: buildId)));
+        Func<string, byte[]?> lookup = _ => throw new InvalidOperationException("Unexpected symbol store lookup");
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, findPublicSymbols: lookup,
+            findVendorSymbols: lookup, includeExternalSymbols: false);
+
+        Assert.Equal(["arm64-v8a/libcoreclr.so"], AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Includes_public_and_embedded_symbols_but_keeps_unavailable_files_and_data_explicit()
+    {
+        var coreId = Enumerable.Repeat((byte)2, 20).ToArray();
+        var vendorId = Enumerable.Repeat((byte)3, 20).ToArray();
+        var missingId = Enumerable.Repeat((byte)4, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: coreId)),
+            ("arm64-v8a/libHarfBuzzSharp.so", Elf(symbols: false, buildId: vendorId)),
+            ("arm64-v8a/libmonodroid.so", Elf(id: 5)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: missingId)),
+            ("arm64-v8a/libassembly-store.so", Elf(id: 6)));
+        var requests = new List<string>();
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, id =>
+        {
+            requests.Add(id);
+            return id == Convert.ToHexString(missingId) ? null : Elf(buildId: Convert.FromHexString(id));
+        });
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(["arm64-v8a/libHarfBuzzSharp.so", "arm64-v8a/libcoreclr.so", "arm64-v8a/libmonodroid.so", "arm64-v8a/libxamarin-app.so"],
+            zip.Entries.Select(entry => entry.FullName));
+        Assert.Equal(3, requests.Count);
+        Assert.Equal(["arm64-v8a/libassembly-store.so", "arm64-v8a/libe_sqlite3.so"], AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Theory]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    [InlineData("not-elf")]
+    public void Rejects_invalid_public_symbols_before_creating_any_archive(string failure)
+    {
+        var id = Enumerable.Repeat((byte)2, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+        var invalid = failure switch
+        {
+            "mismatched" => Elf(),
+            "stripped" => Elf(symbols: false, buildId: id),
+            _ => "not ELF"u8.ToArray()
+        };
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => invalid));
+        Assert.False(File.Exists(Output));
+    }
+
+    [Fact]
+    public void Public_runtime_symbols_cannot_hide_missing_app_owned_sidecars()
+    {
+        var id = Enumerable.Repeat((byte)2, 20).ToArray();
+        Aab(("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => throw new InvalidOperationException("Must reject missing app symbols before network access")));
+        Assert.False(File.Exists(Output));
+    }
+
+    [Fact]
+    public void Rejects_nested_bundled_library_names_before_creating_the_archive()
+    {
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libnested/libx.so", Elf()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(Libraries, Bundle, Output));
+        Assert.False(File.Exists(Output));
+    }
+
+    [Theory]
+    [InlineData("libassembly-store.so")]
+    [InlineData("libassemblies.arm64-v8a.blob.so")]
+    public void Rejects_assembly_store_data_even_when_it_has_an_ELF_symbol_table(string library)
+    {
+        Aab(("arm64-v8a/" + library, Elf()));
+        Symbols(("arm64-v8a/" + library, Elf()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+        File.Delete(Output);
+        Library("arm64-v8a/" + library[..^3] + ".dbg.so", Elf());
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(Libraries, Bundle, Output));
+        Assert.False(File.Exists(Output));
+    }
+
+    [Fact]
+    public async Task Public_symbol_lookup_uses_the_official_build_ID_key_and_validates_the_response()
+    {
+        var id = Convert.FromHexString("ABCDEF0123456789ABCDEF0123456789ABCDEF01");
+        var expected = Elf(buildId: id);
+        using var client = new HttpClient(new SymbolHandler(request =>
+        {
+            Assert.Equal("https://msdl.microsoft.com/download/symbols/_.debug/elf-buildid-sym-abcdef0123456789abcdef0123456789abcdef01/_.debug",
+                request.RequestUri!.AbsoluteUri);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(expected) };
+        }));
+        Assert.Equal(expected, await AndroidNativeSymbols.DownloadPublicSymbols(Convert.ToHexString(id), client));
+    }
+
+    [Fact]
+    public async Task Reports_missing_public_files_without_treating_a_service_outage_as_unavailability()
+    {
+        foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.InternalServerError, HttpStatusCode.Forbidden })
+        {
+            var calls = 0;
+            using var client = new HttpClient(new SymbolHandler(_ =>
+            {
+                calls++;
+                return new HttpResponseMessage(status);
+            }));
+            var download = AndroidNativeSymbols.DownloadPublicSymbols("0123456789ABCDEF", client);
+            if (status == HttpStatusCode.NotFound)
+            {
+                Assert.Null(await download);
+            }
+            else
+            {
+                await Assert.ThrowsAsync<HttpRequestException>(() => download);
+            }
+            Assert.Equal(1, calls);
+        }
+    }
+
+    [Theory]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    [InlineData("invalid")]
+    [InlineData("too-large")]
+    [InlineData("unbounded-stream")]
+    public async Task Public_download_rejects_invalid_or_unbounded_symbol_content(string failure)
+    {
+        var id = Convert.FromHexString("0123456789ABCDEF");
+        using var client = new HttpClient(new SymbolHandler(_ =>
+        {
+            HttpContent content = failure switch
+            {
+                "mismatched" => new ByteArrayContent(Elf()),
+                "stripped" => new ByteArrayContent(Elf(symbols: false, buildId: id)),
+                "unbounded-stream" => new StreamContent(new ZeroStream(AndroidNativeSymbols.MaximumSymbolBytes + 1L)),
+                _ => new ByteArrayContent([])
+            };
+            if (failure == "too-large")
+            {
+                content.Headers.ContentLength = AndroidNativeSymbols.MaximumSymbolBytes + 1L;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }));
+        await Assert.ThrowsAsync<InvalidDataException>(() => AndroidNativeSymbols.DownloadPublicSymbols(Convert.ToHexString(id), client));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../arbitrary-host")]
+    [InlineData("ABC")]
+    [InlineData("0123456789ABCDEG")]
+    public async Task Invalid_public_keys_never_make_a_request(string id)
+    {
+        using var client = new HttpClient(new SymbolHandler(_ => throw new InvalidOperationException("No request expected")));
+        await Assert.ThrowsAsync<ArgumentException>(() => AndroidNativeSymbols.DownloadPublicSymbols(id, client));
+        await Assert.ThrowsAsync<ArgumentException>(() => AndroidNativeSymbols.DownloadVendorSymbols(id, "https://symbols.example/", client));
+    }
+
+    // #3440: the supplier store answers {base}/{lowercase GNU build ID} with a
+    // debug ELF; the same ELF/ABI/size/identity gate applies as for MSDL.
+    [Fact]
+    public async Task Vendor_symbol_lookup_uses_the_build_ID_path_and_validates_the_response()
+    {
+        var id = Convert.FromHexString("ABCDEF0123456789ABCDEF0123456789ABCDEF01");
+        var expected = Elf(buildId: id);
+        using var client = new HttpClient(new SymbolHandler(request =>
+        {
+            Assert.Equal("https://supplier.invalid/symbols/abcdef0123456789abcdef0123456789abcdef01",
+                request.RequestUri!.AbsoluteUri);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(expected) };
+        }));
+        Assert.Equal(expected, await AndroidNativeSymbols.DownloadVendorSymbols(
+            Convert.ToHexString(id), "https://supplier.invalid/symbols/", client));
+    }
+
+    [Fact]
+    public async Task Reports_missing_vendor_files_without_treating_a_service_outage_as_unavailability()
+    {
+        foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.InternalServerError, HttpStatusCode.Forbidden })
+        {
+            using var client = new HttpClient(new SymbolHandler(_ => new HttpResponseMessage(status)));
+            var download = AndroidNativeSymbols.DownloadVendorSymbols(
+                "0123456789ABCDEF", "https://supplier.invalid/", client);
+            if (status == HttpStatusCode.NotFound)
+            {
+                Assert.Null(await download);
+            }
+            else
+            {
+                await Assert.ThrowsAsync<HttpRequestException>(() => download);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    [InlineData("invalid")]
+    [InlineData("too-large")]
+    [InlineData("unbounded-stream")]
+    public async Task Vendor_download_rejects_invalid_or_unbounded_symbol_content(string failure)
+    {
+        var id = Convert.FromHexString("0123456789ABCDEF");
+        using var client = new HttpClient(new SymbolHandler(_ =>
+        {
+            HttpContent content = failure switch
+            {
+                "mismatched" => new ByteArrayContent(Elf()),
+                "stripped" => new ByteArrayContent(Elf(symbols: false, buildId: id)),
+                "unbounded-stream" => new StreamContent(new ZeroStream(AndroidNativeSymbols.MaximumSymbolBytes + 1L)),
+                _ => new ByteArrayContent([])
+            };
+            if (failure == "too-large")
+            {
+                content.Headers.ContentLength = AndroidNativeSymbols.MaximumSymbolBytes + 1L;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }));
+        await Assert.ThrowsAsync<InvalidDataException>(() => AndroidNativeSymbols.DownloadVendorSymbols(
+            Convert.ToHexString(id), "https://supplier.invalid/", client));
+    }
+
+    [Theory]
+    [InlineData("/relative/path")]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://supplier.invalid/symbols")]
+    [InlineData("file:///c/symbols")]
+    // A remote (non-loopback) http store cannot be trusted: a build ID is not
+    // a secret, so a tampered ELF would still pass the identity check.
+    [InlineData("http://supplier.invalid/symbols")]
+    [InlineData("http://8.8.8.8/symbols")]
+    public async Task Invalid_vendor_base_urls_never_make_a_request(string baseUrl)
+    {
+        using var client = new HttpClient(new SymbolHandler(_ => throw new InvalidOperationException("No request expected")));
+        await Assert.ThrowsAsync<ArgumentException>(() => AndroidNativeSymbols.DownloadVendorSymbols(
+            "0123456789ABCDEF", baseUrl, client));
+    }
+
+    [Fact]
+    public void Vendor_symbols_fill_gaps_the_public_store_misses()
+    {
+        var id = Enumerable.Repeat((byte)8, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: id)));
+        var publicCalls = 0;
+        var vendorCalls = 0;
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => { publicCalls++; return null; },
+            findVendorSymbols: buildId => { vendorCalls++; return Elf(buildId: Convert.FromHexString(buildId)); });
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(["arm64-v8a/libe_sqlite3.so", "arm64-v8a/libxamarin-app.so"],
+            zip.Entries.Select(entry => entry.FullName));
+        Assert.Equal(1, publicCalls);
+        Assert.Equal(1, vendorCalls);
+        Assert.Empty(AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Public_store_wins_over_the_vendor_store_for_the_same_build_ID()
+    {
+        var id = Enumerable.Repeat((byte)8, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: id)));
+        var vendorCalls = 0;
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            buildId => Elf(buildId: Convert.FromHexString(buildId)),
+            findVendorSymbols: _ => { vendorCalls++; return Elf(); });
+
+        Assert.Equal(0, vendorCalls);
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(2, zip.Entries.Count);
+    }
+
+    [Fact]
+    public void Vendor_symbols_reuse_the_build_ID_cache_across_builds()
+    {
+        var id = Enumerable.Repeat((byte)8, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: id)));
+        var vendorCalls = 0;
+        Func<string, byte[]?> vendor = buildId => { vendorCalls++; return Elf(buildId: Convert.FromHexString(buildId)); };
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => null, CacheDir, vendor);
+        Assert.Equal(1, vendorCalls);
+        Assert.True(File.Exists(Path.Join(CacheDir, CacheKey(id))));
+
+        // The supplier store is queried again only for genuinely new build IDs.
+        File.Delete(Output);
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => null, CacheDir, _ => throw new InvalidOperationException("Cached build ID must not fetch"));
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(2, zip.Entries.Count);
+    }
+
+    // #3440: the packaging path reads ANDROID_VENDOR_SYMBOLS_BASE_URL itself —
+    // exercise that exact wiring over real loopback HTTP.
+    [Fact]
+    public async Task Vendor_store_env_var_fetches_symbols_over_http()
+    {
+        var id = Enumerable.Repeat((byte)8, 20).ToArray();
+        var expected = Elf(buildId: id);
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: id)));
+
+        using var freePort = new TcpListener(IPAddress.Loopback, 0);
+        freePort.Start();
+        var port = ((IPEndPoint)freePort.LocalEndpoint).Port;
+        freePort.Stop();
+        var requested = "";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var serving = Task.Run(() =>
+        {
+            var context = listener.GetContext();
+            requested = context.Request.Url!.AbsolutePath;
+            context.Response.StatusCode = 200;
+            context.Response.OutputStream.Write(expected);
+            context.Response.Close();
+        });
+        var previous = Environment.GetEnvironmentVariable(AndroidNativeSymbols.VendorSymbolsBaseUrlVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                AndroidNativeSymbols.VendorSymbolsBaseUrlVariable, $"http://127.0.0.1:{port}");
+
+            // No findVendorSymbols — the env var alone must drive the fetch.
+            AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => null);
+
+            using var zip = ZipFile.OpenRead(Output);
+            Assert.Equal(["arm64-v8a/libe_sqlite3.so", "arm64-v8a/libxamarin-app.so"],
+                zip.Entries.Select(entry => entry.FullName));
+            Assert.Equal($"/{Convert.ToHexString(id).ToLowerInvariant()}", requested);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(AndroidNativeSymbols.VendorSymbolsBaseUrlVariable, previous);
+        }
+        await serving.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Theory]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    public void Rejects_invalid_vendor_symbols_before_creating_any_archive(string failure)
+    {
+        var id = Enumerable.Repeat((byte)8, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libe_sqlite3.so", Elf(symbols: false, buildId: id)));
+        var invalid = failure == "mismatched" ? Elf() : Elf(symbols: false, buildId: id);
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => null, findVendorSymbols: _ => invalid));
+        Assert.False(File.Exists(Output));
+    }
+
+    private string CacheDir => Path.Join(root, "symbol-cache");
+    private static string CacheKey(byte[] buildId) => Convert.ToHexString(buildId).ToLowerInvariant();
+
+    // #3444: cold public downloads get a bounded 90 seconds; everything else
+    // keeps its existing deadline and there are no retries.
+    [Fact]
+    public void Cold_public_downloads_allow_up_to_ninety_seconds()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(90), AndroidNativeSymbols.ColdDownloadDeadline);
+    }
+
+    [Fact]
+    public void Warm_public_symbol_cache_makes_no_fetch_calls()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Directory.CreateDirectory(CacheDir);
+        File.WriteAllBytes(Path.Join(CacheDir, CacheKey(id)), Elf(buildId: id));
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => throw new InvalidOperationException("Warm cache must not fetch"), CacheDir);
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(["arm64-v8a/libcoreclr.so", "arm64-v8a/libxamarin-app.so"],
+            zip.Entries.Select(entry => entry.FullName));
+    }
+
+    [Fact]
+    public void Cold_download_is_cached_by_build_id_and_reused_across_builds()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        var fetches = 0;
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, buildId =>
+        {
+            fetches++;
+            return Elf(buildId: Convert.FromHexString(buildId));
+        }, CacheDir);
+
+        Assert.Equal(1, fetches);
+        var cached = Path.Join(CacheDir, CacheKey(id));
+        Assert.True(File.Exists(cached));
+        Assert.Equal(Elf(buildId: id), File.ReadAllBytes(cached));
+
+        // A later build with the same build IDs hits the cache and never fetches.
+        File.Delete(Output);
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            _ => throw new InvalidOperationException("Cached build ID must not fetch"), CacheDir);
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Equal(2, zip.Entries.Count);
+    }
+
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("mismatched")]
+    [InlineData("stripped")]
+    [InlineData("oversized")]
+    public void Invalid_cache_entries_are_evicted_and_fetched_fresh(string kind)
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Directory.CreateDirectory(CacheDir);
+        var path = Path.Join(CacheDir, CacheKey(id));
+        File.WriteAllBytes(path, kind switch
+        {
+            "mismatched" => Elf(buildId: Enumerable.Repeat((byte)9, 20).ToArray()),
+            "stripped" => Elf(symbols: false, buildId: id),
+            "oversized" => new byte[AndroidNativeSymbols.MaximumSymbolBytes + 1],
+            _ => "garbage"u8.ToArray()
+        });
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output,
+            buildId => Elf(buildId: Convert.FromHexString(buildId)), CacheDir);
+
+        using var zip = ZipFile.OpenRead(Output);
+        Assert.Contains(zip.Entries, e => e.FullName == "arm64-v8a/libcoreclr.so");
+        // The poisoned entry was evicted and replaced by the fresh download.
+        Assert.Equal(Elf(buildId: id), File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void Fetched_symbols_are_validated_before_entering_the_cache()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Create(
+            Libraries, Bundle, Output, _ => "garbage"u8.ToArray(), CacheDir));
+
+        Assert.False(File.Exists(Output));
+        var files = Directory.Exists(CacheDir) ? Directory.GetFiles(CacheDir) : Array.Empty<string>();
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public void Missing_public_symbols_are_not_negatively_cached()
+    {
+        var id = Enumerable.Repeat((byte)7, 20).ToArray();
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libcoreclr.so", Elf(symbols: false, buildId: id)));
+
+        var fetches = 0;
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => { fetches++; return null; }, CacheDir);
+
+        var files = Directory.Exists(CacheDir) ? Directory.GetFiles(CacheDir) : Array.Empty<string>();
+        Assert.Empty(files);
+
+        // A 404 is reported again on the next build — never remembered forever.
+        File.Delete(Output);
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output, _ => { fetches++; return null; }, CacheDir);
+        Assert.Equal(2, fetches);
+    }
+
+    private sealed class SymbolHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(respond(request));
+        }
+    }
+
+    private sealed class ZeroStream(long length) : Stream
+    {
+        private long remaining = length;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer)
+        {
+            var count = (int)Math.Min(buffer.Length, remaining);
+            buffer[..count].Clear();
+            remaining -= count;
+            return count;
+        }
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            _ = offset;
+            _ = origin;
+            throw new NotSupportedException();
+        }
+        public override void SetLength(long value)
+        {
+            _ = value;
+            throw new NotSupportedException();
+        }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _ = buffer;
+            _ = offset;
+            _ = count;
+            throw new NotSupportedException();
+        }
     }
 }

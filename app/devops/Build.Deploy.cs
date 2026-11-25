@@ -7,6 +7,7 @@ using Google.Apis.Upload;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -173,9 +174,11 @@ partial class Build
                 }
                 Serilog.Log.Information($"Assigned to {track} track");
 
-                // Commit edit
-                var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
-                commitRequest.Execute();
+                // Commit edit — Play finishes processing the uploaded bundle
+                // asynchronously, so an accepted upload does not yet mean the
+                // edit is committable; the bounded retry inside owns that
+                // rejection and any uncertain commit outcome.
+                CommitPlayEdit(service, edit.Id, track, versionCode);
                 committed = true;
                 if (releaseNotes is not null)
                 {
@@ -254,6 +257,183 @@ partial class Build
     }
 
     /// <summary>
+    /// Commits the prepared Play edit. A completed byte upload — including one
+    /// completed through a resumed-session status response — does not mean
+    /// the bundle is committable: Play finishes processing it asynchronously
+    /// and rejects the commit with 400 "Some of the Android App Bundle
+    /// uploads are not completed yet" until processing lands (CD run
+    /// 44034434746, #3609 — the store needed more than the ~4s that elapsed
+    /// between the accepted upload and the first commit; the bounded budget
+    /// below covers that measured processing window, not an open-ended wait).
+    /// A rejected commit leaves the edit open, so that exact rejection and
+    /// 5xx answers retry on the same edit inside a bounded budget; every
+    /// other rejection stays permanent. A transport-level failure resolves
+    /// against remote state instead of guessing — but Play allows only one
+    /// open edit per account, so a fresh probe edit could invalidate a
+    /// still-pending commit. The original edit's own state is read first:
+    /// still open proves the commit did not land and retries it; consumed
+    /// (404) proves it landed and only then may a probe edit verify the
+    /// version code on the live track — so delivery is never declared on an
+    /// uncommitted edit and a possibly committed edit is never discarded
+    /// prematurely.
+    /// </summary>
+    internal static void CommitPlayEdit(AndroidPublisherService service, string editId, string track, long versionCode,
+        Action<TimeSpan>? sleep = null)
+    {
+        for (var attempt = 1; attempt <= PlayCommitMaxAttempts; attempt++)
+        {
+            try
+            {
+                service.Edits.Commit(GooglePlayPackageName, editId).Execute();
+                Serilog.Log.Information(attempt == 1
+                    ? $"Committed Play edit {editId}"
+                    : $"Committed Play edit {editId} on attempt {attempt} — the store finished processing the bundle");
+                return;
+            }
+            catch (GoogleApiException rejected) when (IsRetryableCommitRejection(rejected)
+                && attempt < PlayCommitMaxAttempts)
+            {
+                var delay = PlayCommitRetryDelays[Math.Min(attempt - 1, PlayCommitRetryDelays.Length - 1)];
+                Serilog.Log.Warning($"Play edit commit attempt {attempt}/{PlayCommitMaxAttempts} rejected while the store settles " +
+                    $"({(int)rejected.HttpStatusCode} {rejected.HttpStatusCode}: {TrimForLog(rejected.Message, 200)}); retrying in {delay.TotalSeconds:0}s");
+                (sleep ?? Thread.Sleep)(delay);
+            }
+            catch (GoogleApiException gone) when (gone.HttpStatusCode == HttpStatusCode.NotFound && attempt > 1)
+            {
+                // A retry that finds the edit consumed means an earlier commit
+                // landed despite a lost or rejected-looking answer — verify
+                // on the live track instead of declaring failure.
+                if (PlayReleaseIsLive(service, track, versionCode))
+                {
+                    Serilog.Log.Warning($"Play edit {editId} is consumed and release {versionCode} is live on {track}; an earlier commit landed despite its failed response");
+                    return;
+                }
+                throw;
+            }
+            catch (Exception uncertain) when (uncertain is HttpRequestException or TaskCanceledException
+                or IOException or AggregateException)
+            {
+                // The response was lost, not necessarily the commit. Resolve
+                // the original edit's state with a non-mutating read before
+                // any new edit exists. Still open proves the commit did not
+                // land — the same edit retries within the bounded budget.
+                // Consumed proves it landed — only then may a probe edit ask
+                // the live track whether the release published. An
+                // unreadable state keeps the original failure.
+                switch (PlayEditStillOpen(service, editId))
+                {
+                    case true when attempt < PlayCommitMaxAttempts:
+                    {
+                        var delay = PlayCommitRetryDelays[Math.Min(attempt - 1, PlayCommitRetryDelays.Length - 1)];
+                        Serilog.Log.Warning($"Play edit commit attempt {attempt}/{PlayCommitMaxAttempts} lost its response " +
+                            $"but edit {editId} is still open; retrying the commit in {delay.TotalSeconds:0}s");
+                        (sleep ?? Thread.Sleep)(delay);
+                        continue;
+                    }
+                    case false when PlayReleaseIsLive(service, track, versionCode):
+                        Serilog.Log.Warning($"Play edit commit response was lost but release {versionCode} is live on {track}; treating the commit as landed");
+                        return;
+                    default:
+                        throw;
+                }
+            }
+        }
+    }
+
+    internal const int PlayCommitMaxAttempts = 6;
+
+    internal static readonly TimeSpan[] PlayCommitRetryDelays =
+    [
+        TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20),
+        TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(40),
+    ];
+
+    /// <summary>
+    /// Retryable commit answers: the asynchronous bundle-processing 400 and
+    /// any 5xx — the edit stays open either way, and a commit that secretly
+    /// landed turns the next attempt into a verifiable 404 instead of a
+    /// duplicate write. Other 4xx answers are permanent rejections.
+    /// </summary>
+    static bool IsRetryableCommitRejection(GoogleApiException error) =>
+        (int)error.HttpStatusCode >= 500 ||
+        (error.HttpStatusCode == HttpStatusCode.BadRequest
+            && error.Message.Contains("not completed", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Non-mutating read of the original edit's own state: true while the
+    /// edit is still open, false once consumed, null when the answer itself
+    /// is unreachable. Play allows one open edit per account and a new edit
+    /// invalidates an existing one, so this must always run before any probe
+    /// edit is created while a commit outcome is uncertain.
+    /// </summary>
+    static bool? PlayEditStillOpen(AndroidPublisherService service, string editId)
+    {
+        try
+        {
+            service.Edits.Get(GooglePlayPackageName, editId).Execute();
+            return true;
+        }
+        catch (GoogleApiException gone) when (gone.HttpStatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+        catch (Exception probe) when (probe is GoogleApiException or HttpRequestException
+            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+        {
+            Serilog.Log.Debug($"Play edit {editId} state read failed: {probe.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether the committed (live) state of the track already carries the
+    /// uploaded version code — the proof that a commit whose answer was lost
+    /// still landed. Must only run once the deployment edit is provably
+    /// consumed, because the read creates a throwaway edit and Play allows
+    /// only one open edit per account. An inconclusive read counts as not
+    /// live so the caller keeps the original failure.
+    /// </summary>
+    static bool PlayReleaseIsLive(AndroidPublisherService service, string track, long versionCode) =>
+        ReadLiveTrack(service, track)?.Releases?
+            .Any(release => release.VersionCodes?.Contains(versionCode) == true) == true;
+
+    /// <summary>
+    /// Reads one track's committed state through a throwaway read-only edit —
+    /// a fresh edit snapshots the live track. Returns null on a failed read:
+    /// inconclusive evidence, never proof of absence.
+    /// </summary>
+    static Track? ReadLiveTrack(AndroidPublisherService service, string track)
+    {
+        AppEdit? readEdit = null;
+        try
+        {
+            readEdit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
+            return service.Edits.Tracks.Get(GooglePlayPackageName, readEdit.Id, track).Execute();
+        }
+        catch (Exception probe) when (probe is GoogleApiException or HttpRequestException
+            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+        {
+            Serilog.Log.Debug($"Live {track} track read failed: {probe.Message}");
+            return null;
+        }
+        finally
+        {
+            if (readEdit is not null)
+            {
+                try
+                {
+                    service.Edits.Delete(GooglePlayPackageName, readEdit.Id).Execute();
+                }
+                catch (Exception cleanup) when (cleanup is GoogleApiException or HttpRequestException
+                    or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+                {
+                    Serilog.Log.Warning($"Failed to discard the readback edit {readEdit.Id}: {cleanup.Message}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Post-commit readback: a fresh read-only edit asks the store for the
     /// persisted track. Only a provably different value fails the deploy —
     /// the update response already proved acceptance, so an absent field or
@@ -262,36 +442,14 @@ partial class Build
     /// </summary>
     static void VerifyPlayReleaseNotes(AndroidPublisherService service, string track, long versionCode, string language, string expected)
     {
-        AppEdit? verifyEdit = null;
-        string? actual;
-        try
+        var persisted = ReadLiveTrack(service, track);
+        if (persisted is null)
         {
-            verifyEdit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
-            var persisted = service.Edits.Tracks.Get(GooglePlayPackageName, verifyEdit.Id, track).Execute();
-            var release = persisted.Releases?.FirstOrDefault(r => r.VersionCodes?.Contains(versionCode) == true);
-            actual = release?.ReleaseNotes?.FirstOrDefault(n => n.Language == language)?.Text;
-        }
-        catch (Exception probe) when (probe is GoogleApiException or HttpRequestException
-            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
-        {
-            Serilog.Log.Warning($"Hebrew release-notes readback is inconclusive — the post-commit track read failed: {probe.Message}");
+            Serilog.Log.Warning("Hebrew release-notes readback is inconclusive — the post-commit track read failed");
             return;
         }
-        finally
-        {
-            if (verifyEdit is not null)
-            {
-                try
-                {
-                    service.Edits.Delete(GooglePlayPackageName, verifyEdit.Id).Execute();
-                }
-                catch (Exception cleanup) when (cleanup is GoogleApiException or HttpRequestException
-                    or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
-                {
-                    Serilog.Log.Warning($"Failed to discard the readback edit {verifyEdit.Id}: {cleanup.Message}");
-                }
-            }
-        }
+        var release = persisted.Releases?.FirstOrDefault(r => r.VersionCodes?.Contains(versionCode) == true);
+        var actual = release?.ReleaseNotes?.FirstOrDefault(n => n.Language == language)?.Text;
         if (actual is null)
         {
             Serilog.Log.Warning($"Hebrew release-notes readback is inconclusive — track {track} returned no {language} releaseNotes field");
@@ -321,8 +479,28 @@ partial class Build
     // A resumable session stays open server-side, so a request that stalls past
     // the client deadline (run 40699641279 was canceled mid-upload) resumes
     // from the confirmed byte offset instead of re-sending the whole bundle.
-    static IUploadProgress UploadWithResume(ResumableUpload uploadRequest, int maxAttempts = 3)
+    // Diagnostics never log the signed session URL — only confirmed byte
+    // offsets and whether the session was re-initiated. A second initiation
+    // means an earlier initiate response was lost and that session may still
+    // be open inside the edit, which is exactly what the commit later reports
+    // as an unfinished bundle upload (#3609).
+    internal static IUploadProgress UploadWithResume(ResumableUpload uploadRequest, int maxAttempts = 3)
     {
+        var sessions = 0;
+        uploadRequest.UploadSessionData += _ =>
+        {
+            sessions++;
+            if (sessions == 1)
+            {
+                Serilog.Log.Debug("AAB resumable upload session initiated");
+            }
+            else
+            {
+                Serilog.Log.Warning($"AAB upload session #{sessions} initiated — a previous session may still be open inside this edit");
+            }
+        };
+        uploadRequest.ProgressChanged += progress =>
+            Serilog.Log.Debug($"AAB upload progress: {progress.Status} ({progress.BytesSent} bytes confirmed by the store)");
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             IUploadProgress? progress = null;
@@ -337,6 +515,15 @@ partial class Build
                 Serilog.Log.Debug($"AAB upload request canceled: {canceled.Message}");
             }
             if (progress?.Status == UploadStatus.Completed)
+            {
+                return progress;
+            }
+            // A definitive store rejection refuses the session itself — it can
+            // never be resumed, so leave it for the edit cleanup instead of
+            // retrying a dead session.
+            if (progress?.Exception is GoogleApiException rejected
+                && (int)rejected.HttpStatusCode < 500
+                && rejected.HttpStatusCode != HttpStatusCode.TooManyRequests)
             {
                 return progress;
             }
@@ -361,30 +548,43 @@ partial class Build
         });
     }
 
-    // Pushes app/store-listing onto the app's own Hebrew listing inside an open
-    // edit. Play resolves Hebrew under the legacy "iw" tag, so the tag is read
-    // back from the edit rather than hardcoded.
+    // Pushes each locale directory under app/store-listing onto its Google Play
+    // listing inside an open edit. The directory name is the Play language tag,
+    // except "he": Play resolves Hebrew under the legacy "iw" tag, so the tag is
+    // read back from the edit rather than hardcoded. Screenshots stay on the
+    // default (Hebrew) listing — the other locales inherit its graphic assets.
     void SyncStoreListing(AndroidPublisherService service, string editId)
     {
         var listingDir = RootDirectory / "store-listing";
-        var description = ReadListingFile(listingDir / "he" / "description.txt", 4000);
-        var shortDescription = ReadListingFile(listingDir / "he" / "short-description.txt", 80);
         var screenshotsDir = listingDir / "screenshots" / "android";
         var screenshots = screenshotsDir.DirectoryExists()
             ? screenshotsDir.GlobFiles("*.png").OrderBy(p => p.Name).ToList()
             : [];
-        if (description is null && shortDescription is null && screenshots.Count == 0)
+        var localeDirs = listingDir.DirectoryExists()
+            ? listingDir.GlobDirectories("*").Where(d => d.Name != "screenshots").OrderBy(d => d.Name).ToList()
+            : [];
+        if (localeDirs.Count == 0 && screenshots.Count == 0)
         {
             Serilog.Log.Information("No store-listing content found under app/store-listing - skipping listing sync");
             return;
         }
 
         var listings = service.Edits.Listings.List(GooglePlayPackageName, editId).Execute().Listings ?? [];
-        var language = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
+        var hebrewLanguage = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
 
-        if (description is not null || shortDescription is not null)
+        foreach (var localeDir in localeDirs)
         {
+            var language = localeDir.Name == "he" ? hebrewLanguage : localeDir.Name;
+            var title = ReadListingFile(localeDir / "title.txt", 30);
+            var shortDescription = ReadListingFile(localeDir / "short-description.txt", 80);
+            var description = ReadListingFile(localeDir / "description.txt", 4000);
+            if (title is null && shortDescription is null && description is null)
+            {
+                continue;
+            }
+
             var listing = listings.FirstOrDefault(l => l.Language == language) ?? new Listing { Language = language };
+            listing.Title = title ?? listing.Title;
             listing.ShortDescription = shortDescription ?? listing.ShortDescription;
             listing.FullDescription = description ?? listing.FullDescription;
             service.Edits.Listings.Update(listing, GooglePlayPackageName, editId, language).Execute();
@@ -393,12 +593,12 @@ partial class Build
 
         if (screenshots.Count > 0)
         {
-            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, language,
+            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, hebrewLanguage,
                 EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum.PhoneScreenshots).Execute();
             foreach (var screenshot in screenshots)
             {
                 using var stream = File.OpenRead(screenshot);
-                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, language,
+                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, hebrewLanguage,
                     EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum.PhoneScreenshots, stream, "image/png").Upload();
                 if (uploadProgress.Status != UploadStatus.Completed)
                 {
@@ -406,7 +606,7 @@ partial class Build
                 }
             }
 
-            Serilog.Log.Information($"Replaced {language} phone screenshots ({screenshots.Count} files)");
+            Serilog.Log.Information($"Replaced {hebrewLanguage} phone screenshots ({screenshots.Count} files)");
         }
     }
 
@@ -503,23 +703,25 @@ partial class Build
 
             if (releaseNotes is not null)
             {
-                var applied = TrySetSubmissionReleaseNotes(flightId, releaseNotes, out var attempted);
                 // The binary must not stay stranded in a draft: commit the
                 // submission even when only the notes update failed.
                 var commitArguments = flightId is not null
                     ? $"flights submission publish \"{MsStoreAppId}\" \"{flightId}\""
                     : $"submission publish \"{MsStoreAppId}\"";
-                ProcessTasks.StartProcess("msstore", commitArguments)
-                    .AssertZeroExitCode();
-                // An attempted write the store did not persist must be a
-                // visible phase failure — a silent warning would record the
-                // deployment successful, advance the notes baseline and let
-                // the guard block a retry, so this audience would never see
-                // the announcements. A submission carrying no Hebrew
-                // releaseNotes field at all is a store limitation the notes
-                // manifest already records, not a delivery failure.
-                Assert.True(applied || !attempted,
-                    "Hebrew releaseNotes write was attempted but not persisted; the binary submission was still committed");
+                var scope = flightId is not null ? "flights submission" : "submission";
+                var target = flightId is not null
+                    ? $"\"{MsStoreAppId}\" \"{flightId}\""
+                    : $"\"{MsStoreAppId}\"";
+                var applied = MsStoreSubmission.PublishWithReleaseNotes(
+                    () => GetMsStoreSubmission(flightId),
+                    metadata =>
+                    {
+                        var escaped = metadata.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                        ProcessTasks.StartProcess("msstore", $"{scope} update {target} \"{escaped}\"")
+                            .AssertZeroExitCode();
+                    },
+                    () => ProcessTasks.StartProcess("msstore", commitArguments).AssertZeroExitCode(),
+                    releaseNotes, Serilog.Log.Logger);
                 if (applied)
                 {
                     Serilog.Log.Information("Microsoft Store Hebrew release notes published");
@@ -534,135 +736,14 @@ partial class Build
     /// stdout-captured like CreateMsStoreFlight — the CLI prints the machine
     /// JSON on stdout and diagnostics on stderr.
     /// </summary>
-    static JsonNode GetMsStoreSubmission(string? flightId)
+    static JsonObject GetMsStoreSubmission(string? flightId)
     {
         var arguments = flightId is not null
             ? $"flights submission get \"{MsStoreAppId}\" \"{flightId}\""
             : $"submission get \"{MsStoreAppId}\"";
-        var process = ProcessTasks.StartProcess(
-            "msstore", arguments, logOutput: false, logInvocation: true);
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"msstore could not read the pending submission (exit {process.ExitCode})");
-        }
-        return JsonNode.Parse(string.Join("\n", process.Output.Select(o => o.Text)))!;
-    }
-
-    /// <summary>
-    /// Case-insensitive property lookup — msstore/Partner Center serialize
-    /// the same submission contract with different casing across releases.
-    /// </summary>
-    static JsonNode? Child(JsonNode? node, params string[] names)
-    {
-        var current = node;
-        foreach (var name in names)
-        {
-            if (current is not JsonObject obj)
-            {
-                return null;
-            }
-            var property = obj.FirstOrDefault(p =>
-                string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-            if (property.Key is null)
-            {
-                return null;
-            }
-            current = property.Value;
-        }
-        return current;
-    }
-
-    static void SetChild(JsonObject obj, string name, string value)
-    {
-        var property = obj.FirstOrDefault(p =>
-            string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-        if (property.Key is null)
-        {
-            obj[name] = value;
-        }
-        else
-        {
-            obj[property.Key] = value;
-        }
-    }
-
-    /// <summary>
-    /// Writes the Hebrew releaseNotes into the draft submission the publish
-    /// just created — strictly inside that submission object, so a flight
-    /// without its own Hebrew listing can never edit the live production
-    /// listing by accident. A submission that structurally carries no
-    /// Hebrew releaseNotes field is skipped, not failed (no authorized
-    /// write path exists there); only an attempted write the store did not
-    /// persist is reported as failed, so the caller can fail the phase.
-    /// </summary>
-    bool TrySetSubmissionReleaseNotes(string? flightId, string notes, out bool attempted)
-    {
-        attempted = false;
-        var scope = flightId is not null ? "flights submission" : "submission";
-        var target = flightId is not null
-            ? $"\"{MsStoreAppId}\" \"{flightId}\""
-            : $"\"{MsStoreAppId}\"";
-        try
-        {
-            var submission = GetMsStoreSubmission(flightId);
-            if (Child(submission, "listings") is not JsonObject listings)
-            {
-                Serilog.Log.Warning("Pending submission exposes no listings — skipping releaseNotes (the production listing is never touched)");
-                return false;
-            }
-            var hebrewKey = listings
-                .Select(p => p.Key)
-                .Where(k => k.StartsWith("he", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-            if (hebrewKey is null)
-            {
-                Serilog.Log.Warning($"Pending submission has no Hebrew listing (locales: {string.Join(", ", listings.Select(p => p.Key))}) — skipping releaseNotes");
-                return false;
-            }
-            if (Child(submission, "listings", hebrewKey, "baseListing") is not JsonObject baseListing)
-            {
-                Serilog.Log.Warning($"Hebrew listing {hebrewKey} has no baseListing — skipping releaseNotes");
-                return false;
-            }
-            SetChild(baseListing, "releaseNotes", notes);
-            // System.Text.Json escapes Hebrew as \uXXXX, keeping the update
-            // payload pure ASCII inside the command-line argument.
-            var metadata = submission.ToJsonString();
-            // The write is attempted from here on — failures past this point
-            // (oversized payload, rejected update, readback mismatch) fail
-            // the notes phase rather than skip it.
-            attempted = true;
-            const int argLimit = 30000;
-            if (metadata.Length > argLimit)
-            {
-                Serilog.Log.Warning($"Submission metadata is {metadata.Length} chars, over the safe CLI argument size — releaseNotes update cannot be formed");
-                return false;
-            }
-            var escaped = metadata.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            ProcessTasks.StartProcess(
-                    "msstore", $"{scope} update {target} \"{escaped}\"")
-                .AssertZeroExitCode();
-
-            // Readback: the field is only set when the store echoes the
-            // exact text — never trust the write call alone.
-            var persisted = Child(GetMsStoreSubmission(flightId),
-                "listings", hebrewKey, "baseListing", "releaseNotes");
-            var accepted = persisted?.GetValue<string>() == notes;
-            if (!accepted)
-            {
-                Serilog.Log.Warning("Partner Center did not persist the exact Hebrew releaseNotes");
-            }
-            return accepted;
-        }
-        catch (Exception error) when (error is JsonException or InvalidOperationException
-            or ArgumentException or IOException or NotSupportedException or ProcessException)
-        {
-            Serilog.Log.Warning($"Hebrew releaseNotes update failed: {error.Message}");
-            return false;
-        }
+        // Force human progress to stderr even if MSSTORE_OUTPUT_STREAM was
+        // inherited as stdout. The machine JSON remains on stdout.
+        return MsStoreSubmission.Read("msstore", arguments + " --output-stream stderr");
     }
 
     string CreateMsStoreFlight()

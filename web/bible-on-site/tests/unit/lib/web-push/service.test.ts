@@ -2,8 +2,14 @@
 jest.mock("server-only", () => ({}));
 
 const mockQuery = jest.fn();
+const mockLockedTransaction = jest.fn();
+const mockTxQuery = jest.fn();
+const mockTxExecute = jest.fn();
 jest.mock("@/lib/api-client", () => ({
 	query: (...args: unknown[]) => mockQuery(...args),
+	lockedTransaction: (...args: unknown[]) => mockLockedTransaction(...args),
+	txQuery: (...args: unknown[]) => mockTxQuery(...args),
+	txExecute: (...args: unknown[]) => mockTxExecute(...args),
 }));
 
 const mockSend = jest.fn();
@@ -20,6 +26,7 @@ jest.mock("web-push", () => ({
 }));
 
 import {
+	SubscriptionStoreFullError,
 	dailyPerekPayload,
 	deleteSubscription,
 	getVapidPublicKey,
@@ -117,9 +124,27 @@ describe("web-push service", () => {
 	});
 
 	describe("persistence", () => {
+		beforeEach(() => {
+			mockQuery.mockResolvedValue([]);
+			mockTxQuery.mockResolvedValue([]);
+			mockLockedTransaction.mockImplementation((_lock, fn) => fn({}));
+		});
+
 		it("upserts by endpoint hash", async () => {
 			await saveSubscription(validBody);
-			const [sql, params] = mockQuery.mock.calls[0];
+			// New endpoint: existence probe, then the locked re-check, the
+			// capacity count and the insert inside one transaction.
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"SELECT endpoint_hash FROM tanah_web_push_subscription WHERE endpoint_hash = ?",
+			);
+			expect(mockLockedTransaction).toHaveBeenCalledWith(
+				"tanah_web_push_subscription:save",
+				expect.any(Function),
+			);
+			expect(mockTxQuery.mock.calls[1][1]).toContain(
+				"SELECT COUNT(*) AS total FROM tanah_web_push_subscription",
+			);
+			const [, sql, params] = mockTxExecute.mock.calls[0];
 			expect(sql).toContain("ON DUPLICATE KEY UPDATE");
 			expect(params[0]).toMatch(/^[0-9a-f]{64}$/);
 			expect(params.slice(1)).toEqual([
@@ -134,10 +159,51 @@ describe("web-push service", () => {
 		it("deletes by the same endpoint hash", async () => {
 			await saveSubscription(validBody);
 			await deleteSubscription(FCM);
+			// save issues one plain SELECT (existence probe); the delete is
+			// the next pool-level query after it.
 			expect(mockQuery.mock.calls[1][0]).toContain("DELETE");
 			expect(mockQuery.mock.calls[1][1]).toEqual([
 				mockQuery.mock.calls[0][1][0],
 			]);
+		});
+
+		it("refuses a new subscription when the store is at its bound (#3500)", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([]) // endpoint not yet stored
+				.mockResolvedValueOnce([{ total: 25_000 }]);
+
+			await expect(saveSubscription(validBody)).rejects.toBeInstanceOf(
+				SubscriptionStoreFullError,
+			);
+			expect(mockTxExecute).not.toHaveBeenCalled();
+		});
+
+		it("still upserts an existing endpoint at the store bound", async () => {
+			mockQuery
+				.mockReset()
+				.mockResolvedValueOnce([{ endpoint_hash: "x".repeat(64) }])
+				.mockResolvedValue([]);
+
+			await saveSubscription(validBody);
+
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+			expect(mockQuery.mock.calls[1][0]).toContain(
+				"INSERT INTO tanah_web_push_subscription",
+			);
+			expect(mockLockedTransaction).not.toHaveBeenCalled();
+		});
+
+		it("upserts an endpoint claimed while waiting for the store lock", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([{ endpoint_hash: "x".repeat(64) }]);
+
+			await saveSubscription(validBody);
+
+			// Claimed inside the lock: no capacity count, straight to insert.
+			expect(mockTxQuery).toHaveBeenCalledTimes(1);
+			expect(mockTxExecute).toHaveBeenCalledTimes(1);
 		});
 	});
 

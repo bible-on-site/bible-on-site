@@ -14,7 +14,7 @@ import type { TargetCatalogue } from "./catalogue";
  * Bump when the LLM prompt or output contract changes — recorded on LLM
  * proposals so generations stay traceable and reruns re-checkpoint.
  */
-export const LINK_PROMPT_VERSION = "linking-v2";
+export const LINK_PROMPT_VERSION = "linking-v3";
 
 export const HEURISTIC_GENERATOR_ID = "heuristic-citations:v1";
 /** Keep historical heuristic checkpoints/dedupe stable across LLM prompt edits. */
@@ -40,8 +40,9 @@ export function buildArticleLinkSystemPrompt(): string {
 		"  article text supporting it. No evidence → put it in abstentions.",
 		"- Use ONLY the relationship keys and target forms listed. Never invent",
 		"  relationship types, entity ids, authors, dedications, moadim or dates.",
-		"- A mentioned pasuk is evidence for a covering-source candidate — it is",
-		"  NOT proof the article's whole verified coverage should change. Use",
+		"- Verse-article additions require explicit literal source citations.",
+		"  Semantic meaning-only verse links are deferred. Never add an uncited verse.",
+		"- A cited pasuk is NOT proof the article's whole verified coverage should change. Use",
 		'  action "add" for individual pasuk mentions; "replace" only when the',
 		"  article demonstrably claims to cover that whole set.",
 		"- Author attribution is fixed explicitly on upload/import. The current",

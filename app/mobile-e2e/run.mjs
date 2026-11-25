@@ -36,8 +36,8 @@ rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true }
 rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
-    ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
-    : "../BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app");
+    ? "../BibleOnSite/bin/Debug/net11.0-android/android-x64/com.tanah.daily929-Signed.apk"
+    : "../BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app");
 if (!existsSync(appPath)) throw new Error(`Build the app with bun run build:app first: ${appPath}`);
 if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
@@ -85,9 +85,13 @@ const interactions = platform === "ios" ? iosInteractionDiagnostics({
   nativeLog: resolve(artifacts, "device-live.log"), execute, inspectorPath,
 }) : undefined;
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
-  interactions.capture(command, request)) : undefined;
+  interactions.capture(command, request),
+  { pin: request => interactions.pin(request) }) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
+  // Appium 4 defaults to info; the diagnostics below rely on the driver-level
+  // debug surface v3 emitted implicitly, so keep it explicit (#3419 review).
+  "--log-level", "debug",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
 });

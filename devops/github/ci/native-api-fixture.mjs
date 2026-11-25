@@ -70,7 +70,7 @@ export async function createApiFixture(docker, { arch, now, sleep }) {
 			"MYSQL_ROOT_HOST=%",
 			"--env",
 			"MYSQL_DATABASE=native_image_smoke",
-			"mysql:8.4",
+			"mysql:9.7.4",
 		]);
 		const deadline = now() + 30_000;
 		let lastError;

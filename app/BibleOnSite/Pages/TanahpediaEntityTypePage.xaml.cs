@@ -13,7 +13,7 @@ namespace BibleOnSite.Pages;
 [QueryProperty(nameof(EntityType), "entityType")]
 [QueryProperty(nameof(Sub), "sub")]
 #pragma warning disable S2333 // MAUI XAML supplies the other partial declaration and controls.
-public partial class TanahpediaEntityTypePage : ContentPage
+public partial class TanahpediaEntityTypePage : ContentPage, IWindowsDesktopSurface, IWindowsSearchSurface
 #pragma warning restore S2333
 {
     private readonly TanahpediaEntityTypeViewModel _viewModel;
@@ -83,11 +83,27 @@ public partial class TanahpediaEntityTypePage : ContentPage
         }
     }
 
-    private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
+    private async void OnSearchTitleClicked(object? sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
     }
 
+    /// <summary>Esc and the desktop Back inputs peel the search overlay (or its
+    /// filter sheet) before navigation (#2766).</summary>
+    bool IWindowsDesktopSurface.DismissTopmostSurface() => TanahpediaSearch.HandleBack();
+
+    void IWindowsDesktopSurface.FocusInitialElement()
+    {
+        // Same guard as the readers: an open search overlay owns focus —
+        // refocused initial focus must not yank it back to the hamburger.
+        if (!TanahpediaSearch.IsSearchOpen)
+        {
+            Controls.SharedTopBar.FocusNavigationButton(this);
+        }
+    }
+
+    /// <summary>Ctrl+F opens the scoped Tanahpedia search (#2766).</summary>
+    void IWindowsSearchSurface.OpenDesktopSearch() => _ = TanahpediaSearch.OpenAsync();
 
     protected override bool OnBackButtonPressed()
     {

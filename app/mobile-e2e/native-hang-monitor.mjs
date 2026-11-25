@@ -1,8 +1,11 @@
 // Observe each distinct request that remains pending for the existing 25 seconds.
 // A completed slow request must not consume evidence for a later failing test.
+// Every issued request still gets its passive app identity pinned at issue
+// time: a request that faults inside milliseconds never reaches the capture
+// threshold, yet it is the command the failed scenario last sent.
 export function monitorNativeInteractions(capture, {
   schedule = (callback) => setTimeout(callback, 25000), cancel = clearTimeout,
-  now = () => new Date().toISOString(),
+  now = () => new Date().toISOString(), pin = () => {},
 } = {}) {
   let partial = '';
   const pending = new Map();
@@ -31,6 +34,8 @@ export function monitorNativeInteractions(capture, {
       sequence: ++sequence, command: key, request: detail,
       sessionId: route.split('/')[2], startedAt: now(), pending: true,
     };
+    try { pin(info); }
+    catch (error) { failure ??= error; }
     const request = { info, timer: undefined };
     const requests = pending.get(key) ?? [];
     requests.push(request);
@@ -39,6 +44,8 @@ export function monitorNativeInteractions(capture, {
       if (stopped || !info.pending || info.capturedAt) return;
       cancel(request.timer);
       info.capturedAt = now();
+      // Completion can update the live request before the queued capture runs.
+      Object.defineProperty(info, 'capturedWhilePending', { value: true, enumerable: true });
       const completion = Promise.resolve().then(() => capture(key, info))
         .catch(error => { failure ??= error; })
         .finally(() => captures.delete(completion));

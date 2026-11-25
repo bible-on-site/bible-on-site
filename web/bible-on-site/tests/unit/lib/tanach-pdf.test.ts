@@ -12,21 +12,18 @@ jest.mock("pdf-lib", () => {
 	const mockPage = { drawText, drawLine };
 	const pages: (typeof mockPage)[] = [];
 	const mockFont = {
-		name: "FrankRuhlLibre-Regular",
+		name: "AlHeperekUI-Regular",
 		widthOfTextAtSize: jest.fn().mockReturnValue(50),
 	};
 	const mockBoldFont = {
-		name: "FrankRuhlLibre-Bold",
+		name: "AlHeperekUI-Bold",
 		widthOfTextAtSize: jest.fn().mockReturnValue(55),
 	};
 	const mockDoc = {
 		registerFontkit: jest.fn(),
 		embedFont: jest.fn().mockImplementation((_bytes, _opts) => {
-			// First call = regular, second call = bold
-			if (mockDoc.embedFont.mock.calls.length <= 1) {
-				return Promise.resolve(mockFont);
-			}
-			return Promise.resolve(mockBoldFont);
+			const faces = [mockFont, mockBoldFont];
+			return Promise.resolve(faces[mockDoc.embedFont.mock.calls.length - 1]);
 		}),
 		addPage: jest.fn(() => {
 			const p = { drawText: jest.fn(), drawLine: jest.fn() };
@@ -65,14 +62,13 @@ jest.mock("../../../src/lib/articles/service", () => ({
 	getArticlesByPerekId: jest.fn(),
 }));
 
+import type { QriSegment } from "../../../src/data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../src/data/perek-dto";
 import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../src/data/sefer-dto";
-import { getPerushimByPerekId } from "../../../src/lib/perushim";
 import { getArticlesByPerekId } from "../../../src/lib/articles/service";
-import type { QriSegment } from "../../../src/data/db/tanah-view-types";
 import { ExportError } from "../../../src/lib/download/export-error";
 import {
 	buildTanachPdfForPerekRange,
@@ -80,9 +76,9 @@ import {
 	segmentsToText,
 	semanticPagesToPerekIds,
 	stripHtml,
-	stripTaamim,
 	wrapText,
 } from "../../../src/lib/download/tanach-pdf";
+import { getPerushimByPerekId } from "../../../src/lib/perushim";
 
 const mockGetPerekByPerekId = getPerekByPerekId as jest.MockedFunction<
 	typeof getPerekByPerekId
@@ -103,10 +99,7 @@ const mockGetArticlesByPerekId = getArticlesByPerekId as jest.MockedFunction<
 // biome-ignore lint/suspicious/noExplicitAny: test helper to access mock internals
 const pdfLib = jest.requireMock("pdf-lib") as any;
 
-function timeframe(
-	from: string,
-	to: string,
-): QriSegment["recordingTimeFrame"] {
+function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
 	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
 }
 
@@ -139,12 +132,7 @@ function makePerek(
 
 describe("segmentsToText", () => {
 	it("separates word-segments with spaces", () => {
-		const segments = [
-			qri("וַיְדַבֵּר"),
-			qri("יְהוָה"),
-			qri("אֶל־"),
-			qri("מֹשֶׁה"),
-		];
+		const segments = [qri("וַיְדַבֵּר"), qri("יְהוָה"), qri("אֶל־"), qri("מֹשֶׁה")];
 		expect(segmentsToText(segments)).toBe("וַיְדַבֵּר יְהוָה אֶל־מֹשֶׁה");
 	});
 
@@ -176,27 +164,6 @@ describe("segmentsToText", () => {
 		expect(segmentsToText(segments)).toBe("");
 	});
 });
-
-describe("stripTaamim", () => {
-	it("removes cantillation marks (U+0591–U+05AF)", () => {
-		// pashta (U+0599) and revii (U+05A7) are taamim
-		expect(stripTaamim("וַיְדַבֵּ֨ר")).toBe("וַיְדַבֵּר");
-		expect(stripTaamim("יְהוָ֧ה")).toBe("יְהוָה");
-	});
-
-	it("keeps nikud (vowels, U+05B0–U+05BD)", () => {
-		expect(stripTaamim("בְּרֵאשִׁית")).toBe("בְּרֵאשִׁית");
-	});
-
-	it("keeps maqaf (U+05BE) and sof pasuq (U+05C3)", () => {
-		expect(stripTaamim("אֶל־מֹשֶׁה׃")).toBe("אֶל־מֹשֶׁה׃");
-	});
-
-	it("handles empty string", () => {
-		expect(stripTaamim("")).toBe("");
-	});
-});
-
 
 describe("stripHtml", () => {
 	it("strips HTML tags", () => {
@@ -384,10 +351,10 @@ describe("buildTanachPdfForPerekRange", () => {
 		pdfLib.__mockPages.length = 0;
 		// Reset embedFont call counter
 		pdfLib.__mockDoc.embedFont.mockImplementation(() => {
-			if (pdfLib.__mockDoc.embedFont.mock.calls.length <= 1) {
-				return Promise.resolve(pdfLib.__mockFont);
-			}
-			return Promise.resolve(pdfLib.__mockBoldFont);
+			const faces = [pdfLib.__mockFont, pdfLib.__mockBoldFont];
+			return Promise.resolve(
+				faces[pdfLib.__mockDoc.embedFont.mock.calls.length - 1],
+			);
 		});
 		mockGetPerushimByPerekId.mockResolvedValue([]);
 		mockGetArticlesByPerekId.mockResolvedValue([]);
@@ -406,7 +373,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(pdfLib.__mockDoc.save).toHaveBeenCalled();
 	});
 
-	it("registers fontkit and embeds two fonts (regular + bold)", async () => {
+	it("registers fontkit and embeds the Al Heperek regular and bold faces", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
 				typeof getPerekByPerekId
@@ -416,11 +383,85 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		expect(pdfLib.__mockDoc.registerFontkit).toHaveBeenCalled();
+		// Regular + bold only — marked scripture stays on the same faces now
+		// that Al Heperek covers the whole mark block (#3685).
 		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledTimes(2);
 		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledWith(
 			expect.any(Uint8Array),
-			{ subset: true },
+			{ subset: true, features: { locl: false } },
 		);
+	});
+
+	it("draws canonical marked text on the Al Heperek body face", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["הָאָֽרֶ֖ץ׃"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		await buildTanachPdfForPerekRange([1]);
+		const scripture = pdfLib.__mockPages[0].drawText.mock.calls
+			.filter(
+				(call: [string, { font: unknown }]) =>
+					call[1].font === pdfLib.__mockFont,
+			)
+			.map((call: [string]) => call[0])
+			.join("");
+		// Taamim stay in the canonical text — Al Heperek shapes them on the
+		// regular face (#3685), so no scripture-face rerouting remains.
+		expect(scripture).toContain("הָאָֽרֶ֖ץ׃");
+	});
+
+	it("keeps marked clusters on the preferred face in headings and abstracts", async () => {
+		// A pointed title stays bold and a pointed abstract stays regular —
+		// marked runs no longer drop to a separate scripture face (#3685).
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "אֹתָֽם׃", []) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{ name: "וַיֹּאמֶ֞ר", authorName: "מחבר", abstract: "<p>הָאָֽרֶץ׃ — …</p>" },
+		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
+		await buildTanachPdfForPerekRange([1]);
+		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
+		const titleMark = calls.find((call: [string]) =>
+			call[0].includes("ֽ"),
+		);
+		expect(titleMark[0]).toContain("אֹתָֽם׃");
+		expect(titleMark[1].font).toBe(pdfLib.__mockBoldFont);
+		const abstractMarks = calls.filter((call: [string]) =>
+			call[0].includes("הָאָֽרֶץ׃"),
+		);
+		expect(abstractMarks.length).toBeGreaterThanOrEqual(1);
+		for (const call of abstractMarks)
+			expect(call[1].font).toBe(pdfLib.__mockFont);
+		expect(calls.find((call: [string]) => call[0].includes("•"))[1].font).toBe(
+			pdfLib.__mockBoldFont,
+		);
+		for (const punctuation of ["—", "…"]) {
+			expect(
+				calls.find((call: [string]) => call[0].includes(punctuation))[1].font,
+			).toBe(pdfLib.__mockFont);
+		}
+	});
+
+	it("keeps a stray mark in an LTR run on the preferred face", async () => {
+		// A nonspacing mark after a Latin base stays inside the LTR embedding
+		// level, so the run must keep its logical chunk order (no reversal).
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{ name: "מאמר", authorName: "מחבר", abstract: "<p>x֑</p>" },
+		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
+		await buildTanachPdfForPerekRange([1]);
+		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
+		const mark = calls.find((call: [string]) => call[0].includes("֑"));
+		expect(mark[1].font).toBe(pdfLib.__mockFont);
+		const latin = calls.find((call: [string]) => call[0].includes("x"));
+		expect(latin[1].font).toBe(pdfLib.__mockFont);
 	});
 
 	it("creates a new page for each perek", async () => {
@@ -509,25 +550,19 @@ describe("buildTanachPdfForPerekRange", () => {
 			>,
 		);
 		mockGetPerushimByPerekId.mockResolvedValue([
-			{ id: 1, name: "רש\"י", parshanName: "רבי שלמה יצחקי", noteCount: 5 },
+			{ id: 1, name: 'רש"י', parshanName: "רבי שלמה יצחקי", noteCount: 5 },
 			{ id: 2, name: "אבן עזרא", parshanName: "אברהם אבן עזרא", noteCount: 3 },
 		]);
 
 		await buildTanachPdfForPerekRange([1]);
 
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 
 		// Text is drawn per bidi run in logical order
 		expect(allText).toContain("פירושים זמינים");
-		expect(
-			allText.some((t: string) => t.includes('רש"י')),
-		).toBe(true);
-		expect(
-			allText.some((t: string) => t.includes("אבן עזרא")),
-		).toBe(true);
+		expect(allText.some((t: string) => t.includes('רש"י'))).toBe(true);
+		expect(allText.some((t: string) => t.includes("אבן עזרא"))).toBe(true);
 	});
 
 	it("includes articles section when available", async () => {
@@ -553,20 +588,16 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 
 		// Text is drawn per bidi run in logical order
 		expect(allText).toContain("מאמרים");
 		expect(allText).toContain("• מאמר על בריאת העולם");
 		expect(allText).toContain("מאת: הרב כהן");
 		// HTML should be stripped from abstract before drawing
-		expect(
-			allText.some((t: string) =>
-				t.includes("This is an abstract"),
-			),
-		).toBe(true);
+		expect(allText.some((t: string) => t.includes("This is an abstract"))).toBe(
+			true,
+		);
 	});
 
 	it("skips pesukim with empty segments (stuma/ptuha only)", async () => {
@@ -578,7 +609,12 @@ describe("buildTanachPdfForPerekRange", () => {
 			helek: "תורה",
 			source: "בראשית א",
 			pesukim: [
-				{ segments: [{ type: "stuma" as const, value: "" }, { type: "ptuha" as const, value: "" }] },
+				{
+					segments: [
+						{ type: "stuma" as const, value: "" },
+						{ type: "ptuha" as const, value: "" },
+					],
+				},
 				{ segments: [{ type: "qri" as const, value: "בראשית" }] },
 			],
 		};
@@ -589,9 +625,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 		expect(allText).toContain("בראשית");
 	});
 
@@ -618,9 +652,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 		expect(allText).toContain("• מאמר ללא תקציר");
 		expect(allText).toContain("מאת: הרב כהן");
 	});
@@ -648,9 +680,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		await buildTanachPdfForPerekRange([1]);
 
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 		// The label splits into bidi runs drawn in visual order: the RTL
 		// tail " ריק", the Latin run "HTML", then the RTL lead run.
 		expect(allText).toEqual(
@@ -683,7 +713,9 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		// 50 pesukim should overflow a single page (842pt - margins),
 		// causing ensureSpace to call addPage at least twice (initial + overflow)
-		expect(pdfLib.__mockDoc.addPage.mock.calls.length).toBeGreaterThanOrEqual(2);
+		expect(pdfLib.__mockDoc.addPage.mock.calls.length).toBeGreaterThanOrEqual(
+			2,
+		);
 	});
 
 	it("adds page numbers to all pages", async () => {
@@ -697,9 +729,7 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		// The page number "1" should be drawn on the first page
 		const page = pdfLib.__mockPages[0];
-		const allText = page.drawText.mock.calls.map(
-			(c: [string]) => c[0],
-		);
+		const allText = page.drawText.mock.calls.map((c: [string]) => c[0]);
 		expect(allText).toContain("1");
 	});
 });
@@ -709,10 +739,14 @@ describe("createTanachPageRangesHandler", () => {
 		jest.clearAllMocks();
 		pdfLib.__mockPages.length = 0;
 		pdfLib.__mockDoc.embedFont.mockImplementation(() => {
-			if (pdfLib.__mockDoc.embedFont.mock.calls.length <= 1) {
-				return Promise.resolve(pdfLib.__mockFont);
-			}
-			return Promise.resolve(pdfLib.__mockBoldFont);
+			const faces = [
+				pdfLib.__mockFont,
+				pdfLib.__mockBoldFont,
+				pdfLib.__mockScriptureFont,
+			];
+			return Promise.resolve(
+				faces[pdfLib.__mockDoc.embedFont.mock.calls.length - 1],
+			);
 		});
 		mockGetPerushimByPerekId.mockResolvedValue([]);
 		mockGetArticlesByPerekId.mockResolvedValue([]);
@@ -738,11 +772,9 @@ describe("createTanachPageRangesHandler", () => {
 			{ pageIndex: 7, semanticName: "ג'", title: "תולדות" },
 		];
 
-		const result = await handler(
-			[3, 4, 5, 6, 7],
-			semanticPages,
-			{ seferName: "במדבר" },
-		);
+		const result = await handler([3, 4, 5, 6, 7], semanticPages, {
+			seferName: "במדבר",
+		});
 
 		expect(result[0]).toBe("pdf");
 		expect(result[1]).toBeInstanceOf(Uint8Array);

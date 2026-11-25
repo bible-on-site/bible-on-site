@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { getPlaces } from "~/server/tanahpedia/places";
 
 export const Route = createFileRoute("/tanahpedia/places")({
@@ -20,7 +21,7 @@ function PlacesListPage() {
 						to="/tanahpedia"
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לתנכפדיה</span>
 					</Link>
 					<h1 className="text-3xl font-bold text-gray-900 mt-2">מקומות</h1>

@@ -145,10 +145,23 @@ class InfrastructureTests(unittest.TestCase):
             for i, s in enumerate(steps)
             if s.get("run", "").endswith("rds-build-access.mjs grant")
         )
+        self.assertLess(check, setup)
         self.assertLess(firewall, setup)
         self.assertLess(setup, verify)
-        self.assertLess(verify, check)
-        self.assertLess(check, grant)
+        self.assertLess(verify, grant)
+        self.assertEqual(
+            steps[setup]["with"]["mysql-version"],
+            "${{ steps.backup_target.outputs.mysql_version }}",
+        )
+        credentials = next(s for s in steps if s.get("id") == "backup_credentials")
+        self.assertTrue(credentials["with"]["output-credentials"])
+        self.assertFalse(credentials["with"]["output-env-credentials"])
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", steps[setup].get("env", {}))
+        for step in [steps[check], *steps[grant:]]:
+            self.assertEqual(
+                step["env"]["AWS_SECRET_ACCESS_KEY"],
+                "${{ steps.backup_credentials.outputs.aws-secret-access-key }}",
+            )
         self.assertIn("3306", steps[firewall]["run"])
         self.assertIn("netns", steps[verify]["run"])
         self.assertIn("127.0.0.1", steps[verify]["run"])

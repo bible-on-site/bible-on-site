@@ -9,7 +9,8 @@ namespace BibleOnSite.Services;
 /// Service for loading perushim notes (commentary text per pasuk).
 /// Android: delivered via Play Asset Delivery (PAD) as an on-demand asset pack in the AAB.
 /// iOS: delivered via Apple Background Assets as a managed on-demand asset pack.
-/// Data updates are coupled to app releases — updating perushim data requires a new app version.
+/// Notes must match the bundled catalog. Apple can update packs for older app builds too,
+/// so incompatible payload layouts use separate managed-pack identifiers.
 /// On app update the client compares build_timestamp in the local DB vs the store-delivered
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
@@ -18,8 +19,7 @@ public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
-    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
-    private const string PerushimNotesPackName = "perushim-notes";
+    private const string PerushimNotesPackName = PadDeliveryService.IosPerushimNotesPackName;
 #else
     private const string PerushimNotesPackName = "perushim_notes";
 #endif
@@ -49,6 +49,11 @@ public class PerushimNotesService : IReaderNotesAvailability
     private bool _notesMissing = true;
     private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
+
+    /// <summary>Times a restore materialized the staged index — a test seam
+    /// proving a rejected delivery is never copied twice.</summary>
+    private int _deliveredIndexCopies;
+    internal int DeliveredIndexCopyCount => _deliveredIndexCopies;
 
     /// <summary>
     /// Raised after initialization, a download or a removal releases the pack,
@@ -149,6 +154,11 @@ public class PerushimNotesService : IReaderNotesAvailability
 
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
+
+    /// <summary>Whether the installed notes have no matching search index on the device
+    /// (e.g. an app update bumped the index normalization), so commentary search needs a
+    /// fresh pack even though the notes stay readable. Reported by the search index.</summary>
+    public bool IsSearchIndexStale { get; internal set; }
 
     /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
     public bool IsInitialized => _initialized;
@@ -384,6 +394,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             }
             File.Delete(Path.Join(DataDirectory, NotesDbName));
             _notesMissing = true;
+            IsSearchIndexStale = false;
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
@@ -398,6 +409,10 @@ public class PerushimNotesService : IReaderNotesAvailability
             await InitializeCoreAsync();
             if (IsAvailable)
             {
+                if (IsSearchIndexStale && !await TryRefreshSearchIndexAsync(progress, cancellationToken))
+                {
+                    return false;
+                }
                 File.Delete(RemovedMarkerPath);
                 return true;
             }
@@ -451,6 +466,47 @@ public class PerushimNotesService : IReaderNotesAvailability
 
         Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
+    }
+
+    /// <summary>
+    /// Refetches the pack for readable notes whose search index went stale and stages its
+    /// index only when it was built for the installed notes, which stay untouched. A pack of
+    /// a newer notes generation is left to the launch-time upgrade, which swaps both together.
+    /// </summary>
+    private async Task<bool> TryRefreshSearchIndexAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        if (!await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
+        {
+            return false;
+        }
+        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+        var sourcePath = padPath == null ? null : PadIndexSourcePath(padPath);
+        if (sourcePath == null || await ReadIndexNotesFingerprintAsync(sourcePath)
+            != await SearchIndexService.FingerprintAsync(_connection!, "build_timestamp"))
+        {
+            return false;
+        }
+        await TryCopyPadIndexAsync(padPath!);
+        var staged = File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
+        IsSearchIndexStale = !staged;
+        return staged;
+    }
+
+    private static async Task<string?> ReadIndexNotesFingerprintAsync(string indexPath)
+    {
+        var index = new SQLiteAsyncConnection(indexPath, SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            return await index.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+        finally
+        {
+            await index.CloseAsync();
+        }
     }
 
     /// <summary>
@@ -566,6 +622,7 @@ public class PerushimNotesService : IReaderNotesAvailability
             _connection = null;
         }
         _notesMissing = true;
+        IsSearchIndexStale = false;
         // Never leave an unusable generation on the device: the ~285 MB legacy
         // DB, its paired search index, journal sidecars, and interrupted
         // replacement leftovers are all app-owned and must go.
@@ -684,6 +741,58 @@ public class PerushimNotesService : IReaderNotesAvailability
     }
 
     /// <summary>
+    /// Byte size of the index the pack or package would deliver — the staged
+    /// copy when present, else the PAD asset or bundled package — without
+    /// copying it. Lets <see cref="SearchIndexService"/> skip re-copying a
+    /// delivery it already evaluated while still noticing a changed payload.
+    /// </summary>
+    internal async Task<long?> PeekDeliveredIndexSizeAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            await InitializeCoreAsync();
+            if (!IsAvailable)
+            {
+                return null;
+            }
+            var stagedPath = Path.Join(DataDirectory, SearchIndexDbName);
+            if (File.Exists(stagedPath))
+            {
+                return new FileInfo(stagedPath).Length;
+            }
+            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+            var sourcePath = padPath == null ? null : PadIndexSourcePath(padPath);
+            if (sourcePath != null)
+            {
+                return new FileInfo(sourcePath).Length;
+            }
+            if (_dataDirectoryOverride == null)
+            {
+                try
+                {
+                    await using var source = await _fileSystem.OpenAppPackageFileAsync(SearchIndexDbName);
+                    return source.Length;
+                }
+                catch (FileNotFoundException)
+                {
+                    // A bundled package may not carry the index.
+                    return null;
+                }
+                catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException)
+                {
+                    // Package streams cannot always report a length — the caller
+                    // restores and evaluates the payload instead.
+                    Console.Error.WriteLine($"Delivered index size unavailable: {ex.Message}");
+                    return null;
+                }
+            }
+            return null;
+        }
+        finally { _operationLock.Release(); }
+    }
+
+    /// <summary>
     /// Runs <paramref name="action"/> only when notes are definitively
     /// unavailable (initialized, then missing, rejected or removed). Skips
     /// without blocking while initialization or a download holds the pack, or
@@ -721,7 +830,8 @@ public class PerushimNotesService : IReaderNotesAvailability
                 return null;
             }
             var path = Path.Join(DataDirectory, SearchIndexDbName);
-            if (!File.Exists(path))
+            var existed = File.Exists(path);
+            if (!existed)
             {
                 var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
                 if (padPath != null)
@@ -733,6 +843,10 @@ public class PerushimNotesService : IReaderNotesAvailability
                 {
                     await TryCopyPackageIndexAsync();
                 }
+            }
+            if (!existed && File.Exists(path))
+            {
+                _deliveredIndexCopies++;
             }
             return File.Exists(path) ? path : null;
         }
@@ -912,14 +1026,22 @@ public class PerushimNotesService : IReaderNotesAvailability
     /// (#2222), so a pack without it leaves commentary search unavailable —
     /// the delivery contract requires it (<see cref="PadDeliveryService"/>).
     /// </summary>
-    private async Task TryCopyPadIndexAsync(string padAssetsPath)
+    /// <summary>The index payload's path inside a mounted pack, or null when
+    /// the pack predates the delivered-index format.</summary>
+    private static string? PadIndexSourcePath(string padAssetsPath)
     {
         var srcPath = Path.Join(padAssetsPath, SearchIndexDbName);
         if (!File.Exists(srcPath))
         {
             srcPath = Path.Join(padAssetsPath, "assets", SearchIndexDbName);
         }
-        if (!File.Exists(srcPath))
+        return File.Exists(srcPath) ? srcPath : null;
+    }
+
+    private async Task TryCopyPadIndexAsync(string padAssetsPath)
+    {
+        var srcPath = PadIndexSourcePath(padAssetsPath);
+        if (srcPath == null)
         {
             return;
         }

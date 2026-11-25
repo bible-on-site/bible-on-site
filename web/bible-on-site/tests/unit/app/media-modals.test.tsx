@@ -110,6 +110,144 @@ describe("JournalismGallery", () => {
 			expect(dialog).toBeInTheDocument();
 		});
 
+		it("moves focus into the dialog on open and restores it to the opener on close", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const opener = screen.getAllByRole("button")[0];
+			opener.focus();
+
+			fireEvent.click(opener);
+			const dialog = screen.getByRole("dialog");
+
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+			// The page behind the dialog cannot be tabbed into.
+			for (const sibling of document.body.children) {
+				if (sibling === dialog) continue;
+				expect(sibling).toHaveAttribute("inert");
+			}
+
+			fireEvent.keyDown(document, { key: "Escape" });
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+			for (const sibling of document.body.children) {
+				expect(sibling).not.toHaveAttribute("inert");
+			}
+		});
+
+		it("leaves siblings that were already inert untouched", () => {
+			const preInert = document.createElement("div");
+			preInert.setAttribute("inert", "");
+			document.body.appendChild(preInert);
+			try {
+				render(<JournalismGallery items={ITEMS} />);
+				openModal();
+				expect(preInert).toHaveAttribute("inert");
+
+				fireEvent.keyDown(document, { key: "Escape" });
+				expect(preInert).toHaveAttribute("inert");
+			} finally {
+				preInert.remove();
+			}
+		});
+
+		it("wraps Tab within the dialog", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			openModal();
+			const closeButton = screen.getByRole("button", { name: "סגור" });
+			const next = screen.getByRole("button", { name: "הבא" });
+			const last = screen.getByRole("button", { name: "הקודם" });
+
+			// fireEvent returns false only when the handler called preventDefault
+			// — that is what proves the trap intercepted the key.
+			last.focus();
+			expect(fireEvent.keyDown(last, { key: "Tab" })).toBe(false);
+			expect(closeButton).toHaveFocus();
+
+			closeButton.focus();
+			expect(fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true })).toBe(
+				false,
+			);
+			expect(last).toHaveFocus();
+
+			// Mid-list Tab is left to the browser: not prevented, not moved.
+			next.focus();
+			expect(fireEvent.keyDown(next, { key: "Tab" })).toBe(true);
+			expect(next).toHaveFocus();
+		});
+
+		it("wraps Tab and Shift+Tab when focus sits on the dialog container", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const dialog = openModal();
+			// Clicking the image lands focus on the container (tabIndex -1).
+			dialog.focus();
+
+			expect(fireEvent.keyDown(dialog, { key: "Tab" })).toBe(false);
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+
+			dialog.focus();
+			expect(fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true })).toBe(
+				false,
+			);
+			expect(screen.getByRole("button", { name: "הקודם" })).toHaveFocus();
+		});
+
+		it("restores focus to the clicked opener even when it was never focused", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const opener = screen.getAllByRole("button")[0];
+			// Safari and Firefox do not focus buttons on click.
+			fireEvent.click(opener);
+			expect(opener).not.toHaveFocus();
+
+			fireEvent.keyDown(document, { key: "Escape" });
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+		});
+
+		it("wraps Tab onto itself when the nav buttons are hidden", () => {
+			// jsdom has no checkVisibility; stub it so the nav buttons read
+			// hidden, matching the ≤768px stylesheet where they are display:none.
+			const proto = HTMLElement.prototype as {
+				checkVisibility?: () => boolean;
+			};
+			const real = proto.checkVisibility;
+			proto.checkVisibility = function (this: HTMLElement) {
+				return !this.className.includes("modalNav");
+			};
+			try {
+				render(<JournalismGallery items={ITEMS} />);
+				openModal();
+				const closeButton = screen.getByRole("button", { name: "סגור" });
+				closeButton.focus();
+
+				expect(fireEvent.keyDown(closeButton, { key: "Tab" })).toBe(false);
+				expect(closeButton).toHaveFocus();
+
+				expect(
+					fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true }),
+				).toBe(false);
+				expect(closeButton).toHaveFocus();
+			} finally {
+				if (real) proto.checkVisibility = real;
+				else delete proto.checkVisibility;
+			}
+		});
+
+		it("keeps Enter and Space on the nav buttons inside the dialog", () => {
+			render(<JournalismGallery items={ITEMS} />);
+			const dialog = openModal();
+			const next = screen.getByRole("button", { name: "הבא" });
+			next.focus();
+
+			fireEvent.keyDown(next, { key: " " });
+			fireEvent.keyDown(next, { key: "Enter" });
+			expect(dialog).toBeInTheDocument();
+
+			// The button's own activation still navigates.
+			fireEvent.click(next);
+			expect(dialog).toHaveAttribute("aria-label", "כתבה שנייה");
+		});
+
 		it("navigates forward with the next button and wraps around", () => {
 			render(<JournalismGallery items={ITEMS} />);
 			const dialog = openModal();
@@ -234,6 +372,30 @@ describe("ImageLightbox", () => {
 			fireEvent.click(screen.getByRole("document"));
 
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
+		});
+
+		it("moves focus into the dialog on open and restores it to the opener on close", () => {
+			renderLightbox();
+			const opener = screen.getByRole("button");
+			opener.focus();
+
+			fireEvent.click(opener);
+			const dialog = screen.getByRole("dialog");
+
+			expect(screen.getByRole("button", { name: "סגור" })).toHaveFocus();
+			// The page behind the dialog cannot be tabbed into.
+			for (const sibling of document.body.children) {
+				if (sibling === dialog) continue;
+				expect(sibling).toHaveAttribute("inert");
+			}
+
+			fireEvent.click(screen.getByRole("button", { name: "סגור" }));
+
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+			expect(opener).toHaveFocus();
+			for (const sibling of document.body.children) {
+				expect(sibling).not.toHaveAttribute("inert");
+			}
 		});
 	});
 });

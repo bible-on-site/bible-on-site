@@ -26,13 +26,16 @@ Each send creates a durable job and recipient records before publishing work to 
 
 SES adds native unsubscribe controls using Easy DKIM and `ListManagementOptions`. The visible Hebrew footer includes the publisher, monitored contact email and managed unsubscribe link. Each dispatch rechecks the native contact preference and local consent. Subscription events, permanent bounces and complaints update local suppression. Event processing is correlated to the attempt and handles duplicate or out-of-order notifications. API acceptance is shown separately from confirmed delivery. The optional physical-address field is not a readiness gate; no claim of universal legal compliance follows from enabling unsubscribe.
 
+The original-list rollout (#3382) grows the email audience one eligible original subscriber per Asia/Jerusalem day while the global setting stays `test`. Cohort membership lives in `tanah_daily_bulletin_email_cohort` with the deterministic import order; `(cohort, local_date)` admission rows make each day's single claim atomic across workers and retries. While the rollout runs, is paused or completed, scheduled sends also enqueue a limited `real` job reaching only confirmed cohort subscribers; `disabled` suppresses it entirely. The admin panel exposes revision-checked enable/pause/resume/disable controls and aggregate counts only — never recipient addresses. Enrollment of the private reconciled list is a one-time reviewed operation via `bun run scripts/plan-bulletin-rollout-cohort.mts`. See the [rollout runbook](../aws/daily-bulletin-rollout.md).
+
 The additive migration creates settings, subscribers, jobs and per-recipient history. Apply and verify it before enabling the worker. Disable `BULLETIN_EMAIL_WORKER_ENABLED` and restore the preceding admin task definition to roll back execution; retain subscriber preferences, queues and audit data. The stack adds DKIM records without changing existing public routes. Smoove is no longer the delivery provider; its quota-exhausted partial list is unused and no Smoove campaign was sent during this migration.
 
 ## WhatsApp group delivery
 
 The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector. Fresh installations default to test; real delivery requires configuring and explicitly confirming the intended group. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
 
-The new controls have actual desktop/mobile [before and after captures](screenshots/README.md). Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
+The public join carousel and native-app counterpart follow channel validation
+and must expose only public join links. [Issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)
 
 ## Public joining (#2939, #2940, #2941)
 
@@ -45,6 +48,8 @@ The homepage `#bulletin` section shows exactly three Hebrew RTL join cards — T
 ## Database deployment
 
 `data/mysql/tanah_daily_bulletin_upgrade.sql` is an additive, repeatable migration in the normal data deployment manifest. It retains article eligibility, prepared bulletins, and delivery records. It intentionally builds table DDL with `CONCAT`: the existing database deployment Lambda rewrites literal `CREATE TABLE` statements into destructive rebuilds, even with `IF NOT EXISTS`.
+
+`data/mysql/tanah_daily_bulletin_rollout_upgrade.sql` follows the same contract for the original-cohort rollout tables (control row, membership, daily reservations) and is likewise additive and repeatable.
 
 The preprocessor also rewrites table/view creation keywords inside SQL comments. The migration avoids those phrases in its comments, and the deployment validator rejects them. Validate both preprocessing and execution against disposable MySQL before changing this migration.
 
@@ -62,6 +67,22 @@ The release detector routes this migration and its db-populator preservation-tes
 Input fields: `date`, `hebrewDate`, `perekId`, nullable `article` containing `id`, `title`, `author`, and `html`, plus `dedications` as a string array. Output fields: `subject`, `source`, `emailHtml`, `pdfBase64`, and `filename`.
 
 The authenticated admin creates and reads previews. The renderer does not connect to subscriber services or send messages.
+
+### Local visual checks
+
+Run the [local admin app](../../web/admin/README.md#local-development) against
+a disposable MySQL database. Save a bulletin preview with synthetic recipients
+and set `BULLETIN_EMAIL_WORKER_ENABLED=false`. Open `/bulletins` to check the
+saved test audience, consent counts, and HTML/PDF preview. With Playwright
+Chromium installed, capture the page from the repository root.
+
+```powershell
+New-Item -ItemType Directory -Force .outputs | Out-Null
+node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '1440,1100' --full-page --wait-for-selector 'body:has(iframe):has(#email-audience)' http://localhost:3101/bulletins .outputs/bulletin-admin.png
+```
+
+Repeat at `390,844` to inspect the phone layout. Attach captures to the PR or
+issue, or publish them as CI artifacts.
 
 ## Legacy behavior to restore
 

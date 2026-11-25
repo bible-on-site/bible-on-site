@@ -42,6 +42,15 @@ A workflow-level concurrency group serializes iterations
 queued runs execute one at a time instead of interleaving — a third
 dispatch can no longer silently replace a still-pending iteration.
 
+> **Results**: 20 pairs collected on frozen SHA `4c99f0e` (iterations 1–10,
+> Nov 10–15, 2026) are analyzed with the Oct 25–Nov 7 master-window audit in
+> [ios-2635/findings.md](ios-2635/findings.md). Verdict: keep #2312 closed —
+> no runner reliability benefit shown; re-verify on post-`f5f9dadb3` master
+> before a speed-motivated swap. A re-verification attempt on frozen SHA
+> `1c6da48` (2026-11-17) **aborted on the probe-queue criterion** — the
+> `namespace-profile-mac-os` profile did not schedule for this repo for >2h.
+> Re-dispatch only after the profile schedules again; see findings.md.
+
 ## Protocol (from the issue)
 
 - **>=20 shard-pairs**: one pair = the same shard index executed on both

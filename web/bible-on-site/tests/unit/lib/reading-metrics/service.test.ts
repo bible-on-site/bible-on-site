@@ -21,33 +21,10 @@ import {
 	getPerushMetricsByPerekIds,
 	getPerushProgressUnits,
 	getPerushProgressUnitsBatch,
-	isReadingMetricsSchemaMissing,
 	metricOrFallback,
 } from "../../../../src/lib/reading-metrics";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
-
-describe("isReadingMetricsSchemaMissing", () => {
-	it("recognizes missing-table and missing-column errors", () => {
-		expect(isReadingMetricsSchemaMissing({ code: "ER_NO_SUCH_TABLE" })).toBe(
-			true,
-		);
-		expect(isReadingMetricsSchemaMissing({ code: "ER_BAD_FIELD_ERROR" })).toBe(
-			true,
-		);
-		expect(isReadingMetricsSchemaMissing({ errno: 1146 })).toBe(true);
-		expect(isReadingMetricsSchemaMissing({ errno: 1054 })).toBe(true);
-	});
-
-	it("rejects unrelated errors and non-objects", () => {
-		expect(isReadingMetricsSchemaMissing(new Error("down"))).toBe(false);
-		expect(isReadingMetricsSchemaMissing(null)).toBe(false);
-		expect(isReadingMetricsSchemaMissing("ER_NO_SUCH_TABLE")).toBe(false);
-		expect(isReadingMetricsSchemaMissing(1146)).toBe(false);
-		expect(isReadingMetricsSchemaMissing(undefined)).toBe(false);
-		expect(isReadingMetricsSchemaMissing({ code: "ER_DUP_ENTRY" })).toBe(false);
-	});
-});
 
 describe("getPerekMetric", () => {
 	beforeEach(() => jest.clearAllMocks());

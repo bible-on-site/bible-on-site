@@ -5,6 +5,7 @@
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:fonts="clr-namespace:Fonts"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.AuthorsPage"
              x:DataType="viewmodels:AuthorsViewModel"
              Title="רבנים"
@@ -47,12 +48,24 @@
 
               <Grid Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
 
-              <!-- Authors Grid with CollectionView for virtualization/lazy loading -->
+              <!-- Authors Grid with CollectionView for virtualization/lazy loading.
+                   Windows: two giant cards stretched to monitor width read
+                   badly — cap and center the column (#2766). -->
               <CollectionView Grid.Row="0"
                               ItemsSource="{Binding FilteredAuthors}"
                               Margin="8,8,8,0"
                               ItemsLayout="VerticalGrid, 2"
                               SelectionMode="None">
+                     <CollectionView.MaximumWidthRequest>
+                            <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                                   <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                            </OnPlatform>
+                     </CollectionView.MaximumWidthRequest>
+                     <CollectionView.HorizontalOptions>
+                            <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                                   <On Platform="Windows" Value="Center"/>
+                            </OnPlatform>
+                     </CollectionView.HorizontalOptions>
                      <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Author">
                                    <controls:TappableView Activated="OnAuthorTapped"

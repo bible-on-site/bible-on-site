@@ -17,7 +17,7 @@ using Microsoft.Maui.Layouts;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the back-handling partial parts.
 #pragma warning disable S2333
-public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
+public partial class MasoraPage : ContentPage, IQueryAttributable, IAnalyticsScreenName //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MasoraViewModel _viewModel;
@@ -93,6 +93,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MasoraCarousel,
+                // This reader has no ⋮ options menu — nothing to re-scope.
+                MenuPanel = null,
                 // This reader has no reading-position indicator yet.
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
@@ -110,6 +112,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 IsSelectableUnit = unitId => unitId > 0,
                 CurrentUnitId = () => _viewModel.UnitId,
                 NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForUnit(),
             });
     }
 
@@ -259,6 +262,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         _carousel.ScrollToUnit(index);
 
         ClearAllSelections();
+        SetAnalyticsScreenForUnit();
         _chrome.RefreshPrevNext();
 
         _ = UpdateArticlesCountAsync();
@@ -323,6 +327,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         base.OnNavigatedTo(args);
         CarouselLoadingOverlay.ReaderNavigatedTo();
         _carousel.ReaderNavigatedTo();
+        SetAnalyticsScreenForUnit();
     }
 
     protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
@@ -376,6 +381,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             // Hide loading overlay — carousel is ready
             CarouselLoadingOverlay.Hide();
             _carousel.ResnapAfterLoad();
+
+            // The initial visit's screen_view: NavigatedTo fired before the
+            // unit resolved, so the resolved-identity emit lives here (#3378).
+            SetAnalyticsScreenForUnit();
 
             // Update articles count badge
             await UpdateArticlesCountAsync();
@@ -444,6 +453,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
         // Synchronous state update — fast, no guard needed.
         _viewModel.Unit = unit;
+        SetAnalyticsScreenForUnit();
         _chrome.RefreshPrevNext();
 
         // Fire async tasks in the background — never block the next swipe
@@ -522,6 +532,35 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     #endregion
 
+    #region Analytics
+
+    /// <summary>
+    /// The reader reports its own logical screen from page lifecycle and
+    /// carousel swipes — transitions a Shell-level screen_view would
+    /// double-count — so the Shell report is suppressed.
+    /// </summary>
+    public AnalyticsScreen? AnalyticsScreen => null;
+
+    /// <summary>
+    /// Emits the visible surface's screen_view once the masora unit resolves
+    /// (#3378): the reader itself (Masora/{id} + unit heading) or, while the
+    /// articles view is up, its masora-scoped list. A pre-load NavigatedTo
+    /// with id 0 never emits — the post-load call owns the initial visit.
+    /// </summary>
+    private void SetAnalyticsScreenForUnit()
+    {
+        if (_viewModel.UnitId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Masora,
+                _viewModel.UnitId, _viewModel.Heading)
+            : AnalyticsScreens.ForMasora(_viewModel.UnitId, _viewModel.Heading));
+    }
+
+    #endregion
+
     #region Back
 
     protected override bool OnBackButtonPressed()
@@ -536,16 +575,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         // through to page navigation while still visible. The shared policy
         // ranks them foreground-first, including the focused-pasuk overlay
         // added alongside shared recitation playback (#3307, #3260).
-        var owner = ReaderBackPolicy.Resolve(
-            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
-            unitPickerOpen: MasoraUnitPickerPopup.IsVisible,
-            fanMenuOpen: FanMenu.IsOpen,
-            menuOverlayOpen: false,
-            chapterSearchOpen: false,
-            focusedPasuk: _focusedPasuk != null,
-            perushimSheetOpen: PerushimPanel.IsOpen,
-            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
-                _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
+        var owner = ResolveBackOwner();
         switch (owner)
         {
             case ReaderBackSurface.ExitFullScreen:
@@ -568,6 +598,23 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 return false;
         }
     }
+
+    /// <summary>
+    /// The transient surface that owns input right now, in the shared
+    /// foreground-first order — <see cref="ReaderBackSurface.None"/> means a
+    /// plain Back falls through to navigation and PgUp/PgDn may step units
+    /// (#2766).
+    /// </summary>
+    private ReaderBackSurface ResolveBackOwner() => ReaderBackPolicy.Resolve(
+        exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+        unitPickerOpen: MasoraUnitPickerPopup.IsVisible,
+        fanMenuOpen: FanMenu.IsOpen,
+        menuOverlayOpen: false,
+        chapterSearchOpen: false,
+        focusedPasuk: _focusedPasuk != null,
+        perushimSheetOpen: PerushimPanel.IsOpen,
+        selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
 
     /// <summary>
     /// The capsule back affordance stays enabled while any transient surface

@@ -17,9 +17,21 @@ use tracing_actix_web::TracingLogger;
 use crate::providers::Database;
 use crate::services::article_search::{self, ArticleSearchIndex};
 
+use super::access_gate::{AccessGate, gate_middleware};
 use super::profile::Profile;
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
 use tokio::time::Duration;
+
+/// `HOST`/`PORT` resolution for the listen socket — unset or unparseable
+/// values fall back to the local defaults rather than failing startup.
+fn bind_addr(get: impl Fn(&str) -> Option<String>) -> String {
+    let host = get("HOST").unwrap_or_else(|| "127.0.0.1".to_string());
+    let port = get("PORT")
+        .unwrap_or_else(|| "3003".to_string())
+        .parse::<u16>()
+        .unwrap_or(3003);
+    format!("{host}:{port}")
+}
 
 pub struct ActixApp {
     server: Server,
@@ -34,12 +46,7 @@ impl ActixApp {
         // Explicit launch configuration (CI, containers, local DB overrides) takes precedence.
         profile.load_env_file();
 
-        let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let port = env::var("PORT")
-            .unwrap_or_else(|_| "3003".to_string())
-            .parse::<u16>()
-            .unwrap_or(3003);
-        let listener = TcpListener::bind(format!("{}:{}", host, port))?;
+        let listener = TcpListener::bind(bind_addr(|name| env::var(name).ok()))?;
         let port = listener.local_addr().unwrap().port();
         let db: Database = Database::new().await?;
         // Derived article-search index: loads its persisted snapshot, then a
@@ -47,6 +54,10 @@ impl ActixApp {
         // table and periodic hash reconcile.
         let article_index = ArticleSearchIndex::new(db.clone());
         tokio::spawn(article_search::run_worker(article_index.clone()));
+        // Access-gate configuration resolves once at startup: a bad
+        // `API_REQUIRE_SIGNATURE=enforce` deployment fails here, not as a
+        // silent lockout discovered through traffic.
+        let access_gate = AccessGate::resolve()?;
         let shutdown_signal = Arc::new(AtomicBool::new(false));
         let server = HttpServer::new({
             let shutdown_signal = shutdown_signal.clone();
@@ -60,10 +71,11 @@ impl ActixApp {
                         &article_index,
                         shutdown_signal.clone(),
                         &profile,
+                        &access_gate,
                     ))
             }
         })
-        .listen_auto_h2c(listener)?
+        .listen(listener)?
         .run();
         tracing::info!("Server running on port {}", port);
         Ok(Self {
@@ -91,15 +103,19 @@ impl ActixApp {
     /// `profile` is the single resolved environment: development tooling is
     /// registered only when it explicitly allows it, so production and any
     /// unrecognized configuration expose nothing extra.
+    /// `access_gate` is the resolved #3066 access gate — one shared
+    /// `web::Data` keeps the nonce cache coherent across workers.
     pub fn build_app_config(
         db: &Database,
         article_index: &ArticleSearchIndex,
         shutdown_signal: Arc<AtomicBool>,
         profile: &Profile,
+        access_gate: &AccessGate,
     ) -> impl Fn(&mut web::ServiceConfig) {
         let db = db.clone();
         let article_index = article_index.clone();
         let dev_tools = profile.dev_tools_enabled();
+        let access_gate = access_gate.clone();
         move |cfg: &mut web::ServiceConfig| {
             // Keep unmatched requests on a uniform non-disclosing 404:
             // actix-web's built-in default answers 405 + Allow when a path
@@ -108,7 +124,15 @@ impl ActixApp {
             cfg.default_service(web::to(|| async { HttpResponse::NotFound().finish() }))
                 .app_data(web::Data::new(build_schema(&db, &article_index)))
                 .app_data(web::Data::new(article_index.clone()))
-                .service(web::resource("/").guard(guard::Post()).to(graphql_request))
+                .app_data(web::Data::new(access_gate.clone()))
+                // The gate wraps only the GraphQL POST endpoint — health,
+                // readiness and (dev-profile) tooling stay reachable.
+                .service(
+                    web::resource("/")
+                        .guard(guard::Post())
+                        .wrap(actix_web::middleware::from_fn(gate_middleware))
+                        .to(graphql_request),
+                )
                 .service(
                     web::resource("/health")
                         .guard(guard::Any(guard::Get()).or(guard::Head()))
@@ -214,6 +238,31 @@ mod tests {
         Profile::from_name(Some("test"))
     }
 
+    /// Observe-mode gate with no keys — the access contract these tests
+    /// exercise is "everything passes through", identical to a gateless app.
+    fn test_gate() -> AccessGate {
+        AccessGate::for_test(crate::startup::access_gate::GateMode::Observe, &[], 300)
+    }
+
+    #[actix_web::test]
+    async fn bind_addr_prefers_env_and_falls_back_to_local_defaults() {
+        let with = |pairs: &[(&str, &str)]| {
+            bind_addr(|name| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| value.to_string())
+            })
+        };
+        assert_eq!(with(&[]), "127.0.0.1:3003");
+        assert_eq!(
+            with(&[("HOST", "0.0.0.0"), ("PORT", "8080")]),
+            "0.0.0.0:8080"
+        );
+        // An unparseable port keeps the default rather than panicking.
+        assert_eq!(with(&[("PORT", "not-a-port")]), "127.0.0.1:3003");
+    }
+
     #[actix_web::test]
     async fn readiness_route_requires_initialized_live_worker_and_preserves_liveness() {
         use crate::services::article_search::{lsa, store};
@@ -254,6 +303,7 @@ mod tests {
             &index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &test_gate(),
         )))
         .await;
         let response = test::call_service(
@@ -332,6 +382,7 @@ mod tests {
             &article_index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &test_gate(),
         )))
         .await;
         let mut instance = None;
@@ -409,6 +460,7 @@ mod tests {
             &article_index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &test_gate(),
         )))
         .await;
 
@@ -459,6 +511,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &test_profile(),
+                &test_gate(),
             ))
         })
         .workers(1)
@@ -501,6 +554,81 @@ mod tests {
         assert!(body.is_empty(), "HEAD must not send the GET response body");
     }
 
+    /// The access gate in `enforce` rejects unsigned GraphQL calls with 401
+    /// while a valid app signature reaches the real GraphQL handler — proof
+    /// the middleware's body re-injection preserves the extractor contract.
+    /// Health routes deliberately stay unsigned in every mode (#3066).
+    #[actix_web::test]
+    async fn enforce_mode_gates_only_the_graphql_post_route() {
+        use crate::common::signing;
+        use crate::startup::access_gate::GateMode;
+        use hmac::{Hmac, KeyInit, Mac};
+
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let gate = AccessGate::for_test(GateMode::Enforce, &[("k1", "test-secret")], 300);
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+            &test_profile(),
+            &gate,
+        )))
+        .await;
+
+        let body = r#"{"query":"{ __typename }"}"#;
+        let unsigned = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/")
+                .insert_header(("content-type", "application/json"))
+                .set_payload(body)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(unsigned.status(), StatusCode::UNAUTHORIZED);
+
+        let timestamp = chrono::Utc::now().timestamp();
+        let nonce = "e2e-nonce";
+        let canonical = signing::canonical_v1(
+            "k1",
+            "POST",
+            "/",
+            timestamp,
+            nonce,
+            &signing::body_sha256_hex(body.as_bytes()),
+        );
+        let mut mac = <Hmac<sha2::Sha256> as KeyInit>::new_from_slice(b"test-secret").unwrap();
+        mac.update(canonical.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+        let signed = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/")
+                .insert_header(("content-type", "application/json"))
+                .insert_header(("x-api-key-id", "k1"))
+                .insert_header(("x-api-timestamp", timestamp.to_string()))
+                .insert_header(("x-api-nonce", nonce))
+                .insert_header(("x-api-signature", signature))
+                .set_payload(body)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(signed.status(), StatusCode::OK);
+        let json = to_bytes(signed.into_body()).await.unwrap();
+        assert_eq!(
+            std::str::from_utf8(&json).unwrap(),
+            r#"{"data":{"__typename":"QueryRoot"}}"#
+        );
+
+        // Liveness/readiness are health-check lanes: unsigned in every mode.
+        for path in ["/health", "/health/ready"] {
+            let response =
+                test::call_service(&app, test::TestRequest::get().uri(path).to_request()).await;
+            assert_ne!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+        }
+    }
+
     /// Explicit prod, missing, blank and unrecognized configuration all take
     /// the production posture: no IDE at the root GET route (or through a
     /// query string, Accept header, HEAD request or alias) and no shutdown
@@ -523,6 +651,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &Profile::from_name(profile_name),
+                &test_gate(),
             )))
             .await;
 
@@ -612,6 +741,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &Profile::from_name(Some(profile_name)),
+                &test_gate(),
             )))
             .await;
 

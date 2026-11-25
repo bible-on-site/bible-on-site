@@ -109,7 +109,7 @@ fn bulletin_filename(perek_id: i32, source: &str, header: &str) -> String {
 }
 
 const WEBSITE_ORIGIN: &str = "https://xn--febl3a.co.il";
-const LOGO_URL: &str = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/logo-header-bfaa157e34c2.jpg";
+const LOGO_URL: &str = "https://xn--febl3a.co.il/images/logos/header-logo.jpg";
 
 // The transport replaces this tbody-level slot with the native unsubscribe and
 // public contact row. Keeping it inside the card gives every section one edge.
@@ -133,6 +133,9 @@ fn render_email(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{subject}</title>
 <style>
+@font-face {{ font-family: 'Al Heperek Font UI'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://xn--febl3a.co.il/fonts/AlHeperekUI-Regular.woff2') format('woff2'); }}
+@font-face {{ font-family: 'Al Heperek Font UI'; font-style: normal; font-weight: 600; font-display: swap; src: url('https://xn--febl3a.co.il/fonts/AlHeperekUI-SemiBold.woff2') format('woff2'); }}
+@font-face {{ font-family: 'Al Heperek Font UI'; font-style: normal; font-weight: 700; font-display: swap; src: url('https://xn--febl3a.co.il/fonts/AlHeperekUI-Bold.woff2') format('woff2'); }}
 body,table,td,a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
 table {{ border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }}
 .bulletin-article p {{ margin:0 0 12px; }}
@@ -147,14 +150,14 @@ table {{ border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }}
 }}
 </style>
 </head>
-<body style="margin:0;padding:0;background:#f4f1ea;direction:rtl;color:#173e52;font-family:Arial,sans-serif">
+<body style="margin:0;padding:0;background:#f4f1ea;direction:rtl;color:#173e52;font-family:'Al Heperek Font UI',Arial,sans-serif">
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">{source} | {hebrew_date}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#f4f1ea">
 <tr><td align="center" style="padding:24px 12px">
 <table role="presentation" dir="rtl" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #dce5e7;border-top:5px solid #28758a">
 <tbody>
 <tr><td class="bulletin-padding" align="right" style="padding:20px 28px;background:#ffffff;border-bottom:1px solid #dce5e7">
-<h1 class="bulletin-title" style="margin:0;color:#173e52;font-size:32px;line-height:1.25"><a href="{website}/" style="text-decoration:none"><img src="{logo}" width="220" height="110" alt="תנ&quot;ך על הפרק" style="display:block;width:220px;max-width:100%;height:auto;border:0"></a></h1>
+<h1 class="bulletin-title" style="margin:0;color:#173e52;font-size:32px;line-height:1.25"><a href="{website}/" style="text-decoration:none"><img src="{logo}" width="260" height="80" alt="תנ&quot;ך על הפרק" style="display:block;width:260px;max-width:100%;height:auto;border:0"></a></h1>
 <p style="margin:12px 0 0;color:#637780;font-size:15px;line-height:24px"><strong style="color:#173e52;font-size:18px">{source}</strong><span style="padding:0 8px;color:#b4a17c"> | </span>{hebrew_date}</p>
 </td></tr>
 "##,
@@ -174,10 +177,10 @@ table {{ border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }}
         }
         html.push_str("</div></td></tr>\n");
     }
-    html.push_str("<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:24px 28px\"><h2 style=\"margin:0 0 12px;font-size:13px;line-height:20px;color:#28758a\">הפרק היומי</h2><p class=\"bulletin-scripture\" dir=\"rtl\" style=\"margin:0;font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.75;text-align:justify;text-align-last:right;color:#233d48\">");
+    html.push_str("<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:24px 28px\"><h2 style=\"margin:0 0 12px;font-size:13px;line-height:20px;color:#28758a\">הפרק היומי</h2><p class=\"bulletin-scripture\" dir=\"rtl\" style=\"margin:0;font-family:'Al Heperek Font UI',Georgia,'Times New Roman',serif;font-size:19px;line-height:1.75;text-align:justify;text-align-last:right;color:#233d48\">");
     for (index, verse) in chapter.pesukim.iter().enumerate() {
         html.push_str(&format!(
-            "<span class=\"bulletin-verse\"><span class=\"bulletin-verse-number\" style=\"color:#28758a;font-family:Arial,sans-serif;font-size:14px;font-weight:700;vertical-align:baseline;line-height:inherit\">{}</span> {}</span> ",
+            "<span class=\"bulletin-verse\"><span class=\"bulletin-verse-number\" style=\"color:#28758a;font-family:'Al Heperek Font UI',Arial,sans-serif;font-size:14px;font-weight:700;vertical-align:baseline;line-height:inherit\">{}</span> {}</span> ",
             tanach::perek_to_hebrew((index + 1) as u32),
             escape(verse),
         ));
@@ -419,8 +422,8 @@ mod tests {
         );
         assert!(html.contains("alt=\"תנ&quot;ך על הפרק\""));
         assert!(html.contains(&format!("src=\"{LOGO_URL}\"")));
-        assert!(html.contains("width=\"220\" height=\"110\""));
-        assert!(html.contains("width:220px;max-width:100%;height:auto"));
+        assert!(html.contains("width=\"260\" height=\"80\""));
+        assert!(html.contains("width:260px;max-width:100%;height:auto"));
         assert!(html.contains("max-width:680px"));
         assert!(html.contains(&format!(
             "<strong style=\"color:#173e52;font-size:18px\">{}</strong>",

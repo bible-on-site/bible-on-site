@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.TanahpediaPage"
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaViewModel"
@@ -32,9 +33,21 @@
         </controls:SharedTopBar>
 
     <Grid Grid.Row="1">
-        <!-- Content -->
+        <!-- Content — Windows: landing sections at monitor width are
+             unscanable, so the column caps and centers like the other
+             content pages (#2766). -->
         <ScrollView IsVisible="{Binding HasError, Converter={StaticResource InvertedBoolConverter}}">
             <VerticalStackLayout Padding="16" Spacing="20">
+                <VerticalStackLayout.MaximumWidthRequest>
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                    </OnPlatform>
+                </VerticalStackLayout.MaximumWidthRequest>
+                <VerticalStackLayout.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </VerticalStackLayout.HorizontalOptions>
                 <!-- Header -->
                 <VerticalStackLayout Spacing="4">
                     <Label Text="אנציקלופדיה לתנ&quot;ך - אישים, מקומות, אירועים, חפצים ועוד"

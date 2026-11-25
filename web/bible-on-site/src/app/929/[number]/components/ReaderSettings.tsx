@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import {
 	type ReactNode,
 	useCallback,
@@ -8,11 +9,16 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { usePushSubscription } from "@/app/components/PushNotificationsToggle";
 import {
 	DEFAULT_DIVINE_NAME_MASKING,
 	type DivineNameKey,
 	type DivineNameMaskingSettings,
 } from "@/lib/divine-name-masking";
+import {
+	PUSH_MESSAGES,
+	PUSH_SECTION_HREF,
+} from "@/lib/push-notifications";
 import {
 	DIVINE_NAME_MASKING_EVENT,
 	DIVINE_NAME_MASKING_KEY,
@@ -31,6 +37,7 @@ import {
 	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
+	TANAKH_FONT_LABELS,
 } from "@/lib/reader-settings";
 import {
 	DEFAULT_RECITATION_SETTINGS,
@@ -154,6 +161,9 @@ export default function ReaderSettings() {
 	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 	const dialog = useRef<HTMLDialogElement>(null);
 	const titleId = useId();
+	const router = useRouter();
+	// Reads state lazily — only when the reader opens the panel (#3732).
+	const push = usePushSubscription({ auto: false });
 	const updateDisplay = (patch: Partial<ReaderState>) => {
 		const next = { ...display, ...patch };
 		setDisplay(next);
@@ -180,6 +190,29 @@ export default function ReaderSettings() {
 		setAnchor(null);
 		anchor?.focus();
 	}, [anchor]);
+	/**
+	 * Daily browser reminder (#3732). Opt-out works straight from here;
+	 * opt-in subscribes directly only when permission is already granted.
+	 * "default" must not prompt from the dropdown — it navigates to the
+	 * dedicated bulletin card, whose enable button is the sole
+	 * requestPermission call site. "denied"/"unsupported" show their states
+	 * with the checkbox disabled.
+	 */
+	const onReminderChange = (checked: boolean) => {
+		if (!checked) {
+			void push.disable();
+			return;
+		}
+		if (Notification.permission === "granted") {
+			void push.subscribe();
+			return;
+		}
+		/* istanbul ignore else: denied/unsupported keep the checkbox disabled */
+		if (Notification.permission === "default") {
+			close();
+			router.push(PUSH_SECTION_HREF);
+		}
+	};
 	useEffect(() => {
 		setDisplay(getStoredReaderSettings());
 		setRecitation(getRecitationSettings());
@@ -237,6 +270,9 @@ export default function ReaderSettings() {
 		if (!anchor || !dialog.current) return;
 		const panel = dialog.current;
 		panel.showModal();
+		// Re-read the real subscription on every open — the surface may have
+		// been changed on the homepage card in another visit (#3732).
+		void push.refresh();
 		// Using the panel must not count as an outside click for popovers under
 		// it (the download menu keeps its selected range while settings change).
 		const keepUnderlyingOpen = (event: MouseEvent) => event.stopPropagation();
@@ -255,7 +291,7 @@ export default function ReaderSettings() {
 			window.removeEventListener("resize", position);
 			window.removeEventListener("scroll", position, true);
 		};
-	}, [anchor]);
+	}, [anchor, push.refresh]);
 	useEffect(() => {
 		if (anchor)
 			dialog.current
@@ -372,11 +408,11 @@ export default function ReaderSettings() {
 									>
 										{PEREK_TANAKH_FONTS.map((font, index) => (
 											<option key={font || "default"} value={index}>
-												{font === "noto" ? "Noto Serif Hebrew" : "Taamey D"}
+												{TANAKH_FONT_LABELS[font]}
 											</option>
 										))}
 									</select>
-									<small>גופן טעמים מסורתי</small>
+									<small>גופני טעמים לפסוקים</small>
 								</label>
 								<Disclosure
 									label="ריווח"
@@ -530,6 +566,38 @@ export default function ReaderSettings() {
 										</label>
 									</fieldset>
 								</fieldset>
+								{/* Daily browser reminder (#3732): same shared
+								    subscription state and operations as the
+								    dedicated bulletin card. Hidden entirely when
+								    the deployment has push turned off. */}
+								{push.status !== "hidden" && push.status !== "loading" && (
+									<fieldset className={styles.maskingGroup}>
+										<legend>
+											<label>
+												התראה יומית בדפדפן
+												<input
+													className={styles.maskingToggle}
+													type="checkbox"
+													checked={push.status === "on"}
+													disabled={
+														push.busy ||
+														push.status === "denied" ||
+														push.status === "unsupported"
+													}
+													onChange={(event) =>
+														onReminderChange(event.target.checked)
+													}
+												/>
+											</label>
+										</legend>
+										<small>
+											{push.failed
+												? PUSH_MESSAGES.error
+												: (PUSH_MESSAGES[push.status] ??
+													"התראה עם הפרק היומי, גם כשהאתר סגור")}
+										</small>
+									</fieldset>
+								)}
 							</section>
 						) : (
 							<section aria-label="קריינות" className={styles.section}>

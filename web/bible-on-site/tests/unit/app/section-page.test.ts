@@ -81,6 +81,41 @@ describe("[section]/page", () => {
 			}
 		});
 
+		it("links both hero cards - לימוד to /929 and ישומון to /app", async () => {
+			const textOf = (node: ReactNode): string => {
+				if (node == null || typeof node === "boolean") return "";
+				if (typeof node === "string" || typeof node === "number")
+					return String(node);
+				if (Array.isArray(node)) return node.map(textOf).join("");
+				if (isValidElement(node))
+					return textOf(
+						(node.props as { children?: ReactNode }).children,
+					);
+				return "";
+			};
+			const links: { href: string; text: string }[] = [];
+			const walk = (node: ReactNode) => {
+				Children.forEach(node, (child) => {
+					if (!isValidElement(child)) return;
+					const props = child.props as {
+						href?: string;
+						children?: ReactNode;
+					};
+					if (typeof props.href === "string") {
+						links.push({ href: props.href, text: textOf(props.children) });
+					}
+					walk(props.children);
+				});
+			};
+			walk(await Home({ params: params() }));
+			expect(
+				links.some((l) => l.href === "/929/" && l.text.includes("לימוד יומי")),
+			).toBe(true);
+			expect(
+				links.some((l) => l.href === "/app" && l.text.includes("ישומון")),
+			).toBe(true);
+		});
+
 		it("resolves scrollTarget for contact, tos, app, tanah-sefarim", async () => {
 			const contact = await Home({ params: params("contact") });
 			const tos = await Home({ params: Promise.resolve({ section: "tos" }) });

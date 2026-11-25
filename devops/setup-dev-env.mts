@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
@@ -11,7 +12,7 @@ import {
 } from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
 import { withDevSyncIngress } from "./rds-sync-access.mts";
-import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
+import { assertLocalAssetTarget, assetBucketCreateArgs, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -150,7 +151,8 @@ function parseMysqlUrl(url: string): MysqlUrlParts {
 	const port = u.port ? Number.parseInt(u.port, 10) : 3306;
 	const database = u.pathname ? u.pathname.slice(1) : "";
 	return {
-		host: u.hostname,
+		// The CLI treats localhost as a socket on Unix and ignores the TCP port.
+		host: u.hostname === "localhost" ? "127.0.0.1" : u.hostname,
 		port,
 		user: decodeURIComponent(u.username),
 		password: decodeURIComponent(u.password),
@@ -170,6 +172,26 @@ const PROD_RDS_SG_NAME = "tanah-rds-sg";
 const PROD_SSM_DB_URL_PARAM = "/bible-on-site-tanah-db-url";
 const PROD_S3_BUCKET_DEFAULT = "bible-on-site-assets";
 const DEV_S3_BUCKET_DEFAULT = "bible-on-site-assets-dev";
+
+async function withRdsMysqlTls<T>(
+	run: (tlsArgs: string[]) => Promise<T>,
+): Promise<T> {
+	const response = await fetch(
+		"https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem",
+		{ signal: AbortSignal.timeout(30_000) },
+	);
+	if (!response.ok) throw new Error("Unable to download the RDS CA bundle");
+	const bundle = await response.text();
+	const directory = fs.mkdtempSync(path.join(tmpdir(), "bos-rds-ca-"));
+	const ca = path.join(directory, "rds-ca.pem");
+	try {
+		fs.writeFileSync(ca, bundle, { flag: "wx" });
+		return await run(["--ssl-mode=VERIFY_IDENTITY", `--ssl-ca=${ca}`]);
+	} finally {
+		fs.rmSync(ca, { force: true });
+		fs.rmdirSync(directory);
+	}
+}
 
 function fetchSsmParameter(name: string, region: string): string {
 	console.info(`Fetching SSM parameter ${name}...`);
@@ -315,17 +337,48 @@ async function runSyncFromProd(): Promise<void> {
 	// The sync body — runs only while holding owned ingress, so cleanup
 	// revokes exactly the rule this invocation created even when a step fails
 	// (see withDevSyncIngress).
-	const syncBody = async (): Promise<void> => {
+	const syncBody = async (tlsArgs: string[]): Promise<void> => {
 		if (!dryRun) {
-			prodWatermark = queryTableUpdateTimes(prodDb);
+			const localVersion = mysqlQuery(
+				{ ...devDb, database: "" },
+				"SELECT VERSION()",
+			).trim();
+			if (
+				localVersion.startsWith("9.7.") &&
+				mysqlQuery(
+					prodDb,
+					`SELECT COUNT(*) FROM information_schema.COLUMNS
+					WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article'
+						AND COLUMN_NAME = 'content_hash'
+						AND LOWER(GENERATION_EXPRESSION) REGEXP 'md5[[:space:]]*[(]'`,
+					tlsArgs,
+				).trim() !== "0"
+			) {
+				throw new Error(
+					"Production still uses MD5 in tanah_article.content_hash. Sync to a local MySQL 8.4 database until the SHA-2 migration is applied.",
+				);
+			}
+			if (
+				mysqlQuery(
+					prodDb,
+					"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND UPPER(EXTRA) LIKE '%MASKING POLICY%'",
+					tlsArgs,
+				).trim() !== "0"
+			) {
+				throw new Error("Local sync does not support column masking policies.");
+			}
+			prodWatermark = queryTableUpdateTimes(prodDb, tlsArgs);
 		}
 
 		// Dump from prod and restore to dev
 		const dumpPath = path.join(projectDir, "data", ".sync-dump.sql");
 		// RDS-friendly mysqldump flags (admin user lacks RELOAD privilege)
 		const mysqldumpArgs = [
+			...tlsArgs,
 			"--skip-lock-tables",
 			"--no-tablespaces",
+			"--loose-skip-masking-policies",
+			"--column-statistics=0",
 			"--set-gtid-purged=OFF",
 			"--routines",
 			"--triggers",
@@ -347,7 +400,6 @@ async function runSyncFromProd(): Promise<void> {
 			);
 		} else {
 			console.info("Dumping production database...");
-			console.info(`Running: mysqldump ${mysqldumpArgs.join(" ")}`);
 			// Stream stdout straight to the dump file — buffering the whole dump in
 			// memory (maxBuffer) fails with ENOBUFS once the prod DB outgrows it.
 			const dumpFd = fs.openSync(dumpPath, "w");
@@ -635,14 +687,9 @@ async function runSyncFromProd(): Promise<void> {
 			} else {
 				// Ensure dev bucket exists (upsert principle)
 				console.info(`Ensuring S3 bucket '${devS3Bucket}' exists...`);
-				const mbArgs = [
-					"s3",
-					"mb",
-					`s3://${devS3Bucket}`,
-					"--region",
-					awsRegion,
-				];
-				if (s3Endpoint) mbArgs.push("--endpoint-url", s3Endpoint);
+				const mbArgs = assetBucketCreateArgs({
+					bucket: devS3Bucket, region: awsRegion, endpoint: s3Endpoint,
+				});
 				const mbResult = spawnSync("aws", mbArgs, {
 					stdio: ["ignore", "pipe", "pipe"],
 					shell: isWin,
@@ -711,10 +758,12 @@ async function runSyncFromProd(): Promise<void> {
 		console.info(
 			`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
 		);
-		await syncBody();
+		await syncBody(["--ssl-mode=VERIFY_IDENTITY", "--ssl-ca=<RDS CA bundle>"]);
 		console.info("[dry-run] Would revoke ingress on", sgId);
 	} else {
-		await withDevSyncIngress(ec2, sgId, `${publicIp}/32`, syncBody);
+		await withRdsMysqlTls((tlsArgs) =>
+			withDevSyncIngress(ec2, sgId, `${publicIp}/32`, () => syncBody(tlsArgs)),
+		);
 	}
 
 	console.info("sync-from-prod finished.");
@@ -724,17 +773,22 @@ async function runSyncFromProd(): Promise<void> {
 
 const CHECKPOINT_TABLE = "dev_sync_checkpoint";
 
-function mysqlQuery(db: MysqlUrlParts, sql: string): string {
+function mysqlQuery(
+	db: MysqlUrlParts,
+	sql: string,
+	tlsArgs: string[] = [],
+): string {
 	const res = spawnSync(
 		"mysql",
 		[
+			...tlsArgs,
 			"-h",
 			db.host,
 			"-P",
 			String(db.port),
 			"-u",
 			db.user,
-			db.database,
+			...(db.database ? [db.database] : []),
 			"-N",
 			"-B",
 			"-e",
@@ -752,13 +806,17 @@ function mysqlQuery(db: MysqlUrlParts, sql: string): string {
 }
 
 /** Per-table UPDATE_TIME on the given DB — cheap freshness watermark. */
-function queryTableUpdateTimes(db: MysqlUrlParts): Map<string, string | null> {
+function queryTableUpdateTimes(
+	db: MysqlUrlParts,
+	tlsArgs: string[],
+): Map<string, string | null> {
 	// stats_expiry=0 in this session returns live values instead of the
 	// default day-cached information_schema statistics.
 	return parseTableTimes(
 		mysqlQuery(
 			db,
 			`SET SESSION information_schema_stats_expiry=0; SELECT TABLE_NAME, UPDATE_TIME FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db.database.replace(/'/g, "")}' ORDER BY TABLE_NAME`,
+			tlsArgs,
 		),
 	);
 }
@@ -812,15 +870,17 @@ function writeDevCheckpoint(
  */
 async function runCheckFreshness(): Promise<void> {
 	const { prodDb, devDb, sgId, publicIp, ec2 } = await resolveSyncContext();
-	const fresh = await withDevSyncIngress(
-		ec2,
-		sgId,
-		`${publicIp}/32`,
-		async () =>
-			isCheckpointCurrent(
-				queryDevCheckpoint(devDb),
-				queryTableUpdateTimes(prodDb),
-			),
+	const fresh = await withRdsMysqlTls((tlsArgs) =>
+		withDevSyncIngress(
+			ec2,
+			sgId,
+			`${publicIp}/32`,
+			async () =>
+				isCheckpointCurrent(
+					queryDevCheckpoint(devDb),
+					queryTableUpdateTimes(prodDb, tlsArgs),
+				),
+		),
 	);
 	console.info(
 		fresh
@@ -971,7 +1031,16 @@ function assertRustVersion() {
 function assertMAUIVersion() {
 	// TODO: check using semver, TODO: inform if MAUI is not installed
 	console.info("Checking .NET MAUI version...");
-	const supportedMauiVersions = ["9.0.100"];
+	// `dotnet workload list` reports the SDK feature band ("SDK 11.0.100"),
+	// not the workload manifest — derive the expected band from the app
+	// global.json pin so this check cannot go stale on SDK bumps.
+	const sdkPin = JSON.parse(
+		fs.readFileSync(path.join(projectDir, "app", "global.json"), "utf8"),
+	).sdk.version;
+	const [sdkMajor, sdkMinor, sdkPatch] = sdkPin.split(".").map(Number);
+	const supportedMauiVersions = [
+		`${sdkMajor}.${sdkMinor}.${Math.floor(sdkPatch / 100) * 100}`,
+	];
 	const result = spawnSync("dotnet", ["workload", "list"], {
 		shell: isWin,
 	});

@@ -15,7 +15,7 @@ public sealed class OfflineReaderFixture : AppFixture
 public sealed class OfflineReaderCollection : ICollectionFixture<OfflineReaderFixture>;
 
 /// <summary>
-/// #2624: while scripture is already active, tapping the bottom bar's א ב ג
+/// #2624: while scripture is already active, tapping the bottom bar's text
 /// tab animates the visible perek's vertical content back to its start — the
 /// same perek, same reader, no reload. Captures native before/after frames.
 /// </summary>
@@ -43,7 +43,7 @@ public sealed class PerekReselectScrollTests(OfflineReaderFixture fixture)
         fixture.Click(button!);
 
         var backAtTop = await WaitForFirstPasukAsync("א ");
-        backAtTop.Should().BeTrue("reselecting א ב ג scrolls the active list back to its first pasuk");
+        backAtTop.Should().BeTrue("reselecting the text tab scrolls the active list back to its first pasuk");
         var first = FirstVisiblePasuk();
         (first.BoundingRectangle.Top - listTop).Should().BeLessThanOrEqualTo(120,
             "the first pasuk lands at the top of the list, beneath the perek header");

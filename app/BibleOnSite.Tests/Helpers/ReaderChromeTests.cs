@@ -279,6 +279,14 @@ public class ReaderChromeTests
         public void RaiseSelected(Article article) => _articleSelected?.Invoke(this, article);
     }
 
+    private sealed class FakeMenuPanel : IReaderMenuSurface
+    {
+        // A backing field keeps Codacy's cross-file view honest — the
+        // coordinator assigns through the interface, which S3459 misses.
+        private bool _isArticlesMode;
+        public bool IsArticlesMode { get => _isArticlesMode; set => _isArticlesMode = value; }
+    }
+
     /// <summary>
     /// The rig every reader page constructs in its SetupReaderChrome: the same
     /// surface wiring, with fake bar/sheet/articles and real fan controls.
@@ -288,6 +296,8 @@ public class ReaderChromeTests
         public readonly FakeBottomBar BottomBar = new();
         public readonly FakePerushimSheet Sheet = new();
         public readonly FakeArticlesView Articles = new();
+        public readonly FakeMenuPanel Menu = new();
+        public bool IncludeMenuPanel { get; init; } = true;
         public readonly ReaderFanMenu Fan = new();
         public readonly ReaderFanMenuSatellite Prev = new();
         public readonly ReaderFanMenuSatellite Next = new();
@@ -322,7 +332,7 @@ public class ReaderChromeTests
         }
 
         public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null,
-            bool includeProgressIndicator = true, Func<Task>? openNavigation = null)
+            bool includeProgressIndicator = true, Func<Task>? openNavigation = null, Action<bool>? articlesVisibilityChanged = null)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -335,6 +345,7 @@ public class ReaderChromeTests
                     ExitFullscreenButton = ExitButton,
                     ArticlesView = Articles,
                     ReaderContent = Content,
+                    MenuPanel = IncludeMenuPanel ? Menu : null,
                     ReadingProgressIndicator = includeProgressIndicator ? Progress : null,
                     Toolbar = Toolbar,
                     Host = Host,
@@ -355,6 +366,7 @@ public class ReaderChromeTests
                     FullscreenStateChanged = withFullscreenHandler
                         ? isFullScreen => FullscreenChanges.Add(isFullScreen)
                         : null,
+                    ArticlesVisibilityChanged = articlesVisibilityChanged,
                 });
         }
 
@@ -381,7 +393,7 @@ public class ReaderChromeTests
 
     private static void SendTapped(VisualElement owner, TapGestureRecognizer gesture) =>
         typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", BindingFlags.Instance | BindingFlags.Public)!
             .Invoke(gesture, [owner, null]);
 
     private static void TapExit(ReaderExitFullscreenButton button) =>
@@ -522,6 +534,7 @@ public class ReaderChromeTests
                 ExitFullscreenButton = rig.ExitButton,
                 ArticlesView = rig.Articles,
                 ReaderContent = rig.Content,
+                MenuPanel = rig.Menu,
                 ReadingProgressIndicator = rig.Progress,
                 Toolbar = rig.Toolbar,
                 Host = rig.Host,
@@ -562,6 +575,93 @@ public class ReaderChromeTests
         rig.Articles.IsVisible.Should().BeFalse();
         rig.Content.IsVisible.Should().BeTrue();
         rig.BottomBar.IsArticlesActive.Should().BeFalse();
+    }
+
+    // — ⋮ menu content mode (issue #3401) ———————————————————————————————————
+
+    [Fact]
+    public void ArticlesButton_ShowsArticles_PutsTheMenuInArticlesMode()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.Menu.IsArticlesMode.Should().BeFalse("the menu starts on scripture actions");
+
+        rig.BottomBar.RaiseArticles();
+
+        rig.Menu.IsArticlesMode.Should().BeTrue(
+            "in articles mode the menu shows only הסתר שם השם — the scripture reading modes do not apply (#3401)");
+    }
+
+    [Fact]
+    public void TextButton_FromArticles_RestoresTheScriptureMenu()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.BottomBar.RaiseArticles();
+        rig.Menu.IsArticlesMode.Should().BeTrue();
+
+        rig.BottomBar.RaiseTextMode();
+
+        rig.Menu.IsArticlesMode.Should().BeFalse(
+            "returning to the perek view restores the full scripture menu — hiding rows never reset the saved modes (#3401)");
+    }
+
+    [Fact]
+    public void ArticlesButton_WhenReloadThrows_KeepsTheScriptureMenu()
+    {
+        var rig = new Rig();
+        _ = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = rig.BottomBar,
+                PerushimSheet = rig.Sheet,
+                FanMenu = rig.Fan,
+                PreviousSatellite = rig.Prev,
+                NextSatellite = rig.Next,
+                ExitFullscreenButton = rig.ExitButton,
+                ArticlesView = rig.Articles,
+                ReaderContent = rig.Content,
+                MenuPanel = rig.Menu,
+                ReadingProgressIndicator = rig.Progress,
+                Toolbar = rig.Toolbar,
+                Host = rig.Host,
+                ContentArea = rig.ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = () => throw new InvalidOperationException("service down"),
+                CurrentUnit = () => rig.Unit,
+                SelectArticle = _ => { },
+                CanGoPrevious = () => true,
+                CanGoNext = () => true,
+                IsSelectableUnit = _ => true,
+                CurrentUnitId = () => 1,
+                NavigateToUnitAsync = _ => Task.CompletedTask,
+            });
+
+        FluentActions.Invoking(() => rig.BottomBar.RaiseArticles()).Should().NotThrow();
+
+        rig.Menu.IsArticlesMode.Should().BeFalse(
+            "a failed articles load never swapped the surfaces — the menu still serves the visible scripture (#3401)");
+    }
+
+    [Fact]
+    public void ArticlesButton_WithoutMenuPanel_StillSwapsViews()
+    {
+        var rig = new Rig { IncludeMenuPanel = false };
+        var chrome = rig.CreateChrome();
+
+        rig.BottomBar.RaiseArticles();
+
+        chrome.IsShowingArticles.Should().BeTrue();
+        rig.Articles.IsVisible.Should().BeTrue(
+            "readers with no ⋮ menu (masora, moed) keep the swap unchanged (#3401)");
+
+        rig.BottomBar.RaiseTextMode();
+
+        chrome.IsShowingArticles.Should().BeFalse();
+        rig.Articles.IsVisible.Should().BeFalse(
+            "the return to scripture must not trip on the missing menu surface either (#3401)");
     }
 
     // — Reading-progress placement (issue #3364) ———————————————————————————
@@ -800,5 +900,89 @@ public class ReaderChromeTests
 
         FluentActions.Invoking(() => rig.Articles.RaiseSelected(article)).Should().NotThrow();
         rig.Selections.Should().Equal(new int?[] { 5 }, "the highlight still lands even when navigation fails");
+    }
+
+    // — Articles-visibility notifications (#3378) —————————————————————————
+    // The readers re-report their analytics surface when the articles view
+    // swaps in/out — the coordinator publishes the settled transition.
+
+    [Fact]
+    public void ArticlesButton_ShowsArticles_NotifiesVisibilityOnce()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().Equal(new[] { true },
+            "the articles swap settling is the reader's cue to report the scoped list surface");
+    }
+
+    [Fact]
+    public void TextButton_FromArticles_NotifiesVisibilityBackToReader()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+        rig.BottomBar.RaiseArticles();
+        rig.BottomBar.RaiseTextMode();
+
+        changes.Should().Equal(new[] { true, false },
+            "showing then hiding the articles view publishes both transitions");
+    }
+
+    [Fact]
+    public void ArticlesButton_SecondTap_DoesNotReNotify()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+        rig.BottomBar.RaiseArticles();
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().Equal(new[] { true },
+            "an already-open articles view publishes nothing — the surface never changed");
+    }
+
+    [Fact]
+    public void ArticlesButton_WhenReloadThrows_DoesNotNotify()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = rig.BottomBar,
+                PerushimSheet = rig.Sheet,
+                FanMenu = rig.Fan,
+                PreviousSatellite = rig.Prev,
+                NextSatellite = rig.Next,
+                ExitFullscreenButton = rig.ExitButton,
+                ArticlesView = rig.Articles,
+                ReaderContent = rig.Content,
+                ReadingProgressIndicator = rig.Progress,
+                Toolbar = rig.Toolbar,
+                Host = rig.Host,
+                ContentArea = rig.ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = () => throw new InvalidOperationException("service down"),
+                CurrentUnit = () => rig.Unit,
+                SelectArticle = _ => { },
+                CanGoPrevious = () => true,
+                CanGoNext = () => true,
+                IsSelectableUnit = _ => true,
+                CurrentUnitId = () => 1,
+                NavigateToUnitAsync = _ => Task.CompletedTask,
+                ArticlesVisibilityChanged = changes.Add,
+            });
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().BeEmpty(
+            "a failed articles load never swapped the surfaces — no phantom list visit reports");
     }
 }

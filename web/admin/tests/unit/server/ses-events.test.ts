@@ -464,6 +464,102 @@ describe("SES event normalization", () => {
 	});
 });
 
+function open() {
+	return {
+		eventType: "Open",
+		mail: mail(),
+		open: {
+			timestamp: changedAt,
+			ipAddress: "10.0.0.1",
+			userAgent: "Mozilla/5.0",
+		},
+	};
+}
+
+function click() {
+	return {
+		eventType: "Click",
+		mail: mail(),
+		click: {
+			timestamp: changedAt,
+			link: "https://xn--febl3a.co.il/perek/1",
+			ipAddress: "10.0.0.1",
+			userAgent: "Mozilla/5.0",
+		},
+	};
+}
+
+describe("SES tracked engagement events", () => {
+	it("normalizes an open to the correlated attempt without tracking metadata", () => {
+		expect(parseSesEvent(open(), expected)).toEqual({
+			...common,
+			type: "open",
+			timestamp: changedAt,
+		});
+	});
+
+	it("normalizes a click and keeps only the original destination link", () => {
+		expect(parseSesEvent(click(), expected)).toEqual({
+			...common,
+			type: "click",
+			timestamp: changedAt,
+			link: "https://xn--febl3a.co.il/perek/1",
+		});
+	});
+
+	it("accepts engagement events carrying SES bot or link-tag metadata", () => {
+		const opened = open();
+		Object.assign(opened.open, { isBotEvent: true });
+		expect(parseSesEvent(opened, expected)).toMatchObject({ type: "open" });
+		const clicked = click();
+		Object.assign(clicked.click, {
+			linkTags: { campaign: ["daily-bulletin"] },
+			isBotEvent: false,
+		});
+		expect(parseSesEvent(clicked, expected)).toMatchObject({
+			type: "click",
+			link: "https://xn--febl3a.co.il/perek/1",
+		});
+	});
+
+	it.each([
+		{ eventType: "Open", open: null },
+		{ eventType: "Open", open: [] },
+		{ eventType: "Open", open: {} },
+		{ eventType: "Open", open: { timestamp: "not-a-time" } },
+		{ eventType: "Click", click: undefined },
+		{ eventType: "Click", click: {} },
+		{ eventType: "Click", click: { timestamp: changedAt } },
+		{
+			eventType: "Click",
+			click: { timestamp: changedAt, link: "javascript:alert(1)" },
+		},
+		{
+			eventType: "Click",
+			click: { timestamp: changedAt, link: "ftp://example.com/f" },
+		},
+		{
+			eventType: "Click",
+			click: { timestamp: changedAt, link: `https://x/${"a".repeat(2050)}` },
+		},
+		{
+			eventType: "Click",
+			click: { timestamp: changedAt, link: " https://example.com/" },
+		},
+	])("rejects malformed engagement metadata %j", (body) => {
+		expect(parseSesEvent({ mail: mail(), ...body }, expected)).toBeNull();
+	});
+
+	it("requires the same account, configuration-set and attempt correlation as delivery", () => {
+		const event = click();
+		event.mail.sendingAccountId = "999999999999";
+		expect(parseSesEvent(event, expected)).toBeNull();
+		const retry = open();
+		Object.assign(retry.mail.tags, { bulletin_attempt: undefined });
+		expect(parseSesEvent(retry, expected)).toBeNull();
+	});
+});
+
 describe("SES native subscription events", () => {
 	it("normalizes opt-outs and genuine opt-in transitions", () => {
 		expect(parseSesEvent(subscription(), expected)).toEqual({

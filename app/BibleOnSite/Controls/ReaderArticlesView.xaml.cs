@@ -44,8 +44,11 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
 
     public ReaderArticlesView()
     {
+        DebugLog.Write("[Startup] ReaderArticlesView InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] ReaderArticlesView XAML initialized");
         SelectionChanged += OnSelectionChanged;
+        DebugLog.Write("[Startup] ReaderArticlesView constructed");
     }
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -55,5 +58,21 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
             SelectedItem = null;
             ArticleSelected?.Invoke(this, article);
         }
+    }
+
+    protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
+    {
+        base.OnPropertyChanged(propertyName);
+        if (propertyName is nameof(ItemsSource) or nameof(IsGrouped))
+        {
+            ApplyGroupHeaderTemplate();
+        }
+    }
+
+    private void ApplyGroupHeaderTemplate()
+    {
+        GroupHeaderTemplate = ReaderArticlesViewGrouping.ServesGroupHeaders(IsGrouped, ItemsSource)
+            ? (DataTemplate)Resources["ArticleGroupHeaderTemplate"]
+            : null;
     }
 }

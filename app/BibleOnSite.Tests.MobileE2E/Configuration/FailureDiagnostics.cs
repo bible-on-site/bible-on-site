@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -18,8 +17,19 @@ internal static class FailureDiagnostics
         WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
             notificationPort: Environment.GetEnvironmentVariable(PortVariable));
 
+    internal static void BeforeFailure(string test, string? sessionId, Action<string> log, DateTimeOffset scenarioStartedAtUtc) =>
+        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
+            notificationPort: Environment.GetEnvironmentVariable(PortVariable), scenarioStartedAtUtc: scenarioStartedAtUtc);
+
+    internal static void BeforeStartupFailure(string test, string? sessionId, Action<string> log,
+        ReaderStartupTimeoutException failure) =>
+        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
+            notificationPort: Environment.GetEnvironmentVariable(PortVariable),
+            scenarioStartedAtUtc: failure.StartedAtUtc, startupFailure: failure);
+
     internal static void WaitForCapture(string? directory, string test, string? sessionId,
-        Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null)
+        Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null,
+        DateTimeOffset? scenarioStartedAtUtc = null, ReaderStartupTimeoutException? startupFailure = null)
     {
         if (string.IsNullOrEmpty(directory))
         {
@@ -27,7 +37,6 @@ internal static class FailureDiagnostics
         }
 
         var id = Guid.NewGuid().ToString("N");
-        var started = Stopwatch.StartNew();
         var failedAtUtc = DateTimeOffset.UtcNow;
         PreserveFailure(() =>
         {
@@ -43,14 +52,21 @@ internal static class FailureDiagnostics
             var ack = Path.Join(directory, $"{id}.ack.json");
             var request = Path.Join(directory, $"{id}.request.json");
             var temporary = request + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(new
+            var payload = new Dictionary<string, object?>
             {
-                id,
-                test,
-                sessionId,
-                failedAtUtc,
-                deadlineUtc = failedAtUtc + budget,
-            }));
+                ["id"] = id,
+                ["test"] = test,
+                ["sessionId"] = sessionId,
+                ["scenarioStartedAtUtc"] = scenarioStartedAtUtc,
+                ["failedAtUtc"] = failedAtUtc,
+                ["deadlineUtc"] = failedAtUtc + budget,
+            };
+            if (startupFailure != null)
+            {
+                payload["failurePhase"] = "reader-startup";
+                payload["launchId"] = startupFailure.LaunchId;
+            }
+            File.WriteAllText(temporary, JsonSerializer.Serialize(payload));
             File.Move(temporary, request);
             published?.Invoke(request);
 
@@ -59,10 +75,11 @@ internal static class FailureDiagnostics
             {
                 throw new InvalidDataException("The supervisor's loopback notification port is missing or invalid.");
             }
-            var remaining = budget - started.Elapsed;
             // The listening supervisor is ready before the harness starts. One socket exchange,
             // rather than a filesystem subscription race, carries notification and completion.
-            if (remaining <= TimeSpan.Zero || !NotifyCaptureAsync(port, id, ack, remaining).GetAwaiter().GetResult())
+            // The budget bounds that exchange itself; request publication above may consume
+            // arbitrary scheduling time on a loaded host and must not eat into it.
+            if (!NotifyCaptureAsync(port, id, ack, budget).GetAwaiter().GetResult())
             {
                 Log(log, $"Failure diagnostics acknowledgement was not received within {budget.TotalSeconds:0.###} seconds; request {id} retained.");
             }
@@ -70,9 +87,9 @@ internal static class FailureDiagnostics
             File.WriteAllText(Path.Join(directory, $"{id}.error.txt"), exception.ToString()));
     }
 
-    private static async Task<bool> NotifyCaptureAsync(int port, string id, string acknowledgement, TimeSpan remaining)
+    private static async Task<bool> NotifyCaptureAsync(int port, string id, string acknowledgement, TimeSpan budget)
     {
-        using var deadline = new CancellationTokenSource(remaining);
+        using var deadline = new CancellationTokenSource(budget);
         using var client = new TcpClient(AddressFamily.InterNetwork);
         try
         {

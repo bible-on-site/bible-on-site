@@ -1,0 +1,45 @@
+AL HEPEREK FONT LICENSE
+Version 1.0 - 15 November 2026
+
+Copyright (c) 2026 DoradSoft. All rights reserved.
+
+This license applies to the original Al Heperek Font software, editable sources,
+generated font files, and original build and design code in this repository.
+It is a restricted proprietary license, not an open-source license.
+
+1. Authorized use
+   DoradSoft and parties holding its express written permission may develop,
+   install, modify, host, embed, and distribute the font for authorized uses.
+   The official Tanach Al Haperek websites, applications, and documents may
+   include or transmit font files as required to display their content.
+
+2. Permission for readers
+   Recipients may load and temporarily cache the font as required to view or
+   print authorized website, application, or document content. Ordinary access,
+   reading, and printing of that content do not require additional permission.
+   This permission does not authorize independent reuse of the font files.
+
+3. Reserved rights
+   Without prior written permission from DoradSoft, recipients may not extract
+   or independently install, copy, redistribute, rehost, sublicense, sell,
+   convert, subset, modify, or create derivative fonts from this Font Software,
+   except where applicable law expressly permits otherwise. Possession of the
+   source code or a downloaded font file does not grant those permissions.
+
+4. Other works
+   This license does not restrict rights granted by the licenses of other fonts,
+   open-source build tools, or other third-party works. Taamey D remains under
+   its own GPL license and font-embedding exception. No Taamey D glyph outlines,
+   font sources, positioning data, or build code are included in Al Heperek Font.
+
+5. Names and branding
+   No independent right to use DoradSoft or Tanach Al Haperek branding is granted
+   by this license. References identifying the font and its license are allowed.
+
+6. Warranty and liability
+   The Font Software is supplied without warranties of availability, fitness,
+   or freedom from defects. To the extent permitted by applicable law, its
+   authors and rights holders are not liable for losses arising from its use.
+
+Permissions requests may be submitted through the official Tanach Al Haperek
+contact channel. Written authorization must identify the permitted use.

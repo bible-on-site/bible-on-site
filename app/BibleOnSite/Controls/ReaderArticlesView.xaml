@@ -6,11 +6,27 @@
                 xmlns:converters="clr-namespace:BibleOnSite.Converters"
                 x:Class="BibleOnSite.Controls.ReaderArticlesView"
                 x:Name="ArticlesRoot"
+                AutomationId="ReaderArticlesView"
                 IsVisible="False"
                 SelectionMode="Single"
                 Margin="8,8,8,0">
     <CollectionView.Resources>
         <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
+        <!-- Section header for grouped sources (#3752): only the לקריאה נוספת
+             group carries a title; an empty title collapses the slot so flat
+             groups keep today's look. Kept in Resources and applied from
+             code-behind only while a grouped, non-empty source exists — an
+             always-on template makes iOS emit a group supplementary view whose
+             EmptySource.Group lookup throws and crashes the layout pass. -->
+        <DataTemplate x:Key="ArticleGroupHeaderTemplate" x:DataType="models:ArticleListGroup">
+            <Label Text="{Binding Title}"
+                   IsVisible="{Binding Title, Converter={StaticResource StringNotEmptyConverter}}"
+                   FontSize="17"
+                   FontAttributes="Bold"
+                   Padding="8,12,8,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+        </DataTemplate>
     </CollectionView.Resources>
     <!-- Footer spacer so last item can scroll above the bottom bar -->
     <CollectionView.Footer>

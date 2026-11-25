@@ -43,18 +43,15 @@
                 AbsoluteLayout.LayoutBounds="0.08,0.55"
                 AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
-        <!-- Text Button at 28% - vertical א ב ג -->
+        <!-- Text Button at 28% -->
         <Button x:Name="TextButton"
                 AutomationId="TextButton"
                 Style="{x:Static controls:AppButtonStyles.CompactIcon}"
-                Text="א&#x0a;ב&#x0a;ג"
-                FontFamily="OpenSansRegular"
+                Text="{x:Static fonts:FluentUI.text_description_rtl_24_regular}"
                 FontAutoScalingEnabled="False"
                 SemanticProperties.Description="הצגת הטקסט"
                 ToolTipProperties.Text="הצגת הטקסט"
-                FontSize="10"
-                FontAttributes="Bold"
-                LineBreakMode="WordWrap"
+                FontSize="20"
                 Clicked="OnTextButtonClicked"
                 AbsoluteLayout.LayoutBounds="0.28,0.55"
                 AbsoluteLayout.LayoutFlags="PositionProportional"/>

@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
 import {
+	MAX_JSON_BODY_BYTES,
+	readBoundedJson,
+} from "@/lib/bounded-json";
+import {
+	pushRegistrationAllowed,
+	requestClientKey,
+} from "@/lib/rate-limit";
+import {
+	SubscriptionStoreFullError,
 	deleteSubscription,
 	getVapidPublicKey,
 	isPushServiceEndpoint,
@@ -10,27 +19,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** A `PushSubscription.toJSON()` body is well under 1 KB. */
-const MAX_BODY_BYTES = 4 * 1024;
-
 const notConfigured = () =>
 	NextResponse.json({ error: "Web push is not configured" }, { status: 404 });
-
-async function readJson(request: Request): Promise<unknown> {
-	let text: string;
-	try {
-		text = await request.text();
-	} catch {
-		console.warn("Push subscription body read failed");
-		return null;
-	}
-	if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
-}
 
 /**
  * Daily perek push subscriptions (#1096).
@@ -49,7 +39,22 @@ export function GET() {
 
 export async function POST(request: Request) {
 	if (!isWebPushConfigured()) return notConfigured();
-	const subscription = parseSubscription(await readJson(request));
+	// Anonymous endpoint: bound writes per client address (#3500). The
+	// store cap in saveSubscription is the backstop for a distributed
+	// flood.
+	if (!pushRegistrationAllowed(requestClientKey(request))) {
+		return NextResponse.json(
+			{ error: "Too many requests" },
+			{ status: 429 },
+		);
+	}
+	const body = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+	if (body.status === "unreadable") {
+		console.warn("Push subscription body read failed");
+	}
+	const subscription = parseSubscription(
+		body.status === "parsed" ? body.value : null,
+	);
 	if (!subscription) {
 		return NextResponse.json(
 			{ error: "Invalid subscription" },
@@ -58,16 +63,27 @@ export async function POST(request: Request) {
 	}
 	try {
 		await saveSubscription(subscription);
-	} catch {
-		console.error("Failed to save push subscription");
+	} catch (error) {
+		console.error(
+			error instanceof SubscriptionStoreFullError
+				? "Push subscription store is full"
+				: "Failed to save push subscription",
+		);
 		return NextResponse.json({ error: "Unavailable" }, { status: 503 });
 	}
 	return NextResponse.json({ subscribed: true }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
-	const body = await readJson(request);
-	const endpoint = (body as { endpoint?: unknown } | null)?.endpoint;
+	const result = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+	if (result.status === "unreadable") {
+		console.warn("Push subscription body read failed");
+	}
+	const body =
+		result.status === "parsed"
+			? (result.value as { endpoint?: unknown } | null)
+			: null;
+	const endpoint = body?.endpoint;
 	if (!isPushServiceEndpoint(endpoint)) {
 		return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
 	}

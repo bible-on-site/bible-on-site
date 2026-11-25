@@ -537,9 +537,9 @@ export async function websiteSociIndex(
 	staged: ReadonlyMap<"amd64" | "arm64", RegistryImage>,
 ): Promise<ImageDescriptor[]> {
 	const pairs = [];
-	for (const architecture of ["amd64", "arm64"] as const) {
-		const native = staged.get(architecture);
-		assert.ok(native);
+	// Paired modules stage amd64+arm64; ARM64-only website releases stage the
+	// single ARM64 child (#3794).
+	for (const [architecture, native] of staged) {
 		const doc = JSON.parse(native.manifest) as Manifest;
 		const artifact = await readManifest(
 			client,

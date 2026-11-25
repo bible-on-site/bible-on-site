@@ -2,10 +2,11 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
 	CATEGORY_HIERARCHY,
+	CATEGORY_LABELS,
+	ENTITY_TYPE_LABELS,
 	labelForCategoryKey,
 } from "@/lib/tanahpedia/category-hierarchy";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
-import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "@/lib/tanahpedia/service";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { BreadcrumbDropdown } from "../../929/[number]/components/BreadcrumbDropdown";
 import styles from "../../929/[number]/components/breadcrumb.module.css";

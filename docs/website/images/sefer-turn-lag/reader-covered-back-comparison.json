@@ -61,7 +61,6 @@
       }
     ],
     "sourceTree": "1f3bbf0b4b06eee5897bc4b929b7bb8d5056965d",
-    "representative": "reader-final-after.png",
     "positiveControls": "Actual computed overlay contain=paint, Kings300 147fragmentfibers/1146textnodes/106elements; Kings288 three data-qri-label spans and zero labels in light/dark"
   },
   "after": {
@@ -119,8 +118,7 @@
         "paperShading": false
       }
     ],
-    "sourceTree": "da51ce090329a87be3b62ee11cc4a1a8e105ea2c",
-    "representative": "reader-covered-back-after.png"
+    "sourceTree": "da51ce090329a87be3b62ee11cc4a1a8e105ea2c"
   },
   "representativePose": "300-leaf-light-angled.png",
   "representativeSha256": {

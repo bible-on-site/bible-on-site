@@ -33,8 +33,8 @@ import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
-	readdirSync,
 	readFileSync,
+	readdirSync,
 	writeFileSync,
 } from "node:fs";
 import http from "node:http";
@@ -42,10 +42,15 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
+import { standaloneAppDir } from "./standalone-app-dir.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(__dirname, "..");
-const STANDALONE = path.join(APP_ROOT, ".next", "standalone");
+// Resolved lazily: `report`/`sanitize` run without a build present, and the
+// traced app nests under standalone/<package-dir>/ since the shared
+// contract imports widened turbopack.root to web/ (#3710).
+let standaloneDir;
+const STANDALONE = () => (standaloneDir ??= standaloneAppDir(APP_ROOT));
 const WRAPPER = path.join(APP_ROOT, "scripts", "start-server.mjs");
 const HOST = "127.0.0.1";
 
@@ -506,7 +511,7 @@ async function startServer({ runtime, port, extraEnv, diagnostics }) {
 	};
 	if (diagnostics) env.ENABLE_EVENT_LOOP_DIAGNOSTICS = "1";
 	const wrapper = spawn(cmd, [WRAPPER], {
-		cwd: STANDALONE,
+		cwd: STANDALONE(),
 		env,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
@@ -1050,7 +1055,7 @@ async function cmdRun(args) {
 	// Fail before starting any server on unsupported hosts.
 	assertRunPlatform();
 	const manifestPath = path.join(
-		STANDALONE,
+		STANDALONE(),
 		".next/server/server-reference-manifest.json",
 	);
 	const serverActions = resolveServerActions(readJson(manifestPath));
@@ -1084,12 +1089,12 @@ async function cmdRun(args) {
 		cpuModel: (await import("node:os")).cpus()[0]?.model,
 		totalMemBytes: (await import("node:os")).totalmem(),
 		fixture: path.relative(APP_ROOT, fixturePath),
-		standaloneDir: path.relative(APP_ROOT, STANDALONE),
+		standaloneDir: path.relative(APP_ROOT, STANDALONE()),
 		buildId: readFileSync(
-			path.join(STANDALONE, ".next/BUILD_ID"),
+			path.join(STANDALONE(), ".next/BUILD_ID"),
 			"utf8",
 		).trim(),
-		serverSha256: sha256(readFileSync(path.join(STANDALONE, "server.js"))),
+		serverSha256: sha256(readFileSync(path.join(STANDALONE(), "server.js"))),
 		actionManifestSha256: sha256(readFileSync(manifestPath)),
 		serverActions,
 		startedAt: new Date().toISOString(),
@@ -1156,7 +1161,10 @@ export function summarizeRun(rec) {
 		// Window throughput = span of the offered schedule, not per-request mean.
 		const span =
 			Math.max(...results.map((r) => (r.startedAtMs ?? 0) + r.totalMs), 0) -
-			Math.min(...results.map((r) => r.startedAtMs ?? 0), Infinity);
+			Math.min(
+				...results.map((r) => r.startedAtMs ?? 0),
+				Number.POSITIVE_INFINITY,
+			);
 		const cpuBounds = cpuSpan[name];
 		out[name] = {
 			requests: results.length,
@@ -1207,7 +1215,9 @@ export function summarizeRun(rec) {
 
 function readJsonText(file) {
 	const bytes = readFileSync(file);
-	return (file.endsWith(".gz") ? zlib.gunzipSync(bytes) : bytes).toString("utf8");
+	return (file.endsWith(".gz") ? zlib.gunzipSync(bytes) : bytes).toString(
+		"utf8",
+	);
 }
 
 export function readJson(file) {

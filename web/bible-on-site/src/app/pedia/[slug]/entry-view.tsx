@@ -161,7 +161,7 @@ export async function EntryView({ slug }: { slug: string }) {
 	);
 
 	return (
-		<div className={styles.tanahpediaPage}>
+		<main className={styles.tanahpediaPage}>
 			<JsonLd data={entryGraph} />
 			<ReadingProgress
 				units={entryProgressUnits}
@@ -229,6 +229,6 @@ export async function EntryView({ slug }: { slug: string }) {
 					חזרה לתנכפדיה
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

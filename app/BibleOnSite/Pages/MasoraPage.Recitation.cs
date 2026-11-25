@@ -28,18 +28,17 @@ public partial class MasoraPage
     private int _focusedClipEnd = int.MaxValue;
     private CancellationTokenSource? _headerPress;
     private Pasuk? _recitingPasuk;
+    /// <summary>The row last scrolled to — verse transitions only, so follow scrolls stay rare.</summary>
+    private MasoraPasukRow? _recitingRow;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private ReaderRecitationEngine? _recitation;
-    private DateTime _lastLongPressTime = DateTime.MinValue;
     private (int PerekId, int PasukNum) _pressedPasuk = (-1, -1);
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 600;
-    private DateTime _lastScrollTime = DateTime.MinValue;
-    private const int ScrollCooldownMs = 500;
+    private readonly ReaderGestureTiming _gestureTiming = new();
 
     /// <summary>True while the user is scrolling — suppresses long-press arming.</summary>
-    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => _gestureTiming.IsScrolling;
 
     private ReaderRecitationEngine Recitation => _recitation ??= CreateRecitationEngine();
 
@@ -111,6 +110,17 @@ public partial class MasoraPage
             row => row.PerekId == perekId && row.PasukNum == pasukNum);
 
     /// <summary>
+    /// The realized scroll surface of the unit on screen — the carousel is
+    /// virtualized, so it is resolved by the current unit's identity rather
+    /// than by carousel position (#3728).
+    /// </summary>
+    private CollectionView? FindReaderPasukList() => MasoraCarousel
+        .GetVisualTreeDescendants()
+        .OfType<CollectionView>()
+        .FirstOrDefault(view => ReferenceEquals(view.BindingContext, _viewModel.Unit)
+            && view.Handler != null && view.Height > 0);
+
+    /// <summary>
     /// Maps the engine's highlighted word onto the displayed row — clipped
     /// rows translate the canonical 1-based segment index into their own
     /// segment list through <see cref="MasoraPasukRow.ClipStartIndex"/>.
@@ -134,6 +144,15 @@ public partial class MasoraPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
+        // Follow the spoken verse (#3728): when playback lands on a new row
+        // off-screen — play, resume or seek — bring it into view. Suppressed
+        // while the user is scrolling, and a no-op while the row is already
+        // visible.
+        if (nextRow != null && !ReferenceEquals(nextRow, _recitingRow) && !IsScrolling)
+        {
+            ReaderScrollTop.ScrollToItem(FindReaderPasukList(), nextRow);
+        }
+        _recitingRow = nextRow;
         if (word != null && nextRow != null)
         {
             nextRow.Pasuk.RecitingSegment = word.Segment - nextRow.ClipStartIndex;
@@ -200,9 +219,9 @@ public partial class MasoraPage
         ResetRecitationContext();
         _viewModel.ClearSelected();
         _unitRecitationSelection = true;
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         UpdateSelectionBar();
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
     }
 
     private async void OnHeaderPointerPressed(object? sender, PointerEventArgs e)
@@ -218,7 +237,7 @@ public partial class MasoraPage
         var unit = (sender as Label)?.BindingContext as MasoraUnit;
         try
         {
-            await Task.Delay(600, request.Token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, request.Token);
             if (unit != null && unit == _viewModel.Unit)
             {
                 EnterUnitRecitation();
@@ -339,7 +358,7 @@ public partial class MasoraPage
         return;
 #else
         LongPressBehavior.CancelAllPending();
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -359,7 +378,7 @@ public partial class MasoraPage
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+        if (_gestureTiming.IsLongPressDebounced)
         {
             return;
         }
@@ -383,7 +402,7 @@ public partial class MasoraPage
             UpdatePasukSelection();
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -420,10 +439,10 @@ public partial class MasoraPage
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, token);
+            await Task.Delay(ReaderGestureTiming.LongPressDurationMs, token);
             if (!token.IsCancellationRequested && _pressedPasuk == pasuk && !IsScrolling)
             {
-                _lastLongPressTime = DateTime.Now;
+                _gestureTiming.NoteLongPress();
                 ResetRecitationContext();
                 var wasEmpty = _viewModel.SelectedPasukCount == 0;
                 _viewModel.ToggleSelectedPasuk(pasuk.PerekId, pasuk.PasukNum);
@@ -432,7 +451,7 @@ public partial class MasoraPage
                     UpdateSelectionBar();
                     if (wasEmpty && _viewModel.SelectedPasukCount > 0)
                     {
-                        TriggerHapticFeedback();
+                        SelectionHaptics.Trigger();
                     }
                 });
             }
@@ -447,7 +466,7 @@ public partial class MasoraPage
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
 #if ANDROID || IOS || MACCATALYST
-        _lastLongPressTime = DateTime.Now;
+        _gestureTiming.NoteLongPress();
         if (sender is LongPressBehavior behavior &&
             behavior.AssociatedView?.BindingContext is MasoraPasukRow row)
         {
@@ -457,7 +476,7 @@ public partial class MasoraPage
             UpdateSelectionBar();
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -467,7 +486,7 @@ public partial class MasoraPage
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
         _doubleTap.Reset();
-        _lastScrollTime = DateTime.Now;
+        _gestureTiming.NoteScroll();
         _longPressTokenSource?.Cancel();
         _pressedPasuk = (-1, -1);
 #if !ANDROID
@@ -504,7 +523,7 @@ public partial class MasoraPage
         _focusedClipEnd = row.ClipEndIndex;
         // A double tap's first press paused this row's preview through the
         // shared toggle — opening its focused view resumes it.
-        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused &&
+        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering &&
             Recitation.Cursor.ResumesOnPasukFocus($"pasuk:{row.PerekId}:{row.PasukNum}",
                 _recitation.PlayerState == RecitationPlaybackState.Playing))
         {
@@ -768,7 +787,7 @@ public partial class MasoraPage
         var recitationVisual =
             RecitationPlayerState == RecitationPlaybackState.Playing && Recitation.Cursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = Recitation.Busy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו - הורידו את הקלטות הספר בהעדפות" :
@@ -828,7 +847,7 @@ public partial class MasoraPage
         }
 
         await Clipboard.SetTextAsync(text);
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
         // Inline feedback: the bar flashes the clipboard-checkmark glyph.
         await SelectionBar.FlashCopiedAsync();
     }
@@ -846,24 +865,5 @@ public partial class MasoraPage
         var lines = selected.Select(item =>
             $"{PerekDataService.Instance.GetPerekSource(item.PerekId) ?? string.Empty} {item.Pasuk.PasukNumHeb}. {item.Pasuk.Text}");
         return $"{_viewModel.Heading}\n\n{string.Join("\n", lines)}";
-    }
-
-    /// <summary>Triggers haptic feedback (vibration) for selection mode entry.</summary>
-    private static void TriggerHapticFeedback()
-    {
-        try
-        {
-#if ANDROID
-            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
-#elif IOS
-            HapticFeedback.Perform(HapticFeedbackType.LongPress);
-#endif
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
-        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
-        }
     }
 }

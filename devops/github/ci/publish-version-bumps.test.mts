@@ -53,7 +53,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
 	git(a, "remote", "add", "origin", remote);
 	git(a, "tag", "website-v1.0.0");
 	git(a, "push", "--tags", "origin", "master");
-	git(root, "clone", remote, b);
+	git(root, "-c", "core.autocrlf=false", "clone", remote, b);
 	configure(b);
 	return { a, b, remote, git, setVersion };
 }
@@ -123,6 +123,55 @@ test("a late retry does not bump code already covered by a release", (t) => {
 	const source = git(a, "rev-parse", "HEAD");
 	publishVersionBumps(retry, "retry", a, source);
 	assert.equal(git(a, "rev-parse", "HEAD"), source);
+});
+
+test("a late retry fetches its absent source after master history replacement", (t) => {
+	const { a, b, git } = fixture(t);
+	writeFileSync(join(a, "feature.txt"), "unreleased feature");
+	git(a, "add", ".");
+	git(a, "commit", "-m", "old source no longer named by a ref");
+	const source = git(a, "rev-parse", "HEAD");
+	git(a, "push", "origin", "master");
+	git(a, "checkout", "--orphan", "canonical");
+	git(a, "add", ".");
+	git(a, "commit", "-m", "canonical history with equivalent content");
+	const canonical = git(a, "rev-parse", "HEAD");
+	git(a, "push", "--force", "origin", "HEAD:master");
+	assert.throws(() => git(b, "cat-file", "-e", `${source}^{commit}`));
+	publishVersionBumps(retry, "all", b, source);
+	assert.equal(git(b, "rev-parse", "HEAD~1"), canonical);
+	assert.equal(git(b, "rev-parse", `${source}^{commit}`), source);
+	assert.equal(
+		readFileSync(join(b, "feature.txt"), "utf8"),
+		"unreleased feature",
+	);
+	assert.match(
+		git(b, "log", "-1", "--format=%s"),
+		/to release \(website to 1.0.1\)/,
+	);
+	assert.equal(git(b, "status", "--porcelain"), "");
+	// The old source stays a comparison object, never the published parent.
+	assert.throws(() => git(b, "merge-base", "--is-ancestor", source, "HEAD"));
+	assert.equal(
+		git(b, "ls-remote", "origin", "refs/heads/master").split(/\s/)[0],
+		git(b, "rev-parse", "HEAD"),
+	);
+});
+
+test("an unavailable retry source fails before any version or remote change", (t) => {
+	const { a, git } = fixture(t);
+	const before = git(a, "rev-parse", "HEAD");
+	assert.throws(() => publishVersionBumps(retry, "all", a, "f".repeat(40)));
+	assert.equal(git(a, "status", "--porcelain"), "");
+	assert.equal(git(a, "rev-parse", "HEAD"), before);
+	assert.equal(
+		git(a, "ls-remote", "origin", "refs/heads/master").split(/\s/)[0],
+		before,
+	);
+	assert.throws(
+		() => publishVersionBumps(retry, "all", a, "--all"),
+		/immutable commit SHA/,
+	);
 });
 
 test("normal release bumps are idempotent and skip CI", (t) => {

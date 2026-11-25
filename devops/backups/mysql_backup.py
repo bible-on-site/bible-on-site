@@ -26,12 +26,20 @@ DATABASE = "tanah"
 BUCKET = f"bible-on-site-db-backups-{ACCOUNT}-{REGION}"
 PARAMETER = "/bible-on-site-backup/db-url"
 RETENTION = {"weekly": 56, "monthly": 366}
+MYSQL_TOOL_VERSIONS = {"8.4": "8.4.13", "9.7": "9.7.4"}
 PART_BYTES = 16 * 1024 * 1024
 BLOCK_BYTES = 1024 * 1024
 
 
 class BackupError(RuntimeError):
     """An operational failure whose message contains no database content or secrets."""
+
+
+def mysql_family(version):
+    match = re.fullmatch(r"(\d+\.\d+)\.\d+(?:[.\-][A-Za-z0-9.\-]+)?", version)
+    if not match or match.group(1) not in MYSQL_TOOL_VERSIONS:
+        raise BackupError("Backup and restoration support MySQL 8.4 and 9.7")
+    return match.group(1)
 
 
 def identifier(value):
@@ -298,7 +306,42 @@ def catalog(database, directory, phase):
         raise BackupError(
             "A consistent backup requires nonempty InnoDB application tables"
         )
+    if any("MASKING POLICY" in row["extra"].upper() for row in result["COLUMNS"]):
+        raise BackupError("Logical backup does not support column masking policies")
     return result
+
+
+_UPGRADED_ARTICLE_HASH = (
+    r"unhex(left(sha2(concat_ws(0x01,ifnull(`name`,_utf8mb4\'\'),"
+    r"ifnull(`abstract`,_utf8mb4\'\'),ifnull(`content`,_utf8mb4\'\'),"
+    r"`perek_id`,`author_id`),256),32))"
+)
+_RESTORED_ARTICLE_HASH = _UPGRADED_ARTICLE_HASH.replace(
+    r"_utf8mb4\'\'", r"_utf8mb3\'\'"
+)
+
+
+def matches_restored_schema(source_schema, restored_sha256):
+    if fingerprint(source_schema) == restored_sha256:
+        return True
+    # INFORMATION_SCHEMA can report utf8mb4 introducers on these three empty
+    # strings where SHOW CREATE TABLE emits utf8mb3. Both forms produce the
+    # same fingerprint bytes. Accept only this exact transition on the known
+    # stored generated column.
+    columns = source_schema.get("COLUMNS", [])
+    for index, column in enumerate(columns):
+        if (
+            column["table"] == "tanah_article"
+            and column["name"] == "content_hash"
+            and column["type"] == "binary(16)"
+            and column["extra"] == "STORED GENERATED"
+            and column["generation"] == _UPGRADED_ARTICLE_HASH
+        ):
+            expected_columns = columns.copy()
+            expected_columns[index] = {**column, "generation": _RESTORED_ARTICLE_HASH}
+            expected_schema = {**source_schema, "COLUMNS": expected_columns}
+            return fingerprint(expected_schema) == restored_sha256
+    return False
 
 
 def dump_archive(database, path, directory):
@@ -310,6 +353,9 @@ def dump_archive(database, path, directory):
             "--single-transaction",
             "--quick",
             "--no-tablespaces",
+            # MySQL 9.7 otherwise reads privileged system metadata. 8.4
+            # accepts the loose form, and the catalog check excludes policies.
+            "--loose-skip-masking-policies",
             "--column-statistics=0",
             "--set-gtid-purged=OFF",
             "--default-character-set=utf8mb4",
@@ -339,15 +385,15 @@ def dump_archive(database, path, directory):
         errors.unlink(missing_ok=True)
 
 
-def validate_scratch(database, directory, source_uuid):
+def validate_scratch(database, directory, source_uuid, source_version):
     """Prove a fresh loopback scratch target authenticates and is safe and empty."""
     if database.host != "127.0.0.1" or database.name != DATABASE:
         raise BackupError("Restore target must be a fresh loopback tanah database")
     identity = server_identity(database, directory, "Scratch identity query")
     if identity["uuid"] == source_uuid or identity["events"] != "OFF":
         raise BackupError("Unsafe restore server identity or event scheduler")
-    if not identity["version"].startswith("8.4."):
-        raise BackupError("Restoration requires a MySQL 8.4 scratch server")
+    if mysql_family(identity["version"]) != mysql_family(source_version):
+        raise BackupError("Scratch MySQL release family must match the backup source")
     if database.query(
         "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='tanah';",
         directory,
@@ -356,11 +402,11 @@ def validate_scratch(database, directory, source_uuid):
         raise BackupError("Refusing to overwrite an existing database")
 
 
-def restore_archive(database, path, directory, source_uuid, sha256):
+def restore_archive(database, path, directory, source_uuid, source_version, sha256):
     """Import only into a fresh loopback database with its event scheduler disabled."""
     if digest(path) != sha256:
         raise BackupError("Archive SHA-256 mismatch")
-    validate_scratch(database, directory, source_uuid)
+    validate_scratch(database, directory, source_uuid, source_version)
     config = database.defaults(directory)
     errors = error_path(directory, "mysql-import")
     try:
@@ -475,14 +521,16 @@ def backup(source, scratch, s3, kind, directory, *, now=None, run=None):
     # Prove the scratch target authenticates and is a safe empty restore server
     # before the complete production export runs; a cold-cache credential or
     # isolation failure must abort here, not after reading the whole database.
-    validate_scratch(scratch, directory, identity["uuid"])
+    validate_scratch(scratch, directory, identity["uuid"], identity["version"])
     path = Path(directory) / "application.sql.gz"
     dump_archive(source, path, directory)
     if before != catalog(source, directory, "Source catalog query"):
         raise BackupError("Schema changed during export; discard this backup")
     sha256 = digest(path)
-    restored = restore_archive(scratch, path, directory, identity["uuid"], sha256)
-    if restored["schemaSha256"] != fingerprint(before):
+    restored = restore_archive(
+        scratch, path, directory, identity["uuid"], identity["version"], sha256
+    )
+    if not matches_restored_schema(before, restored["schemaSha256"]):
         raise BackupError("Restored schema does not match the exported schema")
     until = now + timedelta(days=RETENTION[kind])
     key = f"{kind}/{now:%Y/%m/%d}/{uuid.uuid4().hex}/application.sql.gz"
@@ -531,8 +579,7 @@ def preflight(session, directory):
     )["DBInstances"][0]
     if instance["DBInstanceStatus"] != "available" or instance["Engine"] != "mysql":
         raise BackupError("RDS instance is not an available MySQL source")
-    if not instance.get("EngineVersion", "").startswith("8.4."):
-        raise BackupError("Backup and restoration tools require MySQL 8.4")
+    tool_version = MYSQL_TOOL_VERSIONS[mysql_family(instance.get("EngineVersion", ""))]
     groups = [
         group["VpcSecurityGroupId"] for group in instance.get("VpcSecurityGroups", [])
     ]
@@ -584,7 +631,7 @@ def preflight(session, directory):
         ]
     ):
         raise BackupError("Backup bucket public access is not blocked")
-    return source, s3
+    return source, s3, tool_version
 
 
 def main():
@@ -599,8 +646,11 @@ def main():
             raise BackupError("Unexpected configured AWS region")
         with tempfile.TemporaryDirectory(prefix="bos-backup-") as directory:
             session = boto3.Session(region_name=REGION)
-            source, s3 = preflight(session, directory)
+            source, s3, tool_version = preflight(session, directory)
             if args.kind == "check":
+                if output := os.environ.get("GITHUB_OUTPUT"):
+                    with Path(output).open("a", encoding="utf-8") as workflow_output:
+                        workflow_output.write(f"mysql_version={tool_version}\n")
                 print(
                     "Backup target, credential scope and bucket protection checks passed"
                 )

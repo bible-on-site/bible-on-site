@@ -119,7 +119,8 @@ impl ArticleRelationshipsMutation {
     /// transaction: `perekId`/`authorId` single-valued replacements and/or
     /// the `coveringSources` + `coverageVerified` set. Omitted fields keep
     /// their stored state; an explicit empty covering list clears it.
-    /// Freshness guards (`expectedContentHash`, `expectedCoveringSources`)
+    /// Freshness guards (`expectedContentHash`, `expectedCoveringSources`,
+    /// `expectedMoedIds`, `expectedCoverageVerified`)
     /// reject stale edits so a newer link is never overwritten by an unseen
     /// one. `previous` in the result is the supported undo record.
     /// Requires `Authorization: Bearer <ARTICLE_API_KEY>`.
@@ -188,8 +189,8 @@ mod tests {
         }
     }
 
-    fn hash_row(hash: &str) -> BTreeMap<String, DbValue> {
-        [("h".to_string(), hash.to_string().into())]
+    fn token_row(input: &str) -> BTreeMap<String, DbValue> {
+        [("token_input".to_string(), input.as_bytes().to_vec().into())]
             .into_iter()
             .collect()
     }
@@ -202,7 +203,7 @@ mod tests {
                 .unwrap();
         MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<entities::article::Model, Vec<_>, _>([vec![article_model(7)]])
-            .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+            .append_query_results([vec![token_row("a")]])
             .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([vec![
                 entities::article_covering_source::Model {
                     article_id: 7,
@@ -250,7 +251,8 @@ mod tests {
                     created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
                         .unwrap()
                         .and_hms_opt(0, 0, 0)
-                        .unwrap(),
+                        .unwrap()
+                        .and_utc(),
                 },
             ]])
             .append_query_results::<entities::moed::Model, Vec<_>, _>([vec![
@@ -375,7 +377,7 @@ mod tests {
         assert_eq!(aggregate["perekId"], 1);
         assert_eq!(aggregate["authorId"], 2);
         assert_eq!(aggregate["coverageVerified"], true);
-        assert_eq!(aggregate["contentHash"], "a".repeat(32));
+        assert_eq!(aggregate["contentHash"], "0cc175b9c0f1b6a831c399e269772661");
         assert_eq!(aggregate["coveringSources"][0]["pasuk"], 3);
         assert_eq!(aggregate["dedications"][0]["dedicationId"], 5);
         assert_eq!(aggregate["dedications"][0]["subject"], "subject");
@@ -461,7 +463,7 @@ mod tests {
                 .append_query_results::<entities::article::Model, Vec<_>, _>([vec![article_model(
                     7,
                 )]])
-                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("b")]])
                 .into_connection(),
         );
         let response = schema(db)
@@ -477,6 +479,54 @@ mod tests {
             response.errors[0].extensions.as_ref().unwrap().get("code"),
             Some(&Value::from("BAD_REQUEST"))
         );
+    }
+
+    #[tokio::test]
+    async fn coverage_precondition_uses_the_graphql_boolean_and_rejects_both_stale_states() {
+        for expected in [true, false] {
+            let mut current = article_model(7);
+            current.coverage_verified = !expected;
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results([vec![current]])
+                    .into_connection(),
+            );
+            let response = schema(db.clone())
+                .execute(
+                    Request::new(format!(
+                        "mutation {{ updateArticleRelationships(articleId: 7, input: {{ source: \"admin\", expectedCoverageVerified: {expected} }}) {{ revalidation }} }}",
+                    ))
+                    .data(auth(Some("article-key"))),
+                )
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert!(
+                response.errors[0]
+                    .message
+                    .contains("coverage verification changed")
+            );
+            assert_eq!(
+                response.errors[0].extensions.as_ref().unwrap().get("code"),
+                Some(&Value::from("BAD_REQUEST"))
+            );
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(log.contains("FOR UPDATE"), "{log}");
+            for verb in ["INSERT INTO", "UPDATE `", "DELETE FROM"] {
+                assert!(!log.contains(verb), "unexpected write {verb}: {log}");
+            }
+        }
+    }
+
+    #[test]
+    fn coverage_precondition_is_a_nullable_boolean_in_the_public_input_schema() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let sdl = schema(db).sdl();
+        let field = sdl
+            .lines()
+            .find(|line| line.trim_start().starts_with("expectedCoverageVerified:"))
+            .unwrap();
+        assert_eq!(field.trim(), "expectedCoverageVerified: Boolean");
     }
 
     #[tokio::test]
@@ -521,7 +571,7 @@ mod tests {
                     rows_affected: 1,
                 }))
                 // `previous` snapshot reads
-                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("b")]])
                 .append_query_results::<entities::article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results([Vec::<BTreeMap<String, DbValue>>::new()])
                 // post-commit reload
@@ -530,7 +580,7 @@ mod tests {
                     after.coverage_verified = false;
                     after
                 }]])
-                .append_query_results([vec![hash_row("c".repeat(32).as_str())]])
+                .append_query_results([vec![token_row("c")]])
                 .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([
                     vec![covering(2)],
                 ])
@@ -553,7 +603,10 @@ mod tests {
         assert_eq!(result["revalidation"], "SKIPPED");
         // `previous` is the pre-write snapshot — the undo record.
         assert_eq!(result["previous"]["coveringSources"][0]["pasuk"], 3);
-        assert_eq!(result["previous"]["contentHash"], "b".repeat(32));
+        assert_eq!(
+            result["previous"]["contentHash"],
+            "92eb5ffee6ae2fec3ad71c777531578f"
+        );
         let relationships = &result["relationships"];
         assert_eq!(relationships["coverageVerified"], false);
         assert_eq!(relationships["coveringSources"][0]["pasuk"], 2);

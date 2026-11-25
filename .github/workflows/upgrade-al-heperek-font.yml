@@ -1,0 +1,114 @@
+name: Upgrade Al Heperek Font
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: upgrade-al-heperek-font
+
+jobs:
+  upgrade:
+    if: github.repository == 'bible-on-site/bible-on-site' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      UPGRADE_BRANCH: automation/al-heperek-font
+    steps:
+      - name: Check for an open font upgrade
+        id: pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=open -f head="${GITHUB_REPOSITORY_OWNER}:$UPGRADE_BRANCH" \
+            -f base="$GITHUB_REF_NAME" -F per_page=1 --jq '.[0].number // empty')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          if [[ -n "$number" ]]; then
+            echo "Font upgrade PR #$number is open for review."
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.pending.outputs.number == ''
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: steps.pending.outputs.number == ''
+        with:
+          node-version-file: devops/package.json
+
+      - name: Get a read token for the private font repository
+        id: font-token
+        if: steps.pending.outputs.number == ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.FONT_RELEASE_READER_CLIENT_ID }}
+          private-key: ${{ secrets.FONT_RELEASE_READER_PRIVATE_KEY }}
+          owner: bible-on-site
+          repositories: al-heperek-font
+          permission-contents: read
+
+      - name: Download the latest stable font release if newer
+        id: release
+        if: steps.pending.outputs.number == ''
+        env:
+          GH_TOKEN: ${{ steps.font-token.outputs.token }}
+        run: node devops/github/release/upgrade-al-heperek-font.mjs download "$RUNNER_TEMP"
+
+      - name: Set up Bun
+        if: steps.release.outputs.tag != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: web/bible-on-site/package.json
+
+      - name: Install the locked brand renderer
+        if: steps.release.outputs.tag != ''
+        working-directory: web/bible-on-site
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # The native tikkun renderer loads pre-baked contour layers pinned to
+      # the packaged font's SHA-256 — a new face makes the stored JSON stale,
+      # so the import regenerates it in the same step (#3685).
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        if: steps.release.outputs.tag != ''
+        with:
+          python-version: "3.15"
+
+      - name: Install the tikkun outline generator dependencies
+        if: steps.release.outputs.tag != ''
+        run: python -m pip install --disable-pip-version-check --no-input -r app/devops/requirements-tikkun.txt
+
+      - name: Verify and update the vendored assets
+        if: steps.release.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          ARCHIVE_SHA256: ${{ steps.release.outputs.sha256 }}
+          SOURCE_REVISION: ${{ steps.release.outputs.revision }}
+        run: |
+          node devops/github/release/upgrade-al-heperek-font.mjs import "$RUNNER_TEMP" "$RELEASE_TAG" "$ARCHIVE_SHA256" "$SOURCE_REVISION"
+          node web/bible-on-site/scripts/generate-brand-assets.mjs
+          node web/bible-on-site/scripts/generate-brand-assets.mjs --check
+          node web/bulletin/scripts/prepare-email-assets.mjs --header-only --sharp-module web/bible-on-site/node_modules/sharp
+          node web/bulletin/scripts/prepare-email-assets.mjs --header-only --check --sharp-module web/bible-on-site/node_modules/sharp
+          python app/devops/generate-tikkun-outlines.py
+          git diff --check
+
+      - name: Open the font upgrade pull request
+        if: steps.release.outputs.tag != ''
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          token: ${{ secrets.BOT_PAT }}
+          branch: ${{ env.UPGRADE_BRANCH }}
+          delete-branch: true
+          commit-message: "chore(branding): upgrade Al Heperek Font to ${{ steps.release.outputs.tag }}"
+          title: "chore(branding): upgrade Al Heperek Font to ${{ steps.release.outputs.tag }}"
+          body: |
+            Vendors the compiled fonts, license and matching outlined logos from [Al Heperek Font ${{ steps.release.outputs.tag }}](https://github.com/bible-on-site/al-heperek-font/releases/tag/${{ steps.release.outputs.tag }}).
+
+            The workflow verified the archive and file hashes, and regenerated the derived brand assets. Review the typography, logo renderings and any license changes before merging.

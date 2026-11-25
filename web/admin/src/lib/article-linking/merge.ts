@@ -27,6 +27,9 @@ export interface ArticleRelationshipsMutationInput {
 	coverageVerified?: boolean;
 	expectedContentHash?: string;
 	expectedCoveringSources?: CoveringSourceInput[];
+	moedIds?: number[];
+	expectedMoedIds?: number[];
+	expectedCoverageVerified?: boolean;
 }
 
 export type ApplyPlan =

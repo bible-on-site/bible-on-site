@@ -29,9 +29,10 @@ export class WebsiteECRDeployer extends ECRDeployerBase {
 
 	override async getDockerImageArchivePath(): Promise<string> {
 		const version = await this.getLocalVersion();
+		// ARM64-only release layout (#3794).
 		return path.resolve(
 			__dirname,
-			`../../../web/bible-on-site/.release/bible-on-site-v${version}.tar.gz`,
+			`../../../web/bible-on-site/.release/bible-on-site-v${version}-arm64.tar.gz`,
 		);
 	}
 

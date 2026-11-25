@@ -27,11 +27,22 @@
                             ToolTipProperties.Text="השמעת הפסוק"
                             IsVisible="False"
                             Clicked="OnPlayClicked"/>
+                    <!-- #3704: a focused-tap pack download swaps the button for
+                         this spinner so the tap visibly took effect. -->
+                    <ActivityIndicator Grid.Column="1" x:Name="PlaySpinner"
+                                       AutomationId="FocusedPlaySpinner"
+                                       IsRunning="True" WidthRequest="20" HeightRequest="20"
+                                       Color="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                       IsVisible="False"/>
                 </Grid>
-                <!-- PasukTextLabel carries the shared scripture face (Taamey D,
-                     #2623) and the reader's justification + size re-render. -->
+                <!-- PasukTextLabel carries the shared scripture face (Al Heperek,
+                     #3685) and the reader's justification + size re-render.
+                     Selectable opts the deep-reading surface into desktop
+                     text selection/copy — the overlay has no tap chain on
+                     the text, unlike the pasuk cell (#2766). -->
                 <controls:PasukTextLabel x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
-                       FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                       FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"
+                       Selectable="True"/>
                 <Label x:Name="RecitationHintLabel" AutomationId="FocusedRecitationHint"
                        FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
             </VerticalStackLayout>

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import packageJson from "../../package.json";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
-import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
 import {
 	buildGraph,
 	organizationNode,
@@ -12,10 +12,13 @@ import {
 	websiteNode,
 } from "@/lib/seo/jsonld";
 import { siteOpenGraph } from "@/lib/seo/opengraph";
+import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
+import { alHeperek } from "./brand-font";
 import { AhrefsAnalytics } from "./components/AhrefsAnalytics";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
+import { TanahpediaEntryPreview } from "./components/TanahpediaEntryPreview";
 import { TopNav } from "./components/TopNav";
 
 export const metadata: Metadata = {
@@ -45,19 +48,24 @@ export default function RootLayout({
 	return (
 		<html
 			lang="he"
+			className={alHeperek.variable}
 			dir="rtl"
 			data-scroll-behavior="smooth"
 			/* The root layout's inline bootstrap applies stored reader settings
-			   (CSS vars) to <html> before first paint — suppress the resulting
+			   (CSS vars) to <html> before first paint - suppress the resulting
 			   hydration-mismatch warning on this element's attributes. */
 			suppressHydrationWarning
 		>
 			<head>
 				<link rel="privacy-policy" href="/#privacyPolicy" />
+				{/* ARD/AI Catalog discovery (issue #3257): registries and the
+				    readiness scanner resolve these rels in page head. */}
+				<link rel="ard" href="/.well-known/ard.json" />
+				<link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
-				{/* Site-wide accessibility preferences (contrast/links) — same
+				{/* Site-wide accessibility preferences (contrast/links) - same
 				    pre-paint contract for the root data attributes (#2767). */}
 				<script>{SITE_A11Y_BOOTSTRAP}</script>
 				<AhrefsAnalytics />
@@ -67,8 +75,10 @@ export default function RootLayout({
 			<body>
 				<TopNav />
 
-				<NavBar />
+				<NavBar version={packageJson.version} />
 				{children}
+				{/* Site-wide entity-link preview delegate (#3712). */}
+				<TanahpediaEntryPreview />
 			</body>
 		</html>
 	);

@@ -6,6 +6,7 @@ import {
 	getArticleHebrewDateOverride,
 	getArticleSummariesByPerekId,
 	getArticleSummariesByPerekIds,
+	getFurtherReadingSummariesByPerekIds,
 } from "@/lib/articles";
 import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { formatDedication } from "@/lib/dedications/types";
@@ -179,6 +180,9 @@ export async function getPerushimSummariesForPerek(
 /** Summaries for a single perek (articles + perushim metadata). */
 export interface PerekSummaries {
 	articles: ArticleSummary[];
+	/** לקריאה נוספת (#3752): verified secondary-coverage recommendations for
+	 * this perek — articles primarily attached to other perakim. */
+	furtherReading: ArticleSummary[];
 	perushim: PerushSummary[];
 	/** Stored per-pasuk units for the flipbook page's progress bar (#2607). */
 	pasukUnits: ReadingProgressUnit[];
@@ -198,24 +202,31 @@ export async function getPerekSummariesBatch(
 	// One grouped query per service for the whole sefer — per-perek
 	// fan-out over a 5-connection pool turned a large sefer's book open
 	// (Tehillim: 150 perakim) into hundreds of serialized round-trips.
-	const [pasukUnits, perekMetrics, articlesByPerek, perushimByPerek] =
-		await Promise.all([
-			metricOrFallback(
-				"perek progress units",
-				new Map<number, ReadingProgressUnit[]>(),
-				() => getPerekProgressUnitsBatch(perekIds),
-			),
-			metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
-				getPerekMetrics(perekIds),
-			),
-			getArticleSummariesByPerekIds(perekIds),
-			getPerushimByPerekIds(perekIds),
-		]);
+	const [
+		pasukUnits,
+		perekMetrics,
+		articlesByPerek,
+		furtherReadingByPerek,
+		perushimByPerek,
+	] = await Promise.all([
+		metricOrFallback(
+			"perek progress units",
+			new Map<number, ReadingProgressUnit[]>(),
+			() => getPerekProgressUnitsBatch(perekIds),
+		),
+		metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
+			getPerekMetrics(perekIds),
+		),
+		getArticleSummariesByPerekIds(perekIds),
+		getFurtherReadingSummariesByPerekIds(perekIds),
+		getPerushimByPerekIds(perekIds),
+	]);
 	return Object.fromEntries(
 		perekIds.map((id) => [
 			String(id),
 			{
 				articles: articlesByPerek.get(id) ?? [],
+				furtherReading: furtherReadingByPerek.get(id) ?? [],
 				perushim: perushimByPerek.get(id) ?? [],
 				pasukUnits: pasukUnits.get(id) ?? [],
 				perekMetric: perekMetrics.get(id) ?? null,

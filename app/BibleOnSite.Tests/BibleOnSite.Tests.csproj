@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -21,10 +21,10 @@
     <PackageReference Include="xunit.v3" Version="4.0.3" />
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
-    <PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.100" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.4.0.200" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.200" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
     <PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
@@ -40,6 +40,7 @@
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Converters\*.cs" Link="Converters\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\AccessibilityStatement.cs" Link="Services\AccessibilityStatement.cs" />
+    <Compile Include="..\BibleOnSite\Services\CopyrightReport.cs" Link="Services\CopyrightReport.cs" />
     <Compile Include="..\BibleOnSite\Services\IRecitationAudioDecoder.cs" Link="Services\IRecitationAudioDecoder.cs" />
     <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
@@ -59,6 +60,7 @@
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\ApiSigningHandler.cs" Link="Services\ApiSigningHandler.cs" />
     <Compile Include="..\BibleOnSite\Services\CalendarPdfAssetService.cs" Link="Services\CalendarPdfAssetService.cs" />
     <Compile Include="..\BibleOnSite\Services\CycleDisplayFormatter.cs" Link="Services\CycleDisplayFormatter.cs" />
     <Compile Include="..\BibleOnSite\Services\LearningCalendarPolicy.cs" Link="Services\LearningCalendarPolicy.cs" />
@@ -83,7 +85,7 @@
     <Compile Include="..\BibleOnSite\Services\IPreferencesCloudStore.cs" Link="Services\IPreferencesCloudStore.cs" />
     <Compile Include="..\BibleOnSite\Services\IUserIdentity.cs" Link="Services\IUserIdentity.cs" />
     <!-- #3185: the emulator endpoint parser is platform-agnostic; the device
-         channel stays behind ANDROID||IOS so the net10.0 unit run compiles it. -->
+         channel stays behind ANDROID||IOS so the net11.0 unit run compiles it. -->
     <Compile Include="..\BibleOnSite\Services\FirebaseEmulatorEndpoint.cs" Link="Services\FirebaseEmulatorEndpoint.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesCloudDocument.cs" Link="Services\PreferencesCloudDocument.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
@@ -111,6 +113,8 @@
     <!-- Exercise the section=packs overview/pack-view swap on the real page with the test XAML shells. -->
     <Compile Include="..\BibleOnSite\Pages\PreferencesPage.xaml.cs" Link="Pages\PreferencesPage.xaml.cs" />
     <Compile Include="..\BibleOnSite\Controls\ExtensionPacksView.xaml.cs" Link="Controls\ExtensionPacksView.xaml.cs" />
+    <!-- Exercise the articles-mode capability contract on the real menu code-behind with the test XAML shell. -->
+    <Compile Include="..\BibleOnSite\Controls\ReaderMenuPanel.xaml.cs" Link="Controls\ReaderMenuPanel.xaml.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />
@@ -121,6 +125,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\ParashaListViewModel.cs" Link="ViewModels\ParashaListViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.cs" Link="ViewModels\ParashaViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.Perushim.cs" Link="ViewModels\ParashaViewModel.Perushim.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\UnitPerushimController.cs" Link="ViewModels\UnitPerushimController.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />
@@ -134,8 +139,8 @@
 
   <ItemGroup>
     <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
-    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
-    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
+    <EmbeddedResource Include="../../web/shared/branding/fonts/AlHeperekUI-*.ttf" LogicalName="%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/AlHeperekUI-outlines.json" LogicalName="AlHeperekUI-outlines.json" />
   </ItemGroup>
 
 </Project>

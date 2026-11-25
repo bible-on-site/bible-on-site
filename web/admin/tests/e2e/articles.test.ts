@@ -5,14 +5,16 @@ test.describe("Articles Management", () => {
 		await page.goto("/articles");
 
 		await expect(page.locator("h1")).toContainText("ניהול מאמרים");
-		// Should have quick navigation input
-		await expect(page.getByPlaceholder("מספר פרק")).toBeVisible();
+		// Should have the perek search combobox
+		await expect(
+			page.getByRole("combobox", { name: "חיפוש ספר ופרק" }),
+		).toBeVisible();
 	});
 
 	test("can navigate to new article form", async ({ page }) => {
 		await page.goto("/articles");
 
-		await page.getByRole("link", { name: "+ מאמר חדש" }).click();
+		await page.getByRole("link", { name: "מאמר חדש" }).click();
 		await expect(page).toHaveURL(/\/articles\/new/);
 		await expect(page.locator("h1")).toContainText("מאמר חדש");
 	});
@@ -51,9 +53,13 @@ test.describe("Articles Management", () => {
 		await expect(
 			page.getByRole("heading", { name: "מועדים", exact: true }),
 		).toBeVisible();
+		await page.getByRole("link", { name: "PRs לקישורי מאמר זה" }).click();
+		await expect(page).toHaveURL(
+			(url) => url.pathname === "/" && url.searchParams.get("tab") === "prs",
+		);
 	});
 
-	test("quick navigation to perek works", async ({ page }) => {
+	test("perek combobox navigates to the picked perek", async ({ page }) => {
 		await page.goto("/articles");
 
 		// Wait for page to load
@@ -61,48 +67,49 @@ test.describe("Articles Management", () => {
 			timeout: 10000,
 		});
 
-		// Enter a perek number and click button
-		const perekInput = page.getByPlaceholder("מספר פרק (1-929)");
-		await perekInput.fill("1");
-
-		// Click the navigation button - this uses window.location so we need to wait for navigation
+		await page
+			.getByRole("combobox", { name: "חיפוש ספר ופרק" })
+			.fill("בראשית");
 		const navigationStarted = performance.now();
-		await Promise.all([
-			page.waitForURL(/\/articles\/perek\/1/, { timeout: 15000 }),
-			page.getByRole("button", { name: /עבור לפרק/ }).click(),
-		]);
+		await page.getByRole("option", { name: "בראשית פרק א" }).click();
+		await expect(page).toHaveURL(/\/articles\/perek\/1/, { timeout: 15000 });
 		await expect(page.getByRole("heading", { name: /פרק 1/ })).toBeVisible({
 			timeout: Math.max(1, 15000 - (performance.now() - navigationStarted)),
 		});
 	});
 
-	test("sefarim accordion shows Hebrew perek labels", async ({ page }) => {
-		await page.goto("/articles");
-
-		// Expand בראשית (first sefer, no additionals)
-		await page.getByRole("button", { name: /בראשית/ }).click();
-		await expect(
-			page.getByRole("link", { name: "א", exact: true }).first(),
-		).toBeVisible();
-		await expect(
-			page.getByRole("link", { name: "נ", exact: true }),
-		).toBeVisible();
-	});
-
-	test("sefarim with additionals show additional letter prefix", async ({
+	test("perek combobox keeps the canonical-number direct jump", async ({
 		page,
 	}) => {
 		await page.goto("/articles");
 
-		// Expand שמואל (has additionals א and ב)
-		await page.getByRole("button", { name: /שמואל/ }).click();
+		const input = page.getByRole("combobox", { name: "חיפוש ספר ופרק" });
+		await input.fill("1");
+		await expect(
+			page.getByRole("option", { name: "בראשית פרק א" }),
+		).toBeVisible();
+		await input.press("Enter");
+		await expect(page).toHaveURL(/\/articles\/perek\/1/);
+	});
+
+	test("perek combobox filters by sefer and shows additionals", async ({
+		page,
+	}) => {
+		await page.goto("/articles");
+
+		const input = page.getByRole("combobox", { name: "חיפוש ספר ופרק" });
+		await input.fill("שמואל");
 		// First perek of שמואל א
 		await expect(
-			page.getByRole("link", { name: "א א", exact: true }).first(),
+			page.getByRole("option", { name: "שמואל פרק א א" }),
 		).toBeVisible();
 		// First perek of שמואל ב
 		await expect(
-			page.getByRole("link", { name: "ב א", exact: true }).first(),
+			page.getByRole("option", { name: "שמואל פרק ב א" }),
 		).toBeVisible();
+		// Non-matching sefarim are filtered out
+		await expect(
+			page.getByRole("option", { name: /בראשית/ }),
+		).toHaveCount(0);
 	});
 });

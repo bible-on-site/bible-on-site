@@ -13,6 +13,7 @@ import {
 	wrapMoedName,
 } from "@/lib/moadim";
 import { getCachedMoadim } from "@/lib/moadim/catalogue-cache";
+import { MoedMonthChip } from "./components/MoedDateLabels";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
@@ -67,7 +68,7 @@ export default async function MoadimLanding() {
 	const wheel = buildMoedWheel(moadim);
 
 	return (
-		<div className={styles.container}>
+		<main className={styles.container}>
 			<div className={styles.heroRow}>
 				<div className={styles.heroText}>
 					<h1 className={styles.heading}>מועדים על הפרק</h1>
@@ -236,7 +237,7 @@ export default async function MoadimLanding() {
 				<nav aria-label="רשימת המועדים" className={styles.index}>
 					<ol className={styles.indexList}>
 						{wheel.slices.map((slice) => (
-							<li key={slice.moed.id} className={styles.indexItem}>
+							<li key={slice.moed.id}>
 								<Link
 									href={moedHref(slice.moed.slug)}
 									className={styles.indexLink}
@@ -248,17 +249,19 @@ export default async function MoadimLanding() {
 											{slice.moed.dateLabel}
 										</span>
 									)}
-									{slice.moed.hebrewMonth && (
-										<span className={styles.indexMonth}>
-											{slice.moed.hebrewMonth}
-										</span>
-									)}
+									{/* The month chip is information, not decoration:
+									    it shows only when the date does not already
+									    name the month (#3381). */}
+									<MoedMonthChip
+										moed={slice.moed}
+										className={styles.indexMonth}
+									/>
 								</Link>
 							</li>
 						))}
 					</ol>
 				</nav>
 			)}
-		</div>
+		</main>
 	);
 }

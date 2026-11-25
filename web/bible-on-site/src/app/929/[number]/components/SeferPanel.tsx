@@ -13,6 +13,7 @@ import type { Article, ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
+import { selectionScopedNoteMetric } from "@/lib/perushim/ranged-metrics";
 import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
 import {
 	resolveSeferPerushSelection,
@@ -56,6 +57,9 @@ interface SeferPanelProps {
 	/** Only the displayed chapter may start commentary reads. */
 	isActive?: boolean;
 	articles?: ArticleSummary[];
+	/** לקריאה נוספת (#3752): verified secondary coverage — articles primarily
+	 * attached to other perakim, rendered below this perek's own list. */
+	furtherArticles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
 	/** Sefer name scoping the perush-selection override (#2544). */
@@ -63,7 +67,7 @@ interface SeferPanelProps {
 	hebrewDateStr: string;
 	/** Article ID or perush name selected by the current book route. */
 	initialSlug?: string;
-	onNavigate?: (slug?: string) => void;
+	onNavigate?: (slug?: string, further?: boolean) => void;
 	/** Title parts of this page's perek, for the perush document title. */
 	perekTitleParts?: SeferPerekTitle;
 	/** Reports the shown article/perush document title (null when none). */
@@ -126,6 +130,7 @@ interface PasukGroup {
 export const SeferPanel = memo(function SeferPanel({
 	isActive = true,
 	articles = NO_ARTICLES,
+	furtherArticles = NO_ARTICLES,
 	perushim = NO_PERUSHIM,
 	perekId = 0,
 	seferName = "",
@@ -154,9 +159,12 @@ export const SeferPanel = memo(function SeferPanel({
 	const deepPerush = slug
 		? eligible.find((perush) => perush.name === slug)
 		: undefined;
+	// A recommendation card (#3752) opens embedded exactly like a primary one,
+	// so the slug lookup spans both lists.
 	const deepArticleSummary =
 		slug && !deepPerush
-			? articles.find((item) => String(item.id) === slug)
+			? (articles.find((item) => String(item.id) === slug) ??
+				furtherArticles.find((item) => String(item.id) === slug))
 			: undefined;
 
 	/* ─── Active tab ─── */
@@ -528,6 +536,23 @@ export const SeferPanel = memo(function SeferPanel({
 		);
 	})();
 
+	/**
+	 * The displayed estimate scope follows the pasuk selection (#2607 —
+	 * "aggregate stored note counts when selections change"): with no
+	 * selection the stored perush×perek metric applies; under a selection
+	 * the *rendered* notes' stored counts aggregate instead — `undefined`
+	 * (unknown, no badge) while those units are still loading or partial.
+	 */
+	const scopedMetricFor = (perush: PerushSummary) =>
+		activePesukim
+			? selectionScopedNoteMetric(
+					noteUnitsByPerush[perush.id],
+					notesByPerush[perush.id]?.filter((note) =>
+						activePesukim.has(note.pasuk),
+					),
+				)
+			: perush.metric;
+
 	const loadingNotes = wantedIds
 		.split(",")
 		.filter(Boolean)
@@ -564,9 +589,14 @@ export const SeferPanel = memo(function SeferPanel({
 	}, [selectedArticle, deepPerush, onContentTitle, perekTitleParts]);
 
 	const navigate = useCallback(
-		(nextSlug?: string) => {
-			if (onNavigate) onNavigate(nextSlug);
-			else if (perekId) writeSeferContentHistory(perekId, nextSlug);
+		(nextSlug?: string, further = false) => {
+			// A לקריאה נוספת selection keeps the *browsed* chapter in the URL and
+			// carries the article id in `?further=` — the canonical
+			// /929/{perek}/{slug} path would 404 on reload because the article
+			// belongs to another perek (#3752).
+			if (onNavigate) onNavigate(nextSlug, further);
+			else if (perekId)
+				writeSeferContentHistory(perekId, nextSlug, false, further);
 			setSlug(nextSlug);
 		},
 		[onNavigate, perekId],
@@ -583,6 +613,67 @@ export const SeferPanel = memo(function SeferPanel({
 
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
+
+	// One card body for both article lists — each card routes through its own
+	// primary perek (`article.perekId`), which for a further-reading card is a
+	// different chapter than the panel's (#3752).
+	const articleCard = (article: ArticleSummary, further = false) => (
+		<Link
+			key={article.id}
+			id={`article-${article.id}`}
+			href={`/929/${article.perekId}/${article.id}`}
+			prefetch={false}
+			className={styles.articleCard}
+			onClick={(event) => {
+				if (
+					event.metaKey ||
+					event.ctrlKey ||
+					event.shiftKey ||
+					event.altKey
+				) {
+					return;
+				}
+				event.preventDefault();
+				navigate(String(article.id), further);
+			}}
+		>
+			<div className={styles.articleCardAuthor}>
+				<Image
+					src={article.authorImageUrl}
+					alt=""
+					aria-hidden="true"
+					width={28}
+					height={28}
+					className={styles.articleCardImg}
+				/>
+				<span className={styles.articleCardAuthorName}>
+					{article.authorName}
+				</span>
+			</div>
+			<div className={styles.articleCardTitle}>{article.name}</div>
+			{/* Codacy anchors the XSS finding at this
+			 * conditional expression, so the nosemgrep
+			 * suppression must sit here rather than beside
+			 * the attribute. */}
+			{/* nosemgrep -- DOMPurify-sanitized abstract */}
+			{article.abstract && (
+				<div
+					className={styles.articleCardAbstract}
+					// nosemgrep -- DOMPurify-sanitized abstract
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(
+							normalizeAbstractHtml(article.abstract),
+						),
+					}}
+				/>
+			)}
+			<ReadingTime
+				estimatedSeconds={article.metric?.estimatedSeconds}
+				className={styles.articleCardMetric}
+			/>
+		</Link>
+	);
 
 	return (
 		<section
@@ -657,8 +748,17 @@ export const SeferPanel = memo(function SeferPanel({
 								<span className={styles.deepParshan}>
 									{deepPerush.parshanName}
 								</span>
+								{/* The estimate's scope stays explicit when a pasuk
+								 * selection narrows this view's notes (#2607). */}
+								{activePesukim && (
+									<span className={styles.deepScope}>
+										{`מסוננים: ${activePesukim.size} פסוקים`}
+									</span>
+								)}
 								<ReadingTime
-									estimatedSeconds={deepPerush.metric?.estimatedSeconds}
+									estimatedSeconds={
+										scopedMetricFor(deepPerush)?.estimatedSeconds
+									}
 									className={styles.deepMetric}
 								/>
 							</div>
@@ -705,7 +805,8 @@ export const SeferPanel = memo(function SeferPanel({
 									{displayPerushim.length === 1 && (
 										<ReadingTime
 											estimatedSeconds={
-												displayPerushim[0].metric?.estimatedSeconds
+												scopedMetricFor(displayPerushim[0])
+													?.estimatedSeconds
 											}
 											className={styles.scopeMetric}
 										/>
@@ -800,7 +901,9 @@ export const SeferPanel = memo(function SeferPanel({
 												<div className={styles.commentaryPerushName}>
 													{perush.name}
 													<ReadingTime
-														estimatedSeconds={perush.metric?.estimatedSeconds}
+														estimatedSeconds={
+															scopedMetricFor(perush)?.estimatedSeconds
+														}
 														className={styles.commentaryPerushMetric}
 													/>
 												</div>
@@ -864,66 +967,28 @@ export const SeferPanel = memo(function SeferPanel({
 							<p className={styles.emptyState}>אין מאמרים לפרק זה</p>
 						) : (
 							<div className={styles.articlesMasonry}>
-								{articles.map((article) => (
-									<Link
-										key={article.id}
-										id={`article-${article.id}`}
-										href={`/929/${article.perekId}/${article.id}`}
-										prefetch={false}
-										className={styles.articleCard}
-										onClick={(event) => {
-											if (
-												event.metaKey ||
-												event.ctrlKey ||
-												event.shiftKey ||
-												event.altKey
-											) {
-												return;
-											}
-											event.preventDefault();
-											navigate(String(article.id));
-										}}
-									>
-										<div className={styles.articleCardAuthor}>
-											<Image
-												src={article.authorImageUrl}
-												alt=""
-												aria-hidden="true"
-												width={28}
-												height={28}
-												className={styles.articleCardImg}
-											/>
-											<span className={styles.articleCardAuthorName}>
-												{article.authorName}
-											</span>
-										</div>
-										<div className={styles.articleCardTitle}>
-											{article.name}
-										</div>
-										{/* Codacy anchors the XSS finding at this
-										 * conditional expression, so the nosemgrep
-										 * suppression must sit here rather than beside
-										 * the attribute. */}
-										{/* nosemgrep -- DOMPurify-sanitized abstract */}
-										{article.abstract && (
-											<div
-												className={styles.articleCardAbstract}
-												// nosemgrep -- DOMPurify-sanitized abstract
-												// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-												dangerouslySetInnerHTML={{
-													__html: DOMPurify.sanitize(
-														normalizeAbstractHtml(article.abstract),
-													),
-												}}
-											/>
-										)}
-										<ReadingTime
-											estimatedSeconds={article.metric?.estimatedSeconds}
-											className={styles.articleCardMetric}
-										/>
-									</Link>
-								))}
+								{articles.map((article) => articleCard(article))}
 							</div>
+						)}
+						{/* לקריאה נוספת (#3752): verified secondary coverage —
+						    articles from other perakim discussing a source in
+						    this one. Renders below the primary list and keeps
+						    showing even when that list is empty. */}
+						{furtherArticles.length > 0 && (
+							<section
+								className={styles.furtherReadingGroup}
+								aria-labelledby={`sefer-further-reading-${perekId}`}
+							>
+								<h3
+									id={`sefer-further-reading-${perekId}`}
+									className={styles.furtherReadingTitle}
+								>
+									לקריאה נוספת
+								</h3>
+								<div className={styles.articlesMasonry}>
+									{furtherArticles.map((article) => articleCard(article, true))}
+								</div>
+							</section>
 						)}
 					</div>
 

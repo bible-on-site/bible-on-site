@@ -1264,6 +1264,12 @@ public class PreferencesViewModelTests : IDisposable
 
             viewModel.ShowPerushimDownload.Should().BeFalse();
             viewModel.ShowPerushimDownloadButton.Should().BeFalse();
+
+            perushim.IsSearchIndexStale = true;
+
+            viewModel.ShowPerushimDownloadButton.Should().BeTrue("installed notes without a usable search index need a fresh pack");
+            viewModel.IsPerushimInstalled.Should().BeTrue();
+            viewModel.PerushimNotesStatusText.Should().Be("חבילת הפירושים מותקנת, אך החיפוש בפירושים דורש עדכון. הורידו שוב כדי לעדכן.");
         }
 
         [Fact]

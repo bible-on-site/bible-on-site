@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { sendMock, getSignedUrlMock } = vi.hoisted(() => ({
+const { sendMock, getSignedUrlMock, clientConfigMock } = vi.hoisted(() => ({
 	sendMock: vi.fn(),
 	getSignedUrlMock: vi.fn(),
+	clientConfigMock: vi.fn(),
 }));
 
 vi.mock("@aws-sdk/client-s3", () => ({
 	S3Client: class {
+		constructor(config: Record<string, unknown>) {
+			clientConfigMock(config);
+		}
 		send = sendMock;
 	},
 	PutObjectCommand: class {
@@ -40,6 +44,7 @@ async function loadS3() {
 
 describe("s3 image helpers", () => {
 	beforeEach(() => {
+		clientConfigMock.mockReset();
 		sendMock.mockReset().mockResolvedValue({});
 		getSignedUrlMock
 			.mockReset()
@@ -48,6 +53,48 @@ describe("s3 image helpers", () => {
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
+	});
+
+	it.each([
+		["http://localhost:4566", "il-central-1", "eu-west-1", "us-east-1"],
+		["", "il-central-1", "eu-west-1", "il-central-1"],
+		["", "", "eu-west-1", "eu-west-1"],
+		["", "", "", "il-central-1"],
+	])(
+		"uses the endpoint's region for signing and URLs (%s, %s, %s)",
+		async (endpoint, region, awsRegion, expected) => {
+			vi.stubEnv("S3_ENDPOINT", endpoint);
+			vi.stubEnv("S3_REGION", region);
+			vi.stubEnv("AWS_REGION", awsRegion);
+			vi.stubEnv("ASSETS_BASE_URL", "");
+			vi.stubEnv("S3_BUCKET", "bucket-x");
+			const { getAuthorImageUrl, getPresignedUploadUrl } = await loadS3();
+			expect(clientConfigMock).toHaveBeenCalledWith(
+				expect.objectContaining({ region: expected }),
+			);
+			const expectedUrl = endpoint
+				? `${endpoint}/bucket-x/authors/high-res/7.jpg`
+				: `https://bucket-x.s3.${expected}.amazonaws.com/authors/high-res/7.jpg`;
+			expect(getAuthorImageUrl(7)).toBe(expectedUrl);
+			expect((await getPresignedUploadUrl(7)).publicUrl).toBe(expectedUrl);
+		},
+	);
+
+	it("falls back to the default bucket when S3_BUCKET is unset", async () => {
+		vi.stubEnv("S3_ENDPOINT", "");
+		vi.stubEnv("S3_REGION", "il-central-1");
+		vi.stubEnv("ASSETS_BASE_URL", "");
+		vi.stubEnv("S3_BUCKET", "");
+		const { getAuthorImageUrl, uploadImage } = await loadS3();
+
+		expect(getAuthorImageUrl(7)).toBe(
+			"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/7.jpg",
+		);
+		await uploadImage(Buffer.from("img"), "image/png", 3);
+		const command = sendMock.mock.calls[0]?.[0] as {
+			input: Record<string, unknown>;
+		};
+		expect(command.input.Bucket).toBe("bible-on-site-assets");
 	});
 
 	describe("when no custom endpoint is configured (AWS)", () => {

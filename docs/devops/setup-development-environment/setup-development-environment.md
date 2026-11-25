@@ -16,7 +16,8 @@ You'll need the following tools:
 - [Python](https://www.python.org/downloads/) == [3.14.0, 3.14.2]
   - Make sure `python` can run from a command line prompt without error
   - Your Python version may not come with all the proper utilities. It is recommended to install the `setuptools` package (`pip install setuptools`); otherwise, you may encounter difficult-to-debug errors.
-- [MySQL](https://dev.mysql.com/downloads) == 8.4
+- [MySQL](https://dev.mysql.com/downloads) 9.7.4 CLI tools and a local 9.7.4 server
+  (installed directly or run with Docker Compose)
 
 For API development, you'll also need:
 
@@ -59,6 +60,11 @@ MySQL must accept connections from Docker's host gateway. Set `DB_URL` to choose
 another existing database. Populate local application content with `sync-from-prod`
 as described below.
 
+Run `bun run backend -- --compose-mysql` to start the Compose MySQL service
+before the API. The API connects over TLS using the service name `mysql` inside
+the Compose network. Host tools use the loopback port regardless of which port
+the API uses inside that network.
+
 If Docker Desktop cannot start, `bun run backend -- --native` runs the same API
 with Cargo and the installed MySQL service. Leave that terminal running; Ctrl+C
 stops the API process tree. No database population or Docker reset occurs during
@@ -70,6 +76,17 @@ builds choose this address automatically. The Windows app uses the configured AP
 or production by default; set `API_URL=http://localhost:3003` to preview local data.
 
 ### Data and MySQL dev database
+
+To run MySQL in Docker, start the optional database service from the repository
+root. The service listens only on loopback and stores data in a dedicated volume.
+
+```bash
+docker compose -f devops/docker-compose.yml --profile mysql up -d --wait mysql
+```
+
+If an existing MySQL server uses port 3306, set `LOCAL_MYSQL_PORT` before
+starting the service or running the Compose launcher. Set `DB_URL` to use the
+same port for host-side tools.
 
 The development MySQL database is named **tanah-dev**. Bootstrap it (structure + sefarim/perushim; demo «הרב לדוגמא» articles are **not** loaded by default):
 
@@ -89,6 +106,10 @@ AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-
 ```
 
 This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.
+
+Sync uses the RDS CA bundle to verify the source. If production still uses MD5
+for `tanah_article.content_hash`, sync into MySQL 8.4 until the SHA-2 migration
+is applied.
 
 ### Keeping `bun run dev` cheap
 

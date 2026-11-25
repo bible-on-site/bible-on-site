@@ -154,7 +154,7 @@ Resources:
     Properties:
       FunctionName: bible-on-site-db-populator
       Description: Populates RDS MySQL database with SQL files from S3
-      Runtime: python3.14
+      Runtime: python3.15
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300 # 5 minutes
@@ -301,16 +301,12 @@ Outputs:
 #
 # 5. Create IAM role for Lambda with S3 read permission
 #
-# 6. Create Lambda function with pymysql bundled:
-#    a. Create deployment package:
-#       mkdir lambda-package && cd lambda-package
-#       pip install pymysql -t .
-#       cp data-deploy-lambda.py index.py
-#       zip -r ../lambda.zip .
+# 6. Create Lambda function with PyMySQL and the RDS CA bundle.
+#    Follow the packaging instructions in data-deploy-lambda.py.
 #    b. Deploy:
 #       aws lambda create-function \
 #         --function-name bible-on-site-db-populator \
-#         --runtime python3.14 \
+#         --runtime python3.15 \
 #         --handler index.handler \
 #         --zip-file fileb://lambda.zip \
 #         --role <LAMBDA_ROLE_ARN> \

@@ -16,14 +16,14 @@ namespace BibleOnSite.Controls;
 public class PasukTextLabel : Label
 {
     /// <summary>
-    /// The shared scripture-font contract (#2623): every pasuk label renders in
-    /// Taamey D — the perek, parasha and masora readers, the focused-pasuk
-    /// overlay and שניים מקרא rows. Set as a local value so the implicit Label
-    /// style's OpenSansRegular can never win; spans without their own
-    /// FontFamily inherit it on every platform (qri/ktiv, reciting/selected
-    /// words, {פ}/{ס} markers). The pasuk-number marker is the deliberate
-    /// exception — reader chrome that keeps the app's main face, set
-    /// explicitly by <see cref="Converters.PasukMarkerTextConverter"/>.
+    /// The shared scripture-font contract (#2623/#3685): every pasuk label
+    /// renders in Al Heperek — the perek, parasha and masora readers, the
+    /// focused-pasuk overlay and שניים מקרא rows. Set as a local value so no
+    /// implicit Label style can win; spans without their own FontFamily
+    /// inherit it on every platform (qri/ktiv, reciting/selected words,
+    /// {פ}/{ס} markers). The pasuk-number marker is the deliberate exception
+    /// — reader chrome that pins the app's main face, set explicitly by
+    /// <see cref="Converters.PasukMarkerTextConverter"/>.
     /// </summary>
     public PasukTextLabel()
     {
@@ -52,6 +52,23 @@ public class PasukTextLabel : Label
     {
         get => (bool)GetValue(JustifyProperty);
         set => SetValue(JustifyProperty, value);
+    }
+
+    /// <summary>
+    /// Opt-in native text selection, currently honored on Windows where it
+    /// maps to TextBlock.IsTextSelectionEnabled (#2766). Deliberately NOT a
+    /// default: the reader's pasuk cell carries a five-handler input chain
+    /// (tap, double-tap, right-tap, pointer press/release, long-press) and a
+    /// selectable TextBlock would compete for the same pointer stream. Only
+    /// gesture-free surfaces — the focused-pasuk overlay — set this.
+    /// </summary>
+    public static readonly BindableProperty SelectableProperty = BindableProperty.Create(
+        nameof(Selectable), typeof(bool), typeof(PasukTextLabel), false);
+
+    public bool Selectable
+    {
+        get => (bool)GetValue(SelectableProperty);
+        set => SetValue(SelectableProperty, value);
     }
 
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)

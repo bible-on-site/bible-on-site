@@ -42,6 +42,7 @@ import {
 	parseCalendarArtifactKey,
 } from "../src/lib/download/calendar-artifacts";
 import { generateCalendarPdf } from "../src/lib/download/calendar-pdf";
+import { stageBrandAssets } from "./stage-brand-assets.mjs";
 import {
 	buildCalendarPdfManifest,
 	type CalendarPdfCacheArtifact,
@@ -205,6 +206,12 @@ async function renderKey(
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	const started = Date.now();
+
+	// pdf-fonts reads the staged brand assets under src/lib/download/ (#3708);
+	// this script runs outside `next build`, which stages them through
+	// next.config.mjs. --check runs under Node's permission model without any
+	// filesystem write grant, so it verifies the staged copies instead.
+	stageBrandAssets({ check: args.check });
 
 	// The package command prepares the catalog before imports load schedule data.
 	// Verification uses the installed catalog and never writes to disk.

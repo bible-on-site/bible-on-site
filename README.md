@@ -18,6 +18,7 @@ Bible on Site is a digital educational initiative aimed at Bible learners, featu
 - [AWS Architecture](docs/aws/architecture/aws-architecture.md)
 - [App High Level Architecture](docs/app/app.md)
 - [Daily Bulletin](docs/daily-bulletin/daily-bulletin.md)
+- [Design decisions and UX guidance](DESIGN.md)
 
 ## Repository Structure
 - [Repository Structure](docs/repo-structure.md)

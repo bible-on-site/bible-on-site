@@ -16,11 +16,12 @@ const Sefer = dynamic(() => import("@/app/929/[number]/components/LoadedSefer"),
 export default function SeferDirect(props: {
 	perekObj: PerekObj;
 	articles: ArticleSummary[];
+	furtherArticles?: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
 }) {
 	return (
-		<div
+		<main
 			style={{
 				position: "fixed",
 				top: 0,
@@ -34,9 +35,10 @@ export default function SeferDirect(props: {
 			<Sefer
 				perekObj={props.perekObj}
 				articles={props.articles}
+				furtherArticles={props.furtherArticles}
 				perushim={props.perushim}
 				perekIds={props.perekIds}
 			/>
-		</div>
+		</main>
 	);
 }

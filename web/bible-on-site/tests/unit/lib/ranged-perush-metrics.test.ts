@@ -4,8 +4,12 @@
  * become the badge metric plus ordered progress units — or nothing at
  * all when any count is unknown.
  */
-import { rangedNotesReadingMetrics } from "../../../src/lib/perushim/ranged-metrics";
+import {
+	rangedNotesReadingMetrics,
+	selectionScopedNoteMetric,
+} from "../../../src/lib/perushim/ranged-metrics";
 import type { RangedPerushNote } from "../../../src/lib/perushim";
+import type { ReadingProgressUnit } from "../../../src/lib/reading-metrics/types";
 
 function note(
 	perekId: number,
@@ -74,5 +78,56 @@ describe("rangedNotesReadingMetrics", () => {
 
 		expect(metric).toBeUndefined();
 		expect(units).toEqual([]);
+	});
+});
+
+describe("selectionScopedNoteMetric", () => {
+	const units: ReadingProgressUnit[] = [
+		{ key: "1:0", wordCount: 40, cumulativeWords: 40 },
+		{ key: "2:0", wordCount: 100, cumulativeWords: 140 },
+		{ key: "2:1", wordCount: 80, cumulativeWords: 220 },
+	];
+	const notes = [
+		{ pasuk: 1, noteIdx: 0 },
+		{ pasuk: 2, noteIdx: 0 },
+		{ pasuk: 2, noteIdx: 1 },
+	];
+
+	it("aggregates the stored counts of exactly the rendered notes", () => {
+		// A selection leaving only pasuk 2's two notes: 100 + 80 = 180
+		// words → ceil(180 * 60 / 220) = 50 seconds.
+		expect(
+			selectionScopedNoteMetric(units, [notes[1], notes[2]]),
+		).toEqual({ wordCount: 180, estimatedSeconds: 50 });
+	});
+
+	it("covers every rendered note even when several share a pasuk", () => {
+		expect(selectionScopedNoteMetric(units, notes)).toEqual({
+			wordCount: 220,
+			estimatedSeconds: 60,
+		});
+	});
+
+	it("reports a verified-empty metric for an empty selection", () => {
+		expect(selectionScopedNoteMetric(units, [])).toEqual({
+			wordCount: 0,
+			estimatedSeconds: 0,
+		});
+	});
+
+	it("is unknown while the note units are still loading", () => {
+		expect(selectionScopedNoteMetric(undefined, notes)).toBeUndefined();
+		expect(selectionScopedNoteMetric(units, undefined)).toBeUndefined();
+	});
+
+	it("is unknown when any rendered note has no stored count", () => {
+		// Pasuk 3 renders without a metric row — a partial estimate must
+		// never present as the selection's count.
+		expect(
+			selectionScopedNoteMetric(units, [
+				notes[0],
+				{ pasuk: 3, noteIdx: 0 },
+			]),
+		).toBeUndefined();
 	});
 });

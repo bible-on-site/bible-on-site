@@ -240,6 +240,66 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RemoveNotesAsync_ClearsAStaleSearchIndexForTheReinstall()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(RemoveNotesAsync_ClearsAStaleSearchIndexForTheReinstall));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        await service.InitializeAsync();
+        service.IsSearchIndexStale = true;
+
+        await service.RemoveNotesAsync();
+
+        service.IsSearchIndexStale.Should().BeFalse("a reinstall ships its own index, checked on the next search");
+    }
+
+    [Theory]
+    [InlineData(false, true, false, null)]
+    [InlineData(true, false, false, null)]
+    [InlineData(true, true, false, null)]
+    [InlineData(true, true, true, null)]
+    [InlineData(true, true, false, "v4:1700000000:n1")]
+    [InlineData(true, true, false, "v4:1800000000:n2")]
+    public async Task TryDownloadNotesAsync_WithStaleSearchIndex_FailsWithoutAnIndexForTheInstalledNotes(
+        bool fetchSucceeds, bool packHasAssets, bool packIndexCorrupt, string? packIndexFingerprint)
+    {
+        var dataDir = Path.Join(_tempRoot,
+            $"stale-index-{fetchSucceeds}-{packHasAssets}-{packIndexCorrupt}-{packIndexFingerprint?.Replace(':', '-')}");
+        var padDir = Path.Join(dataDir, "pad");
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(dataDir, (9, 4, 1, 0, "local note"));
+        // A newer notes generation must not replace the readable notes during an index refresh.
+        await CreateNotesDatabaseAsync(padDir, 1800000000, (9, 4, 1, 0, "pack note"));
+        if (packIndexFingerprint != null)
+        {
+            var index = new SQLiteAsyncConnection(Path.Join(padDir, PerushimNotesService.SearchIndexDbName));
+            await index.ExecuteAsync("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+            await index.ExecuteAsync("INSERT INTO search_metadata VALUES ('notes', ?)", packIndexFingerprint);
+            await index.CloseAsync();
+        }
+        else if (packIndexCorrupt)
+        {
+            await File.WriteAllTextAsync(Path.Join(padDir, PerushimNotesService.SearchIndexDbName),
+                "not a database", TestContext.Current.CancellationToken);
+        }
+        var localNotes = File.ReadAllBytes(Path.Join(dataDir, NotesDbFileName));
+        var pad = new FakePadDeliveryService { AssetPathAfterFetch = packHasAssets ? padDir : null, FetchResult = fetchSucceeds };
+        var service = PerushimNotesService.CreateForTesting(pad, dataDir);
+        await service.InitializeAsync();
+        service.IsSearchIndexStale = true;
+
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        downloaded.Should().BeFalse("no index compatible with the installed notes arrived");
+        pad.FetchCalls.Should().Be(1);
+        service.IsAvailable.Should().BeTrue("the readable notes survive a failed index refresh");
+        service.IsSearchIndexStale.Should().BeTrue();
+        File.Exists(Path.Join(dataDir, PerushimNotesService.SearchIndexDbName)).Should().BeFalse();
+        File.ReadAllBytes(Path.Join(dataDir, NotesDbFileName)).Should().Equal(localNotes);
+    }
+
+    [Fact]
     public async Task TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder()
     {
         var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder));

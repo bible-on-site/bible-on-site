@@ -130,6 +130,24 @@ test("only the worker queue accepts the trusted SNS topic and both queues requir
 	}
 });
 
+test("the SES event destination publishes delivery, subscription and tracked engagement events to the worker topic", () => {
+	const destination =
+		template.Resources.BulletinEventDestination.Properties.EventDestination;
+	assert.equal(destination.Enabled, true);
+	assert.deepEqual(destination.MatchingEventTypes.sort(), [
+		"BOUNCE",
+		"CLICK",
+		"COMPLAINT",
+		"DELIVERY",
+		"OPEN",
+		"REJECT",
+		"RENDERING_FAILURE",
+		"SEND",
+		"SUBSCRIPTION",
+	]);
+	assert.equal(destination.SnsDestination.TopicARN, "BulletinEventsTopic");
+});
+
 test("DNS additions are limited to SES DKIM and a non-enforcing DMARC policy", () => {
 	const records = Object.values(template.Resources).filter(
 		(resource) => resource.Type === "AWS::Route53::RecordSet",
@@ -171,7 +189,9 @@ test("email images preserve their original sources and published content hashes"
 		assert.equal(asset.s3Key, `branding/daily-bulletin/${asset.file}`);
 		assert.equal(
 			asset.url,
-			`https://bible-on-site-assets.s3.il-central-1.amazonaws.com/${asset.s3Key}`,
+			asset.id === "logo-header"
+				? "https://xn--febl3a.co.il/images/logos/header-logo.jpg"
+				: `https://bible-on-site-assets.s3.il-central-1.amazonaws.com/${asset.s3Key}`,
 		);
 		if (asset.id === "logo-header") {
 			assert.deepEqual(bytes, source, "use the exact original wordmark");

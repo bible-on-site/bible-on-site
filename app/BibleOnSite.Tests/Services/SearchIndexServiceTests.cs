@@ -363,8 +363,24 @@ public class SearchIndexServiceTests
     }
 
     /// <summary>Minimal queryable index DB as the pipeline ships it: the
-    /// external-content FTS + documents tables + a fingerprint row.</summary>
+    /// external-content FTS + documents tables + a fingerprint row. The slim
+    /// documents schema carries the note's identity instead of its text —
+    /// hit bodies resolve from the notes blob (#3309).</summary>
     private static string[] DeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
+    [
+        "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+        $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
+        "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER)",
+        "INSERT INTO notes_documents VALUES (1,1,1,7,1,0)",
+        "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
+        $"INSERT INTO notes(rowid,Text) VALUES (1,'{markerDoc}')",
+        "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')",
+    ];
+
+    /// <summary>The pre-#3309 delivered layout: documents rows stored the note
+    /// text itself. Older packs and retained working indexes still arrive in
+    /// this shape and must keep serving until replaced.</summary>
+    private static string[] FatDeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
     [
         "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
         $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
@@ -409,6 +425,218 @@ public class SearchIndexServiceTests
             var stored = await inspection.ExecuteScalarAsync<string>(
                 "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
             stored.Should().Be($"v4:42:n{SearchText.NormalizationVersion}");
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "the delivered layout keeps only the note's identity");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task SlimDeliveredIndex_ResolvesHitBodiesFromTheNotesBlob()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // The blob holds the only copy of the text; markup must be stripped
+        // exactly like the document text the fat layout used to store.
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן <b>מובהק</b> &amp; נקי")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק נקי"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק & נקי");
+    }
+
+    [Fact]
+    public async Task SlimDeliveredIndex_ResolvesDistinctNotesForTheSameVerseAndAuthor()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן ראשון"), (7, 1, 1, 1, "סימן שני")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן ראשון"),
+            "INSERT INTO notes_documents VALUES (2,1,1,7,1,1)",
+            "INSERT INTO notes(rowid,Text) VALUES (2,'סימן שני')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Select(hit => hit.Text).Should().BeEquivalentTo("סימן ראשון", "סימן שני");
+    }
+
+    [Fact]
+    public async Task SlimDeliveredIndex_DropsHitsWhoseIdentityIsMissingFromTheBlob()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),
+            "INSERT INTO notes_documents VALUES (2,1,1,7,1,99)",
+            "INSERT INTO notes(rowid,Text) VALUES (2,'סימן חסר')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+    }
+
+    [Fact]
+    public async Task FatWorkingIndex_KeepsServingStoredTextUntilTheSlimIndexArrives()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // A working index cached by the previous app generation — its
+        // documents still carry the text, so bodies come from the store, not
+        // the blob (whose content deliberately differs here).
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+    }
+
+    [Fact]
+    public async Task FatWorkingIndex_IsReplacedByTheMatchingSlimDeliveredIndex()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // The pack redelivers the same generation in the slim layout.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "the fat working index must be swapped out, not left consuming the duplicated text");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task FatDeliveryMatchingTheFatWorkingIndex_IsNeverCopiedTwice()
+    {
+        await using var storage = new TestStorage();
+        await using var pack = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // The pack still carries the same fat layout — nothing to gain by
+        // restoring its ~300 MB staged copy again once evaluated.
+        var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var delivery = NullPad();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pack.Root);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+
+        (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        notes.DeliveredIndexCopyCount.Should().Be(1, "the first evaluation restores the staged copy once");
+
+        (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        notes.DeliveredIndexCopyCount.Should().Be(1,
+            "a payload already rejected as the same fat layout must not be re-copied every search");
+        File.Exists(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName))
+            .Should().BeFalse("the spent staged copy stays deleted — not a ~300 MB copy-delete loop");
+    }
+
+    [Fact]
+    public async Task RejectedFatDelivery_DoesNotBlockAChangedSlimRedelivery()
+    {
+        await using var storage = new TestStorage();
+        await using var pack = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // A padded document keeps the fat payload strictly larger than the
+        // slim redelivery, so the rejection marker's size check differs.
+        var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}",
+                "סימן מובהק" + new string('א', 4096)));
+        await delivered.CloseAsync();
+        var delivery = NullPad();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pack.Root);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        var cachePath = Path.Join(storage.Root, "search.sqlite");
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+        await using (var index = new SearchIndexService(perakim, notes, cachePath))
+        {
+            (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().ContainSingle();
+        }
+        // The pack is redelivered in the slim layout for the same generation —
+        // a different-sized payload the rejection marker must not suppress.
+        var slim = await pack.CreateDatabaseAsync("slim.sqlite",
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await slim.CloseAsync();
+        File.Move(Path.Join(pack.Root, "slim.sqlite"),
+            Path.Join(pack.Root, PerushimNotesService.SearchIndexDbName), overwrite: true);
+
+        await using var upgraded = new SearchIndexService(perakim, notes, cachePath);
+        (await upgraded.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        var inspection = new SQLite.SQLiteAsyncConnection(cachePath, SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "a changed delivery is re-evaluated and the slim index adopted");
         }
         finally { await inspection.CloseAsync(); }
     }
@@ -422,7 +650,7 @@ public class SearchIndexServiceTests
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
         await delivered.CloseAsync();
         File.Copy(Path.Join(pack.Root, PerushimNotesService.SearchIndexDbName),
             Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
@@ -454,11 +682,11 @@ public class SearchIndexServiceTests
         var source = await perakim.GetSearchConnectionAsync();
         await source.CloseAsync();
         var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
-        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n1";
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"),
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),
             $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')",
             "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
             "INSERT INTO verses_documents VALUES (1,'מוכן מראש',1,1,0,1)",
@@ -483,7 +711,7 @@ public class SearchIndexServiceTests
         await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
         await delivered.CloseAsync();
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
@@ -606,6 +834,101 @@ public class SearchIndexServiceTests
             tables.Should().Be(0, "commentary index data is removed when its pack is gone");
         }
         finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task CommentarySearch_AfterNormalizationBump_RecoversThroughExplicitDownload()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // An app update bumped the normalization: the working index is n1 and
+        // no current-build payload is cached (iOS below 26 after an update).
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var packDir = Path.Join(storage.Root, "pack");
+        Directory.CreateDirectory(packDir);
+        File.Copy(Path.Join(storage.Root, NotesDb), Path.Join(packDir, NotesDb));
+        var packIndex = await storage.CreateDatabaseAsync(Path.Join("pack", PerushimNotesService.SearchIndexDbName),
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await packIndex.CloseAsync();
+        string? padPath = null;
+        var pad = new Mock<IPadDeliveryService>();
+        pad.Setup(d => d.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => padPath);
+        pad.Setup(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                padPath = packDir;
+                return true;
+            });
+        var notes = PerushimNotesService.CreateForTesting(pad.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+
+        (await index.SearchAsync("סימן", filters, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty("the n1 index no longer matches the installed notes");
+        notes.IsAvailable.Should().BeTrue();
+
+        (await notes.TryDownloadNotesAsync(TestContext.Current.CancellationToken)).Should().BeTrue();
+        var hits = await index.SearchAsync("סימן", filters, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        pad.Verify(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()),
+            Times.Once, "the explicit download must refetch the pack even though its notes are still readable");
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        index.CommentaryAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PackSettings_AfterNormalizationBump_OfferRefreshBeforeAnySearch()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var pad = NullPad();
+        var notes = PerushimNotesService.CreateForTesting(pad.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var fileSystem = new Mock<IFileSystem>();
+        var settings = new ExtensionPacksViewModel(notes,
+            new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(fileSystem.Object)), new Mock<IAppNavigator>().Object, () => index);
+
+        await settings.LoadAsync();
+
+        settings.IsPerushimInstalled.Should().BeTrue();
+        settings.ShowPerushimDownloadButton.Should().BeTrue("the n1 index cannot serve the installed notes");
+
+        var deliveryLookups = pad.Invocations.Count;
+        await settings.LoadAsync();
+        pad.Invocations.Count.Should().Be(deliveryLookups,
+            "reopening settings reuses the finished check instead of redoing the index work");
+    }
+
+    [Fact]
+    public async Task PackSettings_WhenTheCommentaryIndexCheckFails_StillLoadTheInstalledState()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        await index.DisposeAsync();
+        var fileSystem = new Mock<IFileSystem>();
+        var settings = new ExtensionPacksViewModel(notes,
+            new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(fileSystem.Object)), new Mock<IAppNavigator>().Object, () => index);
+
+        await settings.Invoking(s => s.LoadAsync()).Should().NotThrowAsync();
+
+        settings.IsPerushimInstalled.Should().BeTrue();
+        settings.ShowPerushimDownloadButton.Should().BeFalse("a failed check leaves the notes-availability state");
     }
 
     [Fact]
@@ -1214,7 +1537,7 @@ public class SearchIndexServiceTests
         var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var packLookup = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var delivery = new Mock<IPadDeliveryService>();
@@ -1246,7 +1569,7 @@ public class SearchIndexServiceTests
         var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
@@ -1305,7 +1628,7 @@ public class SearchIndexServiceTests
         var downloading = notes.TryDownloadNotesAsync();
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
 
@@ -1333,7 +1656,7 @@ public class SearchIndexServiceTests
         // The staged index can outlive its rejected pack (rejection races, partial cleanup).
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
-            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
         await delivered.CloseAsync();
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
 
@@ -1393,7 +1716,7 @@ public class SearchIndexServiceTests
         }
         var fixture = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
             "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
-            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER)",
             "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
             "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')");
         await fixture.ExecuteAsync("INSERT INTO search_metadata VALUES ('notes', ?)",
@@ -1410,7 +1733,7 @@ public class SearchIndexServiceTests
                 {
                     var text = SearchText.PlainText(note.Content);
                     connection.Execute("INSERT INTO notes_documents VALUES (?, ?, ?, ?, ?, ?)",
-                        ++row, text, blob.PerekId, note.Pasuk, note.PerushId, perek.SeferId);
+                        ++row, blob.PerekId, note.Pasuk, note.PerushId, perek.SeferId, note.NoteIdx);
                     connection.Execute("INSERT INTO notes(rowid, Text) VALUES (?, ?)", row, SearchText.Normalize(text));
                 }
             }

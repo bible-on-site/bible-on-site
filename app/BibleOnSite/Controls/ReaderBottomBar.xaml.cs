@@ -17,14 +17,12 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     private Button? _previewArticles;
     private Border? _previewArticleBadge;
     private Label? _previewArticleCount;
-    /// <summary>Height of the bar before the safe-area inset is added.</summary>
-    public static double TotalHeight => HomeUxPreview.Enabled ? 108 : 90;
 
 #pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     /// <summary>Perushim chevron tapped — the page toggles the perushim sheet.</summary>
     public event EventHandler? PerushimToggleRequested;
 
-    /// <summary>Text-mode (א ב ג) button tapped.</summary>
+    /// <summary>Text-mode button tapped.</summary>
     public event EventHandler? TextModeRequested;
 
     /// <summary>Articles button tapped — the page toggles the articles view.</summary>
@@ -69,7 +67,9 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     public ReaderBottomBar()
     {
+        DebugLog.Write("[Startup] ReaderBottomBar InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] ReaderBottomBar XAML initialized");
         if (HomeUxPreview.Enabled) { ConfigurePreviewDock(); }
         // The bar fill is resolved from the requested theme inside
         // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
@@ -84,6 +84,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
             };
             Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
         }
+        DebugLog.Write("[Startup] ReaderBottomBar constructed");
     }
 
     private void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>

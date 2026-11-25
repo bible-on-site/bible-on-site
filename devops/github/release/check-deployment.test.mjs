@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { parse } from "yaml";
 import { checkDeployment, newerVersion } from "./check-deployment.mjs";
+import { apiToken } from "./testflight-build.mjs";
 
 const sha = "a".repeat(40);
 const source = {
@@ -64,6 +70,8 @@ test("latest release deploys from the artifact's exact commit", () => {
 		ref: sha,
 		version: "1.0.10",
 		runAttempt: 1,
+		// A legacy release without native provenance keeps the amd64 path.
+		nativeAmd64: true,
 	});
 });
 test("a late older dispatch cannot replace a newer release", () => {
@@ -172,6 +180,83 @@ test("API failures are never interpreted as permission to deploy", () => {
 	);
 });
 
+test("app deployment grants reusable workflows their declared permissions", () => {
+	const readWorkflow = (file) =>
+		parse(
+			readFileSync(
+				new URL(`../../../.github/workflows/${file}`, import.meta.url),
+				"utf8",
+			),
+		);
+	const workflow = readWorkflow("cd-app.yml");
+	for (const [name, job] of Object.entries(workflow.jobs)) {
+		const localWorkflow = job.uses?.match(/^\.\/\.github\/workflows\/(.+)$/);
+		if (!localWorkflow) continue;
+		const called = readWorkflow(localWorkflow[1]);
+		assert.deepEqual(
+			job.permissions ?? workflow.permissions,
+			called.permissions,
+			`${name} must allow the called workflow without granting extra permissions`,
+		);
+	}
+});
+
+for (const file of ["cd-app.yml", "testflight-distribution.yml"]) {
+	test(`${file} exposes newly installed Fastlane in the current and next step`, {
+		skip: process.platform === "win32",
+	}, (t) => {
+		const workflow = parse(readFileSync(new URL(`../../../.github/workflows/${file}`, import.meta.url), "utf8"));
+		const install = Object.values(workflow.jobs).flatMap(job => job.steps ?? []).find(step => step.name === "Install Fastlane");
+		assert.ok(install?.run);
+		const directory = mkdtempSync(join(tmpdir(), "fastlane bootstrap "));
+		t.after(() => rmSync(directory, { recursive: true, force: true }));
+		const githubPath = join(directory, "github-path");
+		const argumentsFile = join(directory, "gem-arguments");
+		const fastlane = "#!/bin/sh\nprintf 'controlled-fastlane %s\\n' \"$1\"\n";
+		const gem = `#!/bin/sh
+printf '%s\\n' "$@" > "$INSTALL_ARGUMENTS"
+if [ "$GEM_RESULT" != 0 ]; then exit "$GEM_RESULT"; fi
+if [ "$GEM_OMIT_BIN" = 1 ]; then exit 0; fi
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --bindir ]; then shift; destination="$1"; fi
+  shift
+done
+/bin/mkdir -p "$destination"
+printf '%s' "$FASTLANE_FIXTURE" > "$destination/fastlane"
+/bin/chmod +x "$destination/fastlane"
+`;
+		writeFileSync(join(directory, "gem"), gem);
+		chmodSync(join(directory, "gem"), 0o755);
+		const env = { ...process.env, PATH: directory, RUNNER_TEMP: directory, GITHUB_PATH: githubPath,
+			INSTALL_ARGUMENTS: argumentsFile, FASTLANE_FIXTURE: fastlane, GEM_RESULT: "0", GEM_OMIT_BIN: "0" };
+		const run = (overrides = {}) => spawnSync("/bin/bash", ["-e", "-c", install.run], { env: { ...env, ...overrides }, encoding: "utf8" });
+		const installed = run();
+		assert.equal(installed.status, 0, installed.stderr);
+		assert.match(installed.stdout, /controlled-fastlane --version/);
+		const bin = join(directory, "fastlane-bin");
+		assert.equal(readFileSync(githubPath, "utf8"), `${bin}\n`);
+		const argumentsList = readFileSync(argumentsFile, "utf8").trim().split("\n");
+		assert.ok(argumentsList.includes("--user-install"));
+		assert.equal(argumentsList[argumentsList.indexOf("--bindir") + 1], bin);
+		const next = spawnSync("/bin/bash", ["-e", "-c", "fastlane --version"], { env: { ...env, PATH: `${bin}:${directory}` }, encoding: "utf8" });
+		assert.equal(next.status, 0, next.stderr);
+		assert.match(next.stdout, /controlled-fastlane --version/);
+
+		writeFileSync(join(directory, "fastlane"), fastlane);
+		chmodSync(join(directory, "fastlane"), 0o755);
+		writeFileSync(githubPath, "");
+		rmSync(argumentsFile);
+		assert.equal(run({ GEM_RESULT: "23" }).status, 0, "a preinstalled tool must not invoke gem");
+		assert.equal(existsSync(argumentsFile), false);
+		assert.equal(readFileSync(githubPath, "utf8"), "");
+		rmSync(join(directory, "fastlane"));
+		rmSync(bin, { recursive: true });
+		assert.equal(run({ GEM_RESULT: "23" }).status, 23, "installation errors must fail the step");
+		assert.equal(readFileSync(githubPath, "utf8"), "");
+		assert.equal(run({ GEM_OMIT_BIN: "1" }).status, 127, "a successful install without an executable must fail immediately");
+	});
+}
+
 for (const file of [
 	"cd-aws.yml",
 	"cd-app.yml",
@@ -198,6 +283,10 @@ for (const file of [
 					// phase, not binary delivery — it is needs-gated on the
 					// deploy job instead of the deployment guard so reruns
 					// can retry notes after the binary is already delivered.
+					// #3679: its notes-only dispatch resolves the release
+					// identity itself because the skipped deploy job has no
+					// outputs — the step writes only GITHUB_ENV/GITHUB_OUTPUT.
+					"Resolve the recovered release identity",
 					"Preserve notes publication automation",
 					"Checkout the released source",
 					"Setup App Store Connect API Key",
@@ -211,6 +300,223 @@ for (const file of [
 		}
 	});
 }
+
+test("cd-app.yml keeps Hebrew notes publication on Linux and every Apple-native phase on macOS", () => {
+	const workflow = parse(
+		readFileSync(
+			new URL("../../../.github/workflows/cd-app.yml", import.meta.url),
+			"utf8",
+		),
+	);
+	const notes = workflow.jobs.publish_app_store_notes;
+	assert.ok(notes, "publish_app_store_notes must exist");
+	// #3679: hosted macOS capacity repeatedly cancelled the notes job before
+	// its first step. Everything it runs — checkout, a POSIX credential
+	// file, the Node publisher and a gh release attach — is Linux work, so
+	// the job must never again request a macos-* runner.
+	assert.match(notes["runs-on"], /^ubuntu/);
+	assert.doesNotMatch(notes["runs-on"], /macos|windows/i);
+	assert.equal(notes.needs, "deploy_app_store");
+	assert.equal(
+		notes.permissions?.deployments,
+		undefined,
+		"the notes phase must not move deployment records",
+	);
+	for (const step of notes.steps) {
+		assert.equal(
+			step.shell,
+			undefined,
+			`${step.name}: the Linux pool keeps the default bash shell`,
+		);
+		if (step.run)
+			assert.doesNotMatch(
+				step.run,
+				/xcode-select|xcodebuild|xcrun|altool|\bfastlane\b|\bpilot\b|sudo\b/i,
+				step.name,
+			);
+	}
+	assert.equal(
+		workflow.jobs.deploy_app_store["runs-on"],
+		"macos-15",
+		"the binary phase keeps Xcode tooling on macOS",
+	);
+});
+
+test("cd-app.yml notes-only recovery skips binary phases and binds the exact released version", () => {
+	const workflow = parse(
+		readFileSync(
+			new URL("../../../.github/workflows/cd-app.yml", import.meta.url),
+			"utf8",
+		),
+	);
+	const input = workflow.on.workflow_dispatch.inputs.app_store_notes_only;
+	assert.equal(input.type, "boolean");
+	assert.equal(input.required, false);
+	assert.equal(input.default, false);
+	const deploy = workflow.jobs.deploy_app_store;
+	assert.match(
+		deploy.if,
+		/!inputs\.app_store_notes_only/,
+		"a notes-only recovery must skip the binary phase outright",
+	);
+	const notes = workflow.jobs.publish_app_store_notes;
+	assert.match(notes.if, /needs\.deploy_app_store\.result == 'success'/);
+	assert.match(
+		notes.if,
+		/inputs\.app_store_notes_only == true && needs\.deploy_app_store\.result == 'skipped'/,
+		"the notes job runs when the input skipped its dependency",
+	);
+	assert.match(
+		notes.if,
+		/ios_artifact_name/,
+		"notes-only recovery still requires the exact artifact name",
+	);
+	const resolve = notes.steps.find(
+		(step) => step.id === "notes_identity",
+	);
+	assert.ok(resolve, "a step must resolve the release without deploy outputs");
+	assert.match(resolve.if, /inputs\.app_store_notes_only/);
+	assert.match(resolve.run, /app-ios-v/);
+	assert.match(resolve.run, /exit 1/, "a non-release artifact name must fail");
+	const checkout = notes.steps.find(
+		(step) =>
+			step.uses?.startsWith("actions/checkout") &&
+			step.with?.ref?.includes("ARTIFACT_REF"),
+	);
+	assert.match(
+		checkout.with.ref,
+		/env\.ARTIFACT_REF \|\| steps\.notes_identity\.outputs\.ref/,
+		"the released source stays bound to exact provenance",
+	);
+});
+
+test("the notes-only identity step resolves only an exact release artifact name", { skip: process.platform === "win32" }, (t) => {
+	const workflow = parse(
+		readFileSync(
+			new URL("../../../.github/workflows/cd-app.yml", import.meta.url),
+			"utf8",
+		),
+	);
+	const resolve = workflow.jobs.publish_app_store_notes.steps.find(
+		(step) => step.id === "notes_identity",
+	);
+	assert.ok(resolve?.run);
+	const directory = mkdtempSync(join(tmpdir(), "notes-identity-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const run = (artifact) => {
+		const githubEnv = join(directory, "github-env");
+		const githubOutput = join(directory, "github-output");
+		const result = spawnSync("/bin/bash", ["-e", "-c", resolve.run], {
+			env: {
+				PATH: process.env.PATH,
+				IOS_ARTIFACT: artifact,
+				GITHUB_ENV: githubEnv,
+				GITHUB_OUTPUT: githubOutput,
+			},
+			encoding: "utf8",
+		});
+		return {
+			result,
+			env: existsSync(githubEnv) ? readFileSync(githubEnv, "utf8") : "",
+			output: existsSync(githubOutput)
+				? readFileSync(githubOutput, "utf8")
+				: "",
+		};
+	};
+	for (const artifact of ["app-ios-v5.1.33", "app-ios-v0.0.1"]) {
+		const version = artifact.slice("app-ios-v".length);
+		const { result, env, output } = run(artifact);
+		assert.equal(result.status, 0, `${artifact}: ${result.stderr}`);
+		assert.equal(env, `MODULE_VERSION=${version}\n`);
+		assert.equal(output, `ref=app-v${version}\n`);
+		rmSync(join(directory, "github-env"));
+		rmSync(join(directory, "github-output"));
+	}
+	for (const artifact of [
+		"",
+		"app-ios-v5.1.33-beta",
+		"app-android-v5.1.33",
+		"5.1.33",
+		"app-ios-v5.1",
+		"app-ios-v5.1.33;rm -rf /",
+	]) {
+		const { result, env, output } = run(artifact);
+		assert.notEqual(result.status, 0, artifact || "(empty)");
+		assert.match(result.stdout, /app-ios-vX\.Y\.Z/);
+		assert.equal(env, "", artifact);
+		assert.equal(output, "", artifact);
+	}
+});
+
+test("the notes job's App Store Connect key step produces credentials the publisher can sign with on the Linux shell", { skip: process.platform === "win32" }, (t) => {
+	const workflow = parse(
+		readFileSync(
+			new URL("../../../.github/workflows/cd-app.yml", import.meta.url),
+			"utf8",
+		),
+	);
+	const setup = workflow.jobs.publish_app_store_notes.steps.find(
+		(step) => step.name === "Setup App Store Connect API Key",
+	);
+	assert.ok(setup?.run);
+	const deploySetup = workflow.jobs.deploy_app_store.steps.find(
+		(step) => step.name === "Setup App Store Connect API Key",
+	);
+	assert.equal(
+		setup.run,
+		deploySetup?.run,
+		"the credential step stays identical between the binary and notes jobs",
+	);
+	const directory = mkdtempSync(join(tmpdir(), "apple-key-setup-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const home = join(directory, "runner-home");
+	const githubEnv = join(directory, "github-env");
+	const { privateKey } = generateKeyPairSync("ec", {
+		namedCurve: "prime256v1",
+	});
+	const pem = privateKey.export({ type: "pkcs8", format: "pem" });
+	const result = spawnSync("/bin/bash", ["-e", "-c", setup.run], {
+		env: {
+			PATH: process.env.PATH,
+			HOME: home,
+			API_KEY_BASE64: Buffer.from(pem).toString("base64"),
+			API_KEY_ID: "synthetic-key-id",
+			API_ISSUER_ID: "synthetic-issuer",
+			GITHUB_ENV: githubEnv,
+		},
+		encoding: "utf8",
+	});
+	assert.equal(result.status, 0, result.stderr);
+	const keys = join(home, "private_keys");
+	assert.equal(
+		readFileSync(join(keys, "AuthKey_synthetic-key-id.p8"), "utf8"),
+		pem,
+		"the .p8 must decode to the exact secret bytes",
+	);
+	const credentials = JSON.parse(
+		readFileSync(join(keys, "api_key.json"), "utf8"),
+	);
+	assert.equal(credentials.key_id, "synthetic-key-id");
+	assert.equal(credentials.issuer_id, "synthetic-issuer");
+	assert.equal(credentials.in_house, false);
+	assert.equal(
+		credentials.key,
+		pem.trimEnd(),
+		"the JSON key must round-trip to the exact PEM",
+	);
+	assert.equal(
+		readFileSync(githubEnv, "utf8"),
+		`API_KEY_PATH=${join(home, "private_keys", "api_key.json")}\n`,
+	);
+	const token = apiToken(credentials);
+	const [header] = token.split(".");
+	assert.deepEqual(
+		JSON.parse(Buffer.from(header, "base64url").toString("utf8")),
+		{ alg: "ES256", kid: "synthetic-key-id", typ: "JWT" },
+		"the written credential file must sign App Store Connect JWTs",
+	);
+	assert.equal(token.split(".").length, 3);
+});
 
 test("unverified source CI cannot write to production", () => {
 	const mock = request();
@@ -470,6 +776,192 @@ test("an unfinished newer data attempt does not block recovery", () => {
 		},
 	);
 	assert.equal(result.deploy, true);
+});
+
+// Deployment 7846191320's SHA predates the 2026-11-16 history rewrite: real
+// object, disjoint lineage, so the compare API answers 404 "No common
+// ancestor" instead of an ancestry status (#3640).
+const rewrittenHistorySha = "b7c7fafc876e4d13920582c08d387bb6c92ed941";
+const noCommonAncestor = (head) =>
+	new Error(`gh: No common ancestor between ${sha} and ${head}. (HTTP 404)`);
+
+test("only a proven-ahead historical deployment supersedes a data dispatch", () => {
+	for (const [status, deploy] of [
+		["ahead", false],
+		["behind", true],
+		["identical", true],
+		["diverged", true],
+	]) {
+		const mock = request();
+		const result = checkDeployment(
+			{ ...input, moduleName: "data" },
+			(endpoint) => {
+				if (endpoint.includes("/deployments?"))
+					return [
+						{
+							id: 22,
+							sha: rewrittenHistorySha,
+							payload: { ci_run_id: "20" },
+						},
+					];
+				if (endpoint.includes("/deployments/22/statuses"))
+					return [{ state: "success" }];
+				if (endpoint.includes("/compare/")) return { status };
+				if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+				return mock(endpoint);
+			},
+		);
+		assert.equal(result.deploy, deploy, status);
+	}
+});
+
+test("a successful deployment on unrelated history cannot supersede", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return [
+					{ id: 22, sha: rewrittenHistorySha, payload: { ci_run_id: "5" } },
+				];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/deployments/22/statuses"))
+				throw new Error("an unrelated record cannot prove supersession");
+			if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("unproven deployment ancestry fails the guard instead of approving", () => {
+	for (const failure of [
+		"gh: Not Found (HTTP 404)",
+		"gh: Forbidden (HTTP 403)",
+		"gh: HTTP 502 Bad Gateway",
+		"socket hang up",
+	]) {
+		const mock = request();
+		assert.throws(
+			() =>
+				checkDeployment({ ...input, moduleName: "data" }, (endpoint) => {
+					if (endpoint.includes("/deployments?"))
+						return [
+							{
+								id: 22,
+								sha: rewrittenHistorySha,
+								payload: { ci_run_id: "5" },
+							},
+						];
+					if (endpoint.includes("/compare/")) throw new Error(failure);
+					return mock(endpoint);
+				}),
+			(error) =>
+				error.message.includes(
+					`Cannot verify deployment freshness: compare ${sha}...${rewrittenHistorySha} failed`,
+				) && error.message.includes(failure),
+			failure,
+		);
+	}
+});
+
+test("unrelated history later in paginated deployments cannot supersede", () => {
+	const mock = request();
+	const older = {
+		id: 21,
+		sha,
+		payload: { ci_run_id: "5" },
+	};
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return endpoint.endsWith("page=1")
+					? Array(100).fill(older)
+					: [
+							{
+								id: 22,
+								sha: rewrittenHistorySha,
+								payload: { ci_run_id: "5" },
+							},
+						];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("delivered SQL stays a no-op next to unrelated history", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data", artifactId: "90" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return [
+					{ id: 23, sha: rewrittenHistorySha, payload: { ci_run_id: "5" } },
+					{
+						id: 22,
+						sha,
+						payload: { ci_run_id: "10", sql_artifact_id: "90" },
+					},
+				];
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			if (endpoint.includes("/deployments/22/statuses"))
+				return [{ state: "success" }];
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, false);
+	assert.match(result.reason, /already deployed/);
+});
+
+test("a newer Release Data dispatch on unrelated history does not supersede", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/actions/runs?"))
+				return {
+					workflow_runs: [
+						{ ...source, id: 11, head_sha: rewrittenHistorySha },
+						source,
+					],
+				};
+			if (endpoint.includes("/runs/11/jobs?"))
+				return { jobs: [{ name: "Release Data", conclusion: "success" }] };
+			if (endpoint.includes("/compare/"))
+				throw noCommonAncestor(rewrittenHistorySha);
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});
+
+test("unproven Release Data ancestry fails the guard instead of approving", () => {
+	const mock = request();
+	assert.throws(
+		() =>
+			checkDeployment({ ...input, moduleName: "data" }, (endpoint) => {
+				if (endpoint.includes("/actions/runs?"))
+					return {
+						workflow_runs: [
+							{ ...source, id: 11, head_sha: rewrittenHistorySha },
+							source,
+						],
+					};
+				if (endpoint.includes("/runs/11/jobs?"))
+					return { jobs: [{ name: "Release Data", conclusion: "success" }] };
+				if (endpoint.includes("/compare/"))
+					throw new Error("gh: Not Found (HTTP 404)");
+				return mock(endpoint);
+			}),
+		/Cannot verify deployment freshness/,
+	);
 });
 
 const metadata = (attempt = 1, extra = {}) => ({
@@ -917,4 +1409,65 @@ test("admin platform selection requires its own immutable published artifact pai
 			/published CI provenance|tag\/source/,
 		);
 	}
+});
+
+// Website/admin releases carry the ARM64 archive alone since the amd64
+// retirement (#3794); the API still requires its paired payload.
+test("ARM64-only website/admin payloads deploy the single native archive", () => {
+	for (const [moduleName, moduleDirectory, flag] of [
+		["website", "web/bible-on-site", "websiteArm64"],
+		["admin", "web/admin", "adminArm64"],
+	]) {
+		const image =
+			moduleName === "website" ? "bible-on-site" : "bible-on-site-admin";
+		const payload = {
+			ref: sha,
+			ci_run_id: 10,
+			module_name: moduleName,
+			module_version: "1.0.10",
+			released_arm64_artifact_name: `${image}-docker-10-arm64`,
+		};
+		const release = {
+			...published,
+			tag_name: `${moduleName}-v1.0.10`,
+			body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+		};
+		const result = checkDeployment(
+			{ ...input, moduleName, moduleDirectory },
+			request({ releases: [release] }),
+		);
+		assert.equal(result[flag], true);
+		assert.equal(result.nativeAmd64, false);
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" })} -->`,
+		};
+		assert.throws(
+			() =>
+				checkDeployment(
+					{ ...input, moduleName, moduleDirectory },
+					request({ releases: [wrong] }),
+				),
+			/published CI provenance/,
+		);
+	}
+	const apiArm64Only = {
+		...published,
+		tag_name: "api-v1.0.10",
+		body: `<!-- release-delivery:${JSON.stringify({
+			ref: sha,
+			ci_run_id: 10,
+			module_name: "api",
+			module_version: "1.0.10",
+			released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64",
+		})} -->`,
+	};
+	assert.throws(
+		() =>
+			checkDeployment(
+				{ ...input, moduleName: "api", moduleDirectory: "web/api" },
+				request({ releases: [apiArm64Only] }),
+			),
+		/published CI provenance/,
+	);
 });

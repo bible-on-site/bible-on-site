@@ -7,8 +7,12 @@ import {
 	within,
 } from "@testing-library/react";
 import { useEditor } from "@tiptap/react";
+import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	WysiwygEditor,
+	type WysiwygEditorHandle,
+} from "~/components/WysiwygEditor";
 
 const editorState = vi.hoisted(() => {
 	let html = "<p>Initial</p>";
@@ -291,6 +295,189 @@ describe("WysiwygEditor", () => {
 		await waitFor(() =>
 			expect(onChange).toHaveBeenCalledWith("<p>Changed</p>"),
 		);
+	});
+
+	it("flushes a pending debounced edit on unmount", () => {
+		const onChange = vi.fn();
+		const { unmount } = render(
+			<WysiwygEditor
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Changed</p>");
+
+		unmount();
+
+		expect(onChange).toHaveBeenCalledWith("<p>Changed</p>");
+	});
+
+	it("delivers pending edits on demand through its ref handle", () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Changed</p>");
+
+		act(() => ref.current?.flush());
+
+		expect(onChange).toHaveBeenCalledWith("<p>Changed</p>");
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it("delivers source-mode edits on flush without a mode switch", () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={60_000}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "מקור HTML" }));
+		fireEvent.change(screen.getByRole("textbox"), {
+			target: { value: "<p>Source edit</p>" },
+		});
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledWith("<p>Source edit</p>");
+	});
+
+	it("cancels the pending visual timer when switching to source mode", async () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={20}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Visual edit</p>");
+
+		fireEvent.click(screen.getByRole("button", { name: "מקור HTML" }));
+		const source = screen.getByRole("textbox");
+		expect(source).toHaveValue("<p>Visual edit</p>");
+		fireEvent.change(source, { target: { value: "<p>HTML edit</p>" } });
+
+		// Past the debounce: the cancelled visual timer must not flush a stale
+		// snapshot over the newer HTML edits.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(onChange).not.toHaveBeenCalled();
+		expect(source).toHaveValue("<p>HTML edit</p>");
+
+		act(() => ref.current?.flush());
+		expect(onChange).toHaveBeenCalledWith("<p>HTML edit</p>");
+	});
+
+	it("drops pending edits on reset without delivering them", async () => {
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={20}
+			/>,
+		);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		editorState.setHtml("<p>Discarded</p>");
+		const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+
+		// The armed debounce timer must be cancelled outright — otherwise its
+		// firing is masked by the baseline suppressing onChange.
+		expect(clearSpy).toHaveBeenCalled();
+		clearSpy.mockRestore();
+
+		// Past the debounce: the cancelled timer must not flush the discarded edit.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(onChange).not.toHaveBeenCalled();
+
+		// The baseline is now the saved content: a later flush is a no-op.
+		act(() => ref.current?.flush());
+		expect(onChange).not.toHaveBeenCalled();
+
+		// Flushing an edit that matches the baseline stays silent.
+		act(() => {
+			editorOptions.onUpdate?.({ editor: editorState.editor } as never);
+		});
+		act(() => ref.current?.flush());
+		expect(onChange).not.toHaveBeenCalled();
+
+		// A reset with no armed timer just re-anchors on the same baseline.
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("resets state when the TipTap editor is gone", () => {
+		editorState.setUseEditorResult(null);
+		const onChange = vi.fn();
+		const ref = createRef<WysiwygEditorHandle>();
+		render(
+			<WysiwygEditor
+				ref={ref}
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+			/>,
+		);
+		expect(ref.current).not.toBeNull();
+
+		act(() => ref.current?.reset("<p>Baseline</p>"));
+		expect(onChange).not.toHaveBeenCalled();
+		expect(editorState.editor.commands.setContent).not.toHaveBeenCalled();
+
+		// The baseline is the saved content: a later flush is a no-op.
+		act(() => ref.current?.flush());
+		expect(onChange).not.toHaveBeenCalled();
 	});
 
 	it("syncs changed content props back into TipTap", () => {

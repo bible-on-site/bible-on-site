@@ -1,11 +1,13 @@
 import Image from "next/image";
 import styles from "./DailyBulletinSection.module.css";
 import { EmailSignupForm } from "./EmailSignupForm";
+import { PushNotificationsToggle } from "./PushNotificationsToggle";
+import { SectionDivider } from "./SectionDivider";
 
 /**
- * The daily-bulletin join section (#2941): exactly three cards — Telegram,
- * WhatsApp, and email — stacked vertically on small screens and side by side
- * on wide screens.
+ * The daily-bulletin join section (#2941): channel cards — Telegram,
+ * WhatsApp, email, and the dedicated browser-reminder card (#3732) —
+ * stacked vertically on small screens and side by side on wide screens.
  *
  * The Telegram and WhatsApp actions point at the stable first-party routes
  * `/dailyBulletin/join/telegram` and `/dailyBulletin/join/whatsapp` (#2939):
@@ -76,7 +78,11 @@ export function DailyBulletinSection() {
 					</p>
 					<EmailSignupForm source="card" />
 				</article>
+				{/* The dedicated browser-reminder card; renders nothing when the
+				    deployment has push turned off (#3732). */}
+				<PushNotificationsToggle />
 			</div>
+			<SectionDivider />
 		</section>
 	);
 }

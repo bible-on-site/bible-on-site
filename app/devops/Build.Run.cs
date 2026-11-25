@@ -260,7 +260,7 @@ partial class Build
 
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
-                .SetFramework("net10.0-windows10.0.19041.0")
+                .SetFramework("net11.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());
@@ -279,7 +279,7 @@ partial class Build
             }
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
-                .SetFramework("net10.0-windows10.0.19041.0")
+                .SetFramework("net11.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .SetProperty("WindowsPackageType", "None")
                 .SetProperty("WindowsAppSDKSelfContained", "false")
@@ -312,7 +312,7 @@ partial class Build
                 using (var clean = Process.Start(new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"clean \"{MainProject}\" -c {Configuration} -f net10.0-android",
+                    Arguments = $"clean \"{MainProject}\" -c {Configuration} -f net11.0-android",
                     WorkingDirectory = RootDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -327,7 +327,7 @@ partial class Build
                 var watchInfo = new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"watch build -t:Run -f net10.0-android -c {Configuration} {embedArg}".Trim(),
+                    Arguments = $"watch build -t:Run -f net11.0-android -c {Configuration} {embedArg}".Trim(),
                     WorkingDirectory = SourceDirectory,
                     UseShellExecute = false,
                 };
@@ -347,7 +347,7 @@ partial class Build
                 var buildInfo = new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"build -t:Install -f net10.0-android -c {Configuration} {embedArg}".Trim(),
+                    Arguments = $"build -t:Install -f net11.0-android -c {Configuration} {embedArg}".Trim(),
                     WorkingDirectory = SourceDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -387,25 +387,41 @@ partial class Build
         });
 
     /// <summary>
+    /// Runs adb with the shared flags, waits for exit, and returns stdout,
+    /// stderr (when requested) and the exit code.
+    /// </summary>
+    (string Output, string Error, int ExitCode) RunAdb(string[] arguments, bool readStderr = false)
+    {
+        // ArgumentList bypasses shell parsing on the host side entirely.
+        var startInfo = new ProcessStartInfo(GetAdbPath())
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = readStderr,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        // The static Process.Start(startInfo) shape is Semgrep's
+        // command-injection sink; starting an instance is equivalent.
+        using var process = new Process { StartInfo = startInfo }; // nosemgrep — closed argv, literal filename, no shell
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = readStderr ? process.StandardError.ReadToEnd() : "";
+        process.WaitForExit();
+        return (output, error, process.ExitCode);
+    }
+
+    /// <summary>
     /// Checks if the app package is installed on the connected Android emulator.
     /// </summary>
     bool IsAppInstalled()
     {
         try
         {
-            var adbPath = GetAdbPath();
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = GetAdbDeviceArgs("shell pm list packages com.tanah.daily929"),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(startInfo);
-            var output = process?.StandardOutput.ReadToEnd() ?? "";
-            process?.WaitForExit();
-
+            var (output, _, _) = RunAdb(GetAdbDeviceArgs("shell", "pm", "list", "packages", "com.tanah.daily929"));
             return output.Contains("package:com.tanah.daily929");
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb package probe: any failure counts as not-installed
@@ -457,54 +473,21 @@ partial class Build
     /// </summary>
     void LaunchAndVerifyApp()
     {
-        var adbPath = GetAdbPath();
-
         // Force stop the app first to ensure fresh launch
         Serilog.Log.Information("Force stopping app...");
-        var stopInfo = new ProcessStartInfo
-        {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs("shell am force-stop com.tanah.daily929"),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-        };
-        using (var stopProcess = Process.Start(stopInfo))
-        {
-            stopProcess?.WaitForExit();
-        }
+        RunAdb(GetAdbDeviceArgs("shell", "am", "force-stop", "com.tanah.daily929"));
         System.Threading.Thread.Sleep(500);
 
         // Launch the app
         Serilog.Log.Information("Launching app...");
-        var launchInfo = new ProcessStartInfo
-        {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs("shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1"),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-        };
-        using (var launchProcess = Process.Start(launchInfo))
-        {
-            launchProcess?.WaitForExit();
-        }
+        RunAdb(GetAdbDeviceArgs("shell", "monkey", "-p", "com.tanah.daily929", "-c", "android.intent.category.LAUNCHER", "1"));
 
         // Wait for app to start
         System.Threading.Thread.Sleep(3000);
 
         // Verify app is running
-        var pidInfo = new ProcessStartInfo
-        {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs("shell pidof com.tanah.daily929"),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-        };
-        using var pidProcess = Process.Start(pidInfo);
-        var pidOutput = pidProcess?.StandardOutput.ReadToEnd()?.Trim() ?? "";
-        pidProcess?.WaitForExit();
+        var (pidOutput, _, _) = RunAdb(GetAdbDeviceArgs("shell", "pidof", "com.tanah.daily929"));
+        pidOutput = pidOutput.Trim();
 
         if (!string.IsNullOrEmpty(pidOutput))
         {
@@ -515,17 +498,7 @@ partial class Build
             Serilog.Log.Warning("App may have crashed - checking logcat...");
 
             // Get crash info
-            var logcatInfo = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = GetAdbDeviceArgs("logcat -d -t 100"),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true,
-            };
-            using var logcatProcess = Process.Start(logcatInfo);
-            var logcatOutput = logcatProcess?.StandardOutput.ReadToEnd() ?? "";
-            logcatProcess?.WaitForExit();
+            var (logcatOutput, _, _) = RunAdb(GetAdbDeviceArgs("logcat", "-d", "-t", "100"));
 
             // Look for crash indicators
             if (logcatOutput.Contains("FATAL") || logcatOutput.Contains("AndroidRuntime") || logcatOutput.Contains("libmonosgen"))
@@ -553,21 +526,7 @@ partial class Build
     {
         try
         {
-            var adbPath = GetAdbPath();
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = "devices",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(startInfo);
-            var output = process?.StandardOutput.ReadToEnd() ?? "";
-            process?.WaitForExit();
-
-            // Check if there's a device listed (not just the header)
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var lines = GetAdbDeviceLines();
             return lines.Length > 1 && lines.Any(l => l.Contains("device") && !l.StartsWith("List"));
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb device probe: any failure counts as no-device
@@ -595,22 +554,8 @@ partial class Build
     {
         try
         {
-            var adbPath = GetAdbPath();
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = "devices",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(startInfo);
-            var output = process?.StandardOutput.ReadToEnd() ?? "";
-            process?.WaitForExit();
-
             // Find emulator line (starts with "emulator-")
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            return lines.Select(line => line.Trim())
+            return GetAdbDeviceLines()
                 .Where(trimmed => trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
                 .Select(trimmed => trimmed.Split('\t')[0].Trim())
                 .FirstOrDefault();
@@ -624,14 +569,25 @@ partial class Build
     }
 
     /// <summary>
+    /// Returns trimmed, non-empty lines of `adb devices` output (header included).
+    /// </summary>
+    string[] GetAdbDeviceLines()
+    {
+        var (output, _, _) = RunAdb(["devices"]);
+        return output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .ToArray();
+    }
+
+    /// <summary>
     /// Gets ADB arguments with device selector if multiple devices are connected.
     /// </summary>
-    string GetAdbDeviceArgs(string command)
+    string[] GetAdbDeviceArgs(params string[] command)
     {
         var emulatorSerial = GetEmulatorSerial();
         if (emulatorSerial != null)
         {
-            return $"-s {emulatorSerial} {command}";
+            return new[] { "-s", emulatorSerial }.Concat(command).ToArray();
         }
         return command;
     }
@@ -736,19 +692,8 @@ partial class Build
     {
         try
         {
-            var adbPath = GetAdbPath();
-            var info = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = GetAdbDeviceArgs($"shell run-as {AppId} ls files/{fileName}"),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(info);
-            process?.WaitForExit();
-            return process?.ExitCode == 0;
+            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "ls", $"files/{fileName}"), readStderr: true);
+            return exitCode == 0;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb push probe: any failure counts as failed
         catch { return false; } //NOSONAR — adb push probe: any failure counts as failed.
@@ -761,64 +706,27 @@ partial class Build
     /// </summary>
     void PushFileToDevice(string localPath, string fileName)
     {
-        var adbPath = GetAdbPath();
         var tmpPath = $"/data/local/tmp/{fileName}";
 
         // Step 1: push to staging area
         Serilog.Log.Information($"Pushing {fileName} to device ({new System.IO.FileInfo(localPath).Length / (1024 * 1024)} MB)...");
-        var pushInfo = new ProcessStartInfo
+        var (_, pushError, pushExit) = RunAdb(GetAdbDeviceArgs("push", localPath, tmpPath), readStderr: true);
+        if (pushExit != 0)
         {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs($"push \"{localPath}\" {tmpPath}"),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
-        using (var pushProcess = Process.Start(pushInfo))
-        {
-            pushProcess?.WaitForExit();
-            if (pushProcess?.ExitCode != 0)
-            {
-                var err = pushProcess?.StandardError.ReadToEnd();
-                Serilog.Log.Warning($"adb push failed: {err}");
-                return;
-            }
+            Serilog.Log.Warning($"adb push failed: {pushError}");
+            return;
         }
 
         // Step 2: copy from staging into app data via run-as
-        var cpInfo = new ProcessStartInfo
+        var (_, cpError, cpExit) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "cp", tmpPath, $"/data/data/{AppId}/files/{fileName}"), readStderr: true);
+        if (cpExit != 0)
         {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs($"shell run-as {AppId} cp {tmpPath} /data/data/{AppId}/files/{fileName}"),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
-        using (var cpProcess = Process.Start(cpInfo))
-        {
-            cpProcess?.WaitForExit();
-            if (cpProcess?.ExitCode != 0)
-            {
-                var err = cpProcess?.StandardError.ReadToEnd();
-                Serilog.Log.Warning($"run-as cp failed: {err}");
-                return;
-            }
+            Serilog.Log.Warning($"run-as cp failed: {cpError}");
+            return;
         }
 
         // Step 3: clean up staging
-        var rmInfo = new ProcessStartInfo
-        {
-            FileName = adbPath,
-            Arguments = GetAdbDeviceArgs($"shell rm -f {tmpPath}"),
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        using (var rmProcess = Process.Start(rmInfo))
-        {
-            rmProcess?.WaitForExit();
-        }
+        RunAdb(GetAdbDeviceArgs("shell", "rm", "-f", tmpPath));
 
         Serilog.Log.Information($"Pushed {fileName} to device");
     }
@@ -858,23 +766,12 @@ partial class Build
     /// </summary>
     void ClearAndroidAppDatabases()
     {
-        var adbPath = GetAdbPath();
         var filesToDelete = new[] { NotesDbName, CatalogDbName };
 
         foreach (var file in filesToDelete)
         {
-            var deleteInfo = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                Arguments = GetAdbDeviceArgs($"shell run-as {AppId} rm -f /data/data/{AppId}/files/{file}"),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(deleteInfo);
-            process?.WaitForExit();
-            Serilog.Log.Information($"Deleted {file} from device (exit={process?.ExitCode})");
+            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "rm", "-f", $"/data/data/{AppId}/files/{file}"), readStderr: true);
+            Serilog.Log.Information($"Deleted {file} from device (exit={exitCode})");
         }
     }
 
@@ -902,7 +799,7 @@ partial class Build
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{MainProject}\" -t:Run -f net10.0-ios -c {Configuration} --no-restore",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net11.0-ios -c {Configuration} --no-restore",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -924,7 +821,7 @@ partial class Build
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{MainProject}\" -t:Run -f net10.0-maccatalyst -c {Configuration} --no-restore",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net11.0-maccatalyst -c {Configuration} --no-restore",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

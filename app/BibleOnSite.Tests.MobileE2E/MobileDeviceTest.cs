@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using BibleOnSite.Tests.MobileE2E.Configuration;
 using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
@@ -78,14 +79,14 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // the session still re-attempts teardown before creating anything.
             if (!TransportRecovery(exception))
             {
-                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+                SaveStartupDiagnostics(exception);
                 throw;
             }
             Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         try
@@ -94,10 +95,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         return default;
+    }
+
+    private void SaveStartupDiagnostics(Exception exception)
+    {
+        var name = $"SessionStartup-{Guid.NewGuid():N}";
+        if (exception is ReaderStartupTimeoutException readinessFailure)
+        {
+            FailureDiagnostics.BeforeStartupFailure(name, Driver?.SessionId?.ToString(), Output.WriteLine, readinessFailure);
+        }
+        FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(name, "failed", exception), Output.WriteLine);
     }
 
     // The collection fixture owns the driver's lifetime, so a finished test
@@ -137,6 +148,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     private void Run(Action body, string name)
     {
+        var scenarioStartedAtUtc = DateTimeOffset.UtcNow;
         // The caller-member name is the [Fact]/[Theory] method; combining it
         // with the declaring type reproduces the xUnit FullyQualifiedName the
         // coverage tree uses as test identity (#2085). That identity also names
@@ -149,15 +161,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         try
         {
             body();
-            WriteDriverTelemetry();
-            CoverageEvidence.RecordSession(Driver?.SessionId);
-            CoverageEvidence.Finish("passed");
-            CollectAppCoverage(test, "passed");
-            SaveDiagnostics(test, "passed");
+            CompletePassed(test);
+        }
+        catch (Xunit.Sdk.SkipException)
+        {
+            // A skip is a completed attempt, not a failure: its coverage
+            // evidence still counts toward the planned shard union, and there
+            // is no failed app for the supervisor to sample — the failure
+            // handshake does not run.
+            CompletePassed(test);
+            throw;
         }
         catch
         {
-            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine);
+            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine, scenarioStartedAtUtc);
             FailureDiagnostics.PreserveFailure(WriteDriverTelemetry, Output.WriteLine);
             FailureDiagnostics.PreserveFailure(() =>
             {
@@ -168,6 +185,15 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(test, "failed"), Output.WriteLine);
             throw;
         }
+    }
+
+    private void CompletePassed(string test)
+    {
+        WriteDriverTelemetry();
+        CoverageEvidence.RecordSession(Driver?.SessionId);
+        CoverageEvidence.Finish("passed");
+        CollectAppCoverage(test, "passed");
+        SaveDiagnostics(test, "passed");
     }
 
     private void WriteDriverTelemetry()
@@ -205,9 +231,37 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // Attribute session creation, app restart, startup wait and coverage
         // collection to the scenario that follows them.
         DriverTelemetry.Reset();
-        AcquireSession();
+        var launchId = Configuration.Platform == MobilePlatform.IOS && InstrumentedStartup
+            ? ReaderStartupReadiness.CreateLaunchId()
+            : null;
+        AcquireSession(launchId);
         Page = new(Driver!, Platform);
-        Page.WaitForStartup();
+        AwaitReaderStartup(launchId);
+        // An iOS terminate can leave WebDriverAgent's automation session bound
+        // to the dead process: the relaunch then reports success and snapshot
+        // lookups resolve the new app's tree, but every live attribute read
+        // faults for "another pid" — the reader looks loaded while no element
+        // can ever be tapped (#3379). The ordinary restart is also the
+        // recovery: a clean terminate re-pins the session to the live process,
+        // exactly as the next scenario's launch did in the incident.
+        if (Configuration.Platform == MobilePlatform.IOS && LiveChannelFaulted())
+        {
+            Output.WriteLine($"{Configuration.Platform}: the relaunched reader answers element " +
+                "lookups but its live attribute channel faults — the automation session stayed " +
+                "bound to the terminated process; launching once more to re-pin it.");
+            launchId = InstrumentedStartup ? ReaderStartupReadiness.CreateLaunchId() : null;
+            AcquireSession(launchId);
+            // The acquire may have rebuilt the session around a new driver, so
+            // the page object binds whatever the session answers now.
+            Page = new(Driver!, Platform);
+            AwaitReaderStartup(launchId);
+            // A snapshot-only scenario could report green on a reader nothing
+            // can tap, so the second proof fails the connect instead of
+            // leaving a broken channel to masquerade as a pass.
+            Assert.False(LiveChannelFaulted(), $"{Configuration.Platform}: the live attribute " +
+                "channel still faults through a second launch; the automation session stayed " +
+                "bound to the terminated process.");
+        }
         // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
         // runs before the first reset; attribute it to a startup dump so the
         // merged report still counts it (#1232). Later connects overwrite it —
@@ -216,9 +270,80 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         AppCoverage.Reset(Configuration, Output);
     }
 
+    // Unit coverage substitutes the instrumented readiness probe and its gate,
+    // while production answers both from the coverage-enabled app build.
+    protected virtual bool InstrumentedStartup => AppCoverage.Enabled;
+
+    protected virtual TimeSpan WaitForReaderReady(string launchId, TimeSpan budget) =>
+        ReaderStartupReadiness.WaitForReady(launchId, budget);
+
+    private void AwaitReaderStartup(string? launchId)
+    {
+        if (launchId == null)
+        {
+            Page.WaitForStartup();
+            if (Configuration.Platform == MobilePlatform.IOS)
+            {
+                MobilePlatformAdapter.EnsurePortrait(Driver!);
+            }
+            return;
+        }
+        var budget = TimeSpan.FromSeconds(45);
+        var startup = Stopwatch.StartNew();
+        _ = WaitForReaderReady(launchId, budget);
+        // Creation/recovery can inherit landscape. Read orientation only
+        // after readiness, counting correction in the same startup budget.
+        MobilePlatformAdapter.EnsurePortrait(Driver!);
+        Page.WaitForStartup(budget - startup.Elapsed);
+    }
+
+    // Snapshot reads cannot prove the automation channel is live: the stale
+    // session kept resolving the new app's tree while every hit-test answer
+    // came back false. Probe the predicate the first tap relies on — CanTap's
+    // live hittable read — giving a transient startup overlay this short
+    // window to lift; a persistent fault is the dead binding's signature.
+    protected virtual TimeSpan LiveChannelProbe => TimeSpan.FromSeconds(5);
+
+    private bool LiveChannelFaulted()
+    {
+        try
+        {
+            Page.WaitFor("PerekSource", Platform.CanTap, LiveChannelProbe);
+            return false;
+        }
+        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception)
+            || DeviceTransportLoss.Matches(exception))
+        {
+            // A dead session or lost transport belongs to the outer recovery
+            // classifiers, not to one more app restart.
+            throw;
+        }
+        catch (WebDriverException)
+        {
+            // The lookup resolved the reader but no poll could answer hittable
+            // — timeout, persistent element fault, or a stale-element cache —
+            // the same signature the dead process binding produced (#3379).
+            return true;
+        }
+    }
+
     // Unit coverage substitutes IMobileDeviceSession to observe this path
     // without a device.
-    protected void AcquireSession() => _session.Acquire(LaunchEnvironment);
+    protected void AcquireSession() => AcquireSession(null);
+
+    protected void AcquireSession(string? launchId)
+    {
+        if (launchId == null)
+        {
+            _session.Acquire(LaunchEnvironment);
+            return;
+        }
+        var environment = LaunchEnvironment is { } supplied
+            ? new Dictionary<string, string>(supplied)
+            : new Dictionary<string, string>();
+        environment[ReaderStartupReadiness.LaunchIdEnvironmentVariable] = launchId;
+        _session.Acquire(environment);
+    }
 
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);

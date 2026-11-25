@@ -15,6 +15,7 @@ from mysql_backup import (
     REGION,
     BackupError,
     Database,
+    mysql_family,
     restore_archive,
 )
 
@@ -57,6 +58,7 @@ def read_manifest(s3, key, version):
             raise ValueError("Missing size")
         if not manifest["sourceServerUuid"] or not manifest["restoration"]["tables"]:
             raise ValueError("Missing restoration evidence")
+        mysql_family(manifest["serverVersion"])
     except (ValueError, KeyError, TypeError, AttributeError):
         raise BackupError("Invalid backup manifest") from None
     return manifest
@@ -80,7 +82,12 @@ def restore(s3, key, version, scratch, directory):
     if path.stat().st_size != manifest["bytes"]:
         raise BackupError("Archive size mismatch")
     result = restore_archive(
-        scratch, path, directory, manifest["sourceServerUuid"], manifest["sha256"]
+        scratch,
+        path,
+        directory,
+        manifest["sourceServerUuid"],
+        manifest["serverVersion"],
+        manifest["sha256"],
     )
     if result != manifest["restoration"]:
         raise BackupError("Restored schema, row counts or table checksums differ")

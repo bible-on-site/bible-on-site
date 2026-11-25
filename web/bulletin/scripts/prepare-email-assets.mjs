@@ -12,6 +12,7 @@ const keyPrefix = "branding/daily-bulletin";
 const cdnOrigin = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com";
 const args = process.argv.slice(2);
 const check = args.includes("--check");
+const headerOnly = args.includes("--header-only");
 const moduleFlag = args.indexOf("--sharp-module");
 const modulePath = moduleFlag < 0 ? undefined : args[moduleFlag + 1];
 const acceptedArguments =
@@ -22,10 +23,10 @@ const acceptedArguments =
 			);
 if (
 	(moduleFlag >= 0 && (!modulePath || modulePath.startsWith("--"))) ||
-	acceptedArguments.some((arg) => arg !== "--check")
+	acceptedArguments.some((arg) => arg !== "--check" && arg !== "--header-only")
 ) {
 	throw new Error(
-		"Usage: prepare-email-assets.mjs [--check] [--sharp-module PATH]",
+		"Usage: prepare-email-assets.mjs [--check] [--header-only] [--sharp-module PATH]",
 	);
 }
 
@@ -89,7 +90,10 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 		sha256: hash,
 		file,
 		s3Key,
-		url: `${cdnOrigin}/${s3Key}`,
+		url:
+			id === "logo-header"
+				? "https://xn--febl3a.co.il/images/logos/header-logo.jpg"
+				: `${cdnOrigin}/${s3Key}`,
 		contentType: extension === "jpg" ? "image/jpeg" : "image/png",
 		width: metadata.width,
 		height: metadata.height,
@@ -99,22 +103,18 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 	outputs.push({ file, bytes });
 }
 
+const { fontVersion } = JSON.parse(
+	await readFile(
+		resolve(repositoryRoot, "docs/branding/logo-manifest.json"),
+		"utf8",
+	),
+);
 await addAsset(
 	"logo-header",
-	"app/BibleOnSite/Resources/Images/logo_header.jpg",
+	"web/shared/branding/derived/logo_header.jpg",
 	"jpg",
-	async (source) => {
-		if (
-			sha256(source) !==
-			"bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7"
-		) {
-			throw new Error(
-				"The selected original logo changed. Review the source before updating this asset.",
-			);
-		}
-		return source;
-	},
-	"Existing Bible On Site native-app and PDF-header brand artwork; copied without alteration.",
+	async (source) => source,
+	`Al Heperek Yehuda ${fontVersion} outlined wordmark, shared with the native application, website and PDF header.`,
 );
 
 const sources = {
@@ -125,7 +125,7 @@ const sources = {
 		"Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.",
 	globe: "Project-authored globe icon for the Bible On Site email footer.",
 };
-for (const [id, attribution] of Object.entries(sources)) {
+for (const [id, attribution] of headerOnly ? [] : Object.entries(sources)) {
 	await addAsset(
 		id,
 		id === "globe"
@@ -145,7 +145,7 @@ for (const [id, attribution] of Object.entries(sources)) {
 	);
 }
 
-const manifest = {
+let manifest = {
 	schemaVersion: 1,
 	generatedBy: "web/bulletin/scripts/prepare-email-assets.mjs",
 	renderer: {
@@ -155,6 +155,15 @@ const manifest = {
 	},
 	assets,
 };
+if (headerOnly) {
+	manifest = JSON.parse(
+		await readFile(resolve(outputDirectory, "manifest.json"), "utf8"),
+	);
+	const index = manifest.assets.findIndex(({ id }) => id === "logo-header");
+	if (index < 0)
+		throw new Error("Email asset manifest is missing the logo header");
+	manifest.assets[index] = assets[0];
+}
 outputs.push({
 	file: "manifest.json",
 	bytes: Buffer.from(`${JSON.stringify(manifest, null, "\t")}\n`),

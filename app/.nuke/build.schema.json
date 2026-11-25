@@ -29,6 +29,7 @@
         "Compile",
         "CompileAndroid",
         "CompileAndroidReleaseSmoke",
+        "CompileDeviceTests",
         "CompileE2E",
         "CompileMobileE2E",
         "CompileTests",
@@ -64,6 +65,7 @@
         "StartApi",
         "SyncGooglePlayListing",
         "Test",
+        "TestDeviceAndroid",
         "TestE2E",
         "TestIntegration",
         "TestMobileE2E",
@@ -239,6 +241,10 @@
         "ReleaseNotesFile": {
           "type": "string",
           "description": "Path to the Hebrew store release-notes text file for this version"
+        },
+        "SkipExternalAndroidSymbols": {
+          "type": "boolean",
+          "description": "Use only the built app bundle and local sidecars for PackageAndroidSymbols"
         },
         "Solution": {
           "type": "string",

@@ -131,6 +131,17 @@ describe("annotation CLI database driver ownership", () => {
 					for (const name of [script, "website-mysql.mts"]) {
 						copyFileSync(new URL(name, import.meta.url), join(devops, name));
 					}
+					for (const relative of [
+						"web/bible-on-site/src/lib/db-config.ts",
+						"web/shared/mysql/rds-ca.ts",
+					]) {
+						const destination = join(root, relative);
+						mkdirSync(dirname(destination), { recursive: true });
+						copyFileSync(
+							new URL(`../${relative}`, import.meta.url),
+							destination,
+						);
+					}
 					for (const [directory, source] of [
 						[root, 'throw new Error("wrong root driver");'],
 						[

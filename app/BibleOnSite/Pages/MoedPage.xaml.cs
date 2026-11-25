@@ -16,7 +16,7 @@ using BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the recitation/desktop partial parts.
 #pragma warning disable S2333
-public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
+public partial class MoedPage : ContentPage, IQueryAttributable, IAnalyticsScreenName //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MoedViewModel _viewModel;
@@ -77,6 +77,8 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MoedRowsCollection,
+                // This reader has no ⋮ options menu — nothing to re-scope.
+                MenuPanel = null,
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
@@ -95,6 +97,7 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                 IsSelectableUnit = unitId => MoedService.Instance.GetMoed(unitId) != null,
                 CurrentUnitId = () => _viewModel.UnitId,
                 NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForUnit(),
             });
     }
 
@@ -203,6 +206,9 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
             MoedRowsCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
         }
         ClearAllSelections();
+        // The unit swap reports here (NavigationRequested) — not on
+        // Unit's PropertyChanged, which fires for the same swap (#3378).
+        SetAnalyticsScreenForUnit();
         _chrome.RefreshPrevNext();
         _ = UpdateArticlesCountAsync();
         if (_chrome.IsShowingArticles)
@@ -276,6 +282,9 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
             _pendingSlug = null;
             _pendingId = null;
             MoedLoadingOverlay.Hide();
+            // The initial visit's screen_view: NavigatedTo fired before the
+            // moed resolved, so the resolved-identity emit lives here (#3378).
+            SetAnalyticsScreenForUnit();
             await UpdateArticlesCountAsync();
         }
         #pragma warning disable S2221 // Deliberate failure boundary: unit load failure surfaces on the retryable overlay (#2084)
@@ -381,6 +390,41 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
 
     #endregion
 
+    #region Analytics
+
+    /// <summary>
+    /// The reader reports its own logical screen from page lifecycle and
+    /// unit swaps — transitions a Shell-level screen_view would double-count
+    /// — so the Shell report is suppressed.
+    /// </summary>
+    public AnalyticsScreen? AnalyticsScreen => null;
+
+    protected override void OnNavigatedTo(NavigatedToEventArgs args)
+    {
+        base.OnNavigatedTo(args);
+        SetAnalyticsScreenForUnit();
+    }
+
+    /// <summary>
+    /// Emits the visible surface's screen_view once the moed resolves
+    /// (#3378): the reader itself (Moed/{id} + occasion name) or, while the
+    /// articles view is up, its moed-scoped list. A pre-load NavigatedTo
+    /// with id 0 never emits — the post-load call owns the initial visit.
+    /// </summary>
+    private void SetAnalyticsScreenForUnit()
+    {
+        if (_viewModel.UnitId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Moed,
+                _viewModel.UnitId, _viewModel.Heading)
+            : AnalyticsScreens.ForMoed(_viewModel.UnitId, _viewModel.Heading));
+    }
+
+    #endregion
+
     #region Back
 
     protected override bool OnBackButtonPressed()
@@ -392,16 +436,7 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
     {
         // Match the other readers' foreground-first policy: a focused pasuk
         // owns Back before the commentary sheet covered by its overlay (#3307).
-        var owner = ReaderBackPolicy.Resolve(
-            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
-            unitPickerOpen: false,
-            fanMenuOpen: FanMenu.IsOpen,
-            menuOverlayOpen: false,
-            chapterSearchOpen: false,
-            focusedPasuk: _focusedPasuk != null,
-            perushimSheetOpen: PerushimPanel.IsOpen,
-            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
-                _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
+        var owner = ResolveBackOwner();
         switch (owner)
         {
             case ReaderBackSurface.ExitFullScreen:
@@ -421,6 +456,23 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                 return false;
         }
     }
+
+    /// <summary>
+    /// The transient surface that owns input right now, in the shared
+    /// foreground-first order — <see cref="ReaderBackSurface.None"/> means a
+    /// plain Back falls through to navigation and PgUp/PgDn may step units
+    /// (#2766).
+    /// </summary>
+    private ReaderBackSurface ResolveBackOwner() => ReaderBackPolicy.Resolve(
+        exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+        unitPickerOpen: false,
+        fanMenuOpen: FanMenu.IsOpen,
+        menuOverlayOpen: false,
+        chapterSearchOpen: false,
+        focusedPasuk: _focusedPasuk != null,
+        perushimSheetOpen: PerushimPanel.IsOpen,
+        selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
 
     /// <summary>
     /// The capsule back affordance stays enabled while any transient surface

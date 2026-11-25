@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	isSubscriptionManagementLink,
 	validateAudienceChange,
 	validateEmailQueueRequest,
+	validateInactivityUnsubscribe,
 	validateSubscriberChange,
 } from "~/lib/bulletin-email";
 
@@ -174,5 +176,53 @@ describe("bulletin queue requests", () => {
 		{ ...request, requestKey: ` ${request.requestKey}` },
 	])("rejects malformed queue request %j", (value) => {
 		expect(() => validateEmailQueueRequest(value)).toThrow();
+	});
+});
+
+describe("subscription-management link classification", () => {
+	it.each([
+		"https://xn--febl3a.co.il/perek/1",
+		"https://xn--febl3a.co.il/",
+		"http://example.com/article?utm=bulletin",
+	])("counts a content destination as engagement: %s", (link) => {
+		expect(isSubscriptionManagementLink(link)).toBe(false);
+	});
+	it.each([
+		"https://list.subscription.il-central-1.amazonses.com/u/abc",
+		"https://amazonses.com/preferences",
+		"https://sub.execute-api.us-east-1.amazonaws.com/stage/unsub",
+		"https://xn--febl3a.co.il/unsubscribe?id=42",
+		"https://xn--febl3a.co.il/subscription/manage",
+		"not-a-url",
+		"",
+		"javascript:alert(1)",
+		"mailto:reader@example.com",
+	])(
+		"keeps management, unparseable or non-HTTP links out of engagement: %s",
+		(link) => {
+			expect(isSubscriptionManagementLink(link)).toBe(true);
+		},
+	);
+});
+
+describe("inactivity unsubscribe requests", () => {
+	it("accepts a positive subscriber id", () => {
+		expect(validateInactivityUnsubscribe({ subscriberId: 42 })).toEqual({
+			subscriberId: 42,
+		});
+	});
+	it.each([
+		null,
+		undefined,
+		[],
+		"42",
+		{},
+		{ subscriberId: "42" },
+		{ subscriberId: 0 },
+		{ subscriberId: -3 },
+		{ subscriberId: 1.5 },
+		{ subscriberId: Number.MAX_SAFE_INTEGER + 1 },
+	])("rejects a malformed request %j", (value) => {
+		expect(() => validateInactivityUnsubscribe(value)).toThrow();
 	});
 });

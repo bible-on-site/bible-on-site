@@ -54,9 +54,25 @@ public partial class RecitationBookChoice : ObservableObject
     /// <summary>True while this book is part of the running download — replaces its action with progress.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowProgress))]
+    [NotifyPropertyChangedFor(nameof(ShowProgressBar))]
     [NotifyPropertyChangedFor(nameof(ShowDownload))]
     [NotifyPropertyChangedFor(nameof(ShowRemove))]
     private bool _isDownloading;
+
+    /// <summary>
+    /// This sefer's own transfer fraction 0–1 (#3705): 0 means the platform
+    /// has not reported progress yet, so the row shows only its spinner.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProgressBar))]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
+    private double _downloadProgress;
+
+    /// <summary>Whether this row's download/remove actions respond — false while a download runs.</summary>
+    [ObservableProperty] private bool _actionsEnabled = true;
+
+    /// <summary>Whether the row carries the download's cancel action (single-sefer scope).</summary>
+    [ObservableProperty] private bool _showCancel;
 
     [ObservableProperty] private string _status = "";
 
@@ -64,6 +80,9 @@ public partial class RecitationBookChoice : ObservableObject
     public bool IsFullyInstalled => AvailableCount > 0 && InstalledCount >= AvailableCount;
     public bool IsPartiallyInstalled => HasInstalled && !IsFullyInstalled;
     public bool ShowProgress => IsDownloading;
+    /// <summary>The readable bar appears once the platform reports a fraction.</summary>
+    public bool ShowProgressBar => IsDownloading && DownloadProgress > 0;
+    public string ProgressText => DownloadProgress > 0 ? $"{DownloadProgress:P0}" : "";
     public bool ShowDownload => !IsDownloading && CanDownload && !IsFullyInstalled;
     public bool ShowRemove => !IsDownloading && HasInstalled;
     public string DownloadLabel => IsPartiallyInstalled ? "השלמת הורדה" : "הורדה";
@@ -109,6 +128,7 @@ public partial class RecitationPacksViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
     [NotifyPropertyChangedFor(nameof(CanRemove))]
+    [NotifyPropertyChangedFor(nameof(ShowAggregateProgress))]
     private bool _isDownloading;
 
     public bool IsIdle => !IsDownloading;
@@ -264,6 +284,16 @@ public partial class RecitationPacksViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>How many sefer packs the active download covers — scopes the aggregate progress block.</summary>
+    private int _downloadScopeCount;
+
+    /// <summary>
+    /// The bottom progress/cancel block reports aggregate progress only for a
+    /// multi-sefer scope (#3705) — a single sefer's bar and cancel live on its
+    /// own row where the tap landed.
+    /// </summary>
+    public bool ShowAggregateProgress => IsDownloading && _downloadScopeCount > 1;
+
     /// <summary>Downloads every catalogued recording in one action — no selection step.</summary>
     [RelayCommand]
     public async Task DownloadAllAsync() =>
@@ -287,6 +317,34 @@ public partial class RecitationPacksViewModel : ObservableObject
         await DownloadAsync(book.PerekIds.ToHashSet());
     }
 
+    /// <summary>
+    /// Maps the aggregate transfer fraction back onto each sefer's row (#3705):
+    /// the service installs the packs in catalog order, so cumulative bytes
+    /// identify the book in flight — completed rows read 100%, queued rows 0.
+    /// </summary>
+    internal void ApplyBookProgress(double p, HashSet<int> ids)
+    {
+        var packs = _recitation.Books.Where(b => b.PerekIds.Any(ids.Contains)).ToList();
+        var total = packs.Sum(b => b.SizeBytes);
+        if (total <= 0)
+        {
+            return;
+        }
+
+        var completed = p * total;
+        long prior = 0;
+        foreach (var pack in packs)
+        {
+            var fraction = pack.SizeBytes > 0
+                ? Math.Clamp((completed - prior) / pack.SizeBytes, 0, 1) : 0;
+            foreach (var book in Books.Where(b => b.IsDownloading && b.PerekIds.Any(pack.PerekIds.Contains)))
+            {
+                book.DownloadProgress = fraction;
+            }
+            prior += pack.SizeBytes;
+        }
+    }
+
     /// <summary>Performs the selected download scope, keeping stale progress reports from overwriting the outcome.</summary>
     private async Task DownloadAsync(HashSet<int> ids)
     {
@@ -301,11 +359,23 @@ public partial class RecitationPacksViewModel : ObservableObject
             return;
         }
 
+        var scope = Books.Where(b => b.PerekIds.Any(ids.Contains)).ToList();
+        // Set before IsDownloading so the ShowAggregateProgress notification
+        // the flag fires already reads the new scope.
+        _downloadScopeCount = scope.Count;
         IsDownloading = true;
         Progress = 0;
         foreach (var book in Books)
         {
-            book.IsDownloading = book.PerekIds.Any(ids.Contains);
+            var inScope = scope.Contains(book);
+            book.IsDownloading = inScope;
+            book.DownloadProgress = 0;
+            // The cancel action sits on the tapped row for a single-sefer
+            // download; a wider scope keeps the aggregate cancel below (#3705).
+            book.ShowCancel = inScope && scope.Count == 1;
+            // Conflicting actions are guarded per row — unrelated rows stay
+            // readable instead of the whole list dimming (#3705).
+            book.ActionsEnabled = false;
         }
         using var cancellation = new CancellationTokenSource();
         _download = cancellation;
@@ -314,6 +384,7 @@ public partial class RecitationPacksViewModel : ObservableObject
         // a stale report that runs during the catch→finally window must not
         // overwrite the completed or cancelled status.
         string outcome;
+        string? rowOutcome = null;
         try
         {
             Status = "מעדכן את חבילת ההקראה...";
@@ -331,15 +402,24 @@ public partial class RecitationPacksViewModel : ObservableObject
                         return;
                     }
                     Progress = p; Status = $"מוריד הקלטות... {p:P0}";
+                    ApplyBookProgress(p, ids);
                 }
             }), cancellation.Token);
             outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
-        catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
+        catch (OperationCanceledException)
+        {
+            outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך.";
+            rowOutcome = "ההורדה הופסקה - ניתן לנסות שוב.";
+        }
         // Any non-cancellation failure — catalog, package, checksum, filesystem
         // or platform delivery errors — collapses to one retriable status.
         #pragma warning disable S2221 // Deliberate failure boundary: multi-source download failure collapses to one retriable status
-        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; } //NOSONAR — multi-source download failure collapses to one retriable status.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו.";
+            rowOutcome = "ההורדה נכשלה - ניתן לנסות שוב.";
+        }
         #pragma warning restore S2221
         finally
         {
@@ -350,6 +430,9 @@ public partial class RecitationPacksViewModel : ObservableObject
                 foreach (var book in Books)
                 {
                     book.IsDownloading = false;
+                    book.DownloadProgress = 0;
+                    book.ShowCancel = false;
+                    book.ActionsEnabled = true;
                 }
             }
         }
@@ -361,5 +444,18 @@ public partial class RecitationPacksViewModel : ObservableObject
             Status = outcome;
         }
         Refresh();
+        // Failure or cancellation lands on the tapped row too, next to the
+        // retried הורדה action — not only in the page-level status (#3705).
+        // Without a catalog the row keeps its "availability checked at
+        // download" hint: the attempt never reached a known pack.
+        if (rowOutcome != null && IsInstalled)
+        {
+            // Rows whose pack already landed keep their installed status —
+            // "retry" on a completed row contradicts the הסרה action it shows.
+            foreach (var book in scope.Where(b => !b.IsFullyInstalled))
+            {
+                book.Status = rowOutcome;
+            }
+        }
     }
 }

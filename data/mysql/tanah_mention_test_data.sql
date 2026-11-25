@@ -29,6 +29,18 @@ VALUES
         'ישראל',
         'ישראל',
         '<p>שם הדגמה לבדיקת קישורי אזכורים</p>'
+    ),
+    -- Moed preview fixture (#3381): the unique_name equals fixture moed
+    -- 90's stored name ("מועד בדיקה"), so its detail page resolves an
+    -- exact canonical entry and renders the 20-word introduction + the
+    -- תנכפדיה link. The body exceeds twenty words to exercise the
+    -- truncation ellipsis end-to-end; moed 92 has no matching entry and
+    -- covers the absent state.
+    (
+        'e2e00000-0000-4000-8000-0000000000e3',
+        'מועד בדיקה',
+        'מועד בדיקה',
+        '<p>מועד לבדיקות מערכת אחת שתיים שלוש ארבע חמש שש שבע שמונה תשע עשר אחת עשרה שתים עשרה שלוש עשרה ארבע עשרה חמש עשרה שש עשרה שבע עשרה שמונה עשרה תשע עשרה עשרים</p>'
     );
 
 -- Pasuk decoration on perek 1 pasuk 1 (בראשית א א): segment 2 is אֱלֹהִ֑ים.
@@ -55,7 +67,7 @@ VALUES (
     2,
     2,
     'אלהים',
-    MD5('e2e-pasuk-elohim'),
+    LEFT(SHA2('e2e-pasuk-elohim', 256), 32),
     'אלהים',
     'PERSON',
     'auto',
@@ -90,7 +102,7 @@ SELECT 'e2e00000-0000-4000-8000-0000000000d2',
     LOCATE('ישראל', a.content) - 1,
     LOCATE('ישראל', a.content) - 1 + CHAR_LENGTH('ישראל'),
     SUBSTRING(a.content, LOCATE('ישראל', a.content), CHAR_LENGTH('ישראל')),
-    MD5('e2e-article-yisrael'),
+    LEFT(SHA2('e2e-article-yisrael', 256), 32),
     'ישראל',
     'NATION',
     'auto',
@@ -121,7 +133,7 @@ SELECT 'e2e00000-0000-4000-8000-0000000000d3',
     LOCATE('יצחק', a.content) - 1,
     LOCATE('יצחק', a.content) - 1 + CHAR_LENGTH('יצחק'),
     SUBSTRING(a.content, LOCATE('יצחק', a.content), CHAR_LENGTH('יצחק')),
-    MD5('e2e-article-yitzchak'),
+    LEFT(SHA2('e2e-article-yitzchak', 256), 32),
     'יצחק',
     'PERSON',
     'auto',

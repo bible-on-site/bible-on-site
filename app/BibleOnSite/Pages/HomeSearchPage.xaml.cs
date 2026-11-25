@@ -9,7 +9,7 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
 #pragma warning restore S2333
 {
     private bool _active;
-    public string AnalyticsScreenName => "HomeSearch";
+    public AnalyticsScreen? AnalyticsScreen => new("HomeSearch", nameof(HomeSearchPage));
 
     public HomeSearchPage()
     {

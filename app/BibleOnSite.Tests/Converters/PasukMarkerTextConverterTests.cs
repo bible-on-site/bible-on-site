@@ -54,8 +54,9 @@ public class PasukMarkerTextConverterTests
         merged.Spans[2].FontSize.Should().Be(14);
     }
 
-    // #2623: the marker is reader chrome — it keeps the app's main font while
-    // the pasuk text around it renders in Taamey D.
+    // #2623/#3685: the marker is reader chrome — it pins the brand face
+    // explicitly rather than inheriting whatever scripture contract the
+    // label resolves (both are Al Heperek since #3685).
     [Fact]
     public void the_marker_letter_stays_on_the_app_main_font()
     {
@@ -63,7 +64,7 @@ public class PasukMarkerTextConverterTests
             .Should().BeOfType<FormattedString>().Subject;
 
         merged.Spans[0].FontFamily.Should().Be(PasukMarkerTextConverter.MarkerFontFamily);
-        PasukMarkerTextConverter.MarkerFontFamily.Should().Be("OpenSansRegular");
+        PasukMarkerTextConverter.MarkerFontFamily.Should().Be("AlHeperekRegular");
     }
 
     // #2623: a cloned span's null FontFamily must stay *unset*. SetValue marks
@@ -138,7 +139,7 @@ public class PasukMarkerTextConverterTests
             Text = "מודגש",
             FontAttributes = FontAttributes.Bold,
             FontSize = 20,
-            FontFamily = "OpenSansRegular"
+            FontFamily = "AlHeperekRegular"
         };
         var text = PasukText("פסוק", styled);
 
@@ -147,7 +148,7 @@ public class PasukMarkerTextConverterTests
         var clone = merged.Spans[2];
         clone.FontSize.Should().Be(20);
         clone.FontAttributes.Should().Be(FontAttributes.Bold);
-        clone.FontFamily.Should().Be("OpenSansRegular");
+        clone.FontFamily.Should().Be("AlHeperekRegular");
     }
 
     [Fact]
@@ -160,7 +161,7 @@ public class PasukMarkerTextConverterTests
         {
             Text = "מעוצב",
             FontSize = 20,
-            FontFamily = "OpenSansRegular",
+            FontFamily = "AlHeperekRegular",
             FontAttributes = FontAttributes.Italic,
             FontAutoScalingEnabled = false,
             CharacterSpacing = 2.5,
@@ -176,7 +177,7 @@ public class PasukMarkerTextConverterTests
         var clone = ((FormattedString)Convert(text, "א", 16.0)).Spans[2];
 
         clone.FontSize.Should().Be(20);
-        clone.FontFamily.Should().Be("OpenSansRegular");
+        clone.FontFamily.Should().Be("AlHeperekRegular");
         clone.FontAttributes.Should().Be(FontAttributes.Italic);
         clone.FontAutoScalingEnabled.Should().BeFalse();
         clone.CharacterSpacing.Should().Be(2.5);

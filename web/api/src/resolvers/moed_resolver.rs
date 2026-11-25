@@ -112,7 +112,7 @@ mod tests {
             .finish()
     }
 
-    fn moed_model(id: i32) -> entities::moed::Model {
+    fn moed_model(id: u16) -> entities::moed::Model {
         entities::moed::Model {
             id,
             slug: format!("moed-{id}"),
@@ -243,7 +243,8 @@ mod tests {
                         created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
                             .unwrap()
                             .and_hms_opt(0, 0, 0)
-                            .unwrap(),
+                            .unwrap()
+                            .and_utc(),
                     },
                 ]])
                 // articles_for_moed: perek bound read (no ranges → empty),

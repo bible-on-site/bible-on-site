@@ -15,7 +15,7 @@
   border-radius: var(--radius-lg);
   border-right: 4px solid #6366f1;
   /* אחיד עם גופן הגוף (כולל עברית); ז/נ יורשים ולא נופלים ל־fallback במשקל כבד */
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: inherit;
 }
 
 .title {
@@ -686,6 +686,16 @@
   direction: rtl;
   /* מחצית גובה שורת בנות הזוג — לחיבור הקו האנכי לקו האופקי (מומר ב-JS) */
   --matrix-spouse-mid-px: 36px;
+}
+
+/* Keep the server-rendered spouse rail within its available width before the
+   client can measure it and select the responsive layout. */
+.spouseOnlyMatrix {
+  max-width: 100%;
+}
+
+.spouseOnlyMatrix .card {
+  max-width: 100%;
 }
 
 /* קו אנכי ממרכז המכולה למטה עד קו הנישואין האופקי */

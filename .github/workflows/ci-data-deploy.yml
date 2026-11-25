@@ -1,20 +1,7 @@
 name: Data Deployment Tests
 
 on:
-  pull_request:
-    paths:
-      - devops/deploy/data-deploy/**
-      - devops/package.json
-      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
-      - .github/workflows/ci-data-deploy.yml
-  push:
-    branches: [master]
-    paths:
-      - devops/deploy/data-deploy/**
-      - devops/package.json
-      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
-      - .github/workflows/ci-data-deploy.yml
-  merge_group:
+  workflow_call:
 
 permissions:
   contents: read
@@ -22,10 +9,12 @@ permissions:
 jobs:
   test:
     timeout-minutes: 60
-    name: Lambda restoration recovery
+    name: Data deploy and MySQL rehearsals
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
 
@@ -39,3 +28,35 @@ jobs:
           python-version: "3.15" # Lambda runtime of bible-on-site-db-populator
       - name: Test additive migration preservation without AWS
         run: python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"
+      - name: Rehearse the article fingerprint migration on MySQL 8.4
+        run: node devops/deploy/data-deploy/mysql-fingerprint-regression.mjs --mysql-tag 8.4.9
+      - name: Test the packaged Lambda connector against MySQL 9.7 with TLS required
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture=$(mktemp -d)
+          container="lambda-mysql-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf -- "$fixture"' EXIT
+          mkdir "$fixture/tls" "$fixture/package"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj /CN=mysql-fixture.test -addext subjectAltName=DNS:mysql-fixture.test \
+            -keyout "$fixture/tls/server.key" -out "$fixture/tls/server.pem"
+          chmod 644 "$fixture/tls/server.key"
+          install -m 644 docs/aws/cloudformation/data-deploy/data-deploy-lambda.py "$fixture/package/index.py"
+          cp "$fixture/tls/server.pem" "$fixture/package/rds-ca.pem"
+          python -m pip install --requirement docs/aws/cloudformation/data-deploy/requirements.txt \
+            --target "$fixture/package"
+          docker run --detach --rm --name "$container" --publish 127.0.0.1::3306 \
+            --mount "type=bind,source=$fixture/tls,target=/fixture-tls,readonly" \
+            --env MYSQL_ROOT_PASSWORD=fixture-root --env MYSQL_DATABASE=lambda_test \
+            --env MYSQL_USER=lambda_fixture --env MYSQL_PASSWORD=fixture-only \
+            --health-cmd 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --host=127.0.0.1 --user=root --execute="SELECT 1"' \
+            --health-interval 2s --health-timeout 3s --health-retries 30 \
+            mysql:9.7.4 --require-secure-transport=ON --ssl-ca=/fixture-tls/server.pem \
+            --ssl-cert=/fixture-tls/server.pem --ssl-key=/fixture-tls/server.key
+          if ! timeout 60 bash -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" "$1")" = healthy ]; do sleep 1; done' _ "$container"; then
+            docker logs "$container"
+            exit 1
+          fi
+          binding=$(docker port "$container" 3306/tcp)
+          python devops/deploy/data-deploy/lambda_mysql_package_test.py "$fixture/package" "${binding##*:}"

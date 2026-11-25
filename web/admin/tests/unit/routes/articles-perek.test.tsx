@@ -6,9 +6,11 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 
 const { deleteArticle, getArticlesByPerek, getPerek, routeParams } = vi.hoisted(
 	() => ({
@@ -72,7 +74,9 @@ function renderPage() {
 		client,
 		...render(
 			<QueryClientProvider client={client}>
-				<Page />
+				<UndoToastProvider durationMs={30}>
+					<Page />
+				</UndoToastProvider>
 			</QueryClientProvider>,
 		),
 	};
@@ -168,7 +172,7 @@ describe("Chapter article list", () => {
 		getArticlesByPerek.mockResolvedValue([]);
 		renderPage();
 		expect(
-			await screen.findByRole("heading", { name: "📖 פרק 2" }),
+			await screen.findByRole("heading", { name: "פרק 2" }),
 		).toBeVisible();
 		expect(screen.getByText("אין מאמרים בפרק זה עדיין")).toBeVisible();
 		expect(screen.queryByText(/^ספר /)).not.toBeInTheDocument();
@@ -186,7 +190,7 @@ describe("Chapter article list", () => {
 		routeParams.perekId = "invalid";
 		renderPage();
 		expect(
-			screen.getByRole("heading", { name: "📖 פרק invalid" }),
+			screen.getByRole("heading", { name: "פרק invalid" }),
 		).toBeVisible();
 		expect(screen.getByText("מאמרים בפרק זה (0 מאמרים)")).toBeVisible();
 		expect(getPerek).not.toHaveBeenCalled();
@@ -233,17 +237,20 @@ describe("Chapter article list", () => {
 		expect(screen.queryByText(/מאת:/)).not.toBeInTheDocument();
 	});
 
-	it("keeps the article when its deletion is cancelled", async () => {
-		const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+	it("keeps the article when its deletion is undone from the toast", async () => {
 		renderPage();
 		fireEvent.click(await screen.findByRole("button", { name: /מחיקה$/ }));
-		expect(confirm).toHaveBeenCalledWith('האם למחוק את המאמר "מאמר בדיקה"?');
+
+		const toast = await screen.findByRole("status");
+		expect(toast).toHaveTextContent('המאמר "מאמר בדיקה" יימחק');
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+
+		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
 		expect(deleteArticle).not.toHaveBeenCalled();
 		expect(screen.getByRole("link", { name: "מאמר בדיקה" })).toBeVisible();
 	});
 
 	it("disables deletion while pending and refreshes the chapter list after success", async () => {
-		vi.spyOn(window, "confirm").mockReturnValue(true);
 		let finish: () => void = () => {
 			throw new Error("Deletion has not started");
 		};

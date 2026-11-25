@@ -63,9 +63,11 @@ partial class Build : NukeBuild
     AbsolutePath TestProject => Solution.GetProject("BibleOnSite.Tests").Path;
     AbsolutePath E2ETestProject => Solution.GetProject("BibleOnSite.Tests.E2E").Path;
     AbsolutePath MobileE2ETestProject => Solution.GetProject("BibleOnSite.Tests.MobileE2E").Path;
+    AbsolutePath DeviceTestsProject => Solution.GetProject("BibleOnSite.DeviceTests").Path;
 
     AbsolutePath SourceDirectory => MainProject.Parent;
     AbsolutePath TestsDirectory => TestProject.Parent;
     AbsolutePath E2ETestsDirectory => E2ETestProject.Parent;
+    AbsolutePath DeviceTestsDirectory => DeviceTestsProject.Parent;
     AbsolutePath ApiDirectory => RootDirectory.Parent / "web" / "api";
 }

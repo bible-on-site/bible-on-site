@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -7,6 +8,7 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UndoToastProvider } from "~/components/UndoToast";
 
 const {
 	createEntityMock,
@@ -63,7 +65,9 @@ function renderPanel() {
 	});
 	return render(
 		<QueryClientProvider client={client}>
-			<EntryStructuralPanel entryId="entry-1" />
+			<UndoToastProvider durationMs={30}>
+				<EntryStructuralPanel entryId="entry-1" />
+			</UndoToastProvider>
 		</QueryClientProvider>,
 	);
 }
@@ -87,10 +91,6 @@ describe("EntryStructuralPanel", () => {
 		]) {
 			mock.mockReset().mockResolvedValue({ ok: true });
 		}
-		vi.stubGlobal(
-			"confirm",
-			vi.fn(() => true),
-		);
 	});
 
 	afterEach(() => {
@@ -449,11 +449,7 @@ describe("EntryStructuralPanel", () => {
 			});
 		});
 
-		it("keeps the link when the unlink confirmation is cancelled", async () => {
-			vi.stubGlobal(
-				"confirm",
-				vi.fn(() => false),
-			);
+		it("keeps the link when the pending unlink is undone", async () => {
 			renderPanel();
 			const id = await screen.findByText("person-entity");
 			const card = id.closest("div.rounded-lg");
@@ -465,6 +461,9 @@ describe("EntryStructuralPanel", () => {
 				}),
 			);
 
+			const toast = await screen.findByRole("status");
+			fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+			await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
 			expect(removeEntityMock).not.toHaveBeenCalled();
 		});
 

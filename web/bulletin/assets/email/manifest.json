@@ -9,17 +9,17 @@
 	"assets": [
 		{
 			"id": "logo-header",
-			"sourcePath": "app/BibleOnSite/Resources/Images/logo_header.jpg",
-			"sourceSha256": "bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7",
-			"sha256": "bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7",
-			"file": "logo-header-bfaa157e34c2.jpg",
-			"s3Key": "branding/daily-bulletin/logo-header-bfaa157e34c2.jpg",
-			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/logo-header-bfaa157e34c2.jpg",
+			"sourcePath": "web/shared/branding/derived/logo_header.jpg",
+			"sourceSha256": "ab5ee264e1e018611224245f091d27f79a88c8156ba36965eddc6149bbf2fdbf",
+			"sha256": "ab5ee264e1e018611224245f091d27f79a88c8156ba36965eddc6149bbf2fdbf",
+			"file": "logo-header-ab5ee264e1e0.jpg",
+			"s3Key": "branding/daily-bulletin/logo-header-ab5ee264e1e0.jpg",
+			"url": "https://xn--febl3a.co.il/images/logos/header-logo.jpg",
 			"contentType": "image/jpeg",
-			"width": 591,
-			"height": 295,
-			"bytes": 32659,
-			"attribution": "Existing Bible On Site native-app and PDF-header brand artwork; copied without alteration."
+			"width": 1040,
+			"height": 313,
+			"bytes": 38283,
+			"attribution": "Al Heperek Yehuda 0.9.8 outlined wordmark, shared with the native application, website and PDF header."
 		},
 		{
 			"id": "envelope",

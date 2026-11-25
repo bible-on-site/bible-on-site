@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowLeftRight, ArrowUpRight } from "lucide-react";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -14,6 +15,7 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { toHebrewLetters } from "~/utils/hebrew";
+import { ContributionArticleLinkDiff } from "./ContributionArticleLinks";
 import {
 	HEBREW_MONTHS,
 	RECORD_OPTION_LABELS,
@@ -109,7 +111,11 @@ function Relationship({
 		>
 			<span>{shown(names[0], change.labels)}</span>
 			<span className="contribution-connector" aria-hidden="true">
-				{change.kind === "parent_child" ? "↓" : "↔"}
+				{change.kind === "parent_child" ? (
+					<ArrowDown size={14} />
+				) : (
+					<ArrowLeftRight size={14} />
+				)}
 			</span>
 			<span>{shown(names[1], change.labels)}</span>
 			<small>
@@ -216,7 +222,10 @@ function Coordinates({ change }: { change: ReviewedChange }) {
 					<bdi>
 						{String(state?.latitude)}, {String(state?.longitude)}
 					</bdi>{" "}
-					↗
+					<ArrowUpRight
+						className="inline-block size-3.5 align-[-0.125em]"
+						aria-hidden="true"
+					/>
 				</a>
 			))}
 		</figure>
@@ -305,55 +314,60 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 							של הנתון.
 						</p>
 					)}
-					<div className="contribution-diff-table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">שדה</th>
-									<th scope="col">לפני</th>
-									<th scope="col">אחרי</th>
-								</tr>
-							</thead>
-							<tbody>
-								{changedFields(change).map((field) => (
-									<tr key={field}>
-										<th scope="row">
-											{(isContributionRecordKind(change.kind)
-												? CONTRIBUTION_RECORDS[change.kind].fields[field]?.label
-												: undefined) ??
-												FIELD_LABELS[field] ??
-												(
-													{
-														targets: "יעדי הכינוי",
-														name: "כינוי",
-														targetKind: "סוג הטענה",
-														targetId: "הטענה או היישות",
-														sourceType: "סוג מקור",
-														sourceText: "הפניה ביבליוגרפית",
-														perekId: "פרק",
-														pasukNumber: "פסוק",
-														perushId: "פירוש",
-													} as Record<string, string>
-												)[field] ??
-												field}
-										</th>
-										<td className="removed">
-											<span aria-hidden="true">− </span>
-											<bdi>
-												{shown(change.before?.[field], change.labels, field)}
-											</bdi>
-										</td>
-										<td className="added">
-											<span aria-hidden="true">+ </span>
-											<bdi>
-												{shown(change.after?.[field], change.labels, field)}
-											</bdi>
-										</td>
+					{change.kind === "article_links" ? (
+						<ContributionArticleLinkDiff change={change} />
+					) : (
+						<div className="contribution-diff-table-wrap">
+							<table>
+								<thead>
+									<tr>
+										<th scope="col">שדה</th>
+										<th scope="col">לפני</th>
+										<th scope="col">אחרי</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+								</thead>
+								<tbody>
+									{changedFields(change).map((field) => (
+										<tr key={field}>
+											<th scope="row">
+												{(isContributionRecordKind(change.kind)
+													? CONTRIBUTION_RECORDS[change.kind].fields[field]
+															?.label
+													: undefined) ??
+													FIELD_LABELS[field] ??
+													(
+														{
+															targets: "יעדי הכינוי",
+															name: "כינוי",
+															targetKind: "סוג הטענה",
+															targetId: "הטענה או היישות",
+															sourceType: "סוג מקור",
+															sourceText: "הפניה ביבליוגרפית",
+															perekId: "פרק",
+															pasukNumber: "פסוק",
+															perushId: "פירוש",
+														} as Record<string, string>
+													)[field] ??
+													field}
+											</th>
+											<td className="removed">
+												<span aria-hidden="true">− </span>
+												<bdi>
+													{shown(change.before?.[field], change.labels, field)}
+												</bdi>
+											</td>
+											<td className="added">
+												<span aria-hidden="true">+ </span>
+												<bdi>
+													{shown(change.after?.[field], change.labels, field)}
+												</bdi>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 					{change.kind === "entry" && (
 						<p className="contribution-diff-note">
 							הערך ייווצר עם מטא-נתונים וגוף ריק. טקסט הערך נכתב בנפרד על ידי

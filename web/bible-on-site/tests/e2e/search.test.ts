@@ -78,7 +78,7 @@ test.describe("Site search", () => {
 
 		// Search lives on its own header button; the first regular menu
 		// item is the reader (#2102).
-		const firstItem = menu.locator("ul li").first();
+		const firstItem = menu.locator("ul ul li").first();
 		await expect(firstItem.getByRole("link")).toHaveText(/על הפרק/);
 		await expect(firstItem.getByRole("link")).toHaveAttribute("href", "/929");
 		await expect(menu.getByRole("link", { name: "חיפוש" })).toHaveCount(0);
@@ -123,6 +123,9 @@ test.describe("Site search", () => {
 		await expect(link).toBeVisible();
 		await link.click();
 		await page.waitForURL("**/929/159**");
+		// The URL can commit before the destination renders. Verify that the
+		// canonical verse was reached before testing navigation back from it.
+		await expect(page.locator("#pasuk-4")).toBeVisible();
 
 		// Returning restores query, results and list position.
 		await page.goBack();

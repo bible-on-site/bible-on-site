@@ -23,7 +23,9 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
 
     public FloatingSearchBar()
     {
+        DebugLog.Write("[Startup] FloatingSearchBar InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] FloatingSearchBar XAML initialized");
         if (Config.HomeUxPreview.Enabled) { ConfigurePreviewSearch(); }
         BindingContext = _viewModel;
         LimitPicker.Value = _viewModel.ResultsLimit;
@@ -33,6 +35,7 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
         // installed commentary pack (#2454). The subscriptions stay detached
         // while this control is unloaded so a popped reader is never kept
         // alive by the singleton services.
+        DebugLog.Write("[Startup] FloatingSearchBar availability watchers");
         AttachAvailabilityWatchers();
         Loaded += (_, _) =>
         {
@@ -48,8 +51,10 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
             _debounce?.Cancel();
             _viewModel.CancelSearch();
         };
+        DebugLog.Write("[Startup] FloatingSearchBar recent history");
         RefreshRecentHistory();
         _buildingFilters = false;
+        DebugLog.Write("[Startup] FloatingSearchBar constructed");
     }
 
     /// <summary>

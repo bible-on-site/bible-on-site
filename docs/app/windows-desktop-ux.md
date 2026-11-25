@@ -12,7 +12,8 @@ increments.
 | `Alt+Left` | Shared Back pipeline (same as title-bar Back and mouse Back). |
 | Mouse X1 (Back) button | Same Back pipeline. X2 is ignored (no forward navigation). |
 | `Esc` | Peels the topmost transient surface only — never navigates, never exits. |
-| `Ctrl+F` | Opens/re-focuses the in-page search on Perek and Parasha readers. |
+| `Ctrl+F` | Opens/re-focuses the in-page search on Perek and Parasha readers, and on Tanahpedia (landing + entity-type), Articles and Authors pages (`IWindowsSearchSurface`). |
+| `PgUp` / `PgDn` | Previous/next reading unit on all four readers (Perek, Parasha, Masora, Moed — `IWindowsUnitNavSurface`). Only fires while no transient surface owns input and the corpus has a previous/next unit. |
 | `F11` | Toggles the reader fullscreen presentation on Perek, Parasha and Masora (`IWindowsFullscreenSurface`); `Esc`/Back still exit it first. Ignored while the flyout is open or on non-reader pages. |
 | `Tab` / `Enter` / `Space` | Flyout rows are native WinUI buttons on Windows — focusable, activatable, with hover/pressed/focus visuals and automation names. |
 
@@ -30,13 +31,16 @@ Back ordering (title-bar button, `Alt+Left`, mouse Back — one pipeline in
    existing `#2467`/`#2460` pipeline — keyboard Back never exits the app).
 
 `Esc` runs steps 1–3 only and consumes the press when something was
-dismissed. `Ctrl+F` routes to `IWindowsSearchSurface` on the reader pages.
+dismissed. `Ctrl+F` routes to `IWindowsSearchSurface`; on the Tanahpedia
+pages the same surface's `HandleBack()` peels the filter sheet before
+closing the whole search panel.
 
 The per-page `*WindowsBack.cs` partials (Alt+Left + focus wiring,
 triplicated across Perek/Parasha/Masora) were replaced by the shared
 `DesktopWindowChrome` layer plus the `IWindowsDesktopSurface`/
-`IWindowsSearchSurface` page contracts. Initial focus lands on the page's
-navigation button after each Shell navigation.
+`IWindowsSearchSurface` page contracts. Initial focus lands on the
+reader's entry surface on pages that expose one, with a generic fallback
+to the shared top bar's navigation button for ordinary pages.
 
 ## Adaptive navigation pane
 
@@ -95,7 +99,7 @@ platforms keep `Fill`):
 | `ReaderColumnMaxWidth` (920) | Scripture columns in Perek/Parasha/Masora carousel pages; expanded search results panel. |
 | `ReaderBarMaxWidth` (560) | Floating reader bottom bar (its actions were scattered to window edges). |
 | `ReaderSheetMaxWidth` (760) | Perushim bottom sheet. |
-| `ContentColumnMaxWidth` (960) | Article detail, Tanahpedia entry, Preferences card. |
+| `ContentColumnMaxWidth` (960) | Article detail, Tanahpedia entry, Preferences card; Articles, Authors, Moadim and Tanahpedia landing/entity-type content columns. |
 | `NavPaneBreakpoint` (1008) | Window width at which the flyout locks into the persistent nav pane. |
 
 `PointerOver` in the shared Button/ImageButton styles now dims to 0.85 —
@@ -228,11 +232,75 @@ clearly labelled Windows-only always-on-top opt-in.
   `alwaysOnTop=True` → topmost after relaunch; `alwaysOnTop=False` →
   ordinary stacking restored.
 
+## Audited defects addressed in increment 5
+
+Observed on the Debug build at 125% display scale with UIA tree dumps and
+screenshots; synthesized input is inert in this session (cursor does not
+move, elevated always-on-top Task Manager holds the foreground), so key
+presses could not be driven live — accelerator wiring is covered by unit
+tests and code review while every UIA-visible change below was verified
+in the running tree:
+
+- **List rows announced CLR type names again.** The increment-2 fix had
+  silently stopped working: .NET 11 defaults Windows `CollectionView` to
+  `Handlers.Items2.CollectionViewHandler2`
+  (`RuntimeFeature.IsWindowsCollectionView2HandlerEnabled = true`), whose
+  platform view is a WinUI `ItemsView` — not a `ListViewBase` — so the
+  mapper append never ran and `ItemContainer` peers fell back to
+  `Child.ToString()`: every pasuk read as
+  `BibleOnSite.Models.PasukDisplayItem`, every unrealized row as
+  `Microsoft.Maui.Controls.Handlers.Items2.ElementWrapper`.
+  `ListItemAutomationNames` now also attaches to `ItemsView`: it locates
+  the template `ItemsRepeater`, names each container on `ElementPrepared`
+  (plus an already-realized-children sweep, a `Loaded` pass and a
+  `LayoutUpdated` retry while the name is still empty — WinUI reports a
+  null `LayoutUpdated` sender, so the retry delegate captures its
+  element), clears names on `ElementClearing`, and drops every cleared
+  or content-less container to `AccessibilityView.Raw` so pooled rows
+  disappear from the UIA control/content views instead of announcing a
+  type name. Verified: 0 framework-named rows among 39 list items in the
+  reader tree including the offscreen/virtualized peers that previously
+  read `Items2.ElementWrapper`; every pasuk row announces its verse
+  text. The legacy `ListViewBase` path is kept for `CarouselView` and for
+  the handler-1 feature-switch fallback.
+- **Closed fan-menu satellites stayed in the focus/UIA tree.** They were
+  transparent and input-transparent but still `IsKeyboardFocusable` and
+  announced. `ReaderFanMenu` now sets `IsVisible=false` on closed/reset
+  satellites and restores it on open — verified: open tree lists all
+  four (`הפרק הבא`/`בחירת פרק`/`הפרק של היום`/`הפרק הקודם`), closed tree
+  lists none.
+- **No reader keyboard paging.** `PgUp`/`PgDn` did nothing. A shared
+  `IWindowsUnitNavSurface.TryNavigateUnit(direction)` contract is now
+  routed by `DesktopWindowChrome` and implemented on all four readers
+  (Perek/Parasha/Masora/Moed); the readers decline the press when a
+  transient surface owns input or the corpus edge is reached (decision
+  logic unit-tested in `DesktopUnitNavigationTests`).
+- **`Ctrl+F` stopped at the readers.** Tanahpedia landing and
+  entity-type pages implement `IWindowsSearchSurface` via
+  `TanahpediaSearch.OpenAsync()`/`HandleBack()` (Esc/Back peel the filter
+  sheet before the panel); Articles and Authors gained focus/open and
+  dismissal paths for their inline search.
+- **Gesture-only Moadim cards.** List cards were `Border` +
+  `TapGestureRecognizer` — no tab stop, no UIA invoke. Now the shared
+  `TappableView` (keyboard/UIA invocable) with identical visuals.
+- **Wide-monitor sprawl.** Articles, Authors, Moadim and both Tanahpedia
+  pages stretched edge-to-edge; they now cap at
+  `DesktopLayout.ContentColumnMaxWidth` (960) centered, Windows only.
+- **No text selection anywhere useful.** `PasukTextLabel` gained an
+  opt-in `Selectable` flag mapped to WinUI
+  `TextBlock.IsTextSelectionEnabled`, enabled only on the focused-pasuk
+  overlay — reader rows keep their tap/double-tap/right-click/long-press
+  gesture chain untouched.
+- **Ordinary pages had no initial focus.** `DesktopWindowChrome` now
+  falls back to the shared top bar's navigation button when the page
+  does not expose a desktop surface (`SharedTopBar` focus helper).
+
 ## Deferred
 
 - Per-page layout beyond column caps (learning calendar, corpus search
   grids, list pages), and the bottom-bar's absolute layout redesign.
-- `Ctrl+F` on non-reader pages, XButton2, arrow-key pasuk navigation.
+- `Ctrl+F` on the remaining non-reader surfaces, XButton2, arrow-key
+  pasuk navigation.
 - Full Narrator/Accessibility Insights pass (increments 2–3 fixed the
   UIA names/roles found in tree dumps) and keyboard focus *containment*
   inside popups.

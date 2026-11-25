@@ -89,3 +89,53 @@ describe("searchPesukim", () => {
 		expect(hits.length).toBeLessThanOrEqual(5);
 	});
 });
+
+describe("build-time warm-up artifact", () => {
+	const corpusKey = Symbol.for("bible-on-site.search-corpus");
+	const derivedKey = Symbol.for("bible-on-site.warm-derived");
+	// Injecting through the shared derived-data slot is the production seam:
+	// warmDerived() serves whatever the verified load cached on globalThis.
+	afterEach(() => {
+		Reflect.deleteProperty(globalThis, corpusKey);
+		Reflect.deleteProperty(globalThis, derivedKey);
+		jest.resetModules();
+	});
+
+	it("serves the indexes from the verified artifact when present", async () => {
+		jest.resetModules();
+		Reflect.deleteProperty(globalThis, corpusKey);
+		(globalThis as Record<symbol, unknown>)[derivedKey] = {
+			perakim: [
+				{
+					perekId: 1,
+					source: "artifact-source",
+					header: "artifact-header",
+					normalizedSource: "artifact-source",
+					normalizedHeader: "artifact-header",
+				},
+			],
+			pesukim: [
+				{
+					perekId: 1,
+					pasukNum: 1,
+					text: "artifact-text",
+					normalized: "artifact-text",
+					reference: "artifact-ref",
+				},
+			],
+			recitations: [],
+		};
+		const corpus = await import("@/lib/search/corpus");
+		expect(corpus.getPerekIndex()[0].source).toBe("artifact-source");
+		expect(corpus.getPasukIndex()[0].text).toBe("artifact-text");
+	});
+
+	it("falls back to live computation when no artifact is available", async () => {
+		// IS_TEST_ENV makes warmDerived resolve null — the live path.
+		jest.resetModules();
+		Reflect.deleteProperty(globalThis, corpusKey);
+		const corpus = await import("@/lib/search/corpus");
+		expect(corpus.getPerekIndex()).toHaveLength(929);
+		expect(corpus.getPasukIndex().length).toBeGreaterThan(20000);
+	});
+});

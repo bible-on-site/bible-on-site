@@ -7,34 +7,42 @@ namespace BibleOnSite.Tests.Helpers;
 public class TikkunGlyphRunTests
 {
     [Fact]
-    public void the_bundled_font_reproduces_the_within_word_movement_that_stripping_would_cause()
+    public void marked_runs_keep_base_glyphs_where_the_bare_word_places_them()
     {
+        // The marks in this word have zero advance. Stripping them preserves
+        // the base glyph geometry that HideMarks relies on (#3265).
         var marked = TikkunFont.Shape("וַיַּ֧רְא", 18);
         var bare = TikkunFont.Shape("וירא", 18);
-        marked.Glyphs.Single(g => g.Name == "vav").X.Should().BeApproximately(21.9287109f, 0.001f);
-        bare.Glyphs.Single(g => g.Name == "vav").X.Should().BeApproximately(21.0498047f, 0.001f);
-        marked.Width.Should().BeApproximately(26.4111328f, 0.001f);
+        marked.Glyphs.Where(g => g.Advance > 0)
+            .Select(g => (g.Name, g.X, g.Y, g.Advance))
+            .Should().Equal(bare.Glyphs.Select(g => (g.Name, g.X, g.Y, g.Advance)));
+        marked.Width.Should().Be(bare.Width);
         marked.Bases.Count.Should().BeGreaterThan(0);
         marked.Marks.Count.Should().BeGreaterThan(0);
+        bare.Marks.Count.Should().Be(0);
     }
 
     [Theory]
-    [InlineData("יּ", "yoddagesh")]
-    [InlineData("שׁ", "trueshin")]
-    [InlineData("שׂ", "sin")]
-    [InlineData("וֹ", "vavxolam")]
-    [InlineData("ײַ", "yodyod")]
-    public void annotations_inside_letter_glyphs_have_their_own_paint_layer(string text, string name)
+    [InlineData("יּ", "uni05D9.ss03", "uni05BC")]
+    [InlineData("שׁ", "uni05E9.ss03", "uni05C1")]
+    [InlineData("שׂ", "uni05E9.ss03", "uni05C2")]
+    [InlineData("וֹ", "uni05D5.ss03", "uni05B9")]
+    [InlineData("יַ", "uni05D9.ss03", "uni05B7")]
+    public void mark_glyphs_paint_in_their_own_layer(string text, string baseGlyph, string markGlyph)
     {
+        // Al Heperek draws dagesh, shin/sin dots and niqqud as separate GDEF
+        // mark glyphs — each paints in the annotation layer so HideMarks can
+        // hide it without touching the base letter's contours (#3685).
         var run = TikkunFont.Shape(text, 18);
-        run.Glyphs.Should().Contain(g => g.Name == name);
+        run.Glyphs.Should().Contain(g => g.Name == baseGlyph);
+        run.Glyphs.Should().Contain(g => g.Name == markGlyph);
         run.Bases.Count.Should().BeGreaterThan(0);
         run.Marks.Count.Should().BeGreaterThan(0);
         run.Bases.Should().NotBeSameAs(run.Marks);
     }
 
     [Fact]
-    public void punctuation_and_base_ligatures_are_not_mistaken_for_vocalization()
+    public void punctuation_and_base_letters_are_not_mistaken_for_vocalization()
     {
         var run = TikkunFont.Shape("אל־מלך׃", 24);
         run.Bases.Count.Should().BeGreaterThan(0);
@@ -56,7 +64,7 @@ public class TikkunGlyphRunTests
     public void the_font_and_derived_contours_cannot_drift_silently()
     {
         using var wrongFont = new MemoryStream([1, 2, 3]);
-        using var outlines = typeof(TikkunFont).Assembly.GetManifestResourceStream("TikkunFont.outlines.json")!;
+        using var outlines = typeof(TikkunFont).Assembly.GetManifestResourceStream("AlHeperekUI-outlines.json")!;
         var load = () => TikkunFont.Load(wrongFont, outlines);
         load.Should().Throw<InvalidDataException>().WithMessage("Regenerate*");
     }

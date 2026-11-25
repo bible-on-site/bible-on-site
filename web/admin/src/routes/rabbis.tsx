@@ -5,6 +5,8 @@ import {
 	Outlet,
 	useMatch,
 } from "@tanstack/react-router";
+import { Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import { useUndoAction } from "~/components/UndoToast";
 import { type Author, deleteAuthor, getAuthors } from "~/server/authors";
 
 export const Route = createFileRoute("/rabbis")({
@@ -42,10 +44,14 @@ function RabbisListPage() {
 		},
 	});
 
+	const scheduleUndo = useUndoAction();
+
 	const handleDelete = (author: Author) => {
-		if (window.confirm(`האם אתה בטוח שברצונך למחוק את "${author.name}"?`)) {
-			deleteMutation.mutate(author.id);
-		}
+		scheduleUndo({
+			key: `author-${author.id}`,
+			message: `הרב "${author.name}" יימחק`,
+			commit: () => deleteMutation.mutate(author.id),
+		});
 	};
 
 	if (isLoading) {
@@ -71,14 +77,18 @@ function RabbisListPage() {
 					params={{ id: "new" }}
 					className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow-md font-medium"
 				>
-					<span className="text-lg">+</span>
+					<Plus size={18} aria-hidden="true" />
 					<span>רב חדש</span>
 				</Link>
 			</div>
 
 			{authors?.length === 0 ? (
 				<div className="bg-white rounded-xl p-12 text-center border border-gray-200 shadow-sm">
-					<div className="text-6xl mb-4">👤</div>
+					<UserRound
+						size={56}
+						className="mx-auto mb-4 text-gray-300"
+						aria-hidden="true"
+					/>
 					<h3 className="text-xl font-semibold text-gray-700 mb-2">
 						אין רבנים במערכת
 					</h3>
@@ -88,7 +98,7 @@ function RabbisListPage() {
 						params={{ id: "new" }}
 						className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
 					>
-						<span>+</span>
+						<Plus size={16} aria-hidden="true" />
 						<span>הוסף רב חדש</span>
 					</Link>
 				</div>
@@ -107,8 +117,8 @@ function RabbisListPage() {
 										className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-100"
 									/>
 								) : (
-									<div className="w-16 h-16 rounded-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500 text-2xl ring-2 ring-gray-100">
-										👤
+									<div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 ring-2 ring-gray-100">
+										<UserRound size={28} aria-hidden="true" />
 									</div>
 								)}
 								<div className="flex-1 min-w-0">
@@ -125,7 +135,7 @@ function RabbisListPage() {
 										params={{ id: String(author.id) }}
 										className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 px-4 py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-all font-medium text-sm"
 									>
-										<span>✏️</span>
+										<Pencil size={14} aria-hidden="true" />
 										<span>עריכה</span>
 									</Link>
 									<button
@@ -133,7 +143,7 @@ function RabbisListPage() {
 										onClick={() => handleDelete(author)}
 										className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 									>
-										<span>🗑️</span>
+										<Trash2 size={14} aria-hidden="true" />
 										<span>מחק</span>
 									</button>
 								</div>

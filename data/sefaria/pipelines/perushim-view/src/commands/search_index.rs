@@ -5,9 +5,12 @@
 //! `{verses,notes}_documents` + matching external-content FTS5 tables + an
 //! `fts5vocab` per table + `search_metadata` content fingerprints. Verses come
 //! from the committed `tanah_view` SQLite; commentary comes from the generated
-//! notes DB. Fingerprints (`v4:{content-id}:n{norm}`) bind the index to the
-//! exact content generation and normalization rules — the app compares them
-//! instead of file timestamps.
+//! notes DB. `notes_documents` deliberately carries only note identity — the
+//! note text itself already lives zlib-compressed in the notes DB blobs, and
+//! duplicating it here cost ~250 MB (~75% of this file); the app resolves hit
+//! bodies back from the blob by (perek, pasuk, perush, note_idx). Fingerprints
+//! (`v4:{content-id}:n{norm}`) bind the index to the exact content generation
+//! and normalization rules — the app compares them instead of file timestamps.
 
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, OpenFlags};
@@ -57,7 +60,7 @@ pub fn build_search_index(notes_db: &Path, tanah_view: &Path, out: &Path) -> Res
         "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT);
          CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
          CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid');
-         CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
+         CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER);
          CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid');",
     )?;
 
@@ -149,8 +152,10 @@ fn insert_verses(index: &mut Connection, tanah: &Connection, sefer_of: &SeferRan
     Ok(())
 }
 
-/// Commentary: decode every perek blob, flatten to plain text, and index the
-/// normalized tokens — the same transform `SearchIndexService` applies.
+/// Commentary: decode every perek blob and index the normalized tokens — the
+/// same transform `SearchIndexService` applies. `notes_documents` records the
+/// note's identity (including `note_idx` inside its blob) rather than a second
+/// copy of the text; the app re-reads the blob for the hit bodies.
 fn insert_notes(index: &mut Connection, notes: &Connection, sefer_of: &SeferRanges) -> Result<()> {
     let mut rows = notes.prepare("SELECT perek_id, data FROM note_blob ORDER BY perek_id")?;
     let mut query = rows.query([])?;
@@ -158,7 +163,7 @@ fn insert_notes(index: &mut Connection, notes: &Connection, sefer_of: &SeferRang
     let tx = index.transaction()?;
     {
         let mut doc = tx.prepare(
-            "INSERT INTO notes_documents (Text, PerekId, PasukNum, PerushId, SeferId) \
+            "INSERT INTO notes_documents (PerekId, PasukNum, PerushId, SeferId, NoteIdx) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
         let mut fts = tx.prepare("INSERT INTO notes (rowid, Text) VALUES (?1, ?2)")?;
@@ -172,11 +177,11 @@ fn insert_notes(index: &mut Connection, notes: &Connection, sefer_of: &SeferRang
                 let plain = search_text::plain_text(&note.content);
                 let normalized = search_text::normalize(&plain);
                 doc.execute(rusqlite::params![
-                    plain,
                     perek_id,
                     note.pasuk,
                     note.perush_id,
-                    sefer_id
+                    sefer_id,
+                    note.note_idx
                 ])?;
                 fts.execute(rusqlite::params![tx.last_insert_rowid(), normalized])?;
             }
@@ -277,7 +282,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(notes_fp, "v4:4242:n1");
+        assert_eq!(notes_fp, "v4:4242:n2");
         let verses_fp: String = index
             .query_row(
                 "SELECT fingerprint FROM search_metadata WHERE name='verses'",
@@ -285,7 +290,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(verses_fp, "v4:2026-01-03 22:08:48 UTC:n1");
+        assert_eq!(verses_fp, "v4:2026-01-03 22:08:48 UTC:n2");
 
         // Notes FTS finds the nikud-stripped token.
         let hits: i64 = index
@@ -297,17 +302,29 @@ mod tests {
             .unwrap();
         assert_eq!(hits, 1);
 
-        // Documents carry the fields the app queries.
-        let (sefer, perush, text): (i64, i64, String) = index
+        // Documents carry the identity the app joins on; the note text is not
+        // duplicated here — it resolves from the notes blob by NoteIdx (#3309).
+        let (sefer, perush, note_idx): (i64, i64, i64) = index
             .query_row(
-                "SELECT SeferId, PerushId, Text FROM notes_documents LIMIT 1",
+                "SELECT SeferId, PerushId, NoteIdx FROM notes_documents LIMIT 1",
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .unwrap();
         assert_eq!(sefer, 1);
         assert_eq!(perush, 7);
-        assert_eq!(text, "בְּרֵאשִׁית בשביל התורה");
+        assert_eq!(note_idx, 0);
+        let text_columns: i64 = index
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            text_columns, 0,
+            "notes_documents must not store the text a second time"
+        );
 
         // Verses indexed with concatenated segments.
         let vhits: i64 = index
@@ -329,6 +346,48 @@ mod tests {
             .unwrap();
         assert!(vocab > 0);
 
+        index.close().unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_splits_words_at_block_tag_boundaries() {
+        let dir = temp_dir("idx_block_tags");
+        let notes = dir.join("notes.sqlite");
+        // Authored table markup: td/th are block boundaries like the other ports
+        // — previously the cells merged into one unsearchable token.
+        v2_notes_db(
+            &notes,
+            Some(note_blob::SCHEMA_VERSION),
+            Some("4242"),
+            &[(
+                1,
+                vec![Note {
+                    perush_id: 7,
+                    perek_id: 1,
+                    pasuk: 1,
+                    note_idx: 0,
+                    note_content: "<table><tr><th>ערב</th><td>בקר</td></tr></table>".into(),
+                }],
+            )],
+            &[],
+        );
+        let tanah = tanah_fixture(&dir);
+        let out = dir.join("idx.sqlite");
+
+        build_search_index(&notes, &tanah, &out).unwrap();
+
+        let index = Connection::open(&out).unwrap();
+        for term in ["ערב", "בקר"] {
+            let hits: i64 = index
+                .query_row(
+                    "SELECT COUNT(*) FROM notes WHERE notes MATCH ?1",
+                    [format!("\"{term}\"")],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(hits, 1, "notes index must find the token '{term}'");
+        }
         index.close().unwrap();
         fs::remove_dir_all(&dir).ok();
     }

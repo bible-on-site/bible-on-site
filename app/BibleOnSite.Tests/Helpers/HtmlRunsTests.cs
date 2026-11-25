@@ -233,6 +233,98 @@ public class HtmlRunsTests
         }
     }
 
+    public class Blockquotes
+    {
+        [Fact]
+        public void quote_content_carries_depth_one()
+        {
+            var runs = HtmlRuns.FromHtml("<p>לפני</p><blockquote><p>ציטוט</p></blockquote><p>אחרי</p>");
+            runs.First(r => r.Text == "ציטוט").QuoteDepth.Should().Be(1);
+            runs.First(r => r.Text == "לפני").QuoteDepth.Should().Be(0);
+            runs.First(r => r.Text == "אחרי").QuoteDepth.Should().Be(0);
+        }
+
+        [Fact]
+        public void nested_quote_increments_the_depth()
+        {
+            var runs = HtmlRuns.FromHtml(
+                "<blockquote><p>חיצון</p><blockquote><p>פנים</p></blockquote></blockquote>");
+            runs.First(r => r.Text == "חיצון").QuoteDepth.Should().Be(1);
+            runs.First(r => r.Text == "פנים").QuoteDepth.Should().Be(2);
+        }
+
+        [Fact]
+        public void quote_keeps_inline_formatting_and_links()
+        {
+            var runs = HtmlRuns.FromHtml(
+                "<blockquote><p>טקסט <b>מודגש</b> <a href=\"/929/1\">מקור</a></p></blockquote>");
+            // The collapsed separator space lands on the run that follows it.
+            runs.First(r => r.Text.EndsWith("מודגש")).Should().Match<HtmlRun>(
+                r => r.Bold && r.QuoteDepth == 1);
+            runs.First(r => r.Text.EndsWith("מקור")).Should().Match<HtmlRun>(
+                r => r.Link == "/929/1" && r.QuoteDepth == 1);
+        }
+
+        [Fact]
+        public void quote_text_stays_unchanged()
+        {
+            var runs = HtmlRuns.FromHtml("<blockquote><p>אמר רבי יצחק</p></blockquote>");
+            string.Concat(runs.Select(r => r.Text)).Should().Be("אמר רבי יצחק");
+        }
+    }
+
+    public class QuoteBlockRanges
+    {
+        [Fact]
+        public void quote_range_covers_its_whole_paragraph()
+        {
+            var runs = HtmlRuns.FromHtml("<p>א</p><blockquote><p>ב</p></blockquote><p>ג</p>");
+            var blocks = HtmlRuns.QuoteBlocks(runs);
+            blocks.Should().ContainSingle();
+            var block = blocks[0];
+            (block.Start, block.End, block.Depth).Should().Be((2, 4, 1));
+            // [2,4) is "ב\n" — the paragraph plus its terminator.
+            string.Concat(runs.Select(r => r.Text))[block.Start..block.End].Should().Be("ב\n");
+        }
+
+        [Fact]
+        public void adjacent_quote_paragraphs_merge_into_one_block()
+        {
+            var runs = HtmlRuns.FromHtml("<blockquote><p>א</p><p>ב</p></blockquote>");
+            var blocks = HtmlRuns.QuoteBlocks(runs);
+            blocks.Should().ContainSingle();
+            (blocks[0].Start, blocks[0].End, blocks[0].Depth).Should().Be((0, 3, 1));
+        }
+
+        [Fact]
+        public void nested_levels_get_their_own_blocks()
+        {
+            var runs = HtmlRuns.FromHtml(
+                "<blockquote><p>א</p><blockquote><p>ב</p></blockquote><p>ג</p></blockquote>");
+            var blocks = HtmlRuns.QuoteBlocks(runs);
+            blocks.Should().HaveCount(3);
+            blocks[0].Should().Be(new HtmlQuoteBlock(0, 2, 1));
+            blocks[1].Should().Be(new HtmlQuoteBlock(2, 4, 2));
+            blocks[2].Should().Be(new HtmlQuoteBlock(4, 5, 1));
+        }
+
+        [Fact]
+        public void trailing_quote_paragraph_extends_to_text_end()
+        {
+            var runs = HtmlRuns.FromHtml("<blockquote><p>א</p><p>ב</p></blockquote>");
+            var blocks = HtmlRuns.QuoteBlocks(runs);
+            blocks.Should().ContainSingle().Which.End
+                .Should().Be(string.Concat(runs.Select(r => r.Text)).Length);
+        }
+
+        [Fact]
+        public void no_quote_markup_means_no_blocks()
+        {
+            HtmlRuns.QuoteBlocks(HtmlRuns.FromHtml("<p>א</p><div>ב</div>")).Should().BeEmpty();
+            HtmlRuns.QuoteBlocks(HtmlRuns.FromHtml(null)).Should().BeEmpty();
+        }
+    }
+
     public class LinksAndMedia
     {
         [Fact]

@@ -54,9 +54,14 @@ function fixture({
 	shallow = false,
 	afterModes = {},
 	release = published(),
+	extraTrees = {},
+	absentCommits = [],
 } = {}) {
 	const calls = [];
-	let available = present;
+	const absent = new Set(
+		(present ? [] : [baselineSha]).concat(absentCommits),
+	);
+	const trees = { [baselineSha]: before, [headSha]: after, ...extraTrees };
 
 	const request = (endpoint) => {
 		if (endpoint.endsWith("/releases?per_page=100&page=1")) return [release];
@@ -70,27 +75,42 @@ function fixture({
 	const git = (args) => {
 		calls.push(args);
 		if (args[0] === "fetch") {
-			available = true;
+			absent.delete(args.at(-1));
 			return "";
 		}
 		if (args[0] === "rev-parse") {
 			if (args[1] === "HEAD") return headSha;
 			if (args[1] === "--is-shallow-repository") return String(shallow);
-			if (args.includes("--quiet") && !available)
+			const sha = args.at(-1).replace(/\^\{commit\}$/, "");
+			if (args.includes("--quiet") && absent.has(sha))
 				throw Object.assign(new Error("missing commit"), {
 					status: 1,
 					stdout: "",
 					stderr: "",
 				});
-			return baselineSha;
+			return sha;
 		}
-		const beforeRef =
-			args[args[0] === "ls-tree" ? 3 : 1].startsWith(baselineSha);
-		const source = beforeRef ? before : after;
+		const ref = args[args[0] === "ls-tree" ? 3 : 1].split(":")[0];
+		if (absent.has(ref))
+			throw Object.assign(new Error("unknown commit"), {
+				status: 128,
+				stdout: "",
+				stderr: "",
+			});
+		const source = trees[ref] ?? after;
 		if (args[0] === "show") return source.get(args[1].slice(41));
 		if (args[0] === "ls-tree") {
-			const modes = beforeRef ? beforeModes : afterModes;
+			const modes = source === before ? beforeModes : afterModes;
+			// Honor the pathspecs after `--` exactly like Git does: exact file
+			// or directory prefix — otherwise a narrowed listing could not
+			// prove the shared contract paths reach the comparison (#3726).
+			const pathspecs = args.slice(args.indexOf("--") + 1);
 			return [...source]
+				.filter(([file]) =>
+					pathspecs.some(
+						(spec) => file === spec || file.startsWith(`${spec}/`),
+					),
+				)
 				.map(
 					([file, content]) =>
 						`${modes[file] ?? "100644"} blob ${createHash("sha1").update(content).digest("hex")}\t${file}\0`,
@@ -181,13 +201,18 @@ test("published annotated tags are pinned and delivery metadata must match the t
 		endpoint.includes("/git/ref/")
 			? { ref: `refs/tags/${tag}`, object: { type: "tag", sha: annotatedSha } }
 			: { object: { type: "commit", sha: baselineSha } };
-	assert.equal(publishedReleaseCommit(repo, release, request), baselineSha);
+	const input = fixture();
+	assert.equal(
+		publishedReleaseCommit(repo, release, request, input.git),
+		baselineSha,
+	);
 	assert.throws(
 		() =>
 			publishedReleaseCommit(
 				repo,
 				{ ...release, body: release.body.replace(baselineSha, headSha) },
 				request,
+				fixture().git,
 			),
 		/delivery source differs/,
 	);
@@ -206,6 +231,88 @@ test("published annotated tags are pinned and delivery metadata must match the t
 			})),
 		/another ref/,
 	);
+});
+
+test("a re-anchored tag resolves when its API tree matches the recorded delivery source", () => {
+	// A rewritten master re-anchors the tag while the release marker keeps the
+	// run's real delivery source; identical API trees prove the same release.
+	const deliverySha = "e".repeat(40);
+	const release = {
+		...published(),
+		body: `<!-- release-delivery:${JSON.stringify({ module_name: "api", module_version: "0.1.93", ref: deliverySha, ci_run_id: "10", ci_run_attempt: "1" })} -->`,
+	};
+	const request = (endpoint) =>
+		endpoint.includes("/git/ref/")
+			? { ref: `refs/tags/${tag}`, object: { type: "commit", sha: baselineSha } }
+			: { object: { type: "commit", sha: baselineSha } };
+	const input = fixture({ extraTrees: { [deliverySha]: files("0.1.93") } });
+	assert.equal(
+		publishedReleaseCommit(repo, release, request, input.git),
+		baselineSha,
+	);
+	const drifted = files("0.1.93");
+	drifted.set("web/api/src/main.rs", 'fn main() { println!("drift"); }\n');
+	assert.throws(
+		() =>
+			publishedReleaseCommit(
+				repo,
+				release,
+				request,
+				fixture({ extraTrees: { [deliverySha]: drifted } }).git,
+			),
+		/delivery source differs/,
+	);
+});
+
+test("a re-anchored tag fetches only the recorded delivery source it lacks", () => {
+	// The orphaned delivery commit is absent from a fresh checkout until the
+	// reconciliation fetches exactly that sha.
+	const deliverySha = "e".repeat(40);
+	const release = {
+		...published(),
+		body: `<!-- release-delivery:${JSON.stringify({ module_name: "api", module_version: "0.1.93", ref: deliverySha, ci_run_id: "10", ci_run_attempt: "1" })} -->`,
+	};
+	const request = (endpoint) =>
+		endpoint.includes("/git/ref/")
+			? { ref: `refs/tags/${tag}`, object: { type: "commit", sha: baselineSha } }
+			: { object: { type: "commit", sha: baselineSha } };
+	const input = fixture({
+		extraTrees: { [deliverySha]: files("0.1.93") },
+		absentCommits: [deliverySha],
+	});
+	assert.equal(
+		publishedReleaseCommit(repo, release, request, input.git),
+		baselineSha,
+	);
+	const fetched = input.calls.filter((args) => args[0] === "fetch");
+	assert.deepEqual(fetched.map((args) => args.at(-1)), [deliverySha]);
+});
+
+test("a re-anchored published tag still reconciles pending API changes", () => {
+	const deliverySha = "e".repeat(40);
+	const release = {
+		...published(),
+		body: `<!-- release-delivery:${JSON.stringify({ module_name: "api", module_version: "0.1.93", ref: deliverySha, ci_run_id: "10", ci_run_attempt: "1" })} -->`,
+	};
+	const input = fixture({
+		release,
+		extraTrees: { [deliverySha]: files("0.1.93") },
+	});
+	const result = pendingApiRelease(input);
+	assert.equal(result.pending, false);
+	assert.equal(result.baselineTag, tag);
+	assert.equal(result.baselineSha, baselineSha);
+	const changed = files("0.1.94");
+	changed.set("web/api/src/main.rs", 'fn main() { println!("pending"); }\n');
+	const pending = pendingApiRelease(
+		fixture({
+			after: changed,
+			release,
+			extraTrees: { [deliverySha]: files("0.1.93") },
+		}),
+	);
+	assert.equal(pending.pending, true);
+	assert.deepEqual(pending.changedFiles, ["web/api/src/main.rs"]);
 });
 
 test("normalization masks only package.version and its unique source-less Cargo.lock entry", () => {
@@ -363,6 +470,32 @@ for (const [name, change] of [
 		assert.equal(result.changedFiles.length, 1);
 	});
 }
+
+test("unreleased shared registry changes select an API release (#3710)", () => {
+	// The API compiles web/shared/article-relationships into the release, so a
+	// registry-only diff between the published commit and HEAD must report
+	// pending — a blocked release cannot leave it unpublished (#3726 review).
+	for (const [name, before, after] of [
+		[
+			"blob differs",
+			'{"articles": {"old": []}}\n',
+			'{"articles": {"new": []}}\n',
+		],
+		["addition", undefined, '{"articles": {"new": []}}\n'],
+		["deletion", '{"articles": {"old": []}}\n', undefined],
+	]) {
+		const beforeFiles = files("0.1.93");
+		const afterFiles = files("0.1.94");
+		const registry = "web/shared/article-relationships/registry.json";
+		if (before !== undefined) beforeFiles.set(registry, before);
+		if (after !== undefined) afterFiles.set(registry, after);
+		const result = pendingApiRelease(
+			fixture({ before: beforeFiles, after: afterFiles }),
+		);
+		assert.equal(result.pending, true, name);
+		assert.deepEqual(result.changedFiles, [registry], name);
+	}
+});
 
 test("Git executable mode changes remain production differences", () => {
 	const result = pendingApiRelease(

@@ -84,6 +84,8 @@ interface Sink {
 	paths: Set<string>;
 	patterns: Set<string>;
 	overflowed: boolean;
+	/** Published moed names→slugs, loaded once per batch for pedia deps. */
+	moedNames?: Promise<Map<string, string>>;
 }
 
 function newSink(): Sink {
@@ -448,6 +450,58 @@ async function addMoedDepsForArticleCoverage(
 	}
 }
 
+/**
+ * Every published moed keyed by its NFC-normalized name — the same
+ * normalization the moed's Tanahpedia preview applies when resolving
+ * the name to an entry (#3381). The catalogue is small and closed per
+ * batch, so the read is one bounded query shared across the change
+ * list.
+ */
+async function publishedMoedNames(): Promise<Map<string, string>> {
+	try {
+		const rows = await query<{ name: string; slug: string }>(
+			`SELECT name, slug FROM tanah_moed WHERE published = TRUE`,
+		);
+		return new Map(
+			rows.map((row) => [row.name.normalize("NFC"), row.slug]),
+		);
+	} catch (error) {
+		// Moed schema not deployed yet — nothing to expire.
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Moed schema is not deployed yet; skipping moed invalidation for this change until the migration runs.",
+			);
+			return new Map();
+		}
+		throw error;
+	}
+}
+
+function moedNamesByName(sink: Sink): Promise<Map<string, string>> {
+	sink.moedNames ??= publishedMoedNames();
+	return sink.moedNames;
+}
+
+/**
+ * A moed resolves its Tanahpedia preview from its stored name (#3381),
+ * so any name in a pedia change's union — unique_name, old name, alias
+ * or disambiguation member — that equals a published moed name can flip
+ * that resolution, content or link. The moed's detail tag and route
+ * expire with it. The path-only alias writes the admin emits carry no
+ * names at all; the moed preview caches additionally collect the
+ * mention-refs tag those requests do expire.
+ */
+async function addMoedDepsForPediaNames(sink: Sink, names: string[]) {
+	if (names.length === 0) return;
+	const moedNames = await moedNamesByName(sink);
+	for (const name of names) {
+		const slug = moedNames.get(name.normalize("NFC"));
+		if (!slug) continue;
+		addTag(sink, moedTag(slug));
+		addPath(sink, `/מועדים/${slug}`);
+	}
+}
+
 function addUnitDeps(sink: Sink, unit: UnitRef) {
 	if (unit.division === "parasha") {
 		/* istanbul ignore next -- every parasha index entry sets scope explicitly */
@@ -563,11 +617,13 @@ async function entryRelations(uniqueName: string): Promise<EntryRelations> {
  * The shared dependency set of one pedia entry name: its `/pedia/{name}`
  * route (alias or disambiguation pages live on the same route), the
  * categories its entities list it under, the index, the per-perek curated
- * reference caches and the broad mention-decoration cache (mention rows
+ * reference caches, the broad mention-decoration cache (mention rows
  * resolve by name, so any entry lifecycle change can flip resolution on
- * any perek — no cheap scoping exists).
+ * any perek — no cheap scoping exists), and the moadim whose stored
+ * names match — their Tanahpedia previews resolve through the same
+ * name tables.
  */
-function addPediaEntryDeps(
+async function addPediaEntryDeps(
 	sink: Sink,
 	names: string[],
 	entityTypes: string[],
@@ -592,6 +648,29 @@ function addPediaEntryDeps(
 		addTag(sink, entityRefsTag(perekId));
 	}
 	addTag(sink, COLLECTION_TAGS.pediaMentionRefs);
+	await addMoedDepsForPediaNames(sink, names);
+}
+
+/**
+ * לקריאה נוספת (#3752): a covered perek's recommendation section lists the
+ * article even though its primary perek sits elsewhere, so every covering
+ * span perek is a consumer of the article's summary. Its perek-scoped
+ * article tag + flat route expire alongside the primary perek's (already
+ * invalidated through the caller's primary loop — skipped here). The span
+ * union the callers pass covers both sides of a coverage edit: supplied
+ * destroyed spans and the post-commit live rows.
+ */
+function addFurtherReadingDeps(
+	sink: Sink,
+	spans: ArticleCoveringSpan[],
+	primaryPerekIds: number[],
+) {
+	const primary = new Set(primaryPerekIds);
+	for (const span of spans) {
+		if (primary.has(span.perekId)) continue;
+		addTag(sink, perekArticlesTag(span.perekId));
+		addPath(sink, `/929/${span.perekId}`);
+	}
 }
 
 // --- per-kind resolution ----------------------------------------------------
@@ -637,6 +716,8 @@ async function resolveArticle(
 	for (const unit of unitsForArticle(change.perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	// Each covered perek's לקריאה נוספת section consumes this summary (#3752).
+	addFurtherReadingDeps(sink, spans, change.perekIds);
 	await addMoedDepsForArticleCoverage(sink, change.perekIds, spans, [
 		change.id,
 	]);
@@ -675,6 +756,9 @@ async function resolveAuthor(
 	for (const unit of unitsForArticle(perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	// The author's name renders on their articles' recommendation cards in
+	// every covered perek's לקריאה נוספת section too (#3752).
+	addFurtherReadingDeps(sink, spans, perekIds);
 	await addMoedDepsForArticleCoverage(
 		sink,
 		perekIds,
@@ -706,7 +790,12 @@ async function resolvePediaEntry(
 		...relations.refPerekIds,
 	]);
 	for (const synonym of synonymNames) names.add(synonym);
-	addPediaEntryDeps(sink, [...names], [...entityTypes], [...refPerekIds]);
+	await addPediaEntryDeps(
+		sink,
+		[...names],
+		[...entityTypes],
+		[...refPerekIds],
+	);
 }
 
 async function resolvePediaEntity(
@@ -735,14 +824,14 @@ async function resolvePediaEntity(
 		);
 		for (const row of synonyms) names.add(row.name);
 	}
-	addPediaEntryDeps(sink, [...names], [...types], [...pereks]);
+	await addPediaEntryDeps(sink, [...names], [...types], [...pereks]);
 }
 
-function resolvePediaEntries(
+async function resolvePediaEntries(
 	sink: Sink,
 	change: Extract<EntityChange, { kind: "pedia-entries" }>,
 ) {
-	addPediaEntryDeps(
+	await addPediaEntryDeps(
 		sink,
 		change.uniqueNames,
 		change.entityTypes ?? [],
@@ -915,7 +1004,7 @@ export async function resolveEntityChanges(
 				await resolvePediaEntity(sink, change);
 				break;
 			case "pedia-entries":
-				resolvePediaEntries(sink, change);
+				await resolvePediaEntries(sink, change);
 				break;
 			case "moed":
 				resolveMoed(sink, change);

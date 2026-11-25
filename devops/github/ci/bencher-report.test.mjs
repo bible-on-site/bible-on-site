@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { createBencherIO, runBencherReport } from "./bencher-report.mjs";
+import { describe, test } from "node:test";
+import { CHECK_LISTING_REREAD_MS, CHECK_LISTING_REREADS, createBencherIO, runBencherReport } from "./bencher-report.mjs";
 
 const project = "bible-on-site-website";
 const uuid = "01a1cef7-e731-770b-8c2f-0baa5aeb657e";
@@ -17,13 +17,18 @@ const checkFixture = () => ({
 	name: `Bencher Report (${project})`, status: "in_progress", conclusion: null,
 	external_id: `bencher:${projectUuid}::t`,
 });
-function setup({ before = [], after = [checkFixture()], report = fixture(), result, fetchError, updateError } = {}) {
+function setup({ listings, before = [], after = [checkFixture()], report = fixture(), result, fetchError, updateError } = {}) {
 	const updates = [];
+	const delays = [];
 	let reads = 0;
+	const lists = listings ?? [before, after];
 	return {
 		updates,
+		delays,
+		reads: () => reads,
 		io: {
-			listChecks: () => reads++ === 0 ? before : after,
+			listChecks: () => lists[Math.min(reads++, lists.length - 1)],
+			delay: (ms) => { delays.push(ms); return Promise.resolve(); },
 			run: () => result ?? { status: 0, stdout: `other output\nView report: ${url}\n` },
 			fetchReport: () => { if (fetchError) throw fetchError; return report; },
 			updateCheck: (id, body) => { updates.push({ id, body }); if (updateError) throw updateError; return { id, ...body }; },
@@ -54,6 +59,63 @@ test("accepts an already completed matching check without rewriting it", async (
 	const check = { ...checkFixture(), status: "completed", conclusion: "success", external_id: `bencher:${projectUuid}:${uuid}:t` };
 	const { io, updates } = setup({ after: [check] });
 	assert.equal((await runBencherReport(context, io)).repaired, false);
+	assert.deepEqual(updates, []);
+});
+
+test("reconciles a matching completed check the first post-invocation listing missed (#3739)", async () => {
+	const check = { ...checkFixture(), status: "completed", conclusion: "success", external_id: `bencher:${projectUuid}:${uuid}:t` };
+	const { io, updates } = setup({ listings: [[], [], [check]] });
+	assert.deepEqual(await runBencherReport(context, io), { id: 42, conclusion: "success", repaired: false });
+	assert.deepEqual(updates, []);
+});
+
+test("still finalizes a pending check that only appears on the second listing", async () => {
+	const { io, updates } = setup({ listings: [[], [], [checkFixture()]] });
+	assert.equal((await runBencherReport(context, io)).repaired, true);
+	assert.equal(updates[0].body.external_id, `bencher:${projectUuid}:${uuid}:t`);
+});
+
+test("stays fail-closed when the second listing is still empty or ambiguous", async () => {
+	for (const listings of [
+		[[], [], []],
+		[[], [], [checkFixture(), { ...checkFixture(), id: 43 }]],
+	]) {
+		const { io, updates } = setup({ listings });
+		await assert.rejects(runBencherReport(context, io), /Expected one new Bencher check/);
+		assert.deepEqual(updates, []);
+	}
+});
+
+describe("runBencherReport", () => {
+	describe("when the check-runs listing lags check creation", () => {
+		test("reconciles a matching check that only becomes visible several listings later", async () => {
+			const { io, updates } = setup({ listings: [[], [], [], [], [checkFixture()]] });
+			assert.equal((await runBencherReport(context, io)).repaired, true);
+			assert.equal(updates[0].body.external_id, `bencher:${projectUuid}:${uuid}:t`);
+		});
+
+		test("stops re-reading the listing once the check is visible", async () => {
+			const attempt = setup({ listings: [[], [], [checkFixture()]] });
+			await runBencherReport(context, attempt.io);
+			assert.equal(attempt.reads(), 3);
+			assert.deepEqual(attempt.delays, [CHECK_LISTING_REREAD_MS]);
+		});
+
+		test("declares the check missing only after exhausting the bounded rereads", async () => {
+			const attempt = setup({ listings: [[], [], []] });
+			await assert.rejects(runBencherReport(context, attempt.io), /Expected one new Bencher check for this invocation; found 0/);
+			assert.equal(attempt.reads(), 2 + CHECK_LISTING_REREADS);
+			assert.deepEqual(attempt.delays, Array(CHECK_LISTING_REREADS).fill(CHECK_LISTING_REREAD_MS));
+			assert.deepEqual(attempt.updates, []);
+		});
+	});
+});
+
+test("rejects a second-listing completed check bound to a different report", async () => {
+	const check = { ...checkFixture(), status: "completed", conclusion: "success",
+		external_id: `bencher:${projectUuid}:02b2def8-f842-880c-9cbb-1cbb0bfc768f:t` };
+	const { io, updates } = setup({ listings: [[], [], [check]] });
+	await assert.rejects(runBencherReport(context, io), /disagrees with its report/);
 	assert.deepEqual(updates, []);
 });
 
@@ -147,7 +209,9 @@ test("binds the platform adapter to the PR head, paginated checks and the exact 
 			return { ok: true, json: () => fixture() };
 		},
 		stdout: { write: (value) => output.push(value) }, stderr: { write: (value) => errors.push(value) },
+		delay: () => "real delay",
 	});
+	assert.equal(io.delay(), "real delay");
 	assert.deepEqual(io.listChecks().map((check) => check.id), [42, 99]);
 	assert.ok(calls[0].args[1].includes(`/commits/${context.checkSha}/check-runs`));
 	assert.ok(calls[0].args.includes("--paginate"));

@@ -1,0 +1,54 @@
+{
+  "family": "Al Heperek Font UI",
+  "version": "0.9.8",
+  "tag": "v0.9.8",
+  "defaultHebrewCut": "ss03",
+  "cantillation": true,
+  "choices": {
+    "א": "A22",
+    "ע": "E26",
+    "ט": "T21",
+    "צ": "C28",
+    "ש": "S35"
+  },
+  "finalTsadiFrom": "C28",
+  "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
+  "upstreamRelease": "https://github.com/bible-on-site/al-heperek-font/releases/tag/v0.9.8",
+  "sourceRevision": "c253be3a188f51987817ae9cf1e0359ab900715d",
+  "archive": {
+    "file": "AlHeperekFont-v0.9.8.zip",
+    "sha256": "43dbe912786e48634e489d946816dbc0bf170051f9a5833b8b2e21488494ad15"
+  },
+  "files": [
+    {
+      "file": "AlHeperekUI-Regular.ttf",
+      "weight": 400,
+      "sha256": "6bcf1504e697760909988ac6fb29704719db2c08597e871a05dc6c855e70b1f7"
+    },
+    {
+      "file": "AlHeperekUI-Regular.woff2",
+      "weight": 400,
+      "sha256": "32816fd161c374a82d9ff54b6dee09402cba89715d98d713d947046d26e68121"
+    },
+    {
+      "file": "AlHeperekUI-SemiBold.ttf",
+      "weight": 600,
+      "sha256": "79749e9e3b2173f060877b82cb5c32107cda14fe1701f180906714fb14682e11"
+    },
+    {
+      "file": "AlHeperekUI-SemiBold.woff2",
+      "weight": 600,
+      "sha256": "1ff26871e9c5e49f58ab560700c7a732f9955d9834f90b36c63ab1486becb044"
+    },
+    {
+      "file": "AlHeperekUI-Bold.ttf",
+      "weight": 700,
+      "sha256": "a16789a16afc39552628f4cc2643555c3677b332ec58138d45695544dc13eb41"
+    },
+    {
+      "file": "AlHeperekUI-Bold.woff2",
+      "weight": 700,
+      "sha256": "f40c496503726cf285d7e55a4d6dd18e6ca882db8a9ebd81cf3e7152e66b05bd"
+    }
+  ]
+}

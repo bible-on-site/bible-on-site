@@ -145,7 +145,7 @@ export default async function MasoraUnitPage({
 					coverDedications={coverDedications}
 				/>
 			</Suspense>
-			<div className={`${perekStyles.perekContainer} seo-content`}>
+			<main className={`${perekStyles.perekContainer} seo-content`}>
 				<UnitBreadcrumb unit={unit} />
 				<h1 className={perekStyles.perekHeading}>
 					{unit.heading}
@@ -203,7 +203,7 @@ export default async function MasoraUnitPage({
 					emptyMessage="אין מאמרים לפרשה זו"
 					scrollStorageKey={`articles-masora-${unitId}`}
 				/>
-			</div>
+			</main>
 		</>
 	);
 }

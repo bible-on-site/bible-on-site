@@ -1,10 +1,18 @@
-/* Daily bulletin join section (#2941).
-   Sits right after the hero: the hero's bottom divider paints #d8ebff, so this
-   section shares that background and flows seamlessly into the sefarim
-   section below it. White cards carry the visual separation. */
+/* Daily bulletin join section (#2941; own visual band per #3267).
+   Rule: each independent top-level landing feature owns a distinct visual
+   band — never merge independent features into one continuous band (see
+   docs/practices/implementation.md). This band is the white island between
+   the hero's blue and the sefarim shelf's light blue — the section-color
+   game: the hero's bottom divider paints this band's white, and the shared
+   SectionDivider invades this band with the shelf's surface
+   (--divider-paint) in an asymmetric wave at the bottom edge. */
 
 .section {
-	background-color: #d8ebff;
+	/* Paints the shared bottom edge with the NEXT section's surface — the
+	   sefarim shelf's #d8ebff (#16283f dark, set below). Keep in sync with
+	   TanahSefarimSection.module.css. */
+	--divider-paint: #d8ebff;
+	background-color: #fff;
 	box-sizing: border-box;
 	min-width: 0;
 	overflow: hidden;
@@ -34,11 +42,14 @@
 }
 
 /* Cards: a single vertical stack on small screens (review on #3083 — no
-   carousel), three columns on wide screens. */
+   carousel), side by side on wide screens. auto-fit keeps three provider
+   cards in three columns and four cards (with the browser-reminder card,
+   #3732) in four without leaving an empty track when push is off. */
 .cards {
 	display: grid;
 	gap: 1.25rem;
-	grid-template-columns: 1fr;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+	justify-content: center;
 	margin: 0 auto;
 	max-width: 72rem;
 	min-width: 0;
@@ -85,6 +96,7 @@
 
 .cardAction {
 	background-color: var(--accent-600, #1552ac);
+	border: 0;
 	border-radius: var(--radius-sm, 4px);
 	color: #fff;
 	display: inline-block;
@@ -97,7 +109,7 @@
 }
 
 @media (hover: hover) {
-	.cardAction:hover {
+	.cardAction:hover:not(:disabled) {
 		background-color: var(--accent-700, #11469c);
 	}
 }
@@ -158,20 +170,32 @@
 		);
 }
 
-/* Wide screens: all three cards side by side. */
-@media screen and (min-width: 960px) {
-	.cards {
-		grid-template-columns: repeat(3, 1fr);
-	}
+/* Browser reminders (#3732): a soft navy wash — the card's channel is the
+   site itself, so it keeps the site accent rather than a provider brand. */
+.cardPush {
+	background-color: #e7edfb;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.85) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #f0f4fd 0%, #dbe5f8 55%, #e9effb 100%);
 }
 
-/* Dark mode: the hero's bottom divider permanently paints this band light
-   blue, so the section stays light in dark mode too — text color and the
-   control tokens are re-pinned to their light-mode values (color is set
-   directly because inherited `color` is already resolved at body), and
-   color-scheme keeps the signup controls light. */
+.cardPush:focus-visible {
+	outline: 2px solid var(--accent-600, #1552ac);
+	outline-offset: 2px;
+}
+
+/* Dark mode: this band stays light by design — the cards and signup form
+   keep their light tokens (color is set directly because inherited `color`
+   is already resolved at body, and color-scheme keeps the signup controls
+   light) — while the shared bottom edge re-paints the shelf's dark surface
+   so the boundary stays seamless. */
 @media (prefers-color-scheme: dark) {
 	.section {
+		--divider-paint: #16283f;
 		--link-accent: var(--accent-600, #1552ac);
 		--link-accent-hover: var(--accent-700, #11469c);
 		--muted-text: #666;

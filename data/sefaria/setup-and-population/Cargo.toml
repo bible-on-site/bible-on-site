@@ -9,3 +9,4 @@ authors.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
+mongo-config.workspace = true

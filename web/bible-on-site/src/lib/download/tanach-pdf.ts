@@ -3,7 +3,8 @@
  *
  * Produces a well-formatted PDF with:
  * - Each perek starts on a fresh page
- * - Proper Hebrew text with nikud (Frank Ruhl Libre static font)
+ * - Al Heperek prose and scripture — its niqqud/taamim release (#3685)
+ *   shapes marked clusters on one face, so no scripture-face split remains
  * - Perek title + descriptive header
  * - Available perushim listed per perek
  * - Related article titles per perek
@@ -29,12 +30,16 @@ import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
 import {
 	bidiRunsWidth,
-	bidiTextWidth,
 	drawBidiRuns,
 	memoizeGlyphEncoding,
+	type VisualTextRun,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
+import {
+	embedUiFont,
+	getBoldFontBytes,
+	getRegularFontBytes,
+} from "./pdf-fonts";
 import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { SemanticPageInfo } from "./types";
 
@@ -61,16 +66,6 @@ export function segmentsToText(segments: Segment[]): string {
 		.replace(/־\s+/g, "־")
 		.replace(/\s+/g, " ")
 		.trim();
-}
-
-/**
- * Strip cantillation marks (taamim, U+0591–U+05AF) from Hebrew text.
- * Keeps nikud (vowels, U+05B0–U+05BD), shin/sin dots, letters, maqaf.
- * Taamim have zero advance-width in many fonts and confuse pdf-lib's
- * width measurement, causing garbled layout.
- */
-export function stripTaamim(text: string): string {
-	return text.replace(/[\u0591-\u05AF]/g, "");
 }
 
 /** Strip HTML tags from a string, decode common entities. */
@@ -163,6 +158,23 @@ function currentPage(ctx: DrawContext) {
 	return pages[pages.length - 1];
 }
 
+interface FontRun extends VisualTextRun {
+	font: PDFFont;
+}
+
+// Al Heperek covers niqqud and taamim since v0.9.5 (#3685), so every run —
+// marked or not — draws on the caller's preferred face.
+function textRuns(text: string, preferred: PDFFont): FontRun[] {
+	return visualTextRuns(text).map((run) => ({ ...run, font: preferred }));
+}
+
+function runsWidth(runs: FontRun[], size: number): number {
+	return runs.reduce(
+		(width, run) => width + bidiRunsWidth(run.font, [run], size),
+		0,
+	);
+}
+
 function drawRtlLine(
 	ctx: DrawContext,
 	text: string,
@@ -173,10 +185,14 @@ function drawRtlLine(
 ): void {
 	const page = currentPage(ctx);
 	// One UAX #9 pass per line — reused for both width and draw.
-	const runs = visualTextRuns(text);
-	const textWidth = bidiRunsWidth(font, runs, size);
+	const runs = textRuns(text, font);
+	const textWidth = runsWidth(runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	drawBidiRuns(page, runs, font, size, Math.max(MARGIN, x), ctx.y, color);
+	let cursor = Math.max(MARGIN, x);
+	for (const run of runs) {
+		drawBidiRuns(page, [run], run.font, size, cursor, ctx.y, color);
+		cursor += bidiRunsWidth(run.font, [run], size);
+	}
 }
 
 function drawRtlWrapped(
@@ -189,7 +205,8 @@ function drawRtlWrapped(
 ): void {
 	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
 	const measuringFont = {
-		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(font, t, s),
+		widthOfTextAtSize: (t: string, s: number) =>
+			runsWidth(textRuns(t, font), s),
 	};
 	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
@@ -230,13 +247,18 @@ export async function buildTanachPdfForPerekRange(
 	const regularBytes = getRegularFontBytes();
 	const boldBytes = getBoldFontBytes();
 	const font = memoizeGlyphEncoding(
-		await doc.embedFont(regularBytes, { subset: true }),
+		await embedUiFont(doc, regularBytes, { subset: true }),
 	);
 	const boldFont = memoizeGlyphEncoding(
-		await doc.embedFont(boldBytes, { subset: true }),
+		await embedUiFont(doc, boldBytes, { subset: true }),
 	);
-
-	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
+	const ctx: DrawContext = {
+		doc,
+		font,
+		boldFont,
+		y: 0,
+		pageNum: 0,
+	};
 
 	for (let i = 0; i < perekIds.length; i++) {
 		const perekId = perekIds[i];
@@ -256,9 +278,10 @@ export async function buildTanachPdfForPerekRange(
 
 		ctx.y -= BODY_LINE_HEIGHT * 0.5; // spacing
 
-		// ── Pesukim ──
+		// ── Pesukim — canonical text keeps its taamim; Al Heperek shapes the
+		//    full marked clusters (#3685). ──
 		for (const pasuk of perek.pesukim) {
-			const text = stripTaamim(segmentsToText(pasuk.segments));
+			const text = segmentsToText(pasuk.segments);
 			if (!text) continue;
 			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
 			ctx.y -= 2; // tiny inter-pasuk gap

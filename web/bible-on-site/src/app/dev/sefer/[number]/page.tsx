@@ -11,7 +11,10 @@
 import { Suspense } from "react";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "@/data/sefer-dto";
-import { getArticleSummariesByPerekId } from "@/lib/articles";
+import {
+	getArticleSummariesByPerekId,
+	getFurtherReadingSummariesByPerekId,
+} from "@/lib/articles";
 import { getPerushimByPerekId } from "@/lib/perushim";
 import {
 	cachedPerKey,
@@ -38,6 +41,13 @@ const getCachedPerushim = cachedPerKey(
 	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
+const getCachedFurtherReading = cachedPerKey(
+	"further-reading-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),
+);
+
 export default async function DevSeferPage({
 	params,
 }: {
@@ -48,8 +58,9 @@ export default async function DevSeferPage({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	const [articles, perushim] = await Promise.all([
+	const [articles, furtherArticles, perushim] = await Promise.all([
 		getCachedArticleSummaries(perekId),
+		getCachedFurtherReading(perekId),
 		getCachedPerushim(perekId),
 	]);
 
@@ -58,6 +69,7 @@ export default async function DevSeferPage({
 			<SeferDirect
 				perekObj={perekObj}
 				articles={articles}
+				furtherArticles={furtherArticles}
 				perushim={perushim}
 				perekIds={perekIds}
 			/>

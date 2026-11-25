@@ -214,11 +214,17 @@ jest.mock("@/data/sefer-dto", () => ({
 	getPerekIdsForSefer: jest.fn().mockReturnValue([1]),
 }));
 
-jest.mock("@/util/hebdates-util", () => ({
-	constructTsetAwareHDate: () => ({
-		toTraditionalHebrewString: () => 'כ"ג אדר תשפ"ו',
-	}),
-}));
+jest.mock("@/util/hebdates-util", () => {
+	const actual = jest.requireActual<
+		typeof import("@/util/hebdates-util")
+	>("@/util/hebdates-util");
+	return {
+		...actual,
+		// Fixed "today": כ"ג אדר ה'תשפ"ו (perek 140 of confirmed cycle 4, #3612).
+		constructTsetAwareHDate: () =>
+			actual.HebrewDate.fromHebrewComponents(5786, "M06", 23),
+	};
+});
 
 // The live date check has dedicated tests; here the Sefer renders its
 // static article lists unless a test returns an override.
@@ -226,9 +232,17 @@ jest.mock("@/app/929/[number]/components/use-daily-article-override", () => ({
 	useDailyArticleOverride: jest.fn(() => null),
 }));
 
-let capturedSeferPanelProps: { articles?: unknown[] }[] = [];
+let capturedSeferPanelProps: {
+	articles?: unknown[];
+	perekId?: number;
+	hebrewDateStr?: string;
+}[] = [];
 jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
-	SeferPanel: (props: { articles?: unknown[] }) => {
+	SeferPanel: (props: {
+		articles?: unknown[];
+		perekId?: number;
+		hebrewDateStr?: string;
+	}) => {
 		capturedSeferPanelProps.push(props);
 		return <div data-testid="blank-page" />;
 	},
@@ -966,6 +980,33 @@ describe("Sefer component", () => {
 		document.title = "other page title";
 		unmountStale();
 		expect(document.title).toBe("other page title");
+	});
+
+	it("dates each panel by its own perek's scheduled day in the active cycle (#3612)", () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		render(
+			<SeferContents
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2, 3]}
+				sefer={{ ...original, perakim: [chapter, chapter, chapter] }}
+			/>,
+		);
+		// The frozen clock sits on כ"ג אדר ה'תשפ"ו — perek 140's day of cycle 4 —
+		// so none of these chapters may show it. Each spread carries its own
+		// perek's scheduled study date in the active cycle instead of "today".
+		const dates = capturedSeferPanelProps.map((props) => props.hebrewDateStr);
+		expect(dates.slice(0, 3)).toEqual([
+			"ז אלול ה'תשפ\"ה",
+			"ח אלול ה'תשפ\"ה",
+			"ט אלול ה'תשפ\"ה",
+		]);
+		expect(dates).not.toContain("כ\"ג אדר ה'תשפ\"ו");
 	});
 
 	it("renders FlipBook and toolbar", () => {

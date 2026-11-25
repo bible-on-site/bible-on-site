@@ -62,7 +62,7 @@ export default async function TanahpediaLandingPage() {
 	const isComingSoon = (key: CategoryKey) => !loadError && counts[key] === 0;
 
 	return (
-		<div className={styles.tanahpediaPage}>
+		<main className={styles.tanahpediaPage}>
 			<JsonLd data={buildLandingGraph()} />
 			<h1 className={styles.pageTitle}>תנכפדיה</h1>
 			<p className={styles.pageSubtitle}>
@@ -198,6 +198,6 @@ export default async function TanahpediaLandingPage() {
 					חזרה לעמוד הראשי
 				</Link>
 			</div>
-		</div>
+		</main>
 	);
 }

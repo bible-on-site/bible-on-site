@@ -7,6 +7,7 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
+import { ArrowUpRight, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
 	CATEGORY_HIERARCHY,
@@ -129,16 +130,17 @@ function TanahpediaIndexPage() {
 					to="/tanahpedia/entries/$id"
 					params={{ id: "new" }}
 					search={{}}
-					className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm shadow-sm"
+					className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm shadow-sm inline-flex items-center gap-1.5"
 				>
-					+ ערך חדש
+					<Plus size={16} aria-hidden="true" />
+					ערך חדש
 				</Link>
 			</div>
 
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+				<div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
-						<span>🔎</span>
+						<Search size={18} aria-hidden="true" />
 						<span>חיפוש ערכים</span>
 					</h2>
 				</div>
@@ -258,7 +260,11 @@ function TanahpediaIndexPage() {
 									rel="noopener noreferrer"
 									className="shrink-0 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-100 hover:bg-blue-50"
 								>
-									אתר ↗
+									אתר{" "}
+									<ArrowUpRight
+										className="inline-block size-3 align-[-0.125em]"
+										aria-hidden="true"
+									/>
 								</a>
 							</div>
 							{cat.children && cat.children.length > 0 && (
@@ -288,7 +294,7 @@ function TanahpediaIndexPage() {
 												className="text-[10px] text-gray-400 hover:text-blue-600 px-0.5"
 												title="פתח באתר"
 											>
-												↗
+												<ArrowUpRight size={12} aria-hidden="true" />
 											</a>
 										</div>
 									))}

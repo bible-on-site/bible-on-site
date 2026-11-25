@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 	emailRead: vi.fn(),
 	emailSend: vi.fn(),
 	audience: vi.fn(),
+	engagement: vi.fn(),
+	confirmUnsubscribe: vi.fn(),
 	telegramRead: vi.fn(),
 	telegramQueue: vi.fn(),
 	telegramAudience: vi.fn(),
@@ -40,6 +42,8 @@ vi.mock("~/server/bulletin-email", () => ({
 	getDailyBulletinEmail: mocks.emailRead,
 	queueDailyBulletinEmail: mocks.emailSend,
 	setDailyBulletinEmailAudience: mocks.audience,
+	getDailyBulletinEmailEngagement: mocks.engagement,
+	confirmDailyBulletinInactivityUnsubscribe: mocks.confirmUnsubscribe,
 }));
 vi.mock("~/server/bulletin-telegram", () => ({
 	getDailyBulletinTelegram: mocks.telegramRead,
@@ -86,6 +90,9 @@ function job(
 		status,
 		counts: { [status]: 2 },
 		createdAt: "2026-10-08T12:00:00Z",
+		tracked: null,
+		opened: null,
+		clicked: null,
 		...overrides,
 	};
 }
@@ -102,6 +109,8 @@ function configured(): BulletinEmailState {
 		realRecipients: 52,
 		unverifiedRecipients: 22,
 		job: null,
+		rollout: null,
+		rolloutJob: null,
 	};
 }
 let serverState: BulletinEmailState;
@@ -160,6 +169,8 @@ describe("daily bulletin preview and SES delivery", () => {
 			serverState = { ...serverState, settings };
 			return Promise.resolve(settings);
 		});
+		mocks.engagement.mockReset().mockResolvedValue(null);
+		mocks.confirmUnsubscribe.mockReset();
 		mocks.telegramRead.mockReset().mockResolvedValue({
 			settings: { audience: "test", revision: 0 },
 			readiness: {
@@ -220,6 +231,16 @@ describe("daily bulletin preview and SES delivery", () => {
 			prepared: false,
 		});
 		expect(mocks.emailRead).not.toHaveBeenCalled();
+	});
+	it("keeps the engagement review reachable when no bulletin was prepared", async () => {
+		mocks.read.mockResolvedValue(null);
+		renderPage();
+		// Cross-edition statistics and the inactivity review are independent
+		// of the selected date's preparation state.
+		expect(
+			await screen.findByText(/מדידת פתיחות וקליקים טרם הופעלה/),
+		).toBeDefined();
+		expect(mocks.engagement).toHaveBeenCalled();
 	});
 
 	it("prepares once and preserves chapter, PDF, email and channel previews", async () => {
@@ -696,5 +717,31 @@ describe("daily bulletin preview and SES delivery", () => {
 		});
 		expect(mocks.emailRead).toHaveBeenCalledTimes(calls);
 		expect(mocks.emailSend).not.toHaveBeenCalled();
+	});
+	it("renders the original-cohort rollout panel and locks it on a failed refresh", async () => {
+		serverState = {
+			...serverState,
+			rollout: {
+				state: "running" as const,
+				cohort: "original",
+				revision: 3,
+				admitted: 4,
+				remaining: 40,
+				excluded: 1,
+				admission: null,
+				lastError: null,
+			},
+		};
+		const client = renderPage();
+		await loaded();
+		const pause = await screen.findByRole("button", {
+			name: "השהיית צירופים",
+		});
+		expect(pause).toBeEnabled();
+		mocks.emailRead.mockRejectedValueOnce(new Error("refresh failed"));
+		await act(async () => {
+			await client.invalidateQueries({ queryKey: ["bulletin-email"] });
+		});
+		await waitFor(() => expect(pause).toBeDisabled());
 	});
 });

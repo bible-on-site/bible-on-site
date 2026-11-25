@@ -69,7 +69,6 @@
       "fixedSeferAndPanelTestsPassed": 81,
       "intermittentCIFailureMustStillBeChecked": true
     },
-    "screenshots": ["website-reader-selection-2026-11-02/before.png", "website-reader-selection-2026-11-02/after.png"],
     "titleContract": "Closing the book after returning to chapter2 preserves chapter2 URL, heading and title"
   },
   "allOwnedDiagnosticContainersVolumesAndNetworksRemoved": true,

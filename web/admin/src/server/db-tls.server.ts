@@ -1,7 +1,6 @@
 import "@tanstack/react-start/server-only";
+import { verifiedRdsTls } from "../../../shared/mysql/rds-ca";
 import { productionRuntime } from "./environment.server";
-// Official root trust bundle: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html
-import { rdsCa } from "./rds-ca.server";
 
 /** Trust RDS certificates and verify the database host; plaintext is local-only. */
 export function databaseTls(url: URL) {
@@ -12,7 +11,7 @@ export function databaseTls(url: URL) {
 		url.searchParams.get("ssl-mode") !== "REQUIRED"
 	)
 		return undefined;
-	return { ca: rdsCa, rejectUnauthorized: true, verifyIdentity: true };
+	return verifiedRdsTls;
 }
 
 /** ssl-mode is our configuration flag, not a mysql2 connection option. */

@@ -25,6 +25,14 @@ approved step): account **250598594267**, region **il-central-1**, cluster
 desired/running 1. Website/API run on-demand `FARGATE`; admin runs
 `FARGATE_SPOT` since 2026-10-24 ([rollout record](admin-spot-rollout.md)).
 
+> **Current delivery state (#3794):** production website and admin run ARM64
+> in prod, so their CI legs and release archives are now ARM64-only — each
+> release carries a single `*-v<version>-arm64.tar.gz` whose OCI index wraps
+> the verified ARM64 child alone. The API keeps its paired amd64+arm64
+> delivery. The paired-contract sections below are historical for
+> website/admin; they still describe the API contract and how rollback-era
+> paired releases were consumed.
+
 ## Repository and registry feasibility
 
 ### Base images have ARM64 variants
@@ -224,10 +232,10 @@ Three properties constrain the design:
    Before index publication, test `resume-image.mts` with an index media type
    and all referenced children present in the same repository. No support
    claim substitutes for that end-to-end qualification.
-3. **Per-arch build caches.** The website `deps-cache` ECR tag is a
-   single-arch amd64 image; arm64 builds need a parallel ref
-   (`bible-on-site:deps-cache-arm64`). The `type=gha` scopes for api/admin
-   similarly gain `-arm64` scopes so arch layers never cross-pollinate.
+3. **Per-arch build caches.** The website `deps` stage caches as a
+   `website-deps-cache.master.<arch>` Actions artifact published by trusted
+   master pushes, so the amd64 and arm64 baselines never cross-pollinate.
+   The `type=gha` scopes for api/admin similarly gain `-arm64` scopes.
 4. **Gate it.** Any added arm64 job must enter `cross_module_ci` under the
    same trigger condition as its amd64 twin (the merge-gating rule in
    `.github/instructions/aws-workflows.instructions.md`), so a broken arm64

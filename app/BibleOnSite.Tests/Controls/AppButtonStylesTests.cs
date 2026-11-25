@@ -1,4 +1,5 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
@@ -44,6 +45,24 @@ public class AppButtonStylesTests
         Contrast(AppButtonStyles.InkDark, AppButtonStyles.SurfaceDark).Should().BeGreaterThanOrEqualTo(4.5);
         Contrast(AppButtonStyles.DestructiveInkLight, AppButtonStyles.SurfaceLight).Should().BeGreaterThanOrEqualTo(4.5);
         Contrast(AppButtonStyles.DestructiveInkDark, AppButtonStyles.SurfaceDark).Should().BeGreaterThanOrEqualTo(4.5);
+    }
+
+    [Fact]
+    public void TextActions_UseTheBrandUiFont()
+    {
+        var button = new Button { Style = AppButtonStyles.Secondary };
+
+        button.FontFamily.Should().Be(BrandFonts.RegularFamily);
+    }
+
+    [Fact]
+    public void Ghost_KeepsTheTransparentLinkSurface()
+    {
+        var button = new Button { Style = AppButtonStyles.Ghost };
+
+        button.BackgroundColor.Should().Be(Colors.Transparent);
+        button.TextColor.Should().Be(AppButtonStyles.InkLight);
+        button.BorderWidth.Should().Be(0);
     }
 
     [Fact]

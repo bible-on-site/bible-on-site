@@ -195,13 +195,15 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
     private bool ToggleDivineNameMasking()
     {
         Page.Tap(Platform.FlyoutButton);
-        Page.Tap("FlyoutPreferences");
+        Platform.Tap(Driver!, Page.ScrollFlyoutTo("FlyoutPreferences"));
         Page.Tap("SettingsDisplayRow");
         // The switch sits near the bottom of the display-preferences
         // ScrollView — a plain wait cannot reach it on a short viewport.
-        var toggle = Page.ScrollToVisible("DivineNameMaskingSwitch");
-        var previous = Platform.IsChecked(toggle);
-        Platform.Tap(Driver!, toggle);
+        Page.ScrollToVisible("DivineNameMaskingSwitch");
+        // The checked read happens inside the wait's own poll, and the tap
+        // re-resolves its target — a held handle can stale between them.
+        var previous = Page.WaitForObservation("DivineNameMaskingSwitch", element => Platform.IsChecked(element));
+        Page.Tap("DivineNameMaskingSwitch");
         Page.WaitFor("DivineNameMaskingSwitch", element => Platform.IsChecked(element) == !previous);
         // Restore the reader so the next restart/lookup starts at a known page.
         Platform.GoBack(Driver!);

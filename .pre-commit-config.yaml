@@ -30,7 +30,7 @@ repos:
         priority: 10
       - id: check-added-large-files
         priority: 10
-        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json)$
+        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json|web/shared/branding/fonts/.*\.ttf)$
       - id: check-xml
         priority: 10
       - id: check-case-conflict
@@ -71,7 +71,7 @@ repos:
   # no explanatory comment), RET502 (implicit-None returns mixed with returns —
   # the "Explicit returns mixed with implicit returns" finding).
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.17.4
+    rev: v0.17.6
     hooks:
       - id: ruff-check
         args: [--select, "F,D2,BLE001,E722,S110,RET502"]

@@ -11,7 +11,7 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
 {
     private int _dailyPerekId;
     private bool _loading;
-    public string AnalyticsScreenName => "Home";
+    public AnalyticsScreen? AnalyticsScreen => new("Home", nameof(HomePage));
 
     public HomePage()
     {

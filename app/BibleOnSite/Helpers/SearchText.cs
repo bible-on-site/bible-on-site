@@ -14,7 +14,17 @@ public static class SearchText
     /// pipeline (data/sefaria/pipelines/perushim-view search_text.rs NORM_VERSION) and
     /// the app regenerate matching indexes.
     /// </summary>
-    internal const int NormalizationVersion = 1;
+    internal const int NormalizationVersion = 2;
+
+    // Block-level elements shared with the website (`web/bible-on-site/src/lib/search/normalize.ts`),
+    // the delivered index builder (`data/sefaria/pipelines/perushim-view/src/commands/search_text.rs`)
+    // and the article-search service (`web/api/src/services/article_search/text.rs`): every block tag —
+    // open or close — is a word break, so all ports emit the same plain text for the same HTML.
+    private static readonly HashSet<string> BlockTagNames = new(StringComparer.Ordinal)
+    {
+        "br", "p", "div", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "table", "blockquote", "section", "article", "header", "footer", "hr",
+    };
 
     public static string PlainText(string text)
     {
@@ -28,11 +38,33 @@ public static class SearchText
         {
             node.Remove();
         }
-        foreach (var node in (document.DocumentNode.SelectNodes("//br|//p|//div|//li|//tr|//h1|//h2|//h3") ?? Enumerable.Empty<HtmlNode>()).ToArray())
+        var builder = new StringBuilder();
+        AppendPlainText(document.DocumentNode, builder);
+        return HtmlEntity.DeEntitize(builder.ToString()).Trim();
+    }
+
+    // Each block-element boundary emits one space unless output already ends in
+    // one — the same dedup `search_text.rs` and `normalize.ts` apply per tag.
+    private static void AppendPlainText(HtmlNode node, StringBuilder builder)
+    {
+        if (node is HtmlTextNode textNode)
         {
-            node.ParentNode!.InsertAfter(document.CreateTextNode(" "), node);
+            builder.Append(textNode.Text);
+            return;
         }
-        return HtmlEntity.DeEntitize(document.DocumentNode.InnerText);
+        var isBlock = BlockTagNames.Contains(node.Name);
+        if (isBlock && builder.Length > 0 && builder[^1] != ' ')
+        {
+            builder.Append(' ');
+        }
+        foreach (var child in node.ChildNodes)
+        {
+            AppendPlainText(child, builder);
+        }
+        if (isBlock && builder.Length > 0 && builder[^1] != ' ')
+        {
+            builder.Append(' ');
+        }
     }
 
     public static string Normalize(string text)

@@ -4,9 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
 import { getBuildWorkerCount } from "./scripts/build-worker-budget.mjs";
+import { stageBrandAssets } from "./scripts/stage-brand-assets.mjs";
 
 const KB = 1024;
 const MB = KB * KB;
+
+// Shared branding (#3708) is the canonical source; public/ and the PDF inputs
+// under src/lib/download/ are staged copies restored at every config load.
+stageBrandAssets();
 
 const isProduction = process.env.NODE_ENV === "production";
 const localAssetEndpoint = [
@@ -75,12 +80,19 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [
 			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
+			"./src/data/db/warm-derived.generated.json.br",
 			"./cache-handler.mjs",
 		],
 	},
 	transpilePackages: ["html-flip-book-react"],
+	// The tracing root follows turbopack.root, so standalone output nests
+	// the app under `bible-on-site/` — the Dockerfile and the standalone
+	// asset copy account for the nested layout.
 	turbopack: {
-		root: import.meta.dirname,
+		// Files outside the root are not resolved, so the root must span the
+		// shared contract sources in `web/shared/` (#3710) that `src` modules
+		// now import directly (revalidate, bulletin-join, tanahpedia).
+		root: path.resolve(import.meta.dirname, ".."),
 		// Preserve the canonical JSON number literals: Turbopack's JSON parser
 		// can change the last digit of alignment diagnostics during bundling.
 		rules: {
@@ -185,6 +197,11 @@ const nextConfig = {
 
 	async headers() {
 		return [
+			// Authorized email content loads these public font assets across origins.
+			{
+				source: "/fonts/:path*",
+				headers: [{ key: "Access-Control-Allow-Origin", value: "*" }],
+			},
 			// Stable join routes (#2939) resolve admin-managed destinations at
 			// request time; the redirect may never be cached by browsers or
 			// the CDN.

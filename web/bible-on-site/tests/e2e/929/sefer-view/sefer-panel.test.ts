@@ -88,6 +88,51 @@ test.describe("Sefer left-page panel", () => {
 		});
 	});
 
+	test("dates each chapter's panel by its scheduled day in the active cycle, not today (#3612)", async ({
+		page,
+	}) => {
+		test.setTimeout(120_000);
+		// Freeze on ח כסלו ה'תשפ"ז — perek 319's study day of cycle 4 — while
+		// opening בראשית, whose chapters were scheduled months earlier in the
+		// same cycle. The date between the tabs must follow the chapter, not
+		// the calendar day.
+		await page.clock.setFixedTime(new Date("2026-11-18T10:00:00+02:00"));
+		const seferPage = new SeferPage(page);
+		const panelDate = (pageIndex: number) =>
+			page
+				.locator(`.he-book .page[data-page-index="${pageIndex}"]`)
+				.getByRole("tablist", { name: "בחירת תצוגה" })
+				.locator('[role="presentation"]');
+		const todayLabel = "ח כסלו ה'תשפ\"ז";
+
+		// Direct book deep link: בראשית א sat ז אלול ה'תשפ"ה in cycle 4.
+		await page.goto("/929/1?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(panelDate(4)).toHaveText("ז אלול ה'תשפ\"ה");
+		await expect(panelDate(4)).not.toHaveText(todayLabel);
+
+		// A page turn shows the next chapter's own scheduled date.
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(panelDate(6)).toHaveText("ח אלול ה'תשפ\"ה");
+		await test.info().attach("sefer-panel-perek-2-scheduled-date", {
+			body: await page.screenshot(),
+			contentType: "image/png",
+		});
+
+		// Browser Back restores בראשית א with its own date again.
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/1\?book/);
+		await expect(panelDate(4)).toHaveText("ז אלול ה'תשפ\"ה");
+
+		// An upcoming chapter of the same cycle — יחזקאל מח (perek 500) — shows
+		// its future study date כ"ד תמוז ה'תשפ"ז, still inside cycle 4.
+		await page.goto("/929/500?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(panelDate(98)).toHaveText("כ\"ד תמוז ה'תשפ\"ז");
+		await expect(panelDate(98)).not.toHaveText(todayLabel);
+	});
+
 	test("multi-selects perushim and groups their notes by pasuk", async ({
 		page,
 	}) => {
@@ -301,6 +346,57 @@ test.describe("Sefer left-page panel", () => {
 			"true",
 		);
 		await expect(blank.locator("a#article-1")).toBeFocused();
+	});
+
+	test("groups לקריאה נוספת below the panel's own cards and keeps the browsed perek (#3752)", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		// בראשית ב carries no articles of its own; fixture article 1
+		// (primary בראשית א) verifiably covers בראשית ב א, so the
+		// recommendation group is the whole list.
+		await seferPage.openSeferViewForPerek(2);
+		const blank = page.locator('.he-book .page[data-page-index="6"]');
+		await blank.getByRole("tab", { name: "מאמרים" }).click();
+
+		await expect(
+			blank.getByRole("heading", { name: "לקריאה נוספת" }),
+		).toBeVisible();
+		const card = blank.locator("a#article-1");
+		await expect(card).toBeVisible();
+		// The crawlable href still routes through the article's own perek.
+		await expect(card).toHaveAttribute("href", "/929/1/1");
+
+		// Opening the recommendation embeds the article while the browsed
+		// perek stays in the URL. The article id rides `?further=` — the
+		// canonical /929/{perek}/{slug} path would 404 on reload because the
+		// article belongs to בראשית א, not the viewed ב (#3752 review).
+		await card.click();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(page).toHaveURL(/\/929\/2\?book&further=1/);
+
+		// A fresh load of that URL restores the same embedded article.
+		await page.reload();
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(
+			blank.getByRole("heading", { name: "בראשית ברא - עיון בפסוק הראשון" }),
+		).toBeVisible();
+
+		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
+		await expect(card).toBeVisible();
+		// Returning to the grid drops the selection — a stale further= would
+		// reopen the article on the next reload or book-view entry.
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === "/929/2" &&
+				url.searchParams.has("book") &&
+				!url.searchParams.has("further"),
+		);
 	});
 
 	test("deep-linked perush view selects only that perush without touching defaults", async ({

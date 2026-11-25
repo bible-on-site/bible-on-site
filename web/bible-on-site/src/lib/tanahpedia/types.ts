@@ -1,28 +1,20 @@
+// The taxonomy itself is the shared contract in `web/shared/tanahpedia/` (#3710).
+import type {
+	AnimalKind,
+	AnimalPurity,
+	EntityType,
+} from "../../../../shared/tanahpedia/index";
 import type { ReadingMetric } from "../reading-metrics";
 
-export type EntityType =
-	| "PERSON"
-	| "PLACE"
-	| "EVENT"
-	| "WAR"
-	| "ANIMAL"
-	| "OBJECT"
-	| "TEMPLE_TOOL"
-	| "PLANT"
-	| "ASTRONOMICAL_OBJECT"
-	| "SAYING"
-	| "SEFER"
-	| "TANAH_SEFER"
-	| "PROPHECY"
-	| "NATION";
+export type {
+	AnimalKind,
+	AnimalPurity,
+	CategoryKey,
+	EntityType,
+	PersonRole,
+} from "../../../../shared/tanahpedia/index";
 
-export type PersonRole = "PROPHET" | "KING";
-
-export type AnimalKind = "BEHEMA" | "CHAYA" | "OF" | "SHERETZ";
-export type AnimalPurity = "TAHOR" | "TAMEH";
 export type AnimalClassification = AnimalKind | AnimalPurity;
-
-export type CategoryKey = EntityType | PersonRole | AnimalClassification;
 
 export type Sex = "MALE" | "FEMALE" | "UNKNOWN";
 

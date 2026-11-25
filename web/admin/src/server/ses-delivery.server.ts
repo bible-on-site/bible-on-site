@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	DeleteMessageCommand,
@@ -11,19 +11,23 @@ import type { PoolConnection } from "mysql2/promise";
 import {
 	type EmailJobStatus,
 	type EmailJobSummary,
+	isSubscriptionManagementLink,
 	validateEmailQueueRequest,
 } from "~/lib/bulletin-email";
+import { rolloutDelivers } from "~/lib/bulletin-rollout";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
 import { readBulletinEmailContent } from "./daily-bulletins.server";
 import {
-	execute,
 	query,
 	queryOne,
 	transaction,
 	txExecute,
+	txQuery,
 	txQueryOne,
 } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 import { runOutboxSweep } from "./outbox-deadline.server";
+import { rolloutDeliveryStateForUpdate } from "./rollout-state.server";
 import {
 	type SesAudience,
 	SesClient,
@@ -32,7 +36,6 @@ import {
 } from "./ses-client.server";
 import { parseSesEvent, type SesEvent } from "./ses-events.server";
 import {
-	DeliverySuppressed,
 	getEmailReadiness,
 	loadEmailRuntime,
 	reserveSendSlot,
@@ -48,6 +51,13 @@ const QUEUE_FAILED =
 // It is not an email event or a send request. Acknowledge only the exact message.
 const SES_SNS_VALIDATION_MESSAGE =
 	"Successfully validated SNS topic for Amazon SES event publishing.";
+
+/** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the engagement upgrade is not deployed yet. */
+export function isMissingEngagementSchema(error: unknown): boolean {
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"],
+	});
+}
 
 const TELEGRAM_JOB_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -92,6 +102,8 @@ interface JobRow {
 	status: EmailJobStatus;
 	last_error: string | null;
 	created_at: Date | string;
+	/** Present once the engagement upgrade is deployed; absent before it. */
+	tracked?: number;
 }
 interface RecipientRow {
 	id: number;
@@ -152,6 +164,25 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 		"SELECT status, COUNT(*) AS count FROM tanah_daily_bulletin_email_recipient WHERE job_id = ? GROUP BY status",
 		[job.id],
 	);
+	// A missing engagement schema degrades to nulls, never a fake measured 0.
+	let engagement: { opened: number; clicked: number } | null = null;
+	try {
+		const rows = await queryOne<{
+			opened: number | string | null;
+			clicked: number | string | null;
+		}>(
+			`SELECT COALESCE(SUM(status = 'delivered' AND opened_at IS NOT NULL), 0) AS opened,
+				COALESCE(SUM(status = 'delivered' AND clicked_at IS NOT NULL), 0) AS clicked
+			 FROM tanah_daily_bulletin_email_recipient WHERE job_id = ?`,
+			[job.id],
+		);
+		engagement = {
+			opened: Number(rows?.opened ?? 0),
+			clicked: Number(rows?.clicked ?? 0),
+		};
+	} catch (error) {
+		if (!isMissingEngagementSchema(error)) throw error;
+	}
 	return {
 		id: job.id,
 		date: dateOnly(job.bulletin_date),
@@ -159,6 +190,9 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 		status: aggregate(countsMap(counts)),
 		counts: countsMap(counts),
 		createdAt: isoTime(job.created_at),
+		tracked: engagement === null ? null : Boolean(job.tracked),
+		opened: engagement?.opened ?? null,
+		clicked: engagement?.clicked ?? null,
 	};
 }
 
@@ -343,10 +377,45 @@ async function reconcileEmailOutbox(
 	});
 }
 
+/** The rollout enqueue saw an empty eligible cohort — a skip, not a failure. */
+export class NoConfirmedRecipientsError extends Error {
+	constructor() {
+		super("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		this.name = "NoConfirmedRecipientsError";
+	}
+}
+
 export async function enqueueBulletinEmail(
 	date: string,
 	requestKey: string,
 	expected: { audience: SesAudience; revision: number },
+): Promise<EmailJobSummary> {
+	return enqueueEmailJob(date, requestKey, expected, "settings");
+}
+
+/**
+ * The scheduled limited-cohort job (#3382): licensed by the rollout state, not
+ * the global audience switch. Produces the same durable 'real' job, reaching
+ * only confirmed subscribers — the admitted cohort and direct signups.
+ */
+export async function enqueueBulletinRolloutEmail(
+	date: string,
+	requestKey: string,
+	expectedRevision: number,
+): Promise<EmailJobSummary> {
+	return enqueueEmailJob(
+		date,
+		requestKey,
+		{ audience: "real", revision: expectedRevision },
+		"rollout",
+	);
+}
+
+async function enqueueEmailJob(
+	date: string,
+	requestKey: string,
+	expected: { audience: SesAudience; revision: number },
+	license: "settings" | "rollout",
 ): Promise<EmailJobSummary> {
 	validateEmailQueueRequest({
 		date,
@@ -371,12 +440,15 @@ export async function enqueueBulletinEmail(
 			connection,
 			"SELECT audience, revision FROM tanah_daily_bulletin_email_settings WHERE id = 1 FOR UPDATE",
 		);
-		if (
-			!settings ||
-			settings.audience !== expected.audience ||
-			Number(settings.revision) !== expected.revision
-		)
-			throw new DeliverySuppressed();
+		if (!settings || Number(settings.revision) !== expected.revision)
+			throw new SesSuppressedError();
+		if (license === "rollout") {
+			// Locked alongside settings so an operator disable cannot race the job.
+			if (!rolloutDelivers(await rolloutDeliveryStateForUpdate(connection)))
+				throw new SesSuppressedError();
+		} else if (settings.audience !== expected.audience) {
+			throw new SesSuppressedError();
+		}
 		const existing = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date, DATE_FORMAT(j.created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_at FROM tanah_daily_bulletin_email_job j WHERE bulletin_date = ? AND audience = ? AND idempotency_key = ?",
@@ -420,14 +492,25 @@ export async function enqueueBulletinEmail(
 			"SELECT COUNT(*) AS n FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed'",
 			[expected.audience],
 		);
-		if (!Number(confirmed?.n))
-			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		if (!Number(confirmed?.n)) throw new NoConfirmedRecipientsError();
 		const id = randomUUID();
-		await txExecute(
-			connection,
-			"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
-			[id, date, expected.audience, key, expected.revision],
-		);
+		// The tracked flag records whether the deployed destination collected
+		// OPEN/CLICK at enqueue time — never inferred later from events.
+		const tracked = loadEmailRuntime()?.trackingEnabled ? 1 : 0;
+		try {
+			await txExecute(
+				connection,
+				"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision, tracked) VALUES (?, ?, ?, ?, ?, ?)",
+				[id, date, expected.audience, key, expected.revision, tracked],
+			);
+		} catch (error) {
+			if (!isMissingEngagementSchema(error)) throw error;
+			await txExecute(
+				connection,
+				"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
+				[id, date, expected.audience, key, expected.revision],
+			);
+		}
 		// One set-based insert instead of a row per subscriber under the locks.
 		const enrolled = await txExecute(
 			connection,
@@ -436,8 +519,7 @@ export async function enqueueBulletinEmail(
 			 WHERE s.audience = ? AND s.consent_status = 'confirmed' ORDER BY s.id`,
 			[id, expected.audience],
 		);
-		if (!enrolled.affectedRows)
-			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		if (!enrolled.affectedRows) throw new NoConfirmedRecipientsError();
 		await txExecute(
 			connection,
 			"UPDATE tanah_daily_bulletin_email_job SET cnt_queued = ? WHERE id = ?",
@@ -451,7 +533,7 @@ export async function enqueueBulletinEmail(
 				 AND provider_message_id IS NULL AND sent_at IS NULL AND lease_token IS NULL AND lease_until IS NULL`,
 				["sending", `ses:${id}`, date],
 			);
-			if (reserved.affectedRows !== 1) throw new DeliverySuppressed();
+			if (reserved.affectedRows !== 1) throw new SesSuppressedError();
 		}
 		const inserted = await txQueryOne<JobRow>(
 			connection,
@@ -526,7 +608,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 			current.subscriber_audience !== row.audience ||
 			current.email.toLowerCase() !== current.subscriber_email.toLowerCase()
 		)
-			throw new DeliverySuppressed();
+			throw new SesSuppressedError();
 		const bulletin = await readBulletinEmailContent(
 			dateOnly(row.bulletin_date),
 		);
@@ -541,7 +623,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 						Number(row.subscriber_id),
 					);
 				} catch (error) {
-					suppressed = error instanceof DeliverySuppressed;
+					suppressed = error instanceof SesSuppressedError;
 					throw error;
 				}
 				providerStarted = true;
@@ -595,9 +677,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 		if (!persisted) throw new Error(UNCERTAIN);
 	} catch (error) {
 		const state =
-			suppressed ||
-			error instanceof DeliverySuppressed ||
-			error instanceof SesSuppressedError
+			suppressed || error instanceof SesSuppressedError
 				? "suppressed"
 				: error instanceof SesError
 					? error.outcome
@@ -642,29 +722,122 @@ export async function processEmailRecipient(id: number): Promise<void> {
 	}
 }
 
-export async function applySesEvent(event: SesEvent): Promise<void> {
+/**
+ * Stable identity of one SES notification. The raw notification body is the
+ * truest identity when the caller has it: SQS may redeliver one message and
+ * SNS may publish the same event twice, and every copy carries identical
+ * bytes, while provider details the parser deliberately drops — the opening
+ * address or agent, for example — still keep distinct same-instant events
+ * distinct. The parsed-field fallback covers direct callers without the raw
+ * notification; two indistinguishable records of the same instant remain
+ * one event for counting purposes there.
+ */
+function notificationKey(event: SesEvent, notification?: string): string {
+	const raw =
+		notification ??
+		(event.type === "subscription"
+			? `subscription|${event.email}|${event.timestamp}|${event.unsubscribeAll}|${JSON.stringify(event.topics)}`
+			: `${event.type}|${event.messageId}|${event.attemptId}|${event.timestamp}|${event.link ?? ""}`);
+	// Hashed so a long click URL cannot push distinguishing content past the
+	// column's length and collide two different events into one key.
+	return `evt:${createHash("sha256").update(raw).digest("hex")}`;
+}
+
+/**
+ * Consumes one queue notification durably inside the caller's transaction.
+ * The content-derived key is claimed first: a duplicate insert means this
+ * exact event was already applied and must be skipped rather than counted a
+ * second time. A missing ledger table degrades to pre-ledger behavior;
+ * anything else propagates so the message is retried rather than lost.
+ */
+async function consumeNotification(
+	connection: PoolConnection,
+	notificationId: string,
+	recipientId: number | null,
+	kind: SesEvent["type"],
+): Promise<boolean> {
+	try {
+		await txExecute(
+			connection,
+			`INSERT INTO tanah_daily_bulletin_email_notification
+			 (notification_id, recipient_id, kind, applied_at) VALUES (?, ?, ?, UTC_TIMESTAMP(3))`,
+			[notificationId, recipientId, kind],
+		);
+	} catch (error) {
+		if (
+			typeof error === "object" &&
+			error !== null &&
+			(error as { code?: unknown }).code === "ER_DUP_ENTRY"
+		)
+			return true;
+		if (isMissingEngagementSchema(error)) return false;
+		throw error;
+	}
+	return false;
+}
+
+/**
+ * Locks every subscriber row for an address in primary-key order. This is
+ * the shared first lock for all subscriber-affecting writers — engagement
+ * events, bounce/complaint suppression and subscription updates alike —
+ * because the inactivity opt-out holds its subscriber row while it rechecks
+ * eligibility. Attempt rows are locked only afterwards, so an in-flight
+ * event can never commit engagement between the recheck and the opt-out.
+ */
+async function lockSubscribers(
+	connection: PoolConnection,
+	email: string,
+	subscriberId?: number | null,
+): Promise<void> {
+	await txQuery(
+		connection,
+		`SELECT id FROM tanah_daily_bulletin_subscriber
+		 WHERE email = ? OR id <=> ? ORDER BY id FOR UPDATE`,
+		[email, subscriberId ?? null],
+	);
+}
+
+export async function applySesEvent(
+	event: SesEvent,
+	notification?: string,
+): Promise<void> {
 	if (event.type === "subscription") {
-		for (const audience of ["test", "real"] as const) {
-			const preference = event.topics[audience];
-			if (!event.unsubscribeAll && preference === undefined) continue;
-			const optout = event.unsubscribeAll || preference === "OPT_OUT";
-			await execute(
-				`UPDATE tanah_daily_bulletin_subscriber SET
-				 consent_status = CASE WHEN consent_status IN ('bounced', 'complained') THEN consent_status
-				 WHEN ? THEN CASE WHEN consent_status = 'pending' THEN 'pending' ELSE 'unsubscribed' END
-				 WHEN consent_status = 'unsubscribed' AND consented_at IS NOT NULL THEN 'confirmed' ELSE consent_status END,
-				 last_event_at = ? WHERE email = ? AND audience = ? AND (last_event_at IS NULL OR last_event_at < ? OR (? AND last_event_at = ?))`,
-				[
-					optout,
-					sqlTime(event.timestamp),
-					event.email,
-					audience,
-					sqlTime(event.timestamp),
-					optout,
-					sqlTime(event.timestamp),
-				],
-			);
-		}
+		await transaction(async (connection) => {
+			if (
+				await consumeNotification(
+					connection,
+					notificationKey(event, notification),
+					null,
+					event.type,
+				)
+			)
+				return;
+			// Subscriber rows first — the common lock every writer of
+			// consent-relevant state takes before touching per-attempt data.
+			await lockSubscribers(connection, event.email);
+			for (const audience of ["test", "real"] as const) {
+				const preference = event.topics[audience];
+				if (!event.unsubscribeAll && preference === undefined) continue;
+				const optout = event.unsubscribeAll || preference === "OPT_OUT";
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_subscriber SET
+					 consent_status = CASE WHEN consent_status IN ('bounced', 'complained') THEN consent_status
+					 WHEN ? THEN CASE WHEN consent_status = 'pending' THEN 'pending' ELSE 'unsubscribed' END
+					 WHEN consent_status = 'unsubscribed' AND consented_at IS NOT NULL THEN 'confirmed' ELSE consent_status END,
+					 last_event_at = ? WHERE email = ? AND audience = ? AND (last_event_at IS NULL OR last_event_at < ? OR (? AND last_event_at = ?))`,
+					[
+						optout,
+						sqlTime(event.timestamp),
+						event.email,
+						audience,
+						sqlTime(event.timestamp),
+						optout,
+						sqlTime(event.timestamp),
+					],
+				);
+			}
+		});
 		return;
 	}
 	const separator = event.attemptId.indexOf("_");
@@ -672,6 +845,27 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 	const token = event.attemptId.slice(separator + 1);
 	if (separator < 1 || !Number.isSafeInteger(id) || id <= 0 || !token) return;
 	await transaction(async (connection) => {
+		if (
+			await consumeNotification(
+				connection,
+				notificationKey(event, notification),
+				id,
+				event.type,
+			)
+		)
+			return;
+		// Resolve the owning subscriber without locking the attempt: subscriber
+		// rows are the common first lock, taken before the attempt lock below.
+		const owner = await txQueryOne<{
+			subscriber_id: number;
+			email: string;
+		}>(
+			connection,
+			"SELECT subscriber_id, email FROM tanah_daily_bulletin_email_recipient WHERE id = ?",
+			[id],
+		);
+		if (!owner) return;
+		await lockSubscribers(connection, owner.email, owner.subscriber_id);
 		const row = await txQueryOne<RecipientRow>(
 			connection,
 			"SELECT r.*, DATE_FORMAT(r.event_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS event_at FROM tanah_daily_bulletin_email_recipient r WHERE id = ? FOR UPDATE",
@@ -684,6 +878,62 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			(row.message_id !== null && row.message_id !== event.messageId)
 		)
 			return null;
+		if (event.type === "open" || event.type === "click") {
+			// Tracked engagement: private per-recipient aggregates only. A
+			// subscription-management click is never engagement evidence.
+			if (
+				event.type === "click" &&
+				isSubscriptionManagementLink(event.link ?? "")
+			)
+				return;
+			const column = event.type === "open" ? "opened_at" : "clicked_at";
+			const counter = event.type === "open" ? "open_count" : "click_count";
+			const timestamp = sqlTime(event.timestamp);
+			try {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET ${column} = GREATEST(COALESCE(${column}, ?), ?), ${counter} = ${counter} + 1,
+					 message_id = ?, delivered_at = LEAST(COALESCE(delivered_at,
+						IF(status = 'delivered', event_at, NULL), ?), ?)
+					 WHERE id = ? AND attempt_token = ?`,
+					[
+						timestamp,
+						timestamp,
+						event.messageId,
+						timestamp,
+						timestamp,
+						id,
+						token,
+					],
+				);
+			} catch (error) {
+				if (!isMissingEngagementSchema(error)) throw error;
+				return;
+			}
+			// Engagement is evidence of delivery. Promote an in-flight row
+			// while keeping any definitive bounce or complaint in force.
+			if (
+				row.status === "sending" ||
+				row.status === "accepted" ||
+				row.status === "uncertain"
+			) {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET status = 'delivered', event_at = ?, last_error = NULL
+					 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'accepted', 'uncertain')`,
+					[timestamp, id, token],
+				);
+				await applyRecipientTransition(
+					connection,
+					row.job_id,
+					row.status,
+					"delivered",
+				);
+			}
+			return;
+		}
 		const status: RecipientStatus =
 			event.type === "delivery"
 				? "delivered"
@@ -720,6 +970,23 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			bounced: 4,
 			complained: 5,
 		};
+		// The earliest proven delivery instant — never the edition's nominal
+		// date, which a backdated send cannot move. Stamped before the
+		// staleness checks so an out-of-order earlier Delivery still moves the
+		// evidence back; opens/clicks stamp it via the promotion above.
+		if (event.type === "delivery") {
+			try {
+				await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient
+					 SET delivered_at = LEAST(COALESCE(delivered_at, ?), ?)
+					 WHERE id = ? AND attempt_token = ?`,
+					[sqlTime(event.timestamp), sqlTime(event.timestamp), id, token],
+				);
+			} catch (error) {
+				if (!isMissingEngagementSchema(error)) throw error;
+			}
+		}
 		const older =
 			row.event_at !== null && isoTime(row.event_at) > event.timestamp;
 		const equal =
@@ -782,6 +1049,17 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 						// A missing migration must not block the existing email consumer.
 						if (!signal.aborted)
 							console.error("Signup outbox reconciliation failed");
+					}
+					if (signal.aborted) break;
+					try {
+						const { reconcileRolloutAdmission } = await import(
+							"./rollout-admission.server"
+						);
+						await reconcileRolloutAdmission(signal);
+					} catch {
+						// A missing migration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("Rollout admission reconciliation failed");
 					}
 					if (signal.aborted) break;
 					try {
@@ -913,7 +1191,7 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
-							await applySesEvent(event);
+							await applySesEvent(event, message.Body);
 							handled = true;
 						}
 					}

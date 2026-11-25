@@ -10,14 +10,14 @@ from unittest.mock import patch
 from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, SEARCH_INDEX, SEARCH_INDEX_DIRECTORIES, TANAH, main, prepare_assets, validate_pair
 
 
-def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
+def write_search_index(path: Path, notes_timestamp: int = 200, slim: bool = True) -> None:
     """A minimal delivered-index fixture carrying the generation fingerprints."""
     with closing(sqlite3.connect(path)) as db:
         with db:
             db.execute("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)")
             db.executemany("INSERT INTO search_metadata VALUES (?, ?)", [
-                ("notes", f"v4:{notes_timestamp}:n1"),
-                ("verses", "v4:2026-01-03 22:08:48 UTC:n1"),
+                ("notes", f"v4:{notes_timestamp}:n2"),
+                ("verses", "v4:2026-01-03 22:08:48 UTC:n2"),
             ])
             db.executescript("""
                 CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
@@ -25,8 +25,25 @@ def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
                 CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid');
                 INSERT INTO verses(rowid,Text) VALUES (1,'בראשית');
                 CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row');
-                CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
-                INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
+            """)
+            # The slim layout keeps only the note's identity; the text resolves
+            # from the notes blob. Baseline artifacts can still carry the
+            # legacy fat layout.
+            if slim:
+                db.executescript("""
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER,
+                        SeferId INTEGER, NoteIdx INTEGER);
+                    INSERT INTO notes_documents VALUES (1,1,1,0,1,0);
+                """)
+            else:
+                db.executescript("""
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        Text TEXT, PerekId INTEGER, PasukNum INTEGER,
+                        PerushId INTEGER, SeferId INTEGER);
+                    INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
+                """)
+            db.executescript("""
                 CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid');
                 INSERT INTO notes(rowid,Text) VALUES (1,'בראשית');
                 CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row');
@@ -82,12 +99,33 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                                  (self.source / CATALOG).read_bytes())
                 self.assertEqual((self.app / directory / NOTES).read_bytes(), (self.source / NOTES).read_bytes())
 
-    def test_removes_the_legacy_underscore_pack_dir(self):
-        stale = self.app / "Platforms/iOS/AssetPacks/perushim_notes"
+    def test_removes_legacy_pack_manifests_before_archiving_slim_payloads(self):
+        for name in ("perushim_notes", "perushim-notes"):
+            with self.subTest(name=name):
+                stale = self.app / "Platforms/iOS/AssetPacks" / name
+                stale.mkdir(parents=True)
+                (stale / NOTES).write_bytes(b"stale")
+                (stale / "Manifest.json").write_text(json.dumps({"assetPackID": name}))
+                archive = self.app.parent / ".artifacts/assetpacks" / f"{name}.aar"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"legacy archive")
+                self.assertEqual(prepare_assets(self.source, self.app, "iOS"), 2)
+                self.assertFalse(stale.exists())
+                self.assertFalse(archive.exists())
+                self.assertTrue((self.app / NOTES_DIRECTORIES["iOS"] / SEARCH_INDEX).is_file())
+
+    def test_invalid_source_keeps_the_existing_legacy_pack_and_archive(self):
+        stale = self.app / "Platforms/iOS/AssetPacks/perushim-notes"
         stale.mkdir(parents=True)
-        (stale / NOTES).write_bytes(b"stale")
-        self.assertEqual(prepare_assets(self.source, self.app, "iOS"), 2)
-        self.assertFalse(stale.exists())
+        (stale / NOTES).write_bytes(b"legacy notes")
+        archive = self.app.parent / ".artifacts/assetpacks/perushim-notes.aar"
+        archive.parent.mkdir(parents=True)
+        archive.write_bytes(b"legacy archive")
+        self.metadata("schema_version", "1")
+        with self.assertRaisesRegex(ValueError, "schema v2"):
+            prepare_assets(self.source, self.app, "iOS")
+        self.assertEqual((stale / NOTES).read_bytes(), b"legacy notes")
+        self.assertEqual(archive.read_bytes(), b"legacy archive")
 
     def test_legacy_artifact_is_rejected_without_changing_existing_assets(self):
         self.metadata("perush_catalog", None)
@@ -172,7 +210,7 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_stale_verse_index_is_rejected_before_changing_assets(self):
         with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
             with db:
-                db.execute("UPDATE search_metadata SET fingerprint='v4:old-scripture:n1' WHERE name='verses'")
+                db.execute("UPDATE search_metadata SET fingerprint='v4:old-scripture:n2' WHERE name='verses'")
         with self.assertRaisesRegex(ValueError, "different bundled scripture"):
             prepare_assets(self.source, self.app, "iOS")
         self.assertFalse((self.app / "Resources/Raw" / CATALOG).exists())
@@ -181,7 +219,7 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_old_normalization_is_rejected(self):
         with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
             with db:
-                db.execute("UPDATE search_metadata SET fingerprint='v4:200:n0' WHERE name='notes'")
+                db.execute("UPDATE search_metadata SET fingerprint='v4:200:n1' WHERE name='notes'")
         with self.assertRaisesRegex(ValueError, "different notes generation"):
             validate_pair(self.source)
 
@@ -195,6 +233,24 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                         db.execute(defect)
                 with self.assertRaisesRegex(ValueError, "missing|no notes documents"):
                     validate_pair(self.source)
+
+    def test_legacy_fat_index_layout_is_still_accepted(self):
+        # Baseline artifacts built before #3309 keep the duplicated text in
+        # notes_documents; they remain coherent, queryable indexes.
+        (self.source / SEARCH_INDEX).unlink()
+        write_search_index(self.source / SEARCH_INDEX, slim=False)
+        self.assertEqual(validate_pair(self.source), 2)
+
+    def test_documents_matching_neither_layout_are_rejected(self):
+        (self.source / SEARCH_INDEX).unlink()
+        write_search_index(self.source / SEARCH_INDEX)
+        with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
+            with db:
+                db.execute("CREATE TABLE notes_documents2 AS SELECT rowid, PerekId, PasukNum, PerushId, SeferId FROM notes_documents")
+                db.execute("DROP TABLE notes_documents")
+                db.execute("ALTER TABLE notes_documents2 RENAME TO notes_documents")
+        with self.assertRaisesRegex(ValueError, "neither the slim nor the legacy layout"):
+            validate_pair(self.source)
 
     def test_missing_pair_is_rejected(self):
         for name in [CATALOG, NOTES]:

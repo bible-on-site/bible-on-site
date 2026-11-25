@@ -5,23 +5,30 @@ using BibleOnSite.Helpers;
 namespace BibleOnSite.Tests.Resources;
 
 /// <summary>
-/// Native scripture-font regression (#2623): the pasuk face is Taamey D, the
-/// same family the website reader ships (#2011). These guards pin the whole
-/// packaging-to-renderer path — the bundled TTF and its license, the registrar
-/// alias in MauiProgram, the shared <see cref="Controls.PasukTextLabel"/>
-/// contract on every reader's pasuk text, and the focused overlay sharing the
-/// same control — so a dropped file, a renamed alias or a reverted view cannot
-/// silently fall back to the UI font.
+/// Native scripture-font regression (#3685): the pasuk face is Al Heperek,
+/// the brand family that gained complete niqqud and taamim coverage in
+/// v0.9.5 — the same face the website reader and bulletin now default to.
+/// These guards pin the whole packaging-to-renderer path — the bundled TTF
+/// and its license, the registrar alias in MauiProgram, the shared
+/// <see cref="Controls.PasukTextLabel"/> contract on every reader's pasuk
+/// text, and the focused overlay sharing the same control — so a dropped
+/// file, a renamed alias or a reverted view cannot silently fall back to a
+/// system font. Taamey D stays bundled as the registered alternative (#2623).
 /// </summary>
 public class ScriptureFontTests
 {
     private static readonly string AppRoot = FindAppRoot();
 
     [Fact]
-    public void BundledFont_IsAValidTaameyDTrueTypeFile()
+    public void BundledFont_IsAValidAlHeperekTrueTypeFile()
     {
-        var path = Path.Join(AppRoot, "Resources", "Fonts", "TaameyD-Regular.ttf");
-        Assert.True(File.Exists(path), "TaameyD-Regular.ttf must be bundled in Resources/Fonts");
+        // The packaged face is the canonical shared brand font (#3708) — the
+        // project references web/shared/branding/fonts instead of a local copy.
+        var path = Path.GetFullPath(
+            Path.Join(AppRoot, "..", "..", "web", "shared", "branding", "fonts", "AlHeperekUI-Regular.ttf"));
+        Assert.True(File.Exists(path), "AlHeperekUI-Regular.ttf must be bundled from web/shared/branding/fonts");
+        var csproj = File.ReadAllText(Path.Join(AppRoot, "BibleOnSite.csproj"));
+        Assert.Contains("shared\\branding\\fonts\\*.ttf", csproj);
 
         var bytes = File.ReadAllBytes(path);
         // TrueType sfnt magic, not a web-only WOFF/WOFF2 (#2623 requires a
@@ -30,8 +37,23 @@ public class ScriptureFontTests
         Assert.True(bytes.Length > 10_000, "a real font face, not a stub");
 
         // The 'name' table carries UTF-16BE (Windows) and/or single-byte
-        // (Macintosh) records — the family name must be Taamey D so platforms
-        // resolving the internal family never fall back.
+        // (Macintosh) records — the family name must be Al Heperek Font UI so
+        // platforms resolving the internal family never fall back.
+        var utf16 = Encoding.BigEndianUnicode.GetBytes("Al Heperek Font UI");
+        var latin1 = Encoding.Latin1.GetBytes("Al Heperek Font UI");
+        Assert.True(ContainsSubsequence(bytes, utf16) || ContainsSubsequence(bytes, latin1),
+            "the bundled TTF must be the Al Heperek Font UI family");
+    }
+
+    [Fact]
+    public void TaameyD_RemainsBundledAsTheRegisteredAlternative()
+    {
+        var path = Path.Join(AppRoot, "Resources", "Fonts", "TaameyD-Regular.ttf");
+        Assert.True(File.Exists(path), "TaameyD-Regular.ttf stays bundled as the alternative (#3685)");
+
+        var bytes = File.ReadAllBytes(path);
+        Assert.Equal(new byte[] { 0x00, 0x01, 0x00, 0x00 }, bytes.Take(4).ToArray());
+
         var utf16 = Encoding.BigEndianUnicode.GetBytes("Taamey D");
         var latin1 = Encoding.Latin1.GetBytes("Taamey D");
         Assert.True(ContainsSubsequence(bytes, utf16) || ContainsSubsequence(bytes, latin1),
@@ -64,20 +86,22 @@ public class ScriptureFontTests
     }
 
     [Fact]
-    public void MauiProgram_RegistersTheScriptureFontAlias()
+    public void MauiProgram_RegistersBothScriptureFontAliases()
     {
         var mauiProgram = File.ReadAllText(Path.Join(AppRoot, "MauiProgram.cs"));
-        // The file name and the shared alias must be wired together — a
-        // literal alias here could drift from ScriptureFonts.Family.
-        Assert.Contains("fonts.AddFont(\"TaameyD-Regular.ttf\", ScriptureFonts.Family)", mauiProgram);
+        // The file names and the shared aliases must be wired together — a
+        // literal alias here could drift from ScriptureFonts.
+        Assert.Contains("fonts.AddFont(\"AlHeperekUI-Regular.ttf\", ScriptureFonts.Family)", mauiProgram);
+        Assert.Contains("fonts.AddFont(\"TaameyD-Regular.ttf\", ScriptureFonts.TaameyDFamily)", mauiProgram);
     }
 
     [Fact]
     public void ScriptureFonts_HoldsTheSharedContract()
     {
-        Assert.Equal("TaameyD", ScriptureFonts.Family);
+        Assert.Equal("AlHeperekRegular", ScriptureFonts.Family);
+        Assert.Equal("TaameyD", ScriptureFonts.TaameyDFamily);
         // Regular and Bold share one face — Bold only adds the weight flag a
-        // canvas can honor (Windows); on the net10.0 test target the canvas
+        // canvas can honor (Windows); on the net11.0 test target the canvas
         // name is the alias itself.
         Assert.Equal(ScriptureFonts.Regular.Name, ScriptureFonts.Bold.Name);
         Assert.Equal(Microsoft.Maui.Graphics.FontWeights.Bold, ScriptureFonts.Bold.Weight);
@@ -90,8 +114,9 @@ public class ScriptureFontTests
         // GraphicsView canvases bypass the font registrar — pin each platform's
         // lookup spell: Android asset filename, iOS PostScript name, Windows
         // uri#family (packaged + unpackaged).
-        Assert.Contains("TaameyD-Regular.ttf", src);
-        Assert.Contains("Taamey_D", src);
+        Assert.Contains("AlHeperekUI-Regular.ttf", src);
+        Assert.Contains("AlHeperekUI-Regular", src);
+        Assert.Contains("Al Heperek Font UI", src);
         Assert.Contains("ms-appx:///", src);
         Assert.Contains("file:///", src);
     }

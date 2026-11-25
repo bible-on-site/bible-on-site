@@ -27,7 +27,7 @@ partial class Build
         // coverlet.MTP cannot instrument the test assembly (it is the MTP controller
         // process, coverlet#1911), so coverage runs through coverlet.console which
         // instruments on disk before spawning the test app.
-        var testBinaryDirectory = TestProject.Parent / "bin" / Configuration / "net10.0";
+        var testBinaryDirectory = TestProject.Parent / "bin" / Configuration / "net11.0";
         var resultsRelative = Path.GetRelativePath(RootDirectory, outputDirectory);
         ProcessTasks.StartProcess(DotNetPath,
                 $"tool run coverlet \"{testBinaryDirectory}\" --target dotnet" +
@@ -237,6 +237,7 @@ partial class Build
         var applied = E2ECoverageApply.ApplyDumps(modules,
             dumpFiles.Select(f => (Name: (string)f, Json: File.ReadAllText(f))).ToList(),
             out var stats, m => Serilog.Log.Warning(m));
+        E2ECoverageApply.RequireRecordedVisits(dumpFiles.Count, applied, stats);
 
         var appliedPath = coverageApp / "coverage.opencover.xml";
         E2ECoverageApply.UpdateModuleSummaries(modules);

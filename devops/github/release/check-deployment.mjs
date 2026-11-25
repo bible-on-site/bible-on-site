@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveSqlArtifact } from "./data-artifact.mjs";
 import { startDeployment } from "./deployment-state.mjs";
-import { ghApi } from "./gh-api.mjs";
+import { ghApi, isNoCommonAncestorError } from "./gh-api.mjs";
 import {
 	readRecoveryAsset,
 	verifyRecoveryDeployment,
@@ -58,6 +58,25 @@ function checkQuality(root, runId, runAttempt, request) {
 		throw new Error(
 			"Source CI has not passed Cross Module CI for the release attempt",
 		);
+}
+
+/**
+ * Commit ancestry for the freshness guard, resolved through the compare API.
+ * Besides the usual statuses it returns "unrelated" when GitHub confirms the
+ * commits share no commit (e.g. a deployment recorded before the history
+ * rewrite): such a record provably does not contain `base` and can never
+ * supersede it. Every other compare failure leaves ancestry unproven, so it
+ * stays a classified hard failure rather than silent consent to deploy.
+ */
+function compareFreshness(root, base, head, request) {
+	try {
+		return request(`${root}/compare/${base}...${head}`).status;
+	} catch (error) {
+		if (isNoCommonAncestorError(error)) return "unrelated";
+		throw new Error(
+			`Cannot verify deployment freshness: compare ${base}...${head} failed (${error.message})`,
+		);
+	}
 }
 
 /** Called inside the target's CD concurrency lock, before any production writes. */
@@ -126,7 +145,7 @@ export function checkDeployment(
 					if (!comparisons.has(deployment.sha))
 						comparisons.set(
 							deployment.sha,
-							request(`${root}/compare/${ref}...${deployment.sha}`).status,
+							compareFreshness(root, ref, deployment.sha, request),
 						);
 					newer = comparisons.get(deployment.sha) === "ahead";
 				}
@@ -181,7 +200,7 @@ export function checkDeployment(
 				if (
 					(run.head_sha === ref &&
 						(run.id > source.id || (run.run_attempt ?? 1) > runAttempt)) ||
-					request(`${root}/compare/${ref}...${run.head_sha}`).status === "ahead"
+					compareFreshness(root, ref, run.head_sha, request) === "ahead"
 				)
 					return {
 						deploy: false,
@@ -285,6 +304,17 @@ export function checkDeployment(
 					? { adminArm64: true }
 					: { websiteArm64: true }
 			: {}),
+		// ARM64-only website/admin payloads (#3794) carry no canonical amd64
+		// archive; legacy unpinned releases still default to the amd64 path.
+		...(moduleName === "api" ||
+		moduleName === "website" ||
+		moduleName === "admin"
+			? {
+					nativeAmd64:
+						platformArtifacts === undefined ||
+						platformArtifacts.amd64 !== undefined,
+				}
+			: {}),
 		...(recoveryFile ? { recoveryFile } : {}),
 	};
 }
@@ -340,7 +370,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\nnative_amd64=${result.nativeAmd64 === true}\n`,
 	);
 	if (result.recoveryFile)
 		appendFileSync(

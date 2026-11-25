@@ -1,5 +1,5 @@
 /**
- * Shared Frank Ruhl Libre font loading for the PDF generators.
+ * Shared Al Heperek font loading for the PDF generators.
  *
  * Extracted from tanach-pdf.ts (#2608) so the calendar renderer and the
  * offline artifact generator do not pull scripture/DB modules (perushim,
@@ -12,6 +12,17 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { PDFDocument } from "pdf-lib";
+
+export function embedUiFont(
+	doc: PDFDocument,
+	bytes: Uint8Array,
+	options: { subset?: boolean } = {},
+) {
+	// The Hebrew locl substitution uses one unmapped glyph for both ordinary
+	// and nonbreaking spaces. Use their encoded glyphs for PDF extraction.
+	return doc.embedFont(bytes, { ...options, features: { locl: false } });
+}
 
 let regularFontCache: Uint8Array | null = null;
 let boldFontCache: Uint8Array | null = null;
@@ -29,23 +40,23 @@ function loadFont(filename: string): Uint8Array {
 }
 
 export function getRegularFontBytes(): Uint8Array {
-	if (!regularFontCache)
-		regularFontCache = loadFont("FrankRuhlLibre-Regular.ttf");
+	if (!regularFontCache) regularFontCache = loadFont("AlHeperekUI-Regular.ttf");
 	return regularFontCache;
 }
 
 export function getBoldFontBytes(): Uint8Array {
-	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
+	if (!boldFontCache) boldFontCache = loadFont("AlHeperekUI-Bold.ttf");
 	return boldFontCache;
 }
 
 let logoCache: Uint8Array | null = null;
 
 /**
- * The project's brand logo (the app's logo_header.jpg, vendored next to the
- * fonts). JPEG embeds directly via pdf-lib — keeping it under download/ puts
- * its bytes in the calendar-PDF render fingerprint, so a logo change
- * invalidates the affected cached artifacts (#2727).
+ * The project's brand logo — a staged copy of the canonical
+ * web/shared/branding derived asset (#3708). JPEG embeds directly via
+ * pdf-lib — keeping it under download/ puts its bytes in the calendar-PDF
+ * render fingerprint, so a logo change invalidates the affected cached
+ * artifacts (#2727).
  */
 export function getLogoBytes(): Uint8Array {
 	if (!logoCache) {

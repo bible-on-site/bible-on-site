@@ -33,6 +33,9 @@ partial class Build
     [Parameter("Android key password")]
     readonly string? AndroidKeyPassword;
 
+    [Parameter("Use only the built app bundle and local sidecars for PackageAndroidSymbols")]
+    readonly bool SkipExternalAndroidSymbols;
+
     [Parameter("iOS Team ID")]
     readonly string? IosTeamId;
 
@@ -112,24 +115,20 @@ partial class Build
                     // Restore with RuntimeIdentifier to get RID-specific packages for PublishReadyToRun
                     DotNetRestore(s => s
                         .SetProjectFile(MainProject)
-                        .SetProperty("TargetFramework", "net10.0-windows10.0.19041.0")
+                        .SetProperty("TargetFramework", "net11.0-windows10.0.19041.0")
                         .SetProperty("RuntimeIdentifier", "win-x64")
                         .SetProperty("PublishReadyToRun", "true"));
                 }
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                DotNetRestore(s => s
-                    .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net10.0-android")
-                    .SetProperty("RuntimeIdentifiers", "android-arm64")
-                    .SetRuntime("android-arm64"));
+                DotNetRestore(AndroidPackageRestoreSettings(MainProject, Configuration));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net10.0-ios")
+                    .SetProperty("TargetFramework", "net11.0-ios")
                     .SetProperty("RuntimeIdentifier", "ios-arm64"));
             }
             else
@@ -138,6 +137,17 @@ partial class Build
                 DotNetRestore(s => s.SetProjectFile(MainProject));
             }
         });
+
+    internal static DotNetRestoreSettings AndroidPackageRestoreSettings(string project, string configuration) =>
+        new DotNetRestoreSettings()
+            .SetProjectFile(project)
+            // Android Release enables CoreCLR ReadyToRun. Restore must evaluate
+            // the same configuration as --no-restore publish to acquire Crossgen2.
+            // Let the SDK retain its normal Debug/Release compilation defaults.
+            .SetProperty("Configuration", configuration)
+            .SetProperty("TargetFramework", "net11.0-android")
+            .SetProperty("RuntimeIdentifiers", "android-arm64")
+            .SetRuntime("android-arm64");
 
     void PackageWindows()
     {
@@ -149,7 +159,7 @@ partial class Build
             ["GenerateAppxPackageOnBuild"] = "true",
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
-            ["TargetFramework"] = "net10.0-windows10.0.19041.0",
+            ["TargetFramework"] = "net11.0-windows10.0.19041.0",
             ["RequireRecitationAssets"] = "true",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
@@ -165,7 +175,7 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net10.0-windows10.0.19041.0")
+            .SetFramework("net11.0-windows10.0.19041.0")
             .SetRuntime("win-x64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
@@ -316,13 +326,13 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net10.0-android")
+            .SetFramework("net11.0-android")
             .SetRuntime("android-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
-        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
+        var binDir = MainProject.Parent / "bin" / Configuration / "net11.0-android";
         var aabFiles = binDir.GlobFiles("**/*-Signed.aab");
 
         if (aabFiles.Count > 0)
@@ -335,7 +345,7 @@ partial class Build
 
             // Select the published framework/RID, never a stale sibling build.
             var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
-                "net10.0-android" / "android-arm64" / "app_shared_libraries";
+                "net11.0-android" / "android-arm64" / "app_shared_libraries";
             var symbolsZip = ArtifactsDirectory /
                 $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
             CreateAndValidateAndroidSymbols(sharedLibsDir, ArtifactsDirectory / aabFiles.First().Name, symbolsZip);
@@ -366,10 +376,11 @@ partial class Build
             Assert.FileExists(aabFile, $"AAB file not found: {aabFile}");
             // Select the published framework/RID, never a stale sibling build.
             var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
-                "net10.0-android" / "android-arm64" / "app_shared_libraries";
+                "net11.0-android" / "android-arm64" / "app_shared_libraries";
             Assert.True(sharedLibsDir.DirectoryExists(),
                 $"Android shared libraries not found at {sharedLibsDir} — build the Android release first");
-            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile);
+            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile,
+                includeExternalSymbols: !SkipExternalAndroidSymbols);
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
@@ -387,30 +398,40 @@ partial class Build
             Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
         });
 
+    // #3444: cache debug ELFs by GNU build ID. The release packaging workflow
+    // restores and saves this path.
+    AbsolutePath PublicSymbolCacheDirectory => RootDirectory / ".cache" / "android-native-symbols";
+
     /// <summary>
     /// Produces the Play symbols archive beside a built AAB, then proves the
     /// file on disk — not just the intermediates — meets the contract the
     /// deploy target re-checks before any store write (#2970).
     /// </summary>
-    static void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip,
+        bool includeExternalSymbols = true)
     {
-        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip);
+        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip,
+            symbolCacheDir: PublicSymbolCacheDirectory.ToString(), includeExternalSymbols: includeExternalSymbols);
         LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
     }
 
     /// <summary>
-    /// Documents which bundled arm64 libraries ship without debug symbols —
-    /// .NET/Android runtime libraries are stripped-only upstream, and Play
-    /// accepts partial coverage. Reported honestly instead of claiming
-    /// complete symbol coverage (#2970).
+    /// Reports unavailable symbols separately from SDK-generated data stores.
+    /// Partial coverage remains explicit instead of claiming completeness (#2970).
     /// </summary>
     static void LogSymbolCoverage(IReadOnlyList<string> uncovered)
     {
-        if (uncovered.Count > 0)
+        var missing = uncovered.Where(name => !AndroidNativeSymbols.IsDataContainer(name)).ToArray();
+        if (missing.Length > 0)
         {
             Serilog.Log.Warning(
-                $"No debug symbols for {uncovered.Count} bundled arm64 libraries shipped stripped-only " +
-                $"by the .NET/Android runtime: {string.Join(", ", uncovered)}");
+                "Bundled arm64 libraries without matching native debug symbols ({MissingCount}): {Libraries}",
+                missing.Length, string.Join(", ", missing));
+        }
+        var data = uncovered.Where(AndroidNativeSymbols.IsDataContainer).ToArray();
+        if (data.Length > 0)
+        {
+            Serilog.Log.Information($"Excluded SDK assembly-store data from native debug symbols: {string.Join(", ", data)}");
         }
     }
 
@@ -420,7 +441,7 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["TargetFramework"] = "net10.0-ios",
+            ["TargetFramework"] = "net11.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
             ["RequireAssetPackDownloader"] = "true",
@@ -472,7 +493,7 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net10.0-ios")
+            .SetFramework("net11.0-ios")
             .SetRuntime("ios-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
@@ -480,7 +501,7 @@ partial class Build
         PackageIosAssetPacks();
 
         // Find and copy IPA to artifacts directory
-        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-ios" / "ios-arm64";
+        var binDir = MainProject.Parent / "bin" / Configuration / "net11.0-ios" / "ios-arm64";
         var ipaFiles = binDir.GlobFiles("**/*.ipa");
 
         if (ipaFiles.Count > 0)
@@ -505,7 +526,7 @@ partial class Build
     }
 
     /// <summary>
-    /// Archives every iOS asset pack (perushim-notes + recitation-*) into an Apple
+    /// Archives every iOS asset pack (perushim-notes-slim + recitation-*) into an Apple
     /// Archive (.aar) via `xcrun ba-package`. The archives upload to App Store
     /// Connect separately from the IPA (Transporter); on device they resolve
     /// through BAAssetPackManager managed asset packs.

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { useMemo, useState } from "react";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { diffHtmlWords } from "~/lib/tanahpedia/html-diff";
 import {
 	type EntryRevisionRow,
@@ -101,7 +102,7 @@ function RevisionRow({
 	isBusy: boolean;
 	onApprove: (id: string) => void;
 	onReject: (id: string) => void;
-	onRestore: (id: string) => void;
+	onRestore: (id: string, opener: HTMLElement) => void;
 }) {
 	const [expanded, setExpanded] = useState<"none" | "diff" | "preview">("none");
 	const badge = STATUS_BADGE[revision.status] ?? {
@@ -188,15 +189,7 @@ function RevisionRow({
 					<button
 						type="button"
 						disabled={isBusy}
-						onClick={() => {
-							if (
-								window.confirm(
-									"שחזור ישמור מחדש את הערך עם תוכן הגרסה הזו ויחליף את התוכן בעורך. להמשיך?",
-								)
-							) {
-								onRestore(revision.id);
-							}
-						}}
+						onClick={(e) => onRestore(revision.id, e.currentTarget)}
 						className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
 						title={
 							baseRevisionId === null
@@ -238,6 +231,8 @@ export function EntryHistoryPanel({
 	onEntryChanged,
 }: EntryHistoryPanelProps) {
 	const queryClient = useQueryClient();
+	const [pendingRestore, setPendingRestore] = useState<string | null>(null);
+	const [restoreOpener, setRestoreOpener] = useState<HTMLElement | null>(null);
 
 	const revisionsQuery = useQuery({
 		queryKey: ["tanahpedia-entry-revisions", entryId],
@@ -324,11 +319,28 @@ export function EntryHistoryPanel({
 							isBusy={isBusy}
 							onApprove={(id) => approveMutation.mutate(id)}
 							onReject={(id) => rejectMutation.mutate(id)}
-							onRestore={(id) => restoreMutation.mutate(id)}
+							onRestore={(id, el) => {
+								setPendingRestore(id);
+								setRestoreOpener(el);
+							}}
 						/>
 					))}
 				</ul>
 			)}
+
+			<ConfirmDialog
+				open={pendingRestore !== null}
+				opener={restoreOpener}
+				title="שחזור גרסה"
+				message="שחזור ישמור מחדש את הערך עם תוכן הגרסה הזו ויחליף את התוכן בעורך. להמשיך?"
+				confirmLabel="שחזר"
+				onConfirm={() => {
+					/* istanbul ignore else -- the dialog only opens while a version is staged */
+					if (pendingRestore) restoreMutation.mutate(pendingRestore);
+					setPendingRestore(null);
+				}}
+				onCancel={() => setPendingRestore(null)}
+			/>
 		</div>
 	);
 }

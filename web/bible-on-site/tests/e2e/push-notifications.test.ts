@@ -23,7 +23,12 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 interface PushStubArgs {
-	permission: "granted" | "denied";
+	// Notification.permission as the page sees it on load.
+	permission: "granted" | "denied" | "default";
+	// The answer Notification.requestPermission resolves with; defaults to
+	// `permission`. A "default"-permission browser can still grant the
+	// prompt, which is the flow #3732 gates behind the section's own click.
+	permissionAnswer?: "granted" | "denied" | "default";
 	endpoint: string;
 	p256dh: string;
 	auth: string;
@@ -35,6 +40,7 @@ interface PushStubArgs {
 function installPushStub() {
 	return ({
 		permission,
+		permissionAnswer,
 		endpoint,
 		p256dh,
 		auth,
@@ -53,6 +59,10 @@ function installPushStub() {
 				(char) => char.charCodeAt(0),
 			);
 
+		// A real PushManager subscription survives page navigations; mirror
+		// that with a localStorage flag so the dropdown/card sync assertions
+		// run against the same lifecycle the browser gives the site.
+		const STORAGE_FLAG = "__e2ePushSubscribed";
 		let subscription: {
 			endpoint: string;
 			expirationTime: null;
@@ -63,23 +73,31 @@ function installPushStub() {
 			};
 			unsubscribe: () => Promise<boolean>;
 		} | null = null;
+		const makeSubscription = () => ({
+			endpoint,
+			expirationTime: null,
+			getKey: (name: string) =>
+				decode(name === "p256dh" ? p256dh : auth).buffer,
+			toJSON: () => ({ endpoint, keys: { p256dh, auth } }),
+			unsubscribe: async () => {
+				localStorage.removeItem(STORAGE_FLAG);
+				subscription = null;
+				return true;
+			},
+		});
+		if (localStorage.getItem(STORAGE_FLAG)) {
+			subscription = makeSubscription();
+		}
 
 		const pushManager = PushManager.prototype as unknown as Record<
 			string,
 			unknown
 		>;
-		pushManager.subscribe = async () =>
-			(subscription = {
-				endpoint,
-				expirationTime: null,
-				getKey: (name: string) =>
-					decode(name === "p256dh" ? p256dh : auth).buffer,
-				toJSON: () => ({ endpoint, keys: { p256dh, auth } }),
-				unsubscribe: async () => {
-					subscription = null;
-					return true;
-				},
-			});
+		pushManager.subscribe = async () => {
+			localStorage.setItem(STORAGE_FLAG, "1");
+			subscription = makeSubscription();
+			return subscription;
+		};
 		pushManager.getSubscription = async () => subscription;
 
 		Object.defineProperty(window, "Notification", {
@@ -89,12 +107,23 @@ function installPushStub() {
 					return permission;
 				},
 				requestPermission() {
-					return Promise.resolve(permission);
+					// #3732: the prompt may only come from the section's own enable
+					// click — every test counts these calls.
+					const w = window as unknown as { __permissionCalls?: number };
+					w.__permissionCalls = (w.__permissionCalls ?? 0) + 1;
+					return Promise.resolve(permissionAnswer ?? permission);
 				},
 			},
 		});
 	};
 }
+
+const permissionCalls = (page: Page) =>
+	page.evaluate(
+		() =>
+			(window as unknown as { __permissionCalls?: number }).__permissionCalls ??
+			0,
+	);
 
 interface ShownNotification {
 	title: string;
@@ -169,8 +198,9 @@ async function dispatchNotificationClick(worker: Worker, url: string) {
 				return { url: openUrl, focused: false };
 			};
 			const focusable = (
-				(self as unknown as Record<string, unknown>)
-					.WindowClient as { prototype: Record<string, unknown> }
+				(self as unknown as Record<string, unknown>).WindowClient as {
+					prototype: Record<string, unknown>;
+				}
 			).prototype;
 			focusable.focus = async function focus(this: { url: string }) {
 				scope.__clicks?.push({ action: "focus", url: this.url });
@@ -205,8 +235,9 @@ function fakeSubscription() {
 	};
 }
 
-const pushSection = (page: Page) =>
-	page.locator('section[aria-labelledby="push-notifications-title"]');
+// The dedicated reminder card inside the bulletin section (#3732) — the
+// only place a click may reach Notification.requestPermission().
+const pushSection = (page: Page) => page.locator("#bulletin-push");
 
 test.describe("daily perek push notifications (#1096)", () => {
 	test.beforeEach(async ({ request }) => {
@@ -239,28 +270,33 @@ test.describe("daily perek push notifications (#1096)", () => {
 		await page.goto("/");
 
 		const section = pushSection(page);
-		const checkbox = section.getByRole("checkbox");
-		await expect(checkbox).toBeVisible();
-		await expect(checkbox).not.toBeChecked();
+		const enable = section.getByRole("button", { name: "הפעלת התראות" });
+		const disable = section.getByRole("button", { name: "ביטול התראות" });
+		// One toggle in the shared cardAction slot — its label carries the
+		// state (review on #3732): off offers הפעלה, on offers ביטול.
+		await expect(enable).toBeVisible();
+		await expect(enable).toBeEnabled();
+		await expect(disable).toHaveCount(0);
+		expect(await permissionCalls(page)).toBe(0);
 
-		// Opt in through the real UI: real worker registration, real POST,
-		// real row in the test database.
+		// Opt in through the real UI: one permission prompt from the section's
+		// own click, real worker registration, real POST, real row in the
+		// test database.
 		const posted = page.waitForResponse(
 			(response) =>
 				response.url().endsWith("/api/push/subscription") &&
 				response.request().method() === "POST",
 		);
-		// click() not check(): the controlled input stays unchecked and disabled
-		// until the async opt-in (permission -> worker -> subscribe -> POST)
-		// resolves, so the checked state is asserted by the polling expect below.
-		await checkbox.click();
+		await enable.click();
+		expect(await permissionCalls(page)).toBe(1);
 		const response = await posted;
 		expect(response.status()).toBe(201);
 		expect(response.request().postDataJSON()).toMatchObject({
 			endpoint: sub.endpoint,
 			keys: { p256dh: sub.p256dh, auth: sub.auth },
 		});
-		await expect(checkbox).toBeChecked();
+		await expect(disable).toBeEnabled();
+		await expect(enable).toHaveCount(0);
 		await expect(section).toContainText("ההתראה היומית פעילה");
 
 		const worker = await workerRegistered;
@@ -293,9 +329,7 @@ test.describe("daily perek push notifications (#1096)", () => {
 		// matchAll/find comparison runs for real against the live client list.
 		const focusClick = await dispatchNotificationClick(worker, `${origin}/`);
 		expect(focusClick.errors).toEqual([]);
-		expect(focusClick.clicks).toEqual([
-			{ action: "focus", url: `${origin}/` },
-		]);
+		expect(focusClick.clicks).toEqual([{ action: "focus", url: `${origin}/` }]);
 
 		// Clicking the daily notification asks the platform to open the perek
 		// when no matching window is open.
@@ -312,19 +346,21 @@ test.describe("daily perek push notifications (#1096)", () => {
 		// The /929/1 route the click opens is asserted separately by the key
 		// routes spec; paying its cold-compile cost here would double that.
 
-		// Opt out: real DELETE removes the stored subscription.
+		// Opt out: real DELETE removes the stored subscription — never a
+		// permission prompt.
 		const deleted = page.waitForResponse(
 			(candidate) =>
 				candidate.url().endsWith("/api/push/subscription") &&
 				candidate.request().method() === "DELETE",
 		);
-		await checkbox.click();
+		await disable.click();
 		const deleteResponse = await deleted;
 		expect(deleteResponse.status()).toBe(200);
 		expect(deleteResponse.request().postDataJSON()).toMatchObject({
 			endpoint: sub.endpoint,
 		});
-		await expect(checkbox).not.toBeChecked();
+		await expect(enable).toBeEnabled();
+		expect(await permissionCalls(page)).toBe(1);
 	});
 
 	test("denied permission explains the blocked state without an install funnel", async ({
@@ -339,7 +375,7 @@ test.describe("daily perek push notifications (#1096)", () => {
 
 		const section = pushSection(page);
 		await expect(section).toContainText("ההתראות חסומות בדפדפן");
-		await expect(section.getByRole("checkbox")).toHaveCount(0);
+		await expect(section.getByRole("button")).toHaveCount(0);
 		// No PWA/Home Screen copy anywhere on the page (#2936).
 		await expect(page.getByText("מסך הבית")).toHaveCount(0);
 	});
@@ -360,7 +396,116 @@ test.describe("daily perek push notifications (#1096)", () => {
 
 		const section = pushSection(page);
 		await expect(section).toContainText("הדפדפן הזה אינו תומך בהתראות");
-		await expect(section.getByRole("checkbox")).toHaveCount(0);
+		await expect(section.getByRole("button")).toHaveCount(0);
 		await expect(page.getByText("מסך הבית")).toHaveCount(0);
+	});
+
+	test("reader dropdown navigates to the card for the prompt and stays in sync (#3732)", async ({
+		page,
+		context,
+		baseURL,
+	}) => {
+		const sub = fakeSubscription();
+		await context.addInitScript(installPushStub(), {
+			permission: "default" as const,
+			// A "default"-permission reader can still grant the section prompt.
+			permissionAnswer: "granted" as const,
+			...sub,
+		});
+		await page.goto("/929/1");
+		await page.getByRole("article").first().waitFor({ state: "visible" });
+
+		// Opening the reader dropdown only reads state — no prompt.
+		const settingsButton = page.getByRole("button", {
+			name: "הגדרות קריאה",
+			exact: true,
+		});
+		await settingsButton.click();
+		const reminder = page.getByRole("checkbox", {
+			name: "התראה יומית בדפדפן",
+		});
+		await expect(reminder).toBeVisible();
+		await expect(reminder).not.toBeChecked();
+		expect(await permissionCalls(page)).toBe(0);
+
+		// Opt-in with a pending permission must not prompt from the dropdown:
+		// it navigates to and focuses the dedicated section instead. "commit"
+		// suffices — the assertions below poll while the homepage keeps loading.
+		await reminder.click();
+		await page.waitForURL(/#bulletin-push$/, { waitUntil: "commit" });
+		const section = pushSection(page);
+		await expect(section).toBeFocused();
+		expect(await permissionCalls(page)).toBe(0);
+
+		// The section's own enable click is the one place the prompt fires.
+		const posted = page.waitForResponse(
+			(response) =>
+				response.url().endsWith("/api/push/subscription") &&
+				response.request().method() === "POST",
+		);
+		await section.getByRole("button", { name: "הפעלת התראות" }).click();
+		expect(await permissionCalls(page)).toBe(1);
+		expect((await posted).status()).toBe(201);
+		await expect(section).toContainText("ההתראה היומית פעילה");
+
+		// Back in the reader the same state is mirrored: checked, and opt-out
+		// runs the real DELETE without any permission call. Full `load` so the
+		// settings button is hydrated before the click.
+		await page.goto("/929/1");
+		await page.getByRole("article").first().waitFor({ state: "visible" });
+		await settingsButton.click();
+		await expect(reminder).toBeChecked();
+		expect(await permissionCalls(page)).toBe(0);
+		const deleted = page.waitForResponse(
+			(response) =>
+				response.url().endsWith("/api/push/subscription") &&
+				response.request().method() === "DELETE",
+		);
+		await reminder.click();
+		const deleteResponse = await deleted;
+		expect(deleteResponse.status()).toBe(200);
+		expect(deleteResponse.request().postDataJSON()).toMatchObject({
+			endpoint: sub.endpoint,
+		});
+		await expect(reminder).not.toBeChecked();
+		expect(await permissionCalls(page)).toBe(0);
+
+		// The card mirrors the opt-out too.
+		await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+		await expect(
+			section.getByRole("button", { name: "הפעלת התראות" }),
+		).toBeEnabled();
+	});
+
+	test("reader dropdown enables directly when permission is already granted (#3732)", async ({
+		page,
+		context,
+	}) => {
+		const sub = fakeSubscription();
+		await context.addInitScript(installPushStub(), {
+			permission: "granted" as const,
+			...sub,
+		});
+		await page.goto("/929/1");
+		await page.getByRole("article").first().waitFor({ state: "visible" });
+		await page
+			.getByRole("button", { name: "הגדרות קריאה", exact: true })
+			.click();
+		const reminder = page.getByRole("checkbox", {
+			name: "התראה יומית בדפדפן",
+		});
+		await expect(reminder).toBeVisible();
+
+		const posted = page.waitForResponse(
+			(response) =>
+				response.url().endsWith("/api/push/subscription") &&
+				response.request().method() === "POST",
+		);
+		await reminder.click();
+		expect((await posted).status()).toBe(201);
+		// Granted permission needs no prompt — zero calls, no navigation.
+		expect(await permissionCalls(page)).toBe(0);
+		expect(page.url()).toContain("/929/1");
+		await expect(reminder).toBeChecked();
 	});
 });

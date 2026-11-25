@@ -2,7 +2,12 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
+    <!-- .NET 11's `dotnet run` launches the apphost, making argv[0] the .exe
+         while the entry assembly stays the .dll. NUKE 10.1.0 asserts the two
+         are equal and crashes on startup. UseAppHost=false keeps `dotnet run`
+         invoking `dotnet _build.dll`, which satisfies it. -->
+    <UseAppHost>false</UseAppHost>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace></RootNamespace>
@@ -17,12 +22,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.78.0.4316" />
+    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.78.0.4333" />
     <PackageReference Include="Nuke.Common" Version="10.1.0" />
-    <!-- Match the NuGet.Frameworks assembly used by .NET SDK 10.0.402's MSBuild. -->
+    <!-- Match the NuGet.Frameworks assembly used by .NET SDK 11.0.100's MSBuild. -->
     <PackageReference Include="NuGet.Packaging" Version="8.0.0" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.14" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="11.0.0" />
   </ItemGroup>
 
 </Project>

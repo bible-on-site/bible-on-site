@@ -100,6 +100,47 @@ describe("POST /api/push/daily", () => {
 			expect(mockSend).toHaveBeenCalledWith(body.perekId, FCM);
 		});
 
+		it("returns 502 when every attempted send failed (#3499)", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 4 });
+			const response = await call("Bearer s3cret");
+			expect(response.status).toBe(502);
+			expect(await response.json()).toMatchObject({
+				sent: 0,
+				removed: 0,
+				failed: 4,
+			});
+		});
+
+		it("stays 200 when some sends failed but others delivered", async () => {
+			mockSend.mockResolvedValue({ sent: 2, removed: 1, failed: 3 });
+			expect((await call("Bearer s3cret")).status).toBe(200);
+		});
+
+		it("stays 200 when nothing was sent and nothing failed", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 2, failed: 0 });
+			expect((await call("Bearer s3cret")).status).toBe(200);
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 0 });
+			expect((await call("Bearer s3cret")).status).toBe(200);
+		});
+
+		it.each([
+			["an unknown endpoint", { sent: 0, removed: 0, failed: 0 }],
+			["an endpoint pruned as gone", { sent: 0, removed: 1, failed: 0 }],
+		])(
+			"returns 404 for a targeted check that matched no live subscription (%s)",
+			async (_label, result) => {
+				mockSend.mockResolvedValue(result);
+				const response = await call("Bearer s3cret", { endpoint: FCM });
+				expect(response.status).toBe(404);
+			},
+		);
+
+		it("returns 502 for a targeted send that failed", async () => {
+			mockSend.mockResolvedValue({ sent: 0, removed: 0, failed: 1 });
+			const response = await call("Bearer s3cret", { endpoint: FCM });
+			expect(response.status).toBe(502);
+		});
+
 		it("broadcasts when the supplied body is empty", async () => {
 			const response = await callRaw("Bearer s3cret", "");
 			const body = await response.json();
@@ -150,8 +191,13 @@ describe("POST /api/push/daily", () => {
 			const request = new Request("http://localhost/api/push/daily", {
 				method: "POST",
 				headers: { authorization: "Bearer s3cret" },
-			});
-			jest.spyOn(request, "text").mockRejectedValue(privateFailure());
+				body: new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.error(privateFailure());
+					},
+				}),
+				duplex: "half",
+			} as RequestInit);
 			expect((await POST(request)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
 			expect(warn).toHaveBeenCalledTimes(1);

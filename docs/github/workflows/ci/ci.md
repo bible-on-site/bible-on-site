@@ -9,17 +9,28 @@
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
-| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Data-deploy tooling tests (path-scoped, independent of `ci.yml`) |
+| [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Reusable data deployment and MySQL rehearsal checks |
 | [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
-| [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
 | [`codeql.yml`](../../../../.github/workflows/codeql.yml) | CodeQL analysis (independent check) |
 | [`dependency-review.yml`](../../../../.github/workflows/dependency-review.yml) | PR dependency review (independent check) |
 | [`dependency-submission.yml`](../../../../.github/workflows/dependency-submission.yml) | Dependency snapshot submission |
 | [`xcode-mcpbridge-poc.yml`](../../../../.github/workflows/xcode-mcpbridge-poc.yml) | Diagnostic PoC for Xcode's mcpbridge device driver (dispatch only) |
 
 ## Triggers and concurrency
+
+### Explicit pull request creation
+
+Contributors and assigned agents open pull requests explicitly and choose
+whether the work is a draft or ready for review. Publishing a branch does
+not open a pull request.
+
+The two former branch-publication workflows were disabled repository-wide
+and removed with their scripts and tests on November 17, 2026. Historical
+branches can still contain those workflows, so keep their GitHub workflow
+IDs `216311524` and `421128633` inactive. Re-enabling them would allow old
+branch activity to recreate completed or deliberately closed work.
 
 `ci.yml` runs on `push` to `master`, on `pull_request` to `master`, on
 `merge_group` (merge-queue validation), and on `workflow_dispatch`. The
@@ -64,9 +75,9 @@ deployment-ledger freshness checks rather than requiring source SHA to
 remain the exact current master forever. Recovery additionally verifies
 the published receipt and the actual selected package bytes.
 
-`ci-data-deploy.yml` is separate: it validates the data-deployment tooling and
-triggers on its own path filter (`devops/deploy/data-deploy/**`,
-`devops/package.json`, itself) for PRs, master pushes and merge-queue checks.
+The main workflow calls `ci-data-deploy.yml` when data-deploy tooling,
+manual migrations, the Lambda handler or package pin, or its workflow inputs
+change. Cross Module CI requires the called workflow to succeed when selected.
 
 ## Pipeline Stages
 
@@ -100,6 +111,27 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
+  - `docs_only` (#3621) means every touched path is an inert root
+    `docs/` file or a module documentation path listed in the router
+    **and** no module check fired. When
+    it is true the validation surface skips — `workflow_timeouts`,
+    `root_evidence_guard`, the independent suites (`database_backups`,
+    `transcription_ci`, `perushim_data`) and every module job — so docs-only
+    PRs, master pushes and queue entries cost only detection plus the
+    status-resolution tail. The detection tier (`setup_env`, both
+    availability detectors) still runs, and the prerequisite gate always
+    evaluates their results so a failed detector cannot ride a skipped
+    check to green. A missing coverage baseline keeps its normal recovery
+    path: `baseline_recovery_required` re-fires the owning module job (and
+    `build_sefaria_mongo_docker` mirrors every consumer trigger so a
+    recovery run never waits on an image nobody built), while the checks
+    for suites that stay skipped keep their docs gate inside the gate
+    script. Renames still count both paths, `docs/aws/**` is
+    operational source (CloudFormation, Lambda, nginx) that never
+    qualifies, and source/script/manifest formats under `docs/` (e.g. the
+    device-tests POC) are never documentation. A merge group whose
+    combined delta includes non-documentation work is not docs-only, so
+    the queue's conservative force-all still validates it.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.
@@ -207,24 +239,35 @@ PRs and merge-queue events, without publishing release artifacts. Its SSG build
 uses the production DB through SSM and temporary RDS access. Fork PRs cannot
 run this privileged packaging path. Master pushes package website releases
 when website content changes; Website Performance validates the app pre-merge.
+Its `deps` stage layers cache through the `website-deps-cache.master.<arch>`
+baseline artifacts — trusted master pushes export the stage's BuildKit cache
+(`type=local`) and each packaging run restores the matching architecture's
+latest unexpired artifact; a missing or stale cache just builds cold.
+Artifact names are attacker-controlled, so only artifacts produced by a run on
+this repository's `master` branch are eligible — the restore filters the
+producing `workflow_run`'s repository and branch, never the name alone. The
+database-backed `builder` stage always runs fresh (`--no-cache-filter`).
 
 The shared package job normally removes its temporary database ingress in an
 `always()` step. If its hosted runner disappears, that step cannot run.
 [`rds-build-access-cleanup.yml`](../../../../.github/workflows/rds-build-access-cleanup.yml)
 therefore also cleans access after CI completes, using trusted default-branch
-code and the existing deployment role. It verifies the exact repository,
-workflow, attempt and every completed job before using AWS credentials. It
-reads the actual `tanah-mysql` security groups, validates all matching leases,
-then rechecks each rule's ownership before revoking its exact ID and confirming
-absence. Only tagged website build leases for that completed attempt qualify;
-active attempts and other rules are preserved. No new IAM permission, database
-credential, service setting or public URL is needed.
+code and the existing deployment role. One serialized cleanup sweeps every
+tagged build lease on the `tanah-mysql` security groups: a newer completion
+supersedes the queued run without losing coverage, because each sweep revokes
+the leases of **all** completed attempts, not only its trigger's. It verifies
+the exact repository, workflow, attempt and every completed job of each owning
+build before using AWS credentials on its rules, then rechecks each rule's
+ownership before revoking its exact ID and confirming absence. Active attempts
+and foreign rules are preserved. No new IAM permission, database credential,
+service setting or public URL is needed.
 
 For an older completed run, manually dispatch **Clean completed CI database
-access** with its exact `run_id` and `run_attempt`. Repeating a completed cleanup
-is harmless. Incomplete metadata or changed ownership fails the job without
-guessing. Reverting the cleanup workflow disables independent recovery while
-retaining the package job's ordinary cleanup.
+access** with its exact `run_id` and `run_attempt` — or leave both empty to
+sweep every stale lease. Repeating a completed cleanup is harmless. Incomplete
+metadata or changed ownership fails the job without guessing. Reverting the
+cleanup workflow disables independent recovery while retaining the package
+job's ordinary cleanup.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
@@ -485,24 +528,53 @@ A deleted queue branch can leave its old CI run queued or running after the
 queue has rebuilt a replacement. CI currently assigns each merge-group run a
 unique concurrency key, so normal PR supersession does not remove these runs.
 
-`reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` after
-merge-group CI run requests/completions and matching queue-branch delete
-events. It consumes trusted default-branch code and GitHub metadata, never a
-candidate checkout or artifact. Delivery of internal queue delete events is
-not assumed, so the CI workflow-run scans also provide cleanup opportunities.
+`reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` when a
+PR closes, validation runs are requested/started/completed, or a queue branch is
+deleted. It consumes trusted default-branch code and GitHub metadata, never a
+candidate checkout or artifact. The `pull_request_target: closed` event
+provides the privileged metadata context for fork PRs too; its checkout is
+always the trusted base commit. Run events reconcile validation that starts
+after the merge, including re-runs that do not emit a `requested` event,
+without a scheduled polling job or a separate credential.
+The merged-PR and unmerged-queue passes use independent job concurrency
+groups. Each pass coalesces its own pending events without interrupting a
+running cancellation; a PR event cannot evict the queue pass's pending work.
+Validation of the controller itself uses normal PR concurrency to cancel
+superseded test jobs.
+
+`cancel-merged-pr-runs.mjs` cancels active PR, merge-group and native PR quality
+runs whose associated PRs have merged. It covers every workflow, follows
+GitHub's native pagination once per active status and validates each immutable
+run again before cancellation. Active inventories are not atomic snapshots:
+their `total_count` can change while runs start or finish. Successful
+`gh api --paginate --slurp` completion follows all pagination links; malformed
+pages, failed requests and counts above GitHub's 1,000-result filtered-search
+limit stop the pass. Later native events reconcile status transitions.
+Master pushes, releases, dispatches, open PRs and commits still
+referenced by the live queue are preserved. A merged PR's unfinished checks
+are redundant validation; its normal master CI and deployment remain
+independent, including after an administrative merge. Unknown associations
+and incomplete queue visibility prevent cancellation. A durable intent
+journal precedes each normal cancel request; an uncertain result is read
+once and never retried or force-cancelled.
+GitHub can return HTTP 409 even for a run displayed as queued when its backend
+has not admitted the run yet. That run is recorded as deferred after the same
+identity-checked reconciliation, and the remaining candidates are processed.
+A later native event checks it again. Permission, transport and other provider
+errors remain failures; the controller does not force an unavailable transition.
 
 A candidate must belong to this exact repository and CI workflow, retain its
 original run/ref/head identity, have an absent queue ref, and appear in no
 current queue head or base. Complete bounded pages and two fresh proofs are
-required. Current master and every merged PR's remaining validation are
-preserved, including HEADGREEN cases where a PR merges before its earlier
-checks finish. Unknown identity, incomplete topology, API errors and races
-fail closed. The controller caps requests and permits at most two normal
+required. This older, separate pass only handles unmerged queue entries;
+merged validation belongs to the merged-PR pass described above. Unknown
+identity, incomplete topology, API errors and races fail closed. The
+unmerged controller caps requests and permits at most two normal
 cancellations per invocation; it never force-cancels or retries a mutation.
 
 The cleanup job requires a successful fsynced intent journal before every
 POST and retains one outcome-reconciliation read, so unknown outcomes are not
 retried. It uploads its proof artifact even after failure. For read-only
-inspection, the helper also supports `--dry-run`. Rollback changes the job to
+inspection, both helpers support `--dry-run`. Rollback changes the job to
 that mode and restores `actions: read`; exact stale builds can still be
 cleaned up manually after the same current-state checks.

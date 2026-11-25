@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { iosInteractionDiagnostics as makeDiagnostics, readLoggedIosAppPid, sampleIosFallback, samplePinnedIosApp as samplePinned } from "./ios-interaction-diagnostics.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 
 
 const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
@@ -70,6 +71,7 @@ function diagnosticFixture(t) {
       ? { stdout: `${args[1]} 259 W 0 0 main-thread\n`, stderr: "" }
       : { stdout: OWNED, stderr: "" };
     if (args.includes("screenshot")) writeFileSync(args.at(-1), "frame");
+    if (command === "/usr/bin/sample") writeFileSync(args.at(-1), "sampled native stack");
     return { stdout: "captured", stderr: "" };
   };
   const now = () => Date.parse("2026-10-28T16:33:00Z");
@@ -81,9 +83,14 @@ function failureSignal(extra = {}) {
     failedAtUtc: "2026-10-28T16:33:00Z", deadlineUtc: "2026-10-28T16:33:15Z", ...extra };
 }
 
+function startupFailure(extra = {}) {
+  return failureSignal({ failurePhase: "reader-startup", launchId: "815d55be-d9fc-47ac-85d8-983b58a43998",
+    scenarioStartedAtUtc: "2026-10-28T16:32:10Z", ...extra });
+}
+
 function pendingRequest(sequence, request = "SettingsDisplayRow") {
   return { sequence, command: "POST /session/session-1/elements", request,
-    sessionId: "session-1", capturedAt: "2026-10-28T16:32:45Z", pending: true };
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:20Z", capturedAt: "2026-10-28T16:32:45Z", pending: true };
 }
 
 test("passive identity reads a bounded existing log tail without process probes", (t) => {
@@ -126,8 +133,8 @@ test("failure handoff samples the pinned process while all existing caps remain 
   request.pending = false; request.status = 500;
   f.calls.length = 0;
   assert.deepEqual(await diagnostics.failure(failureSignal()), { status: "captured", pid: 8421 });
-  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", inspectorPath, "sudo"]);
-  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(x => x.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.at(-1).args.includes("8421"));
   assert.ok(f.calls.at(-1).args.includes("settings set target.detach-on-error true"));
@@ -137,6 +144,195 @@ test("failure handoff samples the pinned process while all existing caps remain 
   // Kernel thread rows still land when host debugger channels cannot run.
   assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-threads-8421.txt`), "utf8"),
     "8421 259 W 0 0 main-thread\n");
+  assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-sample-8421.txt`), "utf8"),
+    "sampled native stack");
+});
+
+test("confirmed reader startup failure pins its current app without any pending native request", async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return 8421; } });
+  assert.equal(reads, 0, "healthy startup does not inspect or pin an app");
+  assert.deepEqual(f.calls, []);
+  const failure = startupFailure();
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.equal(reads, 1);
+  assert.deepEqual(f.calls.map(call => call.command),
+    [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
+  assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+  assert.equal(evidence.observation.failurePhase, "reader-startup");
+  assert.equal(evidence.observation.launchId, failure.launchId);
+  assert.equal(evidence.observation.sessionId, failure.sessionId);
+  assert.equal(evidence.observation.source, "existing UDID-scoped native log at confirmed reader-startup failure");
+  assert.equal(evidence.observation.observedAt, new Date(f.now()).toISOString());
+  assert.equal(evidence.observation.request, undefined);
+});
+
+test("reader startup accepts .NET UTC timestamps with seven fractional digits and an explicit offset", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const failure = startupFailure({ scenarioStartedAtUtc: "2026-10-28T16:32:10.0123456+00:00",
+    failedAtUtc: "2026-10-28T16:32:59.1234567+00:00", deadlineUtc: "2026-10-28T16:33:14.1234567+00:00" });
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.ok(f.calls.some(call => call.command === "/usr/bin/sample"));
+  assert.ok(f.calls.some(call => call.command === "sudo"));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.scenarioStartedAtUtc, failure.scenarioStartedAtUtc);
+  assert.equal(evidence.request.deadlineUtc, failure.deadlineUtc);
+});
+
+for (const [label, context] of [
+  ["a one-character ASCII session", { sessionId: "A" }],
+  ["a hyphen-only session", { sessionId: "-" }],
+  ["a 128-character mixed ASCII session", { sessionId: "Az09-".repeat(25) + "aZ9" }],
+  ["a canonical all-zero launch UUID", { launchId: "00000000-0000-0000-0000-000000000000" }],
+]) test(`reader startup accepts ${label}`, async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const failure = startupFailure(context);
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.sessionId, failure.sessionId);
+  assert.equal(evidence.observation.launchId, failure.launchId);
+});
+
+test("reader startup never attributes an earlier interaction's PID to the current launch", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    execute: async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      return command === inspectorPath && args[0] !== "--threads"
+        ? { stdout: "9912 L " + appPath(udid), stderr: "" } : result;
+    } });
+  const earlier = pendingRequest(1, "terminate_app");
+  await diagnostics.capture(earlier.command, earlier);
+  earlier.pending = false;
+  earlier.status = 500;
+  writeFileSync(f.nativeLog, "2026-10-28 16:32:59.000 Df BibleOnSite[9912:def] current launch\n");
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(startupFailure()), { status: "captured", pid: 9912 });
+  assert.deepEqual(f.calls[0].args, ["9912"]);
+  assert.ok(f.calls.every(call => !call.args.includes("8421")));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 9912);
+  assert.equal(evidence.observation.capturedRequest, undefined);
+});
+
+test("ordinary failure with null startup fields retains its original interaction pin", async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return reads === 1 ? 8421 : 9912; } });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(failureSignal({ failurePhase: null, launchId: null })),
+    { status: "captured", pid: 8421 });
+  assert.equal(reads, 1, "ordinary failures cannot select a newly logged process");
+  assert.deepEqual(f.calls[0].args, ["8421"]);
+});
+
+for (const [label, context] of [
+  ["missing phase", { failurePhase: undefined }],
+  ["null phase", { failurePhase: null }],
+  ["ordinary phase", { failurePhase: "scenario" }],
+  ["missing launch identity", { launchId: undefined }],
+  ["null launch identity", { launchId: null }],
+  ["malformed launch identity", { launchId: "not-a-guid" }],
+  ["noncanonical launch identity", { launchId: "815D55BE-D9FC-47AC-85D8-983B58A43998" }],
+  ["misplaced launch separator", { launchId: "815d55bead9fc-47ac-85d8-983b58a43998" }],
+  ["nonhex launch character", { launchId: "g15d55be-d9fc-47ac-85d8-983b58a43998" }],
+  ["separator in launch hex", { launchId: "815d55be-d9fc-47ac-85d8-983b58a4399-" }],
+  ["launch identity with newline", { launchId: "815d55be-d9fc-47ac-85d8-983b58a43998\n" }],
+  ["missing session", { sessionId: undefined }],
+  ["null session", { sessionId: null }],
+  ["empty session", { sessionId: "" }],
+  ["blank session", { sessionId: " " }],
+  ["malformed session", { sessionId: "session/other" }],
+  ["overlong session", { sessionId: "A".repeat(129) }],
+  ["non-ASCII session", { sessionId: "sessiön-1" }],
+  ["session underscore", { sessionId: "session_1" }],
+  ["session with newline", { sessionId: "session-1\n" }],
+  ["missing startup boundary", { scenarioStartedAtUtc: undefined }],
+  ["invalid startup boundary", { scenarioStartedAtUtc: "not-a-date" }],
+  ["non-UTC startup boundary", { scenarioStartedAtUtc: "2026-10-28T18:32:10+02:00" }],
+  ["startup boundary with newline", { scenarioStartedAtUtc: "2026-10-28T16:32:10Z\n" }],
+  ["startup after failure", { scenarioStartedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["missing failure time", { failedAtUtc: undefined }],
+  ["invalid calendar failure time", { failedAtUtc: "2026-02-30T16:33:00Z" }],
+  ["failure time with newline", { failedAtUtc: "2026-10-28T16:33:00Z\n" }],
+  ["future failure time", { failedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["missing deadline", { deadlineUtc: undefined }],
+  ["invalid deadline", { deadlineUtc: "not-a-date" }],
+  ["deadline before failure", { deadlineUtc: "2026-10-28T16:32:59Z" }],
+  ["expanded deadline", { deadlineUtc: "2026-10-28T16:33:16Z" }],
+]) test(`incomplete reader startup context rejects ${label} without pinning or attaching`, async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return 8421; } });
+  const earlier = pendingRequest(1);
+  await diagnostics.capture(earlier.command, earlier);
+  f.calls.length = 0;
+  reads = 0;
+
+  assert.equal((await diagnostics.failure(startupFailure(context))).status, "unknown");
+  assert.equal(reads, 0, "invalid startup context cannot fall back to an earlier interaction");
+  assert.deepEqual(f.calls, []);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation, null);
+});
+
+test("failed startup PID reads retain their error and never inspect a replacement", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { throw new Error("startup native log unavailable"); } });
+  assert.deepEqual(await diagnostics.failure(startupFailure()), { status: "unknown", pid: null });
+  assert.deepEqual(f.calls, []);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, null);
+  assert.equal(evidence.observation.identityError.message, "startup native log unavailable");
+});
+
+for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {
+  test(`startup ownership rejection never chooses another app: ${listing.trim()}`, async t => {
+    const f = diagnosticFixture(t);
+    const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+      execute: async (command, args, options) => {
+        f.calls.push({ command, args, options });
+        return { stdout: listing, stderr: "" };
+      } });
+    const result = await diagnostics.failure(startupFailure());
+    assert.equal(result.status, "exited");
+    assert.equal(result.pid, 8421);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].command, inspectorPath);
+    assert.deepEqual(f.calls[0].args, ["8421"]);
+  });
+}
+
+test("reader startup capture retains the remaining deadline and handoff cancellation", async t => {
+  const f = diagnosticFixture(t);
+  const expired = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    now: () => f.now() + 15000 });
+  assert.deepEqual(await expired.failure(startupFailure()), { status: "expired", pid: 8421 });
+  assert.deepEqual(f.calls, []);
+  const cancellation = new AbortController();
+  cancellation.abort(new Error("startup handoff ended"));
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const result = await diagnostics.failure(startupFailure(), { signal: cancellation.signal });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "startup handoff ended");
+  assert.deepEqual(f.calls, []);
 });
 
 for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {
@@ -160,6 +356,173 @@ test("successful earlier captures and a different session cannot identify the fa
   f.calls.length = 0;
   assert.equal((await diagnostics.failure(failureSignal())).status, "unknown");
   assert.equal((await diagnostics.failure(failureSignal({ sessionId: "other-session" }))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("the failed scenario's last fast-completing command pins the current app at issue time", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  const request = { sequence: 1, command: "GET /session/session-1/element/source/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: true };
+  diagnostics.pin(request);
+  request.pending = false; request.status = 200;
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.deepEqual(f.calls.map(call => call.command),
+    [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+  assert.equal(evidence.observation.source, "passive app identity pinned when the scenario issued the command");
+  assert.equal(evidence.observation.request.status, 200);
+  assert.equal(evidence.observation.request.pending, false);
+});
+
+for (const [label, request, signal] of [
+  ["before the scenario started", { startedAt: "2026-10-28T16:32:05Z" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["after the failure", { startedAt: "2026-10-28T16:33:01Z" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["another session", { sessionId: "other-session" },
+    { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["a completed request without a scenario boundary", { pending: false, status: 200 }, {}],
+]) test(`a pinned command ${label} cannot identify the failed app`, async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: true, ...request });
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal(signal))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("a still-pending fast request pins its app even without a scenario boundary", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:58Z", pending: true });
+
+  assert.equal((await diagnostics.failure(failureSignal())).status, "captured");
+  assert.ok(f.calls.some(call => call.args.includes("8421")));
+});
+
+test("a failed issue-time pin retains its error beside the selected command", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f,
+    readPid() { throw new Error("native log unavailable"); } });
+  diagnostics.pin({ sequence: 1, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:50Z", pending: false, status: 200 });
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.equal((await diagnostics.failure(failure)).status, "unknown");
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, null);
+  assert.equal(evidence.observation.identityError.message, "native log unavailable");
+});
+
+test("a pending capture keeps its pin ahead of later fast request pins", async (t) => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  request.pending = false; request.status = 500;
+  writeFileSync(f.nativeLog, "2026-10-28 16:32:55.000 Df BibleOnSite[9912:def] relaunched\n");
+  diagnostics.pin({ sequence: 2, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:56Z", pending: false, status: 200 });
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" })),
+    { status: "captured", pid: 8421 });
+  assert.ok(f.calls.some(call => call.args.includes("8421")));
+  assert.ok(f.calls.every(call => !call.args.includes("9912")));
+});
+
+test("a pin revives failure evidence when a capture could not read the identity", async (t) => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid: udid, ...f,
+    readPid() { reads++; if (reads === 1) throw new Error("native log unavailable"); return 8421; } });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  request.pending = false; request.status = 500;
+  diagnostics.pin({ sequence: 2, command: "GET /session/session-1/element/e/attribute/hittable",
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:56Z", pending: false, status: 200 });
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+});
+
+test("a completed HTTP 200 lookup retains its pending capture identity within the failed scenario", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  let capture;
+  let threshold;
+  const timestamps = ["2026-10-28T16:32:20Z", "2026-10-28T16:32:45Z", "2026-10-28T16:32:58Z"];
+  const monitor = monitorNativeInteractions(async (command, request) => {
+    capture = await diagnostics.capture(command, request);
+  }, { schedule: callback => { threshold = callback; }, cancel: () => undefined, now: () => timestamps.shift() });
+  monitor.write('[HTTP] --> POST /session/session-1/elements {"value":"CircularMenuButton"}\n');
+  threshold();
+  // The response arrives before the queued capture has begun reading the request.
+  monitor.write('[HTTP] <-- POST /session/session-1/elements 200 122700 ms\n');
+  await monitor.stop();
+  assert.ok(Object.isFrozen(capture.capturedRequest));
+  assert.equal(capture.request.pending, false);
+  assert.equal(capture.request.status, 200);
+  assert.equal(capture.request.capturedWhilePending, true);
+  assert.throws(() => { capture.request.capturedWhilePending = false; }, TypeError);
+  assert.equal(capture.capturedRequest.pending, true);
+  assert.ok(f.calls.every(call => call.command !== "/usr/bin/sample" && call.command !== "sudo"));
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.request.status, 200);
+  assert.equal(evidence.observation.request.pending, false);
+  assert.equal(evidence.observation.capturedRequest.pending, true);
+  assert.equal(evidence.request.scenarioStartedAtUtc, failure.scenarioStartedAtUtc);
+  assert.ok(f.calls.some(call => call.command === "sudo"));
+});
+
+for (const [label, observation, failure] of [
+  ["earlier passing calendar", {}, { scenarioStartedAtUtc: "2026-10-28T16:32:50Z" }],
+  ["request crossing the scenario boundary", { capturedAt: "2026-10-28T16:32:55Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:50Z" }],
+  ["different session", {}, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z", sessionId: "other-session" }],
+  ["capture after failure", { capturedAt: "2026-10-28T16:33:01Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["invalid capture time", { capturedAt: "not-a-date" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["missing request start", { startedAt: undefined }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["invalid boundary", {}, { scenarioStartedAtUtc: "not-a-date" }],
+  ["boundary after failure", {}, { scenarioStartedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["capture preceding request", { startedAt: "2026-10-28T16:32:50Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["request already complete at capture", { pending: false }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["explicitly nonpending capture", { capturedWhilePending: false }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+]) test(`scenario boundary rejects ${label} without sampling`, async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const request = { ...pendingRequest(1), ...observation };
+  await diagnostics.capture(request.command, request);
+  request.pending = false;
+  request.status = 200;
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal(failure))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("an invalid failure time cannot select a legacy pending capture", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal({ failedAtUtc: "not-a-date" }))).status, "unknown");
   assert.deepEqual(f.calls, []);
 });
 
@@ -209,6 +572,10 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
       f.calls.push({ command, args, options });
       if (command === inspectorPath) return { stdout: args[0] === "--threads" ? "8421 259 W 0 0 main-thread\n" : OWNED, stderr: "" };
       if (args.includes("screenshot")) return frame;
+      if (command === "/usr/bin/sample") {
+        writeFileSync(args.at(-1), "sampled native stack");
+        return { stdout: "", stderr: "" };
+      }
       assert.equal(command, "sudo");
       assert.ok(f.calls.some(call => call.args.includes("screenshot")));
       finishFrame(Object.assign(new Error("simulator unresponsive"), { killed: true, signal: "SIGTERM" }));
@@ -218,7 +585,7 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
   assert.equal(result.frameError.signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-stack-8421.txt"), "utf8"), "pinned stack");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-threads-8421.txt"), "utf8"), "8421 259 W 0 0 main-thread\n");
-  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.every(call => !call.args.includes("spawn") && call.command !== "ps"));
 });
@@ -240,6 +607,134 @@ test("a killed kernel thread capture retains its own error beside surviving evid
   assert.equal(JSON.parse(readFileSync(join(f.directory, "dead-threads-threads-error.json"), "utf8")).signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "dead-threads-stack-8421.txt"), "utf8"), "pinned stack");
   assert.equal(readFileSync(join(f.directory, "dead-threads.png"), "utf8"), "frame");
+});
+
+test("a native sample finishes before debugger attachment and survives a failed debugger", async t => {
+  const f = diagnosticFixture(t);
+  let finishSample;
+  const sample = new Promise(resolve => { finishSample = resolve; });
+  const sampling = samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "sample-before-debugger"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      if (command === "/usr/bin/sample") {
+        f.calls.push({ command, args, options });
+        assert.deepEqual(args, ["8421", "1", "-file", join(f.directory, "sample-before-debugger-sample-8421.txt")]);
+        writeFileSync(args.at(-1), "native call tree\nmain-thread waiting in InitializeComponent");
+        await sample;
+        return { stdout: "", stderr: "" };
+      }
+      if (command === "sudo") {
+        f.calls.push({ command, args, options });
+        throw Object.assign(new Error("debugger attach timed out"), { killed: true, signal: "SIGTERM" });
+      }
+      return f.execute(command, args, options);
+    } });
+  await new Promise(setImmediate);
+  assert.ok(f.calls.some(call => call.command === "/usr/bin/sample"));
+  assert.ok(f.calls.every(call => call.command !== "sudo"), "LLDB cannot suspend an active sample");
+  finishSample();
+  const result = await sampling;
+  assert.equal(result.status, "error");
+  assert.equal(result.error.signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "sample-before-debugger-sample-8421.txt"), "utf8"),
+    "native call tree\nmain-thread waiting in InitializeComponent");
+  assert.equal(JSON.parse(readFileSync(join(f.directory, "sample-before-debugger-stack-error.json"), "utf8")).signal,
+    "SIGTERM");
+});
+
+test("a killed native sample retains partial output and falls back to the existing debugger", async t => {
+  const f = diagnosticFixture(t);
+  const sampleKilled = Object.assign(new Error("sample timed out"), { killed: true, signal: "SIGTERM" });
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "partial-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      if (command === "/usr/bin/sample") {
+        f.calls.push({ command, args, options });
+        writeFileSync(args.at(-1), "partial native call tree");
+        throw sampleKilled;
+      }
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "captured", "a successful debugger remains usable after a failed sample");
+  assert.equal(result.sampleError.signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "partial-sample-sample-8421.txt"), "utf8"), "partial native call tree");
+  assert.equal(JSON.parse(readFileSync(join(f.directory, "partial-sample-sample-error.json"), "utf8")).signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "partial-sample-stack-8421.txt"), "utf8"), "captured");
+  assert.ok(f.calls.at(-1).args.includes("--attach-pid"));
+});
+
+for (const listing of ["", "8421 Z " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7")]) {
+  test(`a process replaced during sample never reaches debugger attachment: ${listing.trim()}`, async t => {
+    const f = diagnosticFixture(t);
+    let sampled = false;
+    const result = await samplePinnedIosApp({ udid, pid: 8421,
+      prefix: join(f.directory, "replaced-after-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+      execute: async (command, args, options) => {
+        if (sampled && command === inspectorPath && args[0] !== "--threads") {
+          f.calls.push({ command, args, options });
+          return { stdout: listing, stderr: "" };
+        }
+        const captured = await f.execute(command, args, options);
+        if (command === "/usr/bin/sample") sampled = true;
+        return captured;
+      } });
+    assert.equal(result.status, "error");
+    assert.equal(result.error.message, "Pinned process no longer belongs to this simulator; no debugger attached.");
+    assert.ok(f.calls.every(call => call.command !== "sudo"));
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-process-8421.txt"), "utf8"), OWNED);
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-before-debugger-processes.txt"), "utf8"), listing);
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-sample-8421.txt"), "utf8"), "sampled native stack");
+  });
+}
+
+test("ownership inspection and native sampling share the existing fifteen-second debugger budget", async t => {
+  const f = diagnosticFixture(t);
+  let clock = f.now();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "remaining-budget"), deadlineUtc: "2026-10-28T17:33:00Z", now: () => clock,
+    execute: async (command, args, options) => {
+      if (command === inspectorPath && args[0] !== "--threads" && f.calls.length === 0) clock += 5000;
+      if (command === "/usr/bin/sample") clock += 3000;
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "captured");
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 7000]);
+  assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
+});
+
+test("a native sample cannot start a debugger after consuming the remaining handoff deadline", async t => {
+  const f = diagnosticFixture(t);
+  let clock = f.now();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "sample-deadline"), deadlineUtc: "2026-10-28T16:33:05Z", now: () => clock,
+    execute: async (command, args, options) => {
+      if (command === inspectorPath && args[0] !== "--threads") clock += 1000;
+      if (command === "/usr/bin/sample") clock += 4000;
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "Failure sampling deadline expired.");
+  assert.equal(f.calls.at(-1).command, "/usr/bin/sample");
+  assert.equal(f.calls.at(-1).options.timeout, 4000);
+  assert.equal(readFileSync(join(f.directory, "sample-deadline-sample-8421.txt"), "utf8"), "sampled native stack");
+  assert.ok(f.calls.every(call => call.command !== "sudo"));
+});
+
+test("handoff cancellation during sample prevents another ownership probe or debugger attachment", async t => {
+  const f = diagnosticFixture(t);
+  const cancellation = new AbortController();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "cancelled-after-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    signal: cancellation.signal,
+    execute: async (command, args, options) => {
+      const captured = await f.execute(command, args, options);
+      if (command === "/usr/bin/sample") cancellation.abort(new Error("handoff cancelled during sample"));
+      return captured;
+    } });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "handoff cancelled during sample");
+  assert.equal(f.calls.at(-1).command, "/usr/bin/sample");
+  assert.ok(f.calls.every(call => call.options.signal.aborted));
 });
 
 test("a failed debugger still waits for frame capture before releasing the scenario handoff", async t => {

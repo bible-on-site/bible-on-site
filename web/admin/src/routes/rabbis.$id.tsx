@@ -1,7 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
+import {
+	ArrowRight,
+	Camera,
+	Image as ImageIcon,
+	LoaderCircle,
+	Pencil,
+	Plus,
+	Save,
+	Trash2,
+} from "lucide-react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { ImageUpload } from "~/components/ImageUpload";
 import {
 	type Author,
@@ -36,6 +52,8 @@ function RabbiEditPage() {
 
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
 
 	const { data: author, isLoading: authorLoading } = useQuery({
 		queryKey: ["author", authorId],
@@ -136,10 +154,9 @@ function RabbiEditPage() {
 		return () => clearTimeout(timer);
 	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
 
-	const handleDelete = () => {
-		if (window.confirm("האם אתה בטוח שברצונך למחוק את הרב?")) {
-			deleteMutation.mutate();
-		}
+	const handleDelete = (event: ReactMouseEvent<HTMLElement>) => {
+		setDeleteOpener(event.currentTarget);
+		setConfirmDelete(true);
 	};
 
 	if (authorLoading) {
@@ -159,11 +176,16 @@ function RabbiEditPage() {
 						to="/rabbis"
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						<span>→</span>
+						<ArrowRight size={16} aria-hidden="true" />
 						<span>חזרה לרשימת הרבנים</span>
 					</Link>
-					<h1 className="text-3xl font-bold text-gray-900 mt-2">
-						{isNew ? "➕ רב חדש" : "✏️ עריכת רב"}
+					<h1 className="text-3xl font-bold text-gray-900 mt-2 flex items-center gap-2">
+						{isNew ? (
+							<Plus className="size-7" aria-hidden="true" />
+						) : (
+							<Pencil className="size-7" aria-hidden="true" />
+						)}
+						{isNew ? "רב חדש" : "עריכת רב"}
 					</h1>
 				</div>
 				<div className="flex items-center gap-4">
@@ -178,7 +200,7 @@ function RabbiEditPage() {
 							onClick={handleDelete}
 							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
-							<span>🗑️</span>
+							<Trash2 size={16} aria-hidden="true" />
 							<span>מחק רב</span>
 						</button>
 					)}
@@ -228,11 +250,19 @@ function RabbiEditPage() {
 					<div>
 						{/* biome-ignore lint/a11y/noLabelWithoutControl: ImageUpload is a custom component */}
 						<label className="block text-sm font-semibold text-gray-700 mb-3">
-							📷 תמונת הרב
+							<Camera
+								className="inline-block size-4 align-[-0.125em]"
+								aria-hidden="true"
+							/>{" "}
+							תמונת הרב
 						</label>
 						{isNew ? (
-							<div className="bg-linear-to-br from-gray-50 to-gray-100 rounded-xl p-8 text-center border-2 border-dashed border-gray-300">
-								<div className="text-4xl mb-3">📸</div>
+							<div className="bg-gray-50 rounded-xl p-8 text-center border-2 border-dashed border-gray-300">
+								<ImageIcon
+									size={36}
+									className="mx-auto mb-3 text-gray-400"
+									aria-hidden="true"
+								/>
 								<p className="text-gray-500 font-medium">
 									שמור את הרב לפני העלאת תמונה
 								</p>
@@ -260,10 +290,39 @@ function RabbiEditPage() {
 						disabled={saveMutation.isPending || !formData.name.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
-						{saveMutation.isPending ? "⏳ שומר..." : "💾 שמור עכשיו"}
+						{saveMutation.isPending ? (
+							<>
+								<LoaderCircle
+									className="inline-block size-4 animate-spin align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שומר...
+							</>
+						) : (
+							<>
+								<Save
+									className="inline-block size-4 align-[-0.125em]"
+									aria-hidden="true"
+								/>{" "}
+								שמור עכשיו
+							</>
+						)}
 					</button>
 				</div>
 			</form>
+
+			<ConfirmDialog
+				open={confirmDelete}
+				opener={deleteOpener}
+				title="מחיקת רב"
+				message="האם אתה בטוח שברצונך למחוק את הרב?"
+				confirmLabel="מחק"
+				onConfirm={() => {
+					setConfirmDelete(false);
+					deleteMutation.mutate();
+				}}
+				onCancel={() => setConfirmDelete(false)}
+			/>
 		</div>
 	);
 }

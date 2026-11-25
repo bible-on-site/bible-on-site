@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { bootIos } from "./boot-ios.mjs";
-import { compareVersions, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
+import { compareVersions, loadIosNativeSimulator, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
 
 test("loads the locked iOS simulator driver with its ESM-only export before booting a device", async () => {
   const driver = await loadIosSimulatorDriver();
   assert.equal(typeof driver.getSimulator, "function");
+  const native = await loadIosNativeSimulator();
+  assert.equal(typeof native.NativeSimctl, "function");
+  assert.equal(typeof native.NativeSimctl.prototype.getDevices, "function");
 });
 
 test("chooses the newest available iPhone runtime compatible with Xcode, not a newer incompatible runtime", () => {
@@ -61,7 +64,7 @@ test("compares numeric runtime versions with omitted zero components", () => {
   assert.ok(compareVersions("27.0.1", "27.0") > 0);
 });
 
-const UDID = "00000000-1111-2222-3333-444444444444";
+const UDID = "a0000000-b111-c222-d333-e44444444444";
 const OTHER_UDID = "11111111-2222-3333-4444-555555555555";
 
 function fixture(t, extra = {}) {
@@ -75,6 +78,14 @@ function fixture(t, extra = {}) {
       { udid: OTHER_UDID, name: "iPhone 17 Pro", isAvailable: true, state: "Shutdown" },
     ],
   };
+  let nativeDevices = [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0", state: 2 }];
+  let simState = "Booted";
+  const simQueue = [];
+  const simulator = {
+    stat: async () => { calls.push(["sim-stat"]); return { state: simQueue.length ? simQueue.shift() : simState }; },
+    boot: async () => { calls.push(["sim-boot"]); },
+    waitForBoot: async () => { calls.push(["sim-wait"]); },
+  };
   const options = {
     env,
     run: (...args) => {
@@ -86,11 +97,17 @@ function fixture(t, extra = {}) {
     },
     downloadPlatform: () => { calls.push(["download"]); },
     execute: async (...args) => { calls.push(["async", ...args]); return { stdout: "" }; },
-    loadDriver: async () => ({ getSimulator: async (udid) => { calls.push(["driver", udid]); } }),
+    loadDriver: async () => ({ getSimulator: async (udid, lookup) => { calls.push(["driver", udid, ...(lookup ? [lookup] : [])]); return simulator; } }),
+    loadNativeDriver: async () => ({ NativeSimctl: class {
+      constructor(options) { calls.push(["native", options]); }
+      async getDevices() { calls.push(["native-devices"]); return nativeDevices; }
+    } }),
     log: () => {},
     ...extra,
   };
-  return { options, calls, env, setDevices: (value) => { devices = value; } };
+  return { options, calls, env, simQueue, setSimState: (value) => { simState = value; },
+    setDevices: (value) => { devices = value; },
+    setNativeDevices: (value) => { nativeDevices = value; } };
 }
 
 test("start publishes its exact selected identity only after boot initiation, then wait avoids device listing", async (t) => {
@@ -162,7 +179,94 @@ test("standalone wait still inspects and boots the real selected device", async 
   assert.ok(calls.some(([kind, , command]) => kind === "sync" && command === "list"));
   assert.ok(calls.some(([kind, , command, udid]) => kind === "sync" && command === "boot" && udid === UDID));
   assert.ok(calls.some(([kind, udid]) => kind === "driver" && udid === UDID));
+  assert.ok(!calls.some(([kind]) => kind === "native"));
 });
+
+for (const waitingOn of ["bootstatus", "native warmup"]) {
+  test(`selected Xcode native warmup preserves owned identity and waits for ${waitingOn}`, async (t) => {
+    const { options, calls, env } = fixture(t);
+    const developerDir = "/Applications/Xcode_27.app/Contents/Developer";
+    let complete;
+    const pending = new Promise((resolve) => { complete = resolve; });
+    const devices = [{ udid: UDID.toUpperCase(), runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0", state: 2 }];
+    const running = bootIos({ ...options, mode: "wait",
+      env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0.0", DEVELOPER_DIR: developerDir },
+      execute: async (...args) => {
+        calls.push(["async", ...args]);
+        if (waitingOn === "bootstatus") await pending;
+        return { stdout: "" };
+      },
+      loadNativeDriver: async () => ({ NativeSimctl: class {
+        constructor(options) { calls.push(["native", options]); }
+        async getDevices() {
+          calls.push(["native-devices"]);
+          if (waitingOn === "native warmup") await pending;
+          return devices;
+        }
+      } }),
+    });
+    await new Promise(setImmediate);
+    assert.equal(existsSync(env.GITHUB_ENV), false);
+    complete();
+    await running;
+    assert.deepEqual(calls.filter(([kind]) => kind === "native"), [["native", { developerDir }]]);
+    assert.equal(calls.filter(([kind]) => kind === "native-devices").length, 1);
+    assert.deepEqual(calls.filter(([kind]) => kind === "driver"), [["driver", UDID, { checkExistence: false }]]);
+    assert.deepEqual(calls.filter(([kind]) => kind === "async"), [
+      ["async", "xcrun", ["simctl", "bootstatus", UDID], { encoding: "utf8", timeout: 300000 }],
+    ]);
+    assert.ok(!calls.some(([kind, , command]) => kind === "download" || command === "boot" || command === "list"));
+    assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0.0\n`);
+  });
+}
+
+for (const [label, devices] of [
+  ["missing owned UDID", [{ udid: OTHER_UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }]],
+  ["wrong iOS runtime", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-5" }]],
+  ["another Apple platform", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.tvOS-27-0" }]],
+  ["malformed runtime", [{ udid: UDID, runtimeIdentifier: "invalid" }]],
+  ["empty runtime component", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-" }]],
+  ["repeated runtime separator", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27--0" }]],
+  ["trailing empty runtime component", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0-" }]],
+  ["excess runtime components", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0-0-0" }]],
+  ["non-ASCII runtime digits", [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-２７-0" }]],
+]) {
+  test(`selected Xcode warmup rejects ${label} without exporting readiness`, async (t) => {
+    const { options, calls, env, setNativeDevices } = fixture(t);
+    setNativeDevices(devices);
+    await assert.rejects(bootIos({ ...options, mode: "wait",
+      env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", DEVELOPER_DIR: "/Applications/Xcode_27.app/Contents/Developer" },
+    }), /owned UDID|expected iOS runtime/);
+    assert.equal(existsSync(env.GITHUB_ENV), false);
+    assert.ok(!calls.some(([kind]) => kind === "driver"));
+  });
+}
+
+for (const runtimeIdentifier of ["com.apple.CoreSimulator.SimRuntime.iOS-27", "com.apple.CoreSimulator.SimRuntime.iOS-27-0-0"]) {
+  test(`selected Xcode warmup accepts compatible numeric runtime ${runtimeIdentifier}`, async (t) => {
+    const { options, env, setNativeDevices } = fixture(t);
+    setNativeDevices([{ udid: UDID, runtimeIdentifier }]);
+    await bootIos({ ...options, mode: "wait",
+      env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", DEVELOPER_DIR: "/Applications/Xcode_27.app/Contents/Developer" },
+    });
+    assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0\n`);
+  });
+}
+
+for (const stage of ["native lookup", "driver compatibility", "bootstatus"]) {
+  test(`selected Xcode warmup preserves ${stage} failures without exporting readiness`, async (t) => {
+    const { options, env } = fixture(t);
+    await assert.rejects(bootIos({ ...options, mode: "wait",
+      env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", DEVELOPER_DIR: "/Applications/Xcode_27.app/Contents/Developer" },
+      ...(stage === "native lookup" ? { loadNativeDriver: async () => ({ NativeSimctl: class {
+        async getDevices() { throw new Error("native lookup failed"); }
+      } }) } : {}),
+      ...(stage === "driver compatibility" ? { loadDriver: async () => ({ getSimulator: async () => { throw new Error("compatibility failed"); } }) } : {}),
+      ...(stage === "bootstatus" ? { execute: async () => { throw new Error("bootstatus failed"); } } : {}),
+    }), /failed/);
+    assert.equal(existsSync(env.GITHUB_ENV), false);
+  });
+}
 
 test("selection still downloads a missing compatible runtime and inspects the result", async (t) => {
   const { options, calls, setDevices } = fixture(t);
@@ -210,3 +314,108 @@ for (const sdk of ["not-a-version", "27.0\nEXTRA=value"]) {
     assert.equal(existsSync(env.GITHUB_ENV), false);
   });
 }
+
+test("heal leaves a still-booted handed-off device alone", async (t) => {
+  const { options, calls, env } = fixture(t);
+  await bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.deepEqual(calls.filter(([kind]) => kind === "driver"), [["driver", UDID]]);
+  assert.ok(!calls.some(([kind]) => kind === "sim-boot" || kind === "sim-wait"
+    || kind === "async" || kind === "native" || kind === "download"));
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
+test("heal boots a handed-off device the runner powered off and waits for it", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  await bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
+});
+
+test("heal waits out a still-booting handed-off device without rebooting", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Booting");
+  await bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 0);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+});
+
+test("heal waits out a mid-flight shutdown, then re-boots the device", async (t) => {
+  // Cleanup can still be powering the device off at session entry — a state
+  // the native waitForBoot rejects outright. The check waits for the power-off
+  // to land, then recovers through the driver's own boot path.
+  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  simQueue.push("Shutting Down", "Shutdown");
+  await bootIos({ ...options, mode: "heal", sleep: async () => {},
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(calls.filter(([kind]) => kind === "sim-stat").length, 2);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
+});
+
+test("heal deducts the power-off wait from the recovery boot deadline", async (t) => {
+  // Shutdown polling and boot readiness share one absolute 300-second budget:
+  // the recovery boot may only use the time the power-off did not consume.
+  const { options, calls, env, simQueue } = fixture(t);
+  simQueue.push("Shutting Down", "Shutdown");
+  let tick = 0;
+  let waitBudget;
+  const loadDriver = options.loadDriver;
+  await bootIos({ ...options, mode: "heal", sleep: async () => {},
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    now: () => (tick += 100000),
+    loadDriver: async () => ({ getSimulator: async (...args) => {
+      const simulator = await (await loadDriver()).getSimulator(...args);
+      const waitForBoot = simulator.waitForBoot.bind(simulator);
+      simulator.waitForBoot = async (timeout) => { waitBudget = timeout; return waitForBoot(timeout); };
+      return simulator;
+    } }) });
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.equal(waitBudget, 100000);
+});
+
+test("heal fails without a recovery boot once the shared deadline is spent", async (t) => {
+  const { options, calls, env, simQueue, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  simQueue.push("Shutting Down");
+  let tick = 0;
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    sleep: async () => {}, now: () => (tick += 200000) }),
+    /spent its boot deadline/);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.equal(calls.filter(([kind]) => kind === "sim-wait").length, 0);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
+test("heal fails when the power-off outlives the boot deadline", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Shutting Down");
+  let tick = 0;
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    sleep: async () => {}, now: () => (tick += 200000) }),
+    /past the boot deadline/);
+  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 0);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
+test("heal propagates a failed recovery boot without exporting readiness", async (t) => {
+  const { options, env, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    loadDriver: async () => ({ getSimulator: async () => ({
+      stat: async () => ({ state: "Shutdown" }),
+      boot: async () => { throw new Error("native boot failed"); },
+      waitForBoot: async () => {},
+    }) }) }), /native boot failed/);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});

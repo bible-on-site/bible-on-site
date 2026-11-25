@@ -4,6 +4,8 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
+import type { ArticleLiteralGrounding } from "~/lib/tanahpedia/contribution-article-grounding";
+import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionField,
@@ -11,14 +13,29 @@ import {
 	isContributionRecordKind,
 } from "~/lib/tanahpedia/contribution-records";
 import { SOURCE_TARGETS } from "~/lib/tanahpedia/contribution-specials";
-import type { ChangeInput, Contribution } from "~/lib/tanahpedia/contributions";
+import type {
+	ChangeInput,
+	ChangeState,
+	Contribution,
+	Contributor,
+	IssueScope,
+} from "~/lib/tanahpedia/contributions";
 import {
+	assertIssueScopeChanges,
 	record,
 	textField,
 	uuidField,
 	validateChanges,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
+import {
+	ARTICLE_LINK_AGENT_GUIDE,
+	agentArticleLinkVariant,
+	assertAgentArticleLinkReferences,
+} from "./contribution-agent-article-links.server";
+import { appendAgentArticleEvidence } from "./contribution-article-evidence.server";
+import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import {
 	addEvent,
@@ -37,9 +54,10 @@ import {
 	FAMILY_UNION_TYPES,
 } from "./family-api-spec";
 
-const PROMPT_VERSION = "tanahpedia-issues-v3";
+const PROMPT_VERSION = "tanahpedia-issues-v4";
 
-interface ModelCatalogue {
+export interface ModelCatalogue {
+	articleGroundings?: ArticleLiteralGrounding[];
 	references?: Record<
 		string,
 		{ id: string | number; name: string; ownerId?: string }[]
@@ -47,17 +65,27 @@ interface ModelCatalogue {
 	people: { id: string; name: string }[];
 	places: { id: string; name: string }[];
 	entities: { id: string; name: string }[];
-	targets: { id: string; kind: string }[];
+	targets: {
+		id: string;
+		kind: string;
+		after?: ChangeState;
+		current?: ChangeState;
+	}[];
 }
 
 export function assertGeneratedReferences(
 	changes: ChangeInput[],
 	catalogue: ModelCatalogue,
+	preservedChanges: Contribution["changes"] = [],
 ): void {
 	const people = new Set(catalogue.people.map((person) => person.id));
 	const places = new Set(catalogue.places.map((place) => place.id));
 	const entities = new Set(catalogue.entities.map((entity) => entity.id));
 	for (const change of changes) {
+		if (change.kind === "article_links") {
+			assertAgentArticleLinkReferences(change, catalogue, preservedChanges);
+			continue;
+		}
 		if (
 			change.targetId &&
 			!(change.kind === "metadata"
@@ -161,6 +189,8 @@ export function assertGeneratedReferences(
 export function contributionOutputSchema(
 	catalogue: ModelCatalogue,
 	evidenceCount: number,
+	issueScope?: IssueScope,
+	preservedChanges: Contribution["changes"] = [],
 ) {
 	const nullableString = { type: ["string", "null"] };
 	const nullableInt = { type: ["integer", "null"] };
@@ -176,6 +206,8 @@ export function contributionOutputSchema(
 		enum: catalogue.places.map((place) => place.id),
 	};
 	const variants: Record<string, unknown>[] = [];
+	const articleLinks = agentArticleLinkVariant(catalogue, preservedChanges);
+	if (articleLinks) variants.push(articleLinks);
 	const variant = (
 		kind: string,
 		fields: Record<string, unknown>,
@@ -422,6 +454,37 @@ export function contributionOutputSchema(
 			);
 		}
 	}
+	const scope = validateIssueScope(issueScope);
+	const scopedVariants = scope
+		? variants.flatMap((variant) => {
+				const properties = variant.properties as Record<
+					string,
+					{ const?: string; enum?: string[] }
+				>;
+				if (properties.kind.const !== scope.kind) return [];
+				if (scope.kind === "entry") {
+					const { targetId: _targetId, ...creation } = properties;
+					return [{ ...variant, properties: creation }];
+				}
+				const desiredTarget = scope.targetId;
+				if (desiredTarget === undefined) return [variant];
+				const target = properties.targetId?.enum?.find(
+					(id) =>
+						contributionIdentifierKey(id) ===
+						contributionIdentifierKey(desiredTarget),
+				);
+				if (!target) return [];
+				return [
+					{
+						...variant,
+						required: [
+							...new Set([...(variant.required as string[]), "targetId"]),
+						],
+						properties: { ...properties, targetId: { enum: [target] } },
+					},
+				];
+			})
+		: variants;
 	return {
 		type: "object",
 		additionalProperties: false,
@@ -451,7 +514,9 @@ export function contributionOutputSchema(
 							type: "array",
 							minItems: 1,
 							maxItems: 40,
-							items: { oneOf: variants },
+							items: {
+								oneOf: scopedVariants.length ? scopedVariants : [{ not: {} }],
+							},
 						},
 					},
 				},
@@ -492,6 +557,7 @@ export function contributionSystemPrompt(): string {
 		"metadata: targetId is an existing entity ID; after:{displayName}",
 		"entry_title edits the title of an EXISTING ENTRY, with its exact catalogue targetId and after:{title}. Use this for a requested title edit; never substitute entry creation. It preserves the existing address and article body.",
 		`entry: after:{title,uniqueName,entityType:${ADMIN_CREATABLE_ENTITY_TYPES.join("|")},displayName}; body is always empty, never propose content.`,
+		ARTICLE_LINK_AGENT_GUIDE,
 		"Use the JSON schema for additional category operations. They cover person metadata, roles/reigns, events, wars, nations, sayings, prophecies, animals, plants, astronomy, books, entry links, aliases, evidence attachments and model references. Never emit article or saying content.",
 		"Dates are integers using the repository's YYYYMMDD convention. Use plain Hebrew source references without punctuation.",
 		"Write review descriptions and titles in Hebrew. Explain uncertainty explicitly. Human review is mandatory.",
@@ -539,12 +605,13 @@ async function localGenerate(
 	};
 }
 
-async function awsGenerate(
+export async function awsGenerate(
 	system: string,
 	user: string,
-	schema: ReturnType<typeof contributionOutputSchema>,
+	schema: Record<string, unknown>,
+	options: { model?: string; signal?: AbortSignal } = {},
 ): Promise<{ content: string; model: string }> {
-	const model = process.env.BEDROCK_MODEL_ID?.trim();
+	const model = options.model ?? process.env.BEDROCK_MODEL_ID?.trim();
 	if (!model)
 		throw new Error("BEDROCK_MODEL_ID is not configured on the admin server");
 	const client = new BedrockRuntimeClient({
@@ -572,7 +639,7 @@ async function awsGenerate(
 					},
 				},
 			}),
-			{ abortSignal: AbortSignal.timeout(120000) },
+			{ abortSignal: options.signal ?? AbortSignal.timeout(120000) },
 		);
 		const content =
 			response.output?.message?.content
@@ -599,7 +666,16 @@ export async function prepareContributionGeneration(
 			throw new Error("Assign the issue to Local LLM or AWS LLM first");
 		if (issue.evidence.length === 0)
 			throw new Error("Add evidence to the issue before generating PRs");
-		return { issue, catalogue: await contributionCatalogue(conn) };
+		const scopeContext = issue.scope
+			? await (
+					await import("./contribution-agent-context.server")
+				).readContributionIssueScopeContext(conn, issue)
+			: undefined;
+		return {
+			issue,
+			catalogue: await contributionCatalogue(conn),
+			scopeContext,
+		};
 	};
 	const context = existingConn
 		? await load(existingConn)
@@ -607,12 +683,12 @@ export async function prepareContributionGeneration(
 	const provider = context.issue.assignee.kind;
 	const comments = context.issue.events
 		.filter((event) => event.kind === "comment")
-		.slice(-20)
 		.map((event) => event.body);
 	const issueContext = {
 		title: context.issue.title,
 		description: context.issue.description,
 		evidence: context.issue.evidence,
+		...(context.issue.scope ? { scope: context.issue.scope } : {}),
 		comments,
 	};
 	const searchable = canonicalJson(issueContext).normalize("NFC");
@@ -655,6 +731,9 @@ export async function prepareContributionGeneration(
 				perek: ["perekId", "perek_id"],
 				perush: ["perushId", "perush_id"],
 				tanah_sefer: ["tanahSeferId", "tanah_sefer_id"],
+				article: ["articleId", "article_id", "מאמר"],
+				dedication: ["dedicationId", "dedication_id", "הקדשה"],
+				moed: ["moedId", "moed_id", "מועד"],
 			};
 			return [kind, matching(rows, idNames[kind] ?? [])];
 		}),
@@ -685,12 +764,23 @@ export async function prepareContributionGeneration(
 	const targets = context.catalogue.targets
 		.filter(
 			(target) =>
-				searchable.includes(target.id) ||
+				(target.kind === "article_links"
+					? (references.article ?? []).some(
+							(article) => String(article.id) === target.id,
+						)
+					: searchable.includes(target.id)) ||
 				Object.values(target.after).some((value) =>
 					typeof value === "string"
 						? referenced.has(value)
 						: Array.isArray(value) &&
-							value.some((t) => referenced.has(t.entryId)),
+							value.some(
+								(target) =>
+									target !== null &&
+									typeof target === "object" &&
+									!Array.isArray(target) &&
+									typeof target.entryId === "string" &&
+									referenced.has(target.entryId),
+							),
 				),
 		)
 		.slice(0, 150);
@@ -707,17 +797,41 @@ export async function prepareContributionGeneration(
 			.map((id) => ({ id, name: "קבוצת דעות חלופיות" })),
 	];
 
-	const modelCatalogue = { people, places, entities, targets, references };
+	const baseCatalogue = { people, places, entities, targets, references };
+	let modelCatalogue: ModelCatalogue = context.scopeContext
+		? (
+				await import("./contribution-agent-context.server")
+			).mergeAgentCatalogues(baseCatalogue, context.scopeContext.catalogue)
+		: baseCatalogue;
+	const articleIds = modelCatalogue.targets
+		.filter((target) => target.kind === "article_links")
+		.map((target) => target.id);
+	if (articleIds.length) {
+		const { mergeAgentCatalogues, readContributionArticleGroundingContext } =
+			await import("./contribution-agent-context.server");
+		const load = (conn: PoolConnection) =>
+			readContributionArticleGroundingContext(
+				conn,
+				context.issue.id,
+				articleIds,
+			);
+		modelCatalogue = mergeAgentCatalogues(
+			{ ...modelCatalogue, references: modelCatalogue.references ?? {} },
+			existingConn ? await load(existingConn) : await withContributions(load),
+		);
+	}
 	const schema = contributionOutputSchema(
 		modelCatalogue,
 		context.issue.evidence.length,
+		context.issue.scope,
 	);
 	// The decoder's vocabulary constrains syntax; the model also needs the
 	// operation meanings in its messages. Include only context-supported kinds.
 	const available = new Set(
 		schema.properties.pullRequests.items.properties.changes.items.oneOf.map(
 			(variant) =>
-				(variant.properties as { kind: { const: string } }).kind.const,
+				(variant.properties as { kind: { const: string } } | undefined)?.kind
+					.const,
 		),
 	);
 	const guide = Object.entries(CONTRIBUTION_RECORDS)
@@ -730,11 +844,19 @@ export async function prepareContributionGeneration(
 		issue: issueContext,
 		catalogue: {
 			...modelCatalogue,
-			targets: targets.map(({ after, ...target }) => ({
-				...target,
-				current: after,
-			})),
+			targets: context.scopeContext
+				? modelCatalogue.targets.map(({ after, ...target }) => ({
+						...target,
+						current: target.current ?? after,
+					}))
+				: targets.map(({ after, ...target }) => ({
+						...target,
+						current: after,
+					})),
 		},
+		...(context.scopeContext
+			? { currentRecords: context.scopeContext.records }
+			: {}),
 	});
 	return {
 		issue: context.issue,
@@ -756,6 +878,15 @@ export async function generateContributionPrs(
 	raw: unknown,
 ): Promise<Contribution[]> {
 	const context = await prepareContributionGeneration(raw);
+	if (
+		context.issue.generation?.task ||
+		(context.issue.generation &&
+			["queued", "running"].includes(context.issue.generation.status))
+	) {
+		throw new Error(
+			"This issue uses assigned-agent work. Follow or rerun its saved agent task instead of generating another proposal.",
+		);
+	}
 	const result = await (context.provider === "local_llm"
 		? localGenerate
 		: awsGenerate)(context.system, context.user, context.schema);
@@ -763,7 +894,11 @@ export async function generateContributionPrs(
 }
 
 export async function createGeneratedContributionPrs(
-	context: Awaited<ReturnType<typeof prepareContributionGeneration>>,
+	context: {
+		issue: Contribution;
+		provider: Contribution["assignee"]["kind"];
+		modelCatalogue: ModelCatalogue;
+	},
 	result: { content: string; model: string },
 	hooks: {
 		beforeCreate?: (
@@ -776,6 +911,8 @@ export async function createGeneratedContributionPrs(
 			prs: Contribution[],
 		) => Promise<void> | void;
 		provenanceProvider?: string;
+		actor?: Contributor;
+		promptVersion?: string;
 	} = {},
 ): Promise<Contribution[]> {
 	const { provider, modelCatalogue } = context;
@@ -808,6 +945,7 @@ export async function createGeneratedContributionPrs(
 		)
 			throw new Error("The model cited evidence that is not in the issue");
 		const changes = validateChanges(draft.changes);
+		assertIssueScopeChanges(changes, context.issue.scope);
 		assertGeneratedReferences(changes, modelCatalogue);
 		const allowedCitations = new Set(
 			context.issue.evidence.map((source) => source.citation),
@@ -847,13 +985,26 @@ export async function createGeneratedContributionPrs(
 	return withContributions(async (conn) => {
 		const issue = await readContribution(conn, id, true);
 		assertVersion(issue, context.issue.version);
-		await hooks.beforeCreate?.(conn, issue);
-		const prs: Contribution[] = [];
 		for (const draft of drafts)
+			assertIssueScopeChanges(draft.changes, issue.scope);
+		await hooks.beforeCreate?.(conn, issue);
+		await assertCurrentAgentArticleGrounding(
+			conn,
+			drafts.flatMap((draft) => draft.changes),
+			modelCatalogue,
+		);
+		const prs: Contribution[] = [];
+		for (const draft of drafts) {
+			draft.evidence = await appendAgentArticleEvidence(
+				conn,
+				draft.changes,
+				modelCatalogue,
+				draft.evidence,
+			);
 			prs.push(
 				await createContribution(
 					draft,
-					{
+					hooks.actor ?? {
 						id: `${provider}:${result.model}`,
 						name: result.model,
 						kind: provider === "local_llm" ? "local_llm" : "aws_llm",
@@ -862,14 +1013,15 @@ export async function createGeneratedContributionPrs(
 					{
 						model: result.model,
 						provider: hooks.provenanceProvider ?? provider,
-						promptVersion: PROMPT_VERSION,
+						promptVersion: hooks.promptVersion ?? PROMPT_VERSION,
 					},
 					conn,
 				),
 			);
+		}
 		addEvent(
 			issue,
-			{
+			hooks.actor ?? {
 				id: `${provider}:${result.model}`,
 				name: result.model,
 				kind: provider === "local_llm" ? "local_llm" : "aws_llm",

@@ -4,10 +4,12 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, type Mock, vi } from "vitest";
 import { ArchiveArea } from "~/components/archive/ArchiveArea";
 import { ArchivePage } from "~/components/archive/ArchivePage";
+import { UndoToastProvider } from "~/components/UndoToast";
 
 let directory: {
 	id: string;
@@ -64,11 +66,17 @@ beforeEach(() => {
 		if (command.action === "mkdir") return reply({ id: "dir" }) as Response;
 		return reply({ ok: true }) as Response;
 	}) as Mock;
-	vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 afterEach(() => vi.restoreAllMocks());
+function WrappedArea() {
+	return (
+		<UndoToastProvider durationMs={30}>
+			<ArchiveArea />
+		</UndoToastProvider>
+	);
+}
 async function mount() {
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
 }
 function choose(name = "content.bin", content = "123456") {
@@ -283,7 +291,7 @@ it("reports both the upload error and a skipped dropped folder", async () => {
 it("stops collecting sibling entries after unmount during a directory read", async () => {
 	let finishRead: (entries: FileSystemEntry[]) => void = () => {};
 	let read = false;
-	const view = render(<ArchiveArea />);
+	const view = render(<WrappedArea />);
 	await screen.findByRole("region", { name: "הוספת קבצים לתיקייה" });
 	const pending = {
 		isFile: false,
@@ -313,7 +321,7 @@ it("renders the private login when no session exists", async () => {
 		status: 401,
 		json: async () => ({ error: "login" }),
 	});
-	render(<ArchivePage />);
+	render(<UndoToastProvider durationMs={30}><ArchivePage /></UndoToastProvider>);
 	expect(
 		await screen.findByRole("link", { name: "כניסה לחשבון" }),
 	).toHaveAttribute("href", "/archive/auth/login");
@@ -475,7 +483,7 @@ it("uploads into a same-named existing folder when creation reports a conflict",
 			kind: "folder",
 		},
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	await screen.findByRole("button", { name: "פתיחת תיקייה חומרים" });
 	(fetch as Mock).mockResolvedValueOnce({
 		ok: false,
@@ -703,15 +711,28 @@ it("ignores empty file selections", async () => {
 	});
 	expect(fetch).toHaveBeenCalledTimes(1);
 });
-it("refreshes the directory and removes ready files after confirmation", async () => {
+it("refreshes the directory and removes ready files once the undo toast expires", async () => {
 	await mount();
 	choose();
 	await screen.findByRole("link", { name: "הורדה" });
-	(window.confirm as Mock).mockReturnValueOnce(false);
-	fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
-	expect(screen.getByText("content.bin")).toBeVisible();
-	fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
-	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
+
+	vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+	try {
+		fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
+		const toast = screen.getByRole("status");
+		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
+		await act(() => vi.advanceTimersByTimeAsync(30));
+		expect(screen.queryByRole("status")).toBeNull();
+		expect(screen.getByText("content.bin")).toBeVisible();
+
+		fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
+		await act(() => vi.advanceTimersByTimeAsync(30));
+		expect(
+			screen.getByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן."),
+		).toBeVisible();
+	} finally {
+		vi.useRealTimers();
+	}
 	fireEvent.click(screen.getByRole("button", { name: "רענון" }));
 	await waitFor(() =>
 		expect(fetch).toHaveBeenCalledWith(
@@ -720,23 +741,104 @@ it("refreshes the directory and removes ready files after confirmation", async (
 		),
 	);
 });
-it("shows pending reservations and allows cancellation without deletion confirmation", async () => {
+it("keeps shared logout busy while deferred deletes overlap", async () => {
+	const { archiveBusy } = await import("~/lib/archive-busy");
+	directory.files = [
+		{ id: "f1", filename: "a.bin", size: 1, status: "ready" },
+		{ id: "f2", filename: "b.bin", size: 1, status: "ready" },
+	];
+	const releaseRemoves: Array<() => void> = [];
+	(fetch as Mock).mockImplementation(async (_url, options) => {
+		if (!options?.method) return reply(directory) as Response;
+		const command = JSON.parse(options.body as string);
+		if (command.action === "remove")
+			return new Promise<Response>((resolve) => {
+				releaseRemoves.push(() =>
+					resolve(reply({ ok: true }) as Response),
+				);
+			});
+		return reply({ ok: true }) as Response;
+	});
+	render(<WrappedArea />);
+	const [first, second] = await screen.findAllByRole("button", {
+		name: "מחיקה",
+	});
+	fireEvent.click(first);
+	fireEvent.click(second);
+	await waitFor(() => {
+		expect(releaseRemoves).toHaveLength(2);
+		expect(archiveBusy()).toBe(true);
+	});
+	await act(async () => releaseRemoves[0]());
+	// One delete finishing must not unlock while the other is still in flight.
+	expect(archiveBusy()).toBe(true);
+	await act(async () => releaseRemoves[1]());
+	await waitFor(() => expect(archiveBusy()).toBe(false));
+});
+it("does not rewrite the listing when a deferred delete resolves in another folder", async () => {
+	directory.files = [
+		{ id: "f1", filename: "a.bin", size: 1, status: "ready" },
+		{
+			id: "sub",
+			filename: "חומרים",
+			size: 0,
+			status: "ready",
+			kind: "folder",
+		},
+	];
+	render(<WrappedArea />);
+	fireEvent.click(await screen.findByRole("button", { name: "מחיקה" }));
+	await screen.findByRole("status");
+	const dirReads = (id: string) =>
+		(fetch as Mock).mock.calls.filter(
+			([, options]) =>
+				(options?.headers as Record<string, string>)?.[
+					"X-Archive-Directory"
+				] === id,
+		);
+
+	// The admin opens the nested folder before the delete commits.
+	directory = {
+		...directory,
+		id: "sub",
+		path: "/authors/מחבר א/חומרים/",
+		files: [],
+	};
+	fireEvent.click(
+		screen.getByRole("button", { name: "פתיחת תיקייה חומרים" }),
+	);
+	await waitFor(() => expect(dirReads("sub")).toHaveLength(1));
+	expect(decodeURIComponent(window.location.pathname)).toBe(
+		"/archive/authors/מחבר א/חומרים",
+	);
+
+	// The pending delete commits — it may refresh the CURRENT folder only:
+	// never reload the scheduled folder or roll the URL back to it.
+	await waitFor(() => expect(commandsSent("remove")).toHaveLength(1));
+	await waitFor(() => expect(dirReads("sub")).toHaveLength(2));
+	expect(dirReads("home")).toHaveLength(0);
+	expect(decodeURIComponent(window.location.pathname)).toBe(
+		"/archive/authors/מחבר א/חומרים",
+	);
+});
+it("shows pending reservations and allows cancellation without an undo window", async () => {
 	directory.files = [
 		{ id: "pending", filename: "unfinished", size: 8, status: "uploading" },
 	];
 	directory.quota = 0;
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const cancel = await screen.findByRole("button", {
 		name: "ביטול ופינוי מקום",
 	});
 	expect(screen.getByText(/העלאה לא הושלמה/)).toBeVisible();
 	fireEvent.click(cancel);
 	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
-	expect(window.confirm).not.toHaveBeenCalled();
+	// Non-ready files remove immediately — no undo toast is scheduled.
+	expect(screen.queryByRole("status")).toBeNull();
 });
 it("shows initial load failures and a login link", async () => {
 	(fetch as Mock).mockResolvedValue(reply({ error: "session expired" }, false));
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	expect(await screen.findByRole("alert")).toHaveTextContent("session expired");
 	expect(screen.getByRole("link", { name: "כניסה מחדש" })).toHaveAttribute(
 		"href",
@@ -835,7 +937,7 @@ it("reports deletion and refresh errors", async () => {
 	directory.files = [
 		{ id: "pending", filename: "unfinished", size: 8, status: "uploading" },
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const cancel = await screen.findByRole("button", {
 		name: "ביטול ופינוי מקום",
 	});
@@ -885,7 +987,7 @@ it("pages through bounded directory results and returns to the previous page", a
 			nextCursor: options?.headers?.["X-Archive-After"] ? null : "next",
 		}),
 	) as Mock;
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const next = await screen.findByRole("button", { name: "קבצים נוספים" });
 	fireEvent.click(next);
 	await waitFor(() =>
@@ -916,7 +1018,7 @@ it("shows durable pending deletions and lets their owner retry cleanup", async (
 	directory.files = [
 		{ id: "pending", filename: "deleted.bin", size: 8, status: "deleting" },
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const retry = await screen.findByRole("button", {
 		name: "ניסיון מחיקה מחדש",
 	});
@@ -959,7 +1061,7 @@ it("archivers see only their home navigation and have no delete or admin links",
 	directory.files = [
 		{ id: "ready", filename: "protected.bin", size: 3, status: "ready" },
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	await screen.findByRole("link", { name: "הורדה" });
 	expect(
 		screen.queryByRole("button", { name: "מחיקה" }),
@@ -1040,7 +1142,7 @@ it("shows completed empty files without a negative size", async () => {
 	directory.files = [
 		{ id: "empty", filename: "empty.bin", size: 0, status: "ready" },
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	expect(await screen.findByText(/0 B/)).toBeVisible();
 });
 it("keeps the current folder available when opening another folder fails", async () => {
@@ -1053,7 +1155,7 @@ it("keeps the current folder available when opening another folder fails", async
 			kind: "folder",
 		},
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const open = await screen.findByRole("button", {
 		name: "פתיחת תיקייה חומרים",
 	});
@@ -1088,7 +1190,7 @@ it("navigates breadcrumbs back to the permitted home", async () => {
 			{ id: "nested", name: "חומרים" },
 		],
 	};
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	const home = await screen.findByRole("button", { name: "מחבר א" });
 	directory = {
 		...directory,
@@ -1116,7 +1218,7 @@ it("does not let a delayed refresh replace a newly opened folder", async () => {
 			kind: "folder",
 		},
 	];
-	render(<ArchiveArea />);
+	render(<WrappedArea />);
 	await screen.findByRole("button", { name: "פתיחת תיקייה חומרים" });
 	let finish: (response: Response) => void = () => {};
 	const stale = JSON.parse(JSON.stringify(directory));
@@ -1154,7 +1256,7 @@ it("ignores a late initial-login failure after unmount", async () => {
 				reject = fail;
 			}),
 	);
-	const view = render(<ArchiveArea />);
+	const view = render(<WrappedArea />);
 	view.unmount();
 	await act(async () => {
 		reject(new Error("late failure"));

@@ -71,6 +71,9 @@ export function pathnameWithBookQuery(
 		params.delete("book");
 		params.delete("toc");
 		params.delete("bookPage");
+		// A לקריאה נוספת selection (#3752) has no flat-page meaning: like the
+		// /929/{perek}/{slug} path it replaces, leaving the book drops it.
+		params.delete("further");
 	}
 	const q = params.toString();
 	return q.length > 0 ? `${pathname}?${q}` : pathname;

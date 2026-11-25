@@ -1,10 +1,10 @@
 # Bulletin brand and contact assets
 
-These are versions of existing project artwork for use in email and the daily PDF. The PDF embeds the same original bytes and does not fetch public assets while rendering. The JPEG is copied byte for byte from `app/BibleOnSite/Resources/Images/logo_header.jpg`; its original dimensions are 591 × 295. Preserve that aspect ratio when displaying it.
+These are the Al Heperek Yehuda 0.9.5 wordmark and project contact artwork for email and the daily PDF. The wordmark uses the same outlined lettering as the website, native header and launcher. The PDF embeds the canonical JPEG bytes from `web/shared/branding/derived/logo_header.jpg`. The current wordmark is 1040 × 313 pixels. Email displays the same wordmark from the website's `/images/logos/header-logo.jpg`.
 
 The four contact PNGs rasterize the website's existing SVG icons at 36 × 36, with transparent backgrounds and the original black artwork. Their shapes retain their aspect ratios inside the square canvas without redrawing or recoloring. The globe PNG uses the project-authored 24 × 24 SVG in `source/globe.svg`, rasterized with the same 36 × 36 transparent canvas. Display these icons at 16 or 18 CSS pixels.
 
-`manifest.json` records each source path, source and output SHA-256, filename, dimensions, MIME type, size, attribution, and intended immutable S3 object key and public S3 URL. The public base is `https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/`. Those URLs describe publication targets; generating these files does not upload them or prove that the URLs are live. Publication is a separate operation against the existing public assets bucket.
+`manifest.json` records each source path, source and output SHA-256, filename, dimensions, MIME type, size, attribution, S3 object key and public URL. The current wordmark uses the official website URL. Contact icons retain their content-addressed URLs under `https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/`. The generator records publication targets and writes local files. Asset publication follows the existing deployment process.
 
 ## Regeneration
 

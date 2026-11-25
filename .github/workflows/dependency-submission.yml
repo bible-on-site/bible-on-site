@@ -28,8 +28,33 @@ permissions:
   id-token: write
 
 jobs:
+  # Shared router classification: dependency manifests cannot change inside a
+  # docs-only or Renovate-config-only change, so the expensive MAUI restore is
+  # skipped while the required submit-nuget check still reports (#3621, #3795).
+  detect_docs:
+    timeout-minutes: 10
+    name: Docs-only change detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+      renovate_config_only: ${{ steps.detect.outputs.renovate_config_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Detect docs-only change
+        id: detect
+        run: node devops/github/ci/determine-changes.ts
+
   submit-snapshots:
     timeout-minutes: 60
+    needs: detect_docs
+    if: ${{ needs.detect_docs.outputs.docs_only != 'true' && needs.detect_docs.outputs.renovate_config_only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -60,31 +85,91 @@ jobs:
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
-          # The head leg pins the PR's bumped SDK literally. The base leg's
-          # merge-base checkout has its own global.json still pinning the
-          # previous SDK under rollForward: disable — read it so the installed
-          # SDK satisfies that tree's resolver instead of failing the first
-          # dotnet invocation.
-          dotnet-version: ${{ matrix.source == 'base' && '' || '10.0.403' }}
+          # Each leg reads the SDK pin from whichever tree is checked out —
+          # head's global.json bumps the SDK while the merge-base checkout
+          # still pins the previous one under rollForward: disable.
           global-json-file: global.json
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "17"
+          java-version: "25"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        run: dotnet workload install maui-android
-      - name: 'Restore NuGet projects'
+        # Both snapshot trees resolve their own SDK through global.json. SDK
+        # patches share a feature band (10.0.403 uses 10.0.400 manifests), and
+        # workload-set servicing versions do not follow SDK patch numbers.
+        # Keep this inline: older snapshot checkouts do not contain new helpers.
         run: |
-          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          sdk_version=$(dotnet --version)
+          if [[ ! "$sdk_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]{3})(-[0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Unsupported .NET SDK version: %s\n' "$sdk_version" >&2
+            exit 1
+          fi
+          patch_hundreds="${BASH_REMATCH[3]:0:1}"
+          feature_band="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((patch_hundreds * 100))"
+          for manifests in "${DOTNET_ROOT:?}/sdk-manifests"/*; do
+            [ -d "$manifests" ] || continue
+            if [ "${manifests##*/}" != "$feature_band" ]; then
+              sudo rm -rf -- "$manifests"
+            fi
+          done
+          # Keep the deterministic workload-set pin when the band publishes
+          # sets (#3439): the flat container lists <sdk-patch>.<servicing>
+          # (10.404.0), which --version consumes as <sdk>.<servicing>
+          # (10.0.404.0). Only HTTP 404 means "no published set" and falls
+          # back to the SDK's implicit resolution; transport errors, other
+          # statuses and version-less bodies stay loud instead of silently
+          # downgrading the required check to an unpinned install.
+          feed_file=$(mktemp)
+          if ! feed_status=$(curl -sS -o "$feed_file" -w "%{http_code}" "https://api.nuget.org/v3-flatcontainer/microsoft.net.workloads.${feature_band}/index.json"); then
+            printf 'Workload-set feed request for band %s failed\n' "$feature_band" >&2
+            exit 1
+          fi
+          case "$feed_status" in
+            404)
+              workload_set=""
+              ;;
+            200)
+              workload_set=$(
+                grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' "$feed_file" \
+                  | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+)$/\1.0.\2.\3/' \
+                  | sort -uV | tail -n1 || true
+              )
+              if [ -z "$workload_set" ]; then
+                printf 'Workload-set feed for band %s listed no versions\n' "$feature_band" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              printf 'Workload-set feed lookup for band %s failed: HTTP %s\n' "$feature_band" "$feed_status" >&2
+              exit 1
+              ;;
+          esac
+          rm -f -- "$feed_file"
+          dotnet workload update
+          if [ -n "$workload_set" ]; then
+            dotnet workload install "maui-android" --version "$workload_set"
+          else
+            dotnet workload install "maui-android"
+          fi
+      - name: 'Restore NuGet projects'
+        env:
+          SNAPSHOT_SOURCE: ${{ matrix.source }}
+        run: |
+          # Read the Android TFM from whichever tree is checked out — the
+          # merge-base targets an older .NET, head the current one — so the
+          # restore always matches the snapshot instead of pinning a version.
+          TFM=$(grep -o 'net[0-9.]*-android' app/BibleOnSite/BibleOnSite.csproj | head -1)
+          echo "Restoring $TFM for $SNAPSHOT_SOURCE"
+          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64 -p:PublishReadyToRun=true
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
       - name: 'Submit NuGet dependencies'
-        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.1
         with:
           detectorsCategories: NuGet
           fail-on-empty: true
@@ -94,9 +179,11 @@ jobs:
           snapshot-ref: ${{ env.SNAPSHOT_REF }}
 
   # Repository rules require this exact check name in merge-group/master runs.
+  # Docs-only changes carry no dependency delta: the required check resolves
+  # successfully while the snapshot submission work is skipped (#3621).
   submit-nuget:
     timeout-minutes: 60
-    needs: submit-snapshots
+    needs: [submit-snapshots, detect_docs]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions: {}
@@ -104,4 +191,15 @@ jobs:
       - name: Verify every snapshot submission succeeded
         env:
           SUBMISSION_RESULT: ${{ needs.submit-snapshots.result }}
-        run: test "$SUBMISSION_RESULT" = success
+          DOCS_ONLY: ${{ needs.detect_docs.outputs.docs_only }}
+          RENOVATE_CONFIG_ONLY: ${{ needs.detect_docs.outputs.renovate_config_only }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Docs-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          if [ "$RENOVATE_CONFIG_ONLY" = "true" ]; then
+            echo "Renovate-config-only change: dependency graph is unchanged; nothing to submit."
+            exit 0
+          fi
+          test "$SUBMISSION_RESULT" = success

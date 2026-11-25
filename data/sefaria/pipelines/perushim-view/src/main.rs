@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use bson::Document;
 use clap::{Parser, ValueEnum};
+use mongo_config::{mongo_host_port_from_env, mongodb_uri};
 use mongodb::{Client, options::ClientOptions};
 
 use perushim_view::{aggregation, commands, data};
@@ -112,7 +113,9 @@ async fn run(cli: Cli) -> Result<()> {
         .context("--format is required for json/mysql/sqlite output")?;
 
     let results = fetch_from_mongodb(&cli.dump_name).await?;
-    generate_output(format, &data::extract::extract(&results), &cli)
+    let extracted = data::extract::extract(&results)?;
+    let extracted = data::baseline_loader::preserve_bundled(extracted)?;
+    generate_output(format, &extracted, &cli)
 }
 
 /// Writes the MongoDB extraction results in the requested format — kept
@@ -192,21 +195,6 @@ async fn fetch_from_mongodb(dump_name: &str) -> Result<Vec<Document>> {
     println!("✅ Retrieved {} pipeline documents", results.len());
 
     Ok(results)
-}
-
-fn mongo_host_port_from_env() -> (String, String) {
-    mongo_host_port_from_vars(|key| std::env::var(key).ok())
-}
-
-fn mongo_host_port_from_vars(mut get_var: impl FnMut(&str) -> Option<String>) -> (String, String) {
-    (
-        get_var("MONGO_HOST").unwrap_or_else(|| "localhost".to_string()),
-        get_var("MONGO_PORT").unwrap_or_else(|| "27017".to_string()),
-    )
-}
-
-fn mongodb_uri(mongo_host: &str, mongo_port: &str) -> String {
-    format!("mongodb://{}:{}", mongo_host, mongo_port)
 }
 
 #[cfg(test)]
@@ -643,24 +631,5 @@ mod tests {
     fn generate_output_rejects_non_mongo_formats() {
         let cli = cli_from(&["--format", "convert-notes"]);
         let _ = generate_output(&OutputFormat::ConvertNotes, &extracted_fixture(), &cli);
-    }
-
-    #[test]
-    fn mongo_host_port_and_uri_use_defaults_and_overrides() {
-        assert_eq!(
-            mongo_host_port_from_vars(|_| None),
-            ("localhost".to_string(), "27017".to_string())
-        );
-        let vars = |key: &str| match key {
-            "MONGO_HOST" => Some("mongo".to_string()),
-            "MONGO_PORT" => Some("28017".to_string()),
-            _ => None,
-        };
-        assert_eq!(
-            mongo_host_port_from_vars(vars),
-            ("mongo".to_string(), "28017".to_string())
-        );
-        assert_eq!(vars("UNRELATED"), None);
-        assert_eq!(mongodb_uri("mongo", "28017"), "mongodb://mongo:28017");
     }
 }

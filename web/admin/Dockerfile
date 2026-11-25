@@ -1,7 +1,7 @@
-FROM node:26.13.0-alpine AS base
+FROM node:26.13.1-alpine AS base
 # Bun ships as a standalone binary — copy the pinned release matching
-# packageManager (bun@1.4.4) rather than installing a package manager.
-COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
+# packageManager rather than installing a package manager.
+COPY --from=oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b /usr/local/bin/bun /usr/local/bin/bun
 
 FROM base AS deps
 WORKDIR /app
@@ -20,12 +20,25 @@ ENV NODE_ENV=production
 # Distinct from the runtime VITE_WEBSITE_URL, which names the cluster-internal
 # revalidation endpoint (#2763).
 ENV VITE_PUBLIC_WEBSITE_URL=https://xn--febl3a.co.il
+
+# Optional assets CDN origin (ASSETS_BASE_URL), matching the website image.
+# Empty/unset preserves the direct S3 fallback; see
+# docs/aws/s3-delivery-cost-2026-11-01.md.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
+
 RUN bun run build
 
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# Same baked default as the website runner: server code reads
+# ASSETS_BASE_URL at request time, and a task-definition environment
+# entry can still override it.
+ARG ASSETS_BASE_URL
+ENV ASSETS_BASE_URL=$ASSETS_BASE_URL
 
 RUN apk add --no-cache curl~=8
 

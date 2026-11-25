@@ -33,6 +33,7 @@ public static class AppButtonStyles
     public static Style Primary { get; } = Create((InkLight, InkLight), (Colors.White, Colors.White), (InkLight, InkLight), 0);
     public static Style Destructive { get; } = Create((SurfaceLight, SurfaceDark),
         (DestructiveInkLight, DestructiveInkDark), (DestructiveInkLight, DestructiveInkDark), 1);
+    public static Style Ghost { get; } = CreateGhost();
     public static Style Icon { get; } = CreateIcon();
 
     /// <summary>Replace legacy local appearance values while retaining page-owned layout.</summary>
@@ -57,6 +58,18 @@ public static class AppButtonStyles
         button.Style = style;
     }
 
+    private static Style CreateGhost()
+    {
+        var style = new Style(typeof(Button)) { BasedOn = Secondary };
+        style.Setters.Add(new Setter
+        {
+            Property = PaletteProperty,
+            Value = new Palette((Colors.Transparent, Colors.Transparent), (InkLight, InkDark), (Colors.Transparent, Colors.Transparent)),
+        });
+        style.Setters.Add(new Setter { Property = Button.BorderWidthProperty, Value = 0d });
+        return style;
+    }
+
     private static Style Create((Color Light, Color Dark) surface, (Color Light, Color Dark) ink,
         (Color Light, Color Dark) stroke, double borderWidth)
     {
@@ -64,7 +77,7 @@ public static class AppButtonStyles
         style.Setters.Add(new Setter { Property = PaletteProperty, Value = new Palette(surface, ink, stroke) });
         style.Setters.Add(new Setter { Property = Button.BorderWidthProperty, Value = borderWidth });
         style.Setters.Add(new Setter { Property = Button.CornerRadiusProperty, Value = 16 });
-        style.Setters.Add(new Setter { Property = Button.FontFamilyProperty, Value = "OpenSansRegular" });
+        style.Setters.Add(new Setter { Property = Button.FontFamilyProperty, Value = Helpers.BrandFonts.RegularFamily });
         style.Setters.Add(new Setter { Property = Button.FontSizeProperty, Value = 16d });
         style.Setters.Add(new Setter { Property = Button.PaddingProperty, Value = new Thickness(14, 10) });
         style.Setters.Add(new Setter { Property = VisualElement.MinimumHeightRequestProperty, Value = 48d });

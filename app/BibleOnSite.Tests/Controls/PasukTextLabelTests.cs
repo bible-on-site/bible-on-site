@@ -82,9 +82,9 @@ public class PasukTextLabelTests
         label.FlowDirection.Should().Be(Microsoft.Maui.FlowDirection.LeftToRight);
     }
 
-    // #2623: the shared scripture contract — every pasuk label renders Taamey
-    // D. The ctor sets it as a local value so the implicit Label style's
-    // OpenSansRegular can never win; spans without their own family inherit it.
+    // #2623/#3685: the shared scripture contract — every pasuk label renders
+    // Al Heperek. The ctor sets it as a local value so no implicit Label
+    // style can win; spans without their own family inherit it.
     [Fact]
     public void defaults_to_the_scripture_font_family()
     {
@@ -131,5 +131,35 @@ public class PasukTextLabelTests
 
         notified.Should().BeTrue();
         label.Justify.Should().BeFalse();
+    }
+
+    // #2766: opt-in native text selection, honored on Windows where the
+    // handler maps it to TextBlock.IsTextSelectionEnabled. Off by default —
+    // the reader's pasuk cell carries a five-handler input chain that a
+    // selectable TextBlock would compete with; only gesture-free surfaces
+    // like the focused-pasuk overlay opt in.
+    [Fact]
+    public void selectable_defaults_to_false()
+    {
+        new PasukTextLabel().Selectable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void a_selectable_change_notifies_so_handlers_apply_text_selection()
+    {
+        var label = new PasukTextLabel();
+        var notified = false;
+        label.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PasukTextLabel.Selectable))
+            {
+                notified = true;
+            }
+        };
+
+        label.Selectable = true;
+
+        notified.Should().BeTrue();
+        label.Selectable.Should().BeTrue();
     }
 }

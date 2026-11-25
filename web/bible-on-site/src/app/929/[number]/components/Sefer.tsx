@@ -44,6 +44,8 @@ import { ReadingTime } from "@/app/components/ReadingTime";
 import { FlipBook } from "@/app/components/reading/FlipBook";
 import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { Perek, SefarimItem } from "@/data/db/tanah-view-types";
+import { getActiveLearningCycle } from "@/data/learning-calendar-policy";
+import { getPerekDateInCycle } from "@/data/learning-schedule";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
@@ -64,6 +66,7 @@ import {
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
@@ -185,6 +188,9 @@ const Sefer = (props: {
 	perekObj: PerekObj;
 	sefer: SefarimItem;
 	articles: ArticleSummary[];
+	/** לקריאה נוספת (#3752) for the current perek — verified secondary
+	 * coverage; other perakim's arrives through the batch summary fetch. */
+	furtherArticles?: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
@@ -194,6 +200,10 @@ const Sefer = (props: {
 	/** Perek-scoped dedication lines by canonical perek id (#2731). */
 	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
+	/** The initial slug names a לקריאה נוספת recommendation, not a primary
+	 * article/perush — keeps its `?book&further=` URL shape on rewrite
+	 * (#3752). */
+	initialFurther?: boolean;
 	initialBookPage?: BookPage | null;
 	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
 	perekPasukUnits?: ReadingProgressUnit[];
@@ -207,11 +217,13 @@ const Sefer = (props: {
 	const {
 		perekObj,
 		articles,
+		furtherArticles,
 		perushim,
 		perekIds,
 		entityRefsByPerek,
 		imagesByPerek,
 		initialSlug,
+		initialFurther,
 		initialBookPage,
 		perekPasukUnits,
 		perekMetric,
@@ -225,6 +237,7 @@ const Sefer = (props: {
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
+		initialFurther,
 	);
 	// Memoized so the contentPages memo below keeps its identity across
 	// per-flip re-renders (additionals flatMap would otherwise rebuild it).
@@ -240,8 +253,8 @@ const Sefer = (props: {
 	const navigateFromPage = useMemo(
 		() =>
 			perekIds?.map(
-				(perekId) => (slug?: string) =>
-					contentNavigation.navigate(perekId, slug),
+				(perekId) => (slug?: string, further?: boolean) =>
+					contentNavigation.navigate(perekId, slug, further),
 			),
 		[perekIds, contentNavigation.navigate],
 	);
@@ -464,10 +477,20 @@ const Sefer = (props: {
 		[seferColor],
 	);
 
-	const hebrewDateStr = useMemo(
-		() => constructTsetAwareHDate(new Date()).toTraditionalHebrewString(),
-		[],
-	);
+	// Each spread's header date is its own perek's scheduled study day in the
+	// active learning cycle (#3612) — the cycle holding today, or the upcoming
+	// one during an inter-cycle gap — never a shared "today".
+	const panelDateLabels = useMemo(() => {
+		const today = constructTsetAwareHDate(getCurrentDate());
+		const todayLabel = today.toTraditionalHebrewString();
+		const cycle = getActiveLearningCycle(today);
+		return perakim.map((_perek, perekIdx) => {
+			const id = perekIds?.[perekIdx];
+			return !id
+				? todayLabel
+				: getPerekDateInCycle(id, cycle).toTraditionalHebrewString();
+		});
+	}, [perakim, perekIds]);
 
 	// Index of the current perek within the sefer, used to map SSG-provided data
 	const currentPerekIdx = useMemo(
@@ -673,6 +696,15 @@ const Sefer = (props: {
 										: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
 												?.articles
 							}
+							// Secondary-coverage recommendations ride a separate prop:
+							// the daily override replaces the primary list only (#3098),
+							// לקריאה נוספת always reflects coverage (#3752).
+							furtherArticles={
+								perekIdx === currentPerekIdx
+									? furtherArticles
+									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
+											?.furtherReading
+							}
 							perushim={
 								perekIdx === currentPerekIdx
 									? perushim
@@ -680,7 +712,7 @@ const Sefer = (props: {
 							}
 							perekId={perekIds?.[perekIdx] ?? 0}
 							seferName={perekObj.sefer}
-							hebrewDateStr={hebrewDateStr}
+							hebrewDateStr={panelDateLabels[perekIdx]}
 							initialSlug={
 								contentNavigation.content &&
 								pagePerekId === contentNavigation.content.perekId
@@ -707,10 +739,11 @@ const Sefer = (props: {
 			activePerekId,
 			isVisible,
 			articles,
+			furtherArticles,
 			perushim,
 			batchSummaries,
 			dailyOverride,
-			hebrewDateStr,
+			panelDateLabels,
 			seferPerekTitles,
 			contentNavigation.content,
 			navigateFromPage,

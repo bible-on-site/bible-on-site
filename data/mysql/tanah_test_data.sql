@@ -77,6 +77,11 @@ VALUES (
 <p>המילה "את" באה לרבות, כדברי חז"ל: "את השמים" - לרבות חמה ולבנה וכוכבים ומזלות. "ואת הארץ" - לרבות אילנות ודשאים וגן עדן. יש כאן רמז לכל הנברא בששת ימי הבריאה.</p>
 
 <h2>סיכום</h2>
+<blockquote>
+<p>אמר רבי יצחק: לא היה צריך להתחיל את התורה אלא מ"החדש הזה לכם", שהיא מצוה ראשונה שנצטוו בה ישראל. <b>ומה טעם</b> פתח ב"בְּרֵאשִׁית בָּרָא אֱלֹהִים"?</p>
+<p>משום "כח מעשיו הגיד לעמו לתת להם נחלת גוים" (Psalms 115:16) - פסוק זה מצוטט ב<a href="/929/1/1">מאמר המקור</a>.</p>
+<blockquote><p>ציטוט מקונן לדוגמא - גם ציטוט בתוך ציטוט שומר על זהותו.</p></blockquote>
+</blockquote>
 <p>הפסוק הראשון בתורה מלמד אותנו יסודות עיקריים באמונה: א) יש בורא לעולם. ב) הבריאה היא יש מאין. ג) הקב"ה ברא הכל - שמים וארץ וכל צבאם. ד) לבריאה יש התחלה בזמן. הבנת פסוק זה היא הבסיס להבנת כל התורה כולה, ולכן התורה פותחת דווקא בו.</p>',
         TRUE
     ),
@@ -142,14 +147,45 @@ VALUES (
         FALSE
     );
 
+-- Line-clamp regression fixture (issue #3676). Mirrors production article
+-- 3336 on מלכים ב יא (perek 320): a long <h1> heading that wraps past the
+-- three-line card clamp followed by a separate <p> source line. Nested block
+-- children inside the clamped box painted on top of each other; the card
+-- e2e asserts their line boxes stay disjoint at desktop and mobile widths.
+-- Appended last so its auto-increment id (7) stays stable. Author 4 keeps
+-- the exact-count starter assertions (authors 1-3) untouched, and perek 320
+-- sits outside every moed fixture range and count assertion.
+INSERT INTO tanah_article (
+        PEREK_ID,
+        AUTHOR_ID,
+        ABSTRACT,
+        NAME,
+        PRIORITY,
+        CONTENT,
+        DISTRIBUTABLE
+    )
+VALUES (
+        320,
+        4,
+        '<h1>מלכות עתליה ביהודה, המלכת יואש, ומשמעות האירועים עבור אנשי ממלכת יהודה</h1><p>מלכים ב יא</p>',
+        'מלכות עתליה ביהודה, המלכת יואש, ומשמעות האירועים עבור אנשי ממלכת יהודה',
+        1,
+        '<p>תוכן מאמר לדוגמא עבור בדיקת גלישת שורות בכרטיס הקרוסלה.</p>',
+        TRUE
+    );
+
 -- Representative test data for tanah_article_covering_source. Article 1 gets
 -- verified coverage of its two opening pesukim. Every other fixture article
 -- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
 -- fallback), so range lookups exercise both matching branches.
+-- The (1, 2, 1) row additionally covers one pasuk of בראשית ב, which has no
+-- primary articles — the לקריאה נוספת section (#3752) can assert a
+-- secondary-only recommendation on /929/2 whose card still routes through
+-- the article's own perek (/929/1/1).
 -- The perek FK needs tanah_perek populated, so the db-populator loads this
 -- file only after tanah_sefarim_and_perakim_data.sql.
 INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk)
-VALUES (1, 1, 1), (1, 1, 2);
+VALUES (1, 1, 1), (1, 1, 2), (1, 2, 1);
 UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 
 -- Representative recurring Hebrew-date overrides (#3098). These are test
@@ -238,9 +274,11 @@ SELECT id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasu
 FROM (SELECT 90011 AS id, 9001 AS section_id, 1 AS position,
              1 AS perek_id_start, 1 AS pasuk_start, 1 AS perek_id_end, 3 AS pasuk_end
       UNION ALL
-      -- בראשית ב carries no fixture article, so the range of moed 92 matches
-      -- nothing and its article list is the explicit link alone.
-      SELECT 90021, 9002, 1, 2, 1, 2, 3) seed
+      -- בראשית ב carries no primary fixture article; article 1 only covers
+      -- its פסוק א for the לקריאה נוספת demo (#3752), so this range skips it
+      -- and moed 92 still matches nothing - the article list is the
+      -- explicit link alone.
+      SELECT 90021, 9002, 1, 2, 2, 2, 3) seed
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range WHERE tanah_moed_range.id = seed.id);
 
 INSERT INTO tanah_article_moed (article_id, moed_id)

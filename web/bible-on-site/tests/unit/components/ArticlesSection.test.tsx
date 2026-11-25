@@ -107,7 +107,7 @@ describe("ArticlesSection", () => {
 			expect(strongElement?.textContent).toBe("טקסט מודגש");
 		});
 
-		it("renders adjacent abstract headings as separate block paragraphs", () => {
+		it("renders adjacent abstract headings as separate paragraphs", () => {
 			const { container } = render(
 				<ArticlesSection
 					articles={[

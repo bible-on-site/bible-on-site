@@ -13,9 +13,9 @@ import {
 
 /**
  * פרשה unit pages share the /929 reader chrome: the same swipe
- * navigation, reader settings (font/spacing/recitation), Taamey D and
- * Noto fonts, and the reader layout stylesheet (blue nav, overflow
- * containment).
+ * navigation, reader settings (font/spacing/recitation), the Al Heperek
+ * default plus Taamey D and Noto alternate fonts, and the reader layout
+ * stylesheet (blue nav, overflow containment).
  */
 export default async function ParashaUnitLayout({
 	children,

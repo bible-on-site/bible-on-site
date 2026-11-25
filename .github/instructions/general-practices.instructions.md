@@ -18,6 +18,10 @@ its tests use Python for the native PyAV, faster-whisper and CTranslate2 runtime
 This exception is scoped to that pipeline. Infrastructure, deployment and other
 DevOps tooling continue to use Node.js/TypeScript.
 
+The existing database backup and restore commands in `devops/backups/` use
+Python with boto3 and the MySQL CLI. Their validation and integration tests
+use the same runtime.
+
 ## Tool Learning
 
 Check `.github/tool-registry.md` first. If it is missing or stale, research via Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub; record the tool, version, date, and key learnings there; then apply them.

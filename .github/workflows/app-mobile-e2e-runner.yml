@@ -28,7 +28,10 @@ on:
       mode:
         # release-smoke (#2373): build the Release APK and launch it on the
         # emulator — the only leg that executes the production startup path.
-        description: "build, prebuilt-run, build-and-run, or release-smoke"
+        # device-tests (#3349): build the in-process XHarness test app and run
+        # its instrumentation in this same emulator — no Appium session, no
+        # app build, no coverage/selection pipeline.
+        description: "build, prebuilt-run, build-and-run, release-smoke, or device-tests"
         type: string
         required: true
       e2e_selection_mode:
@@ -88,17 +91,17 @@ jobs:
       # the toolchain cache id and the workload install read from here, and the
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
-      DOTNET_SDK_VERSION: "10.0.403"
-      # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
-      # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
-      # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
-      # until the runner image ships it; see #2566.
-      MAUI_WORKLOAD_SET: "10.0.401.1"
-      # The Android legs are not Xcode-bound: 10.0.402.1 pins Android SDK
-      # 36.1.118, the first servicing release honoring AndroidR8ObfuscationMode
-      # and emitting the r8.json metadata Play scores — the Release smoke APK is
-      # the pre-merge guard that obfuscated builds still launch (#2708, #2373).
-      MAUI_WORKLOAD_SET_ANDROID: "10.0.402.1"
+      DOTNET_SDK_VERSION: "11.0.100"
+      # .NET 11 workload sets are band-scoped to 11.0.1xx; 11.0.100.1 is the
+      # band's first set and selects iOS 27.2 (Xcode 27.2 required) — the
+      # matching Xcode_27* installation is selected below; #2566 tracked the
+      # earlier deferral while the image lagged.
+      MAUI_WORKLOAD_SET: "11.0.100.1"
+      # The Android legs pin the same 11.0.100.1 set: it ships Android SDK
+      # 37.2.x, which honors AndroidR8ObfuscationMode and emits the r8.json
+      # metadata Play scores — the Release smoke APK is the pre-merge guard
+      # that obfuscated builds still launch (#2708, #2373).
+      MAUI_WORKLOAD_SET_ANDROID: "11.0.100.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -184,7 +187,24 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+        # The .NET 11 iOS workload (27.2.x) builds only against Xcode 27.2 —
+        # probe each Xcode_27 app for its real version; a newest-27* glob would
+        # grab the image's 27.3 beta (also aliased as Xcode_27.3.app), which the
+        # workload rejects.
+        run: |
+          XCODE_DIR=""
+          for app in /Applications/Xcode_27*.app; do
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}')"
+            case "$ver" in
+              27.2|27.2.*) XCODE_DIR="$app/Contents/Developer"; break ;;
+            esac
+          done
+          if [ -z "$XCODE_DIR" ]; then
+            echo "::error::No Xcode 27.2 installation under /Applications — required by the iOS 27.2 workload"
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_DIR"
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 
       # Xcode or the workload invalidates compiled intermediates — stamp every
       # iOS cache key with the toolchain so a mismatched restore can't happen.
@@ -248,7 +268,7 @@ jobs:
       # already selected and partitioned the suite once for the whole matrix,
       # and each leg stages its assigned manifest below (#2263).
       - name: Download baseline and select affected tests
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.ios_plan_artifact == ''
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && inputs.ios_plan_artifact == ''
         id: selection
         background: true
         env:
@@ -320,8 +340,8 @@ jobs:
       # Validate once per platform before any device job starts. The iOS
       # consumers verify the identical delivered runtime and configuration.
       - name: Verify real test-host reporting and shutdown
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
-        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests'
+        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       # Validate before booting either device: cold simulator startup competes
       # with cache extraction and subprocess tests. The asynchronous boot still
@@ -422,17 +442,7 @@ jobs:
         if: inputs.mode == 'prebuilt-run'
         run: |
           node app/mobile-e2e/ios-build-artifact.mjs restore "$GITHUB_WORKSPACE" "${{ runner.temp }}/ios-e2e-build" "$MOBILE_E2E_ARTIFACTS" "${{ github.sha }}" "${{ steps.toolchain.outputs.id }}"
-          codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app
-
-      - name: Validate restored runtimes without NuGet cache
-        if: inputs.mode == 'prebuilt-run'
-        working-directory: app
-        env:
-          NUGET_PACKAGES: ${{ runner.temp }}/ios-prebuilt-empty-nuget
-        run: |
-          dotnet devops/bin/Debug/_build.dll ListMobileE2E --configuration Debug
-          dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
-          echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
+          codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app
 
       # bun install --frozen-lockfile is done, so node_modules is frozen. Background cache publication
       # finishes at the wait-all gate before device tests.
@@ -453,7 +463,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           verify-signature: true
 
       # iOS legs stay on the Xcode-27-compatible set; Android legs take the
@@ -498,10 +508,12 @@ jobs:
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
-        # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
-        # maui-android resolves to 10.0.402.1 (Android SDK 36.1.118) for #2708's
-        # obfuscation support; iOS stays pinned until #2566 ships Xcode 27.1.
-        run: dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
+        # 11.0.100.1 selects the iOS 27.2 / Android 37.2 SDKs under SDK 11.
+        # Foreign-band sdk-manifests claiming the same packs abort the install.
+        run: |
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.
@@ -525,7 +537,7 @@ jobs:
       # Shared commentary-search pilot builds the notes FTS index, so a missing
       # or mismatched pair must fail here — before the build, not mid-suite.
       - name: Download perushim SQLite pair
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER
         uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact }}
@@ -534,7 +546,7 @@ jobs:
       # Master baseline lives outside this run's artifact namespace: fetch it
       # through the REST API (no gh binary dependency on the xcode-27 legs).
       - name: Download perushim SQLite pair (master baseline)
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER)
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -546,11 +558,11 @@ jobs:
           test -n "$(ls -A "${{ runner.temp }}/perushim-sqlite" 2>/dev/null)"
 
       - name: Install matching perushim catalog and notes
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests'
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ inputs.platform }}
 
       - name: Build complete simulator app
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests'
         id: build-app
         # Explicit bash enables pipefail, preserving bun failures through tee.
         shell: bash
@@ -570,6 +582,19 @@ jobs:
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           bun run --cwd app/mobile-e2e build:release-smoke 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build-release-smoke.log"
+
+      # In-process device-test layer (#3349): the XHarness test app builds as a
+      # Release APK — Debug APKs ship no embedded assemblies and abort on
+      # launch ("No assemblies found"). The build uses the same pinned
+      # maui-android workload as the Appium leg but never touches the app.
+      - name: Build device-test APK
+        if: inputs.platform == 'Android' && inputs.mode == 'device-tests'
+        id: build-device-tests
+        working-directory: app
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          dotnet devops/bin/Debug/_build.dll CompileDeviceTests 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build-device-tests.log"
 
       # Cached native outputs can retain stale code-signing pages. Sign the
       # final simulator payload inside out and verify it before any launch.
@@ -735,7 +760,7 @@ jobs:
       # process environment, reaches the harness through run.mjs, and gates
       # the FirebaseEmulatorSyncTests scenarios (unset → they skip).
       - name: Start Firebase Emulator Suite
-        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke'
+        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests'
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           (bun run --cwd app/firebase emulators:start > "$MOBILE_E2E_ARTIFACTS/firebase-emulator.log" 2>&1 &)
@@ -751,7 +776,7 @@ jobs:
           exit 1
 
       - name: Run shared pilot on Android
-        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke'
+        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests'
         id: pilot
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
@@ -796,6 +821,28 @@ jobs:
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
           script: bun run --cwd app/mobile-e2e release-smoke
 
+      # Same disposable-emulator wrapper as the Appium pilot (#3349): the
+      # instrumentation's xUnit-v2 XML is pulled off the device, adapted to the
+      # JUnit report under $MOBILE_E2E_ARTIFACTS/results, and the QEMU tree is
+      # ended before the action can retain its output pipes.
+      - name: Run in-process device tests
+        if: inputs.platform == 'Android' && inputs.mode == 'device-tests'
+        id: pilot-device-tests
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
+          script: node app/mobile-e2e/device-tests-pilot.mjs
+
       # The SDK save waits for a genuinely booted device (any stage's readiness
       # log) rather than trusting installed packages, and stays disabled for
       # PR/merge-queue runs so only default-branch scope publishes caches.
@@ -826,6 +873,28 @@ jobs:
       - name: Wait for iPhone simulator
         wait-all:
 
+      # The host is quiet here — simulator boot and WDA preparation drained at
+      # the gate above. The unit slice bounds a one-second loopback handshake
+      # (#3468), so it must not race those background preps; it still gates the
+      # expensive shard run below.
+      - name: Validate restored runtimes without NuGet cache
+        if: inputs.mode == 'prebuilt-run'
+        working-directory: app
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/ios-prebuilt-empty-nuget
+        run: |
+          dotnet devops/bin/Debug/_build.dll ListMobileE2E --configuration Debug
+          dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
+          echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
+
+      # The xcode-27-arm64 20261112.0361.1 runner image can destroy a simulator
+      # after it already reported booted (actions/runner-images#15334). Verify
+      # the handed-off device is still usable right before the session so the
+      # fixed 300-second Appium session deadline is not spent re-booting it.
+      - name: Verify iPhone simulator survived boot
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        run: bun run --cwd app/mobile-e2e ios:boot:heal
+
       # Each runner owns one simulator/session and the case manifest the plan
       # assigned it (#2263). The final merge verifies the executed union equals
       # the planned run set exactly once.
@@ -850,7 +919,7 @@ jobs:
       # same signature twice is systematic and fails the leg. Artifacts still
       # upload via the always() steps below.
       - name: Flag systematic harness diagnostics
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && always() && !cancelled()
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && always() && !cancelled()
         id: silent-failures
         env:
           # A green pilot that produced no trx left this gate with nothing to
@@ -885,8 +954,10 @@ jobs:
       # PR/queue jobs do not save simulator-state caches. After their tests and
       # coverage finish, measure host logging across one controlled shutdown of
       # this job's exact device; no extra simulator boot or test retry is needed.
+      # Dispatch legs measure too — their quiesce step reboots the powered-off
+      # device before the cache capture it still publishes.
       - name: Measure simulator host lifecycle evidence
-        if: inputs.platform == 'iOS' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.pilot-ios.outcome == 'success' && steps.coverage-apply.outcome == 'success'
+        if: inputs.platform == 'iOS' && (github.event_name == 'pull_request' || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch') && steps.pilot-ios.outcome == 'success' && steps.coverage-apply.outcome == 'success'
         run: node app/mobile-e2e/verify-ios-host-log.mjs
       # Captured post-test so the saved device keeps session warm-state, but
       # quiesced first: test apps are removed and the device is shut down so
@@ -910,7 +981,7 @@ jobs:
       # instrumented-coverage artifacts (pre-#2156 layout) skip extraction —
       # the automation-id channel stands alone.
       - name: Extract executable coverage tree
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (always() && !cancelled())
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && (always() && !cancelled())
         id: exec-tree
         env:
           # Each device host runs exactly one pilot; the other's outcome is
@@ -941,7 +1012,7 @@ jobs:
       # coverage — but the tree is marked incomplete so a partial run can never
       # shrink the trusted baseline.
       - name: Collect per-test coverage evidence
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (always() && !cancelled())
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.mode != 'device-tests' && (always() && !cancelled())
         id: collect
         env:
           # Each device host runs exactly one pilot; the other's outcome is
@@ -970,7 +1041,7 @@ jobs:
       # only: iOS legs execute a shard assignment, and suite-level parity is
       # scored by merge_ios against the merged tree. Pure diagnostics.
       - name: Verify shadow selection parity
-        if: inputs.mode != 'build' && inputs.platform == 'Android' && (always() && !cancelled())
+        if: inputs.mode != 'build' && inputs.mode != 'device-tests' && inputs.platform == 'Android' && (always() && !cancelled())
         run: |
           node devops/github/ci/e2e-impact/e2e-impact.ts verify \
             --manifest "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \

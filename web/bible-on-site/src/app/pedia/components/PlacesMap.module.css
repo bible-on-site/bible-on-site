@@ -28,7 +28,9 @@
   flex-direction: column;
   gap: 8px;
   min-width: 110px;
-  font: 0.95rem/1.4 inherit;
+  font-family: var(--font-al-heperek), system-ui, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.4;
   text-align: right;
 }
 

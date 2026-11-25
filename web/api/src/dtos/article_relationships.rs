@@ -141,7 +141,7 @@ pub struct ArticleRelationships {
     /// True: `coveringSources` is the verified coverage; false: coverage is
     /// unknown (readers fall back to the primary perek).
     pub coverage_verified: bool,
-    /// Lowercase hex of the generated `content_hash` — echo back as
+    /// Lowercase hex of the editorial freshness token. Echo it back as
     /// `expectedContentHash` for the stale-edit check.
     pub content_hash: String,
     /// `coveringSources` — the verified pasuk coordinates.
@@ -238,4 +238,39 @@ pub struct UpdateArticleRelationshipsInput {
     /// article row, so a second full-set replacement could otherwise erase
     /// links its caller never saw; a mismatch rejects the write.
     pub expected_moed_ids: Option<Vec<i32>>,
+    /// The verified flag is not included in contentHash. Compare it under the
+    /// article lock so a reviewed replacement cannot overwrite unseen review.
+    pub expected_coverage_verified: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::{InputType, Value, value};
+
+    #[test]
+    fn coverage_precondition_preserves_omitted_null_and_both_boolean_values() {
+        for (value, expected) in [
+            (value!({"source": "legacy-admin"}), None),
+            (
+                value!({"source": "admin", "expectedCoverageVerified": null}),
+                None,
+            ),
+            (
+                value!({"source": "admin", "expectedCoverageVerified": false}),
+                Some(false),
+            ),
+            (
+                value!({"source": "admin", "expectedCoverageVerified": true}),
+                Some(true),
+            ),
+        ] {
+            let input = UpdateArticleRelationshipsInput::parse(Some(value)).unwrap();
+            assert_eq!(input.expected_coverage_verified, expected);
+            assert!(input.coverage_verified.is_none());
+        }
+        let invalid = value!({"source": "admin", "expectedCoverageVerified": "false"});
+        assert!(UpdateArticleRelationshipsInput::parse(Some(invalid)).is_err());
+        assert!(UpdateArticleRelationshipsInput::parse(Some(Value::Null)).is_err());
+    }
 }

@@ -888,6 +888,62 @@ test("ON publishes exactly two verified OCI descriptors with byte sizes and plat
 		assert.equal(registry.images.get("latest")?.digest, result.canonicalDigest);
 	}));
 
+// Website/admin ship the ARM64 archive alone since the amd64 retirement
+// (#3794): one staged child, one index member, or one canonical manifest.
+test("an ARM64-only payload publishes its single verified child in both modes", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "api-publisher-test-"));
+	try {
+		const arm64Path = join(directory, "arm64 image.tar.gz");
+		await writeFile(arm64Path, gzipSync(dockerArchive("arm64")));
+		const prepared = await prepareAPIArchives({
+			arm64ArchivePath: arm64Path,
+			sourceRef,
+			version,
+		});
+		try {
+			assert.deepEqual(
+				prepared.images.map((image) => image.architecture),
+				["arm64"],
+			);
+			for (const publishIndex of [false, true]) {
+				const registry = new Registry();
+				const result = await publishAPIImages(
+					prepared,
+					registry.options(prepared, publishIndex),
+				);
+				assert.deepEqual(registry.pushed, [`v${version}-arm64`]);
+				assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
+				const canonical = registry.images.get(`v${version}`);
+				assert.ok(canonical);
+				if (publishIndex) {
+					assert.equal(canonical.mediaType, OCI_INDEX);
+					const index = JSON.parse(canonical.manifest);
+					assert.equal(index.schemaVersion, 2);
+					assert.equal(index.manifests.length, 1);
+					assert.equal(index.manifests[0].platform.architecture, "arm64");
+					assert.equal(
+						index.manifests[0].digest,
+						registry.images.get(`v${version}-arm64`)?.digest,
+					);
+				} else {
+					assert.equal(
+						canonical.digest,
+						registry.images.get(`v${version}-arm64`)?.digest,
+					);
+				}
+				assert.equal(
+					registry.images.get("latest")?.digest,
+					result.canonicalDigest,
+				);
+			}
+		} finally {
+			await prepared.dispose();
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("resumes an interrupted second child push without rewriting the first", async () =>
 	fixture(async (prepared) => {
 		const registry = new Registry();
