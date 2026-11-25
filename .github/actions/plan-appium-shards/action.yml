@@ -50,6 +50,8 @@ runs:
           --out "$RUNNER_TEMP/${{ inputs.platform-id }}-baseline"
     - name: Select affected tests
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         BASELINE="$RUNNER_TEMP/${{ inputs.platform-id }}-baseline/coverage-tree.json"
         BASELINE_ARGS=()
@@ -99,3 +101,4 @@ runs:
         path: ${{ runner.temp }}/${{ inputs.platform-id }}-plan/
         retention-days: 14
         if-no-files-found: error
+        overwrite: true
