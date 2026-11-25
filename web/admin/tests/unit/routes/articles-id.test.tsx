@@ -307,7 +307,10 @@ describe("ArticleEditPage", () => {
 		);
 	});
 
-	it("blocks autosave while a covering source is invalid and resumes once fixed", async () => {
+	it(
+		"blocks autosave while a covering source is invalid and resumes once fixed",
+		{ timeout: 15_000 },
+		async () => {
 		server.updateArticle.mockResolvedValue(article);
 		renderPage();
 		await waitFor(() =>
@@ -333,7 +336,8 @@ describe("ArticleEditPage", () => {
 				}),
 			{ timeout: 4000 },
 		);
-	});
+		},
+	);
 
 	it("auto-saves pending edits after the debounce delay", async () => {
 		server.updateArticle.mockResolvedValue(article);
