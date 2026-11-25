@@ -75,4 +75,68 @@ test.describe("/929/authors page", () => {
 		const location = response.headers().location;
 		expect(location).toContain("/929/authors");
 	});
+
+	test("serves the blue sketch asset", async ({ request }) => {
+		const response = await request.get("/images/rabbis-blue-sketch.webp");
+
+		expect(response.status()).toBe(200);
+		expect(response.headers()["content-type"]).toContain("image/webp");
+	});
+
+	test("paints the blue sketch as a fixed backdrop behind the index", async ({
+		page,
+	}) => {
+		await page.goto("/929/authors");
+
+		const backdrop = await page.locator("main").evaluate((el) => {
+			const style = window.getComputedStyle(el, "::before");
+			return {
+				backgroundImage: style.backgroundImage,
+				position: style.position,
+			};
+		});
+
+		// Fixed keeps the congregation scene recognizable while the grid scrolls.
+		expect(backdrop.position).toBe("fixed");
+		expect(backdrop.backgroundImage).toContain("rabbis-blue-sketch.webp");
+	});
+
+	test("keeps the sketch as a subdued etching in dark mode", async ({
+		page,
+	}) => {
+		await page.emulateMedia({ colorScheme: "dark" });
+		await page.goto("/929/authors");
+
+		const backgroundImage = await page
+			.locator("main")
+			.evaluate(
+				(el) => window.getComputedStyle(el, "::before").backgroundImage,
+			);
+
+		expect(backgroundImage).toContain("rabbis-blue-sketch.webp");
+		// Dark scrim layer (--background #0f1219) keeps dark surfaces readable.
+		expect(backgroundImage).toContain("15, 18, 25");
+	});
+
+	test("drops the decorative backdrop under high-contrast preference", async ({
+		page,
+	}) => {
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				"siteA11ySettings",
+				JSON.stringify({ contrast: true }),
+			);
+		});
+		await page.goto("/929/authors");
+		await expect(page.locator("html")).toHaveAttribute(
+			"data-a11y-contrast",
+			"high",
+		);
+
+		const content = await page
+			.locator("main")
+			.evaluate((el) => window.getComputedStyle(el, "::before").content);
+
+		expect(content).toBe("none");
+	});
 });
