@@ -201,8 +201,18 @@ internal sealed class AndroidPushPlatformClient : IPushPlatformClient
         {
             // Ensures the service + event wiring exist before the plugin
             // dispatches the tap — the queued-notification path depends on a
-            // subscriber being attached.
+            // subscriber being attached. A failed warm-up must not swallow the
+            // tap: the intent is dispatched below either way.
             await PushNotificationService.Instance.EnsureInitializedAsync(CancellationToken.None);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: a failed init must not drop the notification tap
+        catch (Exception ex) //NOSONAR — a failed init must not drop the notification tap.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Push] init before tap failed: {ex.Message}");
+        }
+        try
+        {
             FirebaseCloudMessagingImplementation.OnNewIntent(intent);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: a malformed launch intent is log-only
