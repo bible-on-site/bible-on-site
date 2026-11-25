@@ -59,14 +59,18 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
 ) AS dependency_count"#;
 const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 19;
 
-/// Same guard without the person-places tables, retried when the pre-migration
-/// database rejects them (see `is_missing_person_places_schema`).
+/// Same guard without the new place tables, retried when the pre-migration
+/// database rejects them (see `is_missing_person_places_schema`). The
+/// birthplace table predates the migration — it only gains a column — so it
+/// stays checked here; each new table is probed separately instead, so a
+/// partially applied migration skips only a table proven absent.
 const PERSON_DEPENDENCY_SQL_PRE_PLACES: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_name WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_birth_date WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
@@ -78,7 +82,14 @@ const PERSON_DEPENDENCY_SQL_PRE_PLACES: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
 ) AS dependency_count"#;
-const PERSON_DEPENDENCY_PRE_PLACES_BIND_COUNT: usize = 16;
+const PERSON_DEPENDENCY_PRE_PLACES_BIND_COUNT: usize = 17;
+
+/// The two place tables introduced by the person-places migration, probed one
+/// at a time when the combined guard hits a pre-migration database.
+const PERSON_NEW_PLACE_DEPENDENCY_SQLS: &[&str] = &[
+    "SELECT EXISTS(SELECT 1 FROM tanahpedia_person_death_place WHERE person_id = ?) AS dependency_count",
+    "SELECT EXISTS(SELECT 1 FROM tanahpedia_person_activity_place WHERE person_id = ?) AS dependency_count",
+];
 
 const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
@@ -138,6 +149,29 @@ fn is_missing_person_places_schema(err: &sea_orm::DbErr) -> bool {
         || message.contains("doesn't exist")
         || message.contains("Unknown table")
 }
+
+/// The birthplace table predates the person-places migration, which only adds
+/// its `place_text` column. That specific failure still leaves the legacy
+/// `place_id` rows readable through the original columns, unlike a genuinely
+/// absent table. Check this before `is_missing_person_places_schema`, which
+/// matches the same error code.
+fn is_missing_place_text_column(err: &sea_orm::DbErr) -> bool {
+    let message = err.to_string();
+    message.contains("place_text")
+        && (message.contains("1054") || message.contains("Unknown column"))
+}
+
+/// Pre-migration birthplace projection: the original columns are still
+/// present when only `place_text` is missing.
+#[derive(FromQueryResult)]
+struct LegacyPersonBirthPlace {
+    id: String,
+    place_id: Option<String>,
+    alt_group_id: Option<String>,
+}
+
+const LEGACY_BIRTH_PLACE_SQL: &str =
+    "SELECT id, place_id, alt_group_id FROM tanahpedia_person_birth_place WHERE person_id = ?";
 
 fn required(value: String, field: &str, max_len: usize) -> Result<String, ServiceError> {
     let value = value.trim().to_string();
@@ -555,17 +589,40 @@ pub async fn delete_orphan_person_node(
             ));
         }
         Err(err) if is_missing_person_places_schema(&err) => {
-            PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
-                DatabaseBackend::MySql,
-                PERSON_DEPENDENCY_SQL_PRE_PLACES,
-                person_dependency_values_pre_places(&entity_id, &person_id),
-            ))
-            .one(&transaction)
-            .await
-            .map_err(db_error)?
-            .ok_or_else(|| {
-                ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>)
-            })?
+            let mut dependencies =
+                PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
+                    DatabaseBackend::MySql,
+                    PERSON_DEPENDENCY_SQL_PRE_PLACES,
+                    person_dependency_values_pre_places(&entity_id, &person_id),
+                ))
+                .one(&transaction)
+                .await
+                .map_err(db_error)?
+                .ok_or_else(|| {
+                    ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>)
+                })?;
+            for sql in PERSON_NEW_PLACE_DEPENDENCY_SQLS {
+                match PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
+                    DatabaseBackend::MySql,
+                    *sql,
+                    [person_id.clone().into()],
+                ))
+                .one(&transaction)
+                .await
+                {
+                    Ok(Some(extra)) => dependencies.dependency_count += extra.dependency_count,
+                    Ok(None) => {
+                        return Err(ServiceError::internal_server_error(
+                            INTERNAL_SERVER_ERROR,
+                            None::<&str>,
+                        ));
+                    }
+                    // Proven absent — the table contributes no dependencies.
+                    Err(err) if is_missing_person_places_schema(&err) => {}
+                    Err(err) => return Err(db_error(err)),
+                }
+            }
+            dependencies
         }
         Err(err) => return Err(db_error(err)),
     };
@@ -1327,6 +1384,28 @@ pub async fn get_person_details(
         .await
     {
         Ok(rows) => rows,
+        // Only `place_text` is missing: the legacy rows still carry place_id,
+        // so re-read them through the original columns instead of degrading
+        // to an empty list.
+        Err(err) if is_missing_place_text_column(&err) => {
+            LegacyPersonBirthPlace::find_by_statement(Statement::from_sql_and_values(
+                DatabaseBackend::MySql,
+                LEGACY_BIRTH_PLACE_SQL,
+                [person_id.clone().into()],
+            ))
+            .all(conn)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .map(|row| person_birth_place::Model {
+                id: row.id,
+                person_id: person_id.clone(),
+                place_id: row.place_id,
+                place_text: None,
+                alt_group_id: row.alt_group_id,
+            })
+            .collect()
+        }
         Err(err) if is_missing_person_places_schema(&err) => vec![],
         Err(err) => return Err(db_error(err)),
     };
@@ -1483,6 +1562,46 @@ mod tests {
             person_dependency_values("entity-1", "person-1").len(),
             PERSON_DEPENDENCY_SQL.matches('?').count()
         );
+    }
+
+    #[test]
+    fn orphan_person_guard_pre_places_fallback_still_checks_birthplace() {
+        // The birthplace table exists in every supported schema (the migration
+        // only adds a column), so the pre-places fallback must keep counting
+        // it; only the two brand-new tables may be dropped from the combined
+        // query, and each is probed individually instead.
+        for table in [
+            "tanahpedia_entry_entity",
+            "tanahpedia_person_name",
+            "tanahpedia_person_birth_date",
+            "tanahpedia_person_death_date",
+            "tanahpedia_person_death_cause",
+            "tanahpedia_person_birth_place",
+            "tanahpedia_person_role_prophet",
+            "tanahpedia_person_role_king",
+            "tanahpedia_person_name_giver_person",
+            "tanahpedia_war_side_participant_person",
+            "tanahpedia_saying_speaker_person",
+            "tanahpedia_saying_audience_person",
+            "tanahpedia_prophecy_prophet",
+            "tanahpedia_prophecy_recipient_person",
+            "tanahpedia_person_parent_child",
+            "tanahpedia_person_union",
+        ] {
+            assert!(
+                PERSON_DEPENDENCY_SQL_PRE_PLACES.contains(table),
+                "fallback missing {table}"
+            );
+        }
+        assert!(!PERSON_DEPENDENCY_SQL_PRE_PLACES.contains("tanahpedia_person_death_place"));
+        assert!(!PERSON_DEPENDENCY_SQL_PRE_PLACES.contains("tanahpedia_person_activity_place"));
+        assert_eq!(
+            person_dependency_values_pre_places("entity-1", "person-1").len(),
+            PERSON_DEPENDENCY_SQL_PRE_PLACES.matches('?').count()
+        );
+        for sql in PERSON_NEW_PLACE_DEPENDENCY_SQLS {
+            assert_eq!(sql.matches('?').count(), 1);
+        }
     }
 
     #[test]
@@ -1951,6 +2070,161 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![dependency_count_row(1)],
                 ])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    /// A pre-migration database lacks only the two new place tables; the
+    /// fallback must still count a stored birthplace as a dependency instead
+    /// of letting the delete cascade it away.
+    #[tokio::test]
+    async fn delete_orphan_person_node_pre_migration_still_counts_birthplace() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                        .to_string(),
+                )])
+                // The fallback still checks the birthplace table: one row.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        let executed_sql = format!("{:?}", transaction_log);
+        assert!(!executed_sql.contains("DELETE FROM"));
+    }
+
+    /// Fully clean pre-migration database: both new tables proven absent and
+    /// no other dependency, so the orphan delete proceeds.
+    #[tokio::test]
+    async fn delete_orphan_person_node_pre_migration_deletes_when_clean() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_exec_results([exec_result.clone(), exec_result])
+                .into_connection(),
+        );
+
+        let deleted = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .expect("should delete orphan attachment on the legacy schema");
+
+        assert_eq!(deleted.person_id, "person-1");
+    }
+
+    /// A partially applied migration can leave exactly one new place table:
+    /// the fallback probes each independently, so an existing death-place row
+    /// still blocks the delete while the absent activity table is skipped.
+    #[tokio::test]
+    async fn delete_orphan_person_node_partial_migration_counts_present_table() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                // death_place exists and holds a row; activity_place is absent.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
                 .into_connection(),
         );
 
@@ -3112,6 +3386,80 @@ mod tests {
 
         assert!(detail.birth_places.is_empty());
         assert!(detail.birth_place_ids.is_empty());
+        assert!(detail.death_places.is_empty());
+        assert!(detail.activity_places.is_empty());
+    }
+
+    /// A database that predates only the `place_text` column still has the
+    /// birthplace rows: the query falls back to the original columns so the
+    /// linked place ids keep surfacing with a null free-text side.
+    #[tokio::test]
+    async fn get_person_details_reads_legacy_birthplaces_without_place_text() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "bilhah",
+                "entity-bilhah",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-bilhah",
+                "בלהה",
+            )]])
+            .append_query_results::<person_name::Model, Vec<person_name::Model>, _>([vec![
+                name_model("name-1", "bilhah", "בלהה"),
+            ]])
+            .append_query_results::<lookup_name_type::Model, Vec<lookup_name_type::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_query_results::<person_birth_date::Model, Vec<person_birth_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_date::Model, Vec<person_death_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_cause::Model, Vec<person_death_cause::Model>, _>([
+                vec![],
+            ])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: 1054 (42S22): Unknown column 'tanahpedia_person_birth_place.place_text' in 'field list'"
+                    .to_string(),
+            )])
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![BTreeMap::from([
+                    ("id".to_string(), Value::String(Some("bp-1".to_string()))),
+                    (
+                        "place_id".to_string(),
+                        Value::String(Some("place-jerusalem".to_string())),
+                    ),
+                    ("alt_group_id".to_string(), Value::String(None)),
+                ])],
+            ])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                    .to_string(),
+            )])
+            .append_query_errors([sea_orm::DbErr::Custom(
+                "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                    .to_string(),
+            )])
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let detail = get_person_details(&db, "bilhah".to_string())
+            .await
+            .expect("legacy schema should still serve stored birthplaces");
+
+        assert_eq!(detail.birth_place_ids, vec!["place-jerusalem".to_string()]);
+        assert_eq!(detail.birth_places.len(), 1);
+        assert_eq!(detail.birth_places[0].id, "bp-1");
+        assert_eq!(
+            detail.birth_places[0].place_id.as_deref(),
+            Some("place-jerusalem")
+        );
+        assert_eq!(detail.birth_places[0].place_text, None);
         assert!(detail.death_places.is_empty());
         assert!(detail.activity_places.is_empty());
     }

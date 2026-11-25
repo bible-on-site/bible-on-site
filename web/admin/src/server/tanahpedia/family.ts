@@ -137,16 +137,19 @@ async function upsertPersonPlace(
 		);
 		return;
 	}
+	// FOR UPDATE + the canonical predicate on the write keep a concurrent
+	// contribution merge from moving the row into an opinion group between the
+	// read and the update (same race replacePersonActivityPlaces guards).
 	const existing = await txQueryOne<{ id: string }>(
 		conn,
-		`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1`,
+		`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1 FOR UPDATE`,
 		[personId],
 	);
 	if (existing) {
 		await txExecute(
 			conn,
-			`UPDATE ${table} SET place_id = ?, place_text = ? WHERE id = ?`,
-			[value.placeId, value.placeText, existing.id],
+			`UPDATE ${table} SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[value.placeId, value.placeText, existing.id, personId],
 		);
 	} else {
 		await txExecute(
@@ -164,6 +167,12 @@ async function upsertPersonPlace(
  * same dependent/source guard the contribution apply path enforces.
  * Alternative-opinion rows belong to other opinion groups and are never
  * touched here.
+ *
+ * The canonical rows are locked FOR UPDATE so a contribution merge cannot move
+ * a row into an opinion group between the read and the writes; the writes also
+ * keep the person + canonical predicates so a stale row id can never touch a
+ * reviewed row. A payload id missing from the locked set means the row stopped
+ * being canonical — fail loudly rather than overwrite the reviewed change.
  */
 async function replacePersonActivityPlaces(
 	conn: PoolConnection,
@@ -177,7 +186,7 @@ async function replacePersonActivityPlaces(
 	}>(
 		conn,
 		`SELECT id, place_id, place_text FROM tanahpedia_person_activity_place
-		 WHERE person_id = ? AND alt_group_id IS NULL`,
+		 WHERE person_id = ? AND alt_group_id IS NULL FOR UPDATE`,
 		[personId],
 	);
 	const kept = new Set<string>();
@@ -185,6 +194,11 @@ async function replacePersonActivityPlaces(
 		const retained = place.id
 			? existing.find((row) => row.id === place.id)
 			: undefined;
+		if (place.id && !retained) {
+			throw new Error(
+				`activityPlaces: row ${place.id} is no longer a canonical activity place (a contribution review may have moved it); reload and retry`,
+			);
+		}
 		if (!retained) {
 			await txExecute(
 				conn,
@@ -201,8 +215,8 @@ async function replacePersonActivityPlaces(
 			continue;
 		await txExecute(
 			conn,
-			`UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ?`,
-			[place.placeId, place.placeText, retained.id],
+			`UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[place.placeId, place.placeText, retained.id, personId],
 		);
 	}
 	for (const row of existing) {
@@ -214,8 +228,8 @@ async function replacePersonActivityPlaces(
 		);
 		await txExecute(
 			conn,
-			`DELETE FROM tanahpedia_person_activity_place WHERE id = ?`,
-			[row.id],
+			`DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[row.id, personId],
 		);
 	}
 }

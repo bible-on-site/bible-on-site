@@ -647,12 +647,12 @@ describe("tanahpedia family api", () => {
 			});
 
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
-				["a1"],
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a1", "person-1"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
-				["a2"],
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a2", "person-1"],
 			);
 			expect(
 				executeMock.mock.calls.some(([sql]) =>
@@ -691,10 +691,16 @@ describe("tanahpedia family api", () => {
 				},
 			});
 
+			// The canonical rows were locked FOR UPDATE before reconciling so a
+			// contribution merge cannot move one between the read and the writes.
+			expect(queryMock).toHaveBeenCalledWith(
+				expect.stringContaining("FOR UPDATE"),
+				["person-1"],
+			);
 			// a2 changed in place — its id stays so citations remain attached.
 			expect(executeMock).toHaveBeenCalledWith(
-				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ?",
-				[null, "חרן", "a2"],
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				[null, "חרן", "a2", "person-1"],
 			);
 			// a3 was removed after the dependent/source guard ran.
 			expect(queryOneMock).toHaveBeenCalledWith(
@@ -702,8 +708,8 @@ describe("tanahpedia family api", () => {
 				["tanahpedia_person_activity_place", "a3"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_activity_place WHERE id = ?",
-				["a3"],
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a3", "person-1"],
 			);
 			// a1 was unchanged — no UPDATE ran against it.
 			expect(
@@ -724,6 +730,31 @@ describe("tanahpedia family api", () => {
 				"place-9",
 				null,
 			]);
+		});
+
+		it("rejects an activity place id that stopped being canonical", async () => {
+			// The editor kept row "a9" but a contribution review already moved it
+			// out of the canonical opinion group, so the locked read no longer
+			// returns it — fail loudly instead of overwriting the reviewed row.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-1", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [{ id: "a9", placeId: "place-9" }],
+					},
+				}),
+			).rejects.toThrow("no longer a canonical activity place");
+			expect(executeMock).not.toHaveBeenCalled();
 		});
 
 		it("refuses to remove a cited activity place", async () => {
@@ -861,8 +892,8 @@ describe("tanahpedia family api", () => {
 				["battle", "cause-1"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ?",
-				["place-2", null, "place-link-1"],
+				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "place-link-1", "person-1"],
 			);
 		});
 

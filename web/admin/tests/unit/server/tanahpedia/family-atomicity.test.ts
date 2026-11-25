@@ -138,9 +138,12 @@ async function connectionExecute(rawSql: string, params: unknown[]) {
 	const tables = driver.pending;
 	if (!tables) throw new Error("SQL escaped its transaction");
 	const normalizedSql = rawSql.replace(/\s+/g, " ").trim();
-	const sql = normalizedSql.endsWith(" LIMIT 1")
-		? normalizedSql.slice(0, -" LIMIT 1".length)
+	const unlocked = normalizedSql.endsWith(" FOR UPDATE")
+		? normalizedSql.slice(0, -" FOR UPDATE".length)
 		: normalizedSql;
+	const sql = unlocked.endsWith(" LIMIT 1")
+		? unlocked.slice(0, -" LIMIT 1".length)
+		: unlocked;
 	if (sql.startsWith("SELECT ")) {
 		const [, source] = splitOnce(sql, " FROM ");
 		const whereIndex = source.indexOf(" WHERE ");
