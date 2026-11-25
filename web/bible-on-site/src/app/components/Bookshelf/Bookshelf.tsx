@@ -282,21 +282,32 @@ function BookBlock({
 	};
 
 	const coverStyle = { backgroundColor: baseColor };
-	const spineStyle = { backgroundColor: spineColor };
+	const spineStyle = {
+		backgroundColor: spineColor,
+		width: `${sqSize * BOOK_WIDTH}px`,
+		height: `${sqSize * BOOK_HEIGHT}px`,
+	};
 	const pageEdgeStyle = {
 		backgroundColor: "#fff",
 		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, #aaa 21%, #aaa 25%, transparent 25%, transparent 46%, #aaa 46%, #aaa 50%, transparent 50%)`,
 		backgroundSize: `${sqSize}px ${sqSize}px`,
 	};
 
-	const topBottomStyle = {
+	// #3799 — every crack between book faces was a coplanar/flush joint that
+	// rasterization opens to whatever sits behind: adjacent covers shared one
+	// plane so the neighbor's cover flickered through the seam (defect 1) and
+	// the bottom page face shared the shelf-top plane (defect 2). Faces keep
+	// their exact butt joints — overshooting a plane into a neighbor's makes
+	// preserve-3d sort quads wrong — but the invisible rear/bottom faces are
+	// simply not rendered, and each cover is nudged `lip` off its neighbors so
+	// no two quads share a plane. Derived from sqSize like every face
+	// dimension so joints stay closed at any shelf size or browser zoom.
+	const lip = Math.max(0.5, sqSize / 16);
+	const coverEdge = sqSize / 8;
+
+	const topStyle = {
 		width: `${sqSize * BOOK_WIDTH}px`,
 		height: `${sqSize * BOOK_DEPTH}px`,
-	};
-
-	const frontBackStyle = {
-		width: `${sqSize * BOOK_WIDTH}px`,
-		height: `${sqSize * BOOK_HEIGHT}px`,
 	};
 
 	const leftRightStyle = {
@@ -313,22 +324,9 @@ function BookBlock({
 		>
 			<div className={styles.blockInner}>
 				<div
-					className={styles.back}
-					style={{ ...frontBackStyle, ...pageEdgeStyle }}
-				/>
-				<div
-					className={styles.bottom}
-					style={{
-						...topBottomStyle,
-						...pageEdgeStyle,
-						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px) translateZ(${sqSize * BOOK_HEIGHT}px)`,
-					}}
-				/>
-				<div
 					className={styles.front}
 					style={{
 						...spineStyle,
-						...frontBackStyle,
 						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				>
@@ -364,26 +362,38 @@ function BookBlock({
 				</div>
 				<div
 					className={styles.left}
-					style={{ ...coverStyle, ...leftRightStyle }}
+					style={{
+						...coverStyle,
+						...leftRightStyle,
+						transform: `rotateY(270deg) translateX(-${sqSize}px)`,
+					}}
 				>
 					<div className={styles.coverContent}>
 						<div className={styles.coverTitle}>{sefer.displayName}</div>
 						<div className={styles.coverSubtitle}>מקראות גדולות</div>
 					</div>
 				</div>
+				{/* Inset `lip` so it never shares a plane with the next book's
+					left cover — coplanar covers were the flickering seam that
+					let the neighboring cover show through the joint. */}
 				<div
 					className={styles.right}
 					style={{
 						...coverStyle,
 						...leftRightStyle,
-						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
+						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH) - lip}px)`,
 					}}
 				/>
+				{/* The page top keeps its texture inside a cover-colored frame:
+					cover boards on the sides and fore-edge, spine color on the
+					front edge — each volume reads as a bound unit from above. */}
 				<div
 					className={styles.top}
 					style={{
-						...topBottomStyle,
+						...topStyle,
 						...pageEdgeStyle,
+						border: `${coverEdge}px solid ${baseColor}`,
+						borderTopColor: spineColor,
 						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				/>
