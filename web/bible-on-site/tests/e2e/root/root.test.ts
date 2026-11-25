@@ -106,6 +106,11 @@ test.describe("Root page", () => {
 		await page.goto(ROOT_URL);
 		const bulletin = page.locator("#bulletin");
 		const shelf = page.locator("#tanah-sefarim");
+		// The browser-reminder card (#3732) mounts only once the client resolves
+		// the push subscription state — the e2e deployment always has VAPID
+		// keys, so the card always arrives. Wait for the grid to settle before
+		// measuring the shaped edge against the shelf seam.
+		await expect(bulletin.locator("#bulletin-push")).toBeVisible();
 		const bulletinBg = await bulletin.evaluate(
 			(el) => getComputedStyle(el).backgroundColor,
 		);
