@@ -1,5 +1,8 @@
 import type { ArticleFormData } from "~/server/articles";
-import type { CoveringSource } from "~/server/covering-sources";
+import {
+	type CoveringSource,
+	normalizeCoveringSources,
+} from "~/server/covering-sources";
 import type { Perek } from "~/server/perakim";
 import { formatPerekLabel } from "~/utils/hebrew";
 
@@ -38,6 +41,21 @@ export function coveringSourceKey(row: CoveringSource): string {
 }
 
 /**
+ * Why a draft row can never be saved, else null. Mirrors the coordinate
+ * checks of `normalizeCoveringSources` so the editor can flag the exact row
+ * before the payload guard throws.
+ */
+export function coveringSourceError(row: CoveringSource): string | null {
+	if (!Number.isInteger(row.perek_id) || !Number.isInteger(row.pasuk)) {
+		return "יש להזין מספר פסוק שלם";
+	}
+	if (row.pasuk < 1) {
+		return "מספר הפסוק חייב להיות לפחות 1";
+	}
+	return null;
+}
+
+/**
  * Returns the keys appearing more than once — the editor flags them so the
  * author can fix duplicates before the server rejects the save.
  */
@@ -67,7 +85,12 @@ export function coverageFieldsForSave(
 	return coveringSources === undefined
 		? {}
 		: {
-				coveringSources: sortCoveringSources(coveringSources),
+				/* Cleared inputs stay in draft state as NaN/0; the save must
+				   never carry them, so the shared server contract throws
+				   instead of letting an invalid coordinate through. */
+				coveringSources: sortCoveringSources(
+					normalizeCoveringSources(coveringSources),
+				),
 				coverageVerified,
 			};
 }

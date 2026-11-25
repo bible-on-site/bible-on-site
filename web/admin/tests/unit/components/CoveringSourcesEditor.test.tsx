@@ -35,8 +35,8 @@ function renderEditor(
 		onVerified?: (v: boolean) => void;
 	} = {},
 ) {
-	const onChange = handlers.onChange ?? vi.fn();
-	const onVerified = handlers.onVerified ?? vi.fn();
+	const onChange = vi.fn((s: CoveringSource[]) => handlers.onChange?.(s));
+	const onVerified = vi.fn((v: boolean) => handlers.onVerified?.(v));
 	render(
 		<CoveringSourcesEditor
 			sources={sources}
@@ -169,13 +169,47 @@ describe("CoveringSourcesEditor", () => {
 		expect(screen.queryByText(/^1-\d+$/)).not.toBeInTheDocument();
 	});
 
-	it("stores pasuk 0 when the input is cleared", () => {
+	it("keeps a cleared pasuk as an empty draft instead of coercing to 0", () => {
 		const { onChange } = renderEditor([{ perek_id: 1, pasuk: 5 }]);
 
 		fireEvent.change(screen.getByLabelText("פסוק למקור 1"), {
 			target: { value: "" },
 		});
 
-		expect(onChange).toHaveBeenCalledWith([{ perek_id: 1, pasuk: 0 }]);
+		const next = onChange.mock.calls.at(-1)?.[0] as CoveringSource[];
+		expect(next).toHaveLength(1);
+		expect(next[0].perek_id).toBe(1);
+		expect(Number.isNaN(next[0].pasuk)).toBe(true);
+	});
+
+	it("keeps a fractional pasuk fractional so it is flagged, not truncated", () => {
+		const { onChange } = renderEditor([{ perek_id: 1, pasuk: 5 }]);
+
+		fireEvent.change(screen.getByLabelText("פסוק למקור 1"), {
+			target: { value: "5.5" },
+		});
+
+		const next = onChange.mock.calls.at(-1)?.[0] as CoveringSource[];
+		expect(next[0].pasuk).toBe(5.5);
+	});
+
+	it("renders a cleared pasuk draft as an empty input", () => {
+		renderEditor([{ perek_id: 1, pasuk: Number.NaN }]);
+
+		expect(screen.getByLabelText("פסוק למקור 1")).toHaveValue(null);
+	});
+
+	it("flags a cleared pasuk draft inline", () => {
+		renderEditor([{ perek_id: 1, pasuk: Number.NaN }]);
+
+		expect(screen.getByText("יש להזין מספר פסוק שלם")).toBeInTheDocument();
+	});
+
+	it("flags pasuk 0 inline", () => {
+		renderEditor([{ perek_id: 1, pasuk: 0 }]);
+
+		expect(
+			screen.getByText("מספר הפסוק חייב להיות לפחות 1"),
+		).toBeInTheDocument();
 	});
 });

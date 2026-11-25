@@ -29,6 +29,7 @@ const server = vi.hoisted(() => ({
 	pendingContent: null as string | null,
 	flushCalls: 0,
 	editorOnChange: null as ((content: string) => void) | null,
+	coverageOnChange: null as ((sources: unknown[]) => void) | null,
 }));
 
 vi.mock("~/server/articles", () => ({
@@ -74,7 +75,10 @@ vi.mock("~/components/HebrewDatesEditor", () => ({
 		server.hebrewDatesEditor(props),
 }));
 vi.mock("~/components/CoveringSourcesEditor", () => ({
-	CoveringSourcesEditor: () => <div data-testid="covering-sources" />,
+	CoveringSourcesEditor: (props: { onChange: (sources: unknown[]) => void }) => {
+		server.coverageOnChange = props.onChange;
+		return <div data-testid="covering-sources" />;
+	},
 }));
 vi.mock("~/components/AutoSaveIndicator", () => ({
 	AutoSaveIndicator: () => <div data-testid="autosave" />,
@@ -144,6 +148,7 @@ describe("ArticleEditPage", () => {
 		server.pendingContent = null;
 		server.flushCalls = 0;
 		server.editorOnChange = null;
+		server.coverageOnChange = null;
 		for (const mock of Object.values(server)) {
 			if (typeof mock === "function" && "mockReset" in mock) mock.mockReset();
 		}
@@ -301,6 +306,38 @@ describe("ArticleEditPage", () => {
 			}),
 		);
 	});
+
+	it(
+		"blocks autosave while a covering source is invalid and resumes once fixed",
+		{ timeout: 15_000 },
+		async () => {
+		server.updateArticle.mockResolvedValue(article);
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("covering-sources")).toBeInTheDocument(),
+		);
+
+		// A cleared pasuk sits in draft state as NaN: it must never be sent.
+		act(() =>
+			server.coverageOnChange?.([{ perek_id: 1, pasuk: Number.NaN }]),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 2500));
+		expect(server.updateArticle).not.toHaveBeenCalled();
+
+		act(() =>
+			server.coverageOnChange?.([{ perek_id: 1, pasuk: 3 }]),
+		);
+		await waitFor(
+			() =>
+				expect(server.updateArticle).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						coveringSources: [{ perek_id: 1, pasuk: 3 }],
+					}),
+				}),
+			{ timeout: 4000 },
+		);
+		},
+	);
 
 	it("auto-saves pending edits after the debounce delay", async () => {
 		server.updateArticle.mockResolvedValue(article);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	coverageFieldsForSave,
+	coveringSourceError,
 	coveringSourceKey,
 	duplicateCoveringSourceKeys,
 	perekSourceLabel,
@@ -116,6 +117,36 @@ describe("duplicateCoveringSourceKeys", () => {
 	});
 });
 
+describe("coveringSourceError", () => {
+	it("accepts a valid coordinate", () => {
+		expect(coveringSourceError({ perek_id: 1, pasuk: 5 })).toBeNull();
+	});
+
+	it("flags a cleared pasuk (NaN draft)", () => {
+		expect(coveringSourceError({ perek_id: 1, pasuk: Number.NaN })).toBe(
+			"יש להזין מספר פסוק שלם",
+		);
+	});
+
+	it("flags a non-integer perek id", () => {
+		expect(
+			coveringSourceError({ perek_id: Number.NaN, pasuk: 5 }),
+		).toBe("יש להזין מספר פסוק שלם");
+	});
+
+	it("flags a fractional pasuk", () => {
+		expect(coveringSourceError({ perek_id: 1, pasuk: 5.5 })).toBe(
+			"יש להזין מספר פסוק שלם",
+		);
+	});
+
+	it("flags pasuk 0", () => {
+		expect(coveringSourceError({ perek_id: 1, pasuk: 0 })).toBe(
+			"מספר הפסוק חייב להיות לפחות 1",
+		);
+	});
+});
+
 describe("coverageFieldsForSave", () => {
 	it("omits both fields when the schema did not report covering sources", () => {
 		expect(coverageFieldsForSave(undefined, true)).toEqual({});
@@ -131,6 +162,33 @@ describe("coverageFieldsForSave", () => {
 			coveringSources: [],
 			coverageVerified: false,
 		});
+	});
+
+	it("rejects non-integer coordinates instead of saving them", () => {
+		expect(() =>
+			coverageFieldsForSave([{ perek_id: 1, pasuk: Number.NaN }], false),
+		).toThrow(/integer perek and pasuk/);
+		expect(() =>
+			coverageFieldsForSave([{ perek_id: Number.NaN, pasuk: 5 }], false),
+		).toThrow(/integer perek and pasuk/);
+	});
+
+	it("rejects a cleared pasuk instead of saving pasuk 0", () => {
+		expect(() =>
+			coverageFieldsForSave([{ perek_id: 1, pasuk: 0 }], false),
+		).toThrow(/pasuk must be at least 1/);
+	});
+
+	it("rejects duplicate coordinates instead of saving them", () => {
+		expect(() =>
+			coverageFieldsForSave(
+				[
+					{ perek_id: 1, pasuk: 5 },
+					{ perek_id: 1, pasuk: 5 },
+				],
+				false,
+			),
+		).toThrow(/Duplicate covering source/);
 	});
 
 	it("sends the set in canonical coordinate order", () => {
