@@ -39,19 +39,18 @@ function next(date: string): string {
 	result.setUTCDate(result.getUTCDate() + 1);
 	return result.toISOString().slice(0, 10);
 }
-/** Sunday-Thursday; advance a weekday yom tov, including Rosh Hashana II. */
+/** Sunday-Thursday; advance every yom tov until the next regular run day. */
 export function bulletinDatesForRun(date: string): string[] {
 	const weekday = day(date).getUTCDay();
 	if (weekday >= 5 || isBulletinHoliday(date)) return [];
 	const dates = [date];
-	if (weekday === 4) return dates;
-	const tomorrow = next(date);
-	if (!isBulletinHoliday(tomorrow)) return dates;
-	dates.push(tomorrow);
-	if (day(tomorrow).getUTCDay() === 4) return dates;
-	const afterTomorrow = next(tomorrow);
-	const h = hebrew(afterTomorrow);
-	if (h.month === "Tishri" && h.day === 2) dates.push(afterTomorrow);
+	let ahead = next(date);
+	for (;;) {
+		const holiday = isBulletinHoliday(ahead);
+		if (day(ahead).getUTCDay() < 5 && !holiday) break;
+		if (holiday) dates.push(ahead);
+		ahead = next(ahead);
+	}
 	return dates;
 }
 /** Reject old/future/replayed dates rather than silently posting yesterday's content. */

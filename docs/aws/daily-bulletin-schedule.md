@@ -1,6 +1,6 @@
 # Scheduled daily bulletin
 
-EventBridge Scheduler enqueues the internal trigger at 10:00 in `Asia/Jerusalem`, Sunday-Thursday. AWS handles daylight-saving changes. The calendar preserves the legacy Israeli rules: skip work-prohibited holidays; prepare a weekday holiday on the preceding study day, including both days of Rosh Hashana when applicable. Friday/Saturday never create another bulletin.
+EventBridge Scheduler enqueues the internal trigger at 10:00 in `Asia/Jerusalem`, Sunday-Thursday. AWS handles daylight-saving changes. The calendar preserves the legacy Israeli rules: skip work-prohibited holidays; prepare every holiday that has no run of its own on the preceding study day, including both days of Rosh Hashana and any yom tov falling on Friday, Shabbat or Sunday. A non-holiday Friday/Saturday never creates another bulletin.
 
 The existing admin SQS worker fans out one generation receipt per target date. Each receipt calls the existing immutable preparation path, which chooses the chapter from the database's persisted 929 mapping and an eligible distributable article, then saves both PDF and email HTML. No content is populated from source files. Generation, channel jobs and native SES events use the same queue; no public scheduler endpoint or second consumer is introduced.
 
