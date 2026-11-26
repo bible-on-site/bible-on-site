@@ -462,29 +462,39 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     }
 
     /// <summary>
-    /// The tree once consecutive snapshots agree, bounded so a perpetually
-    /// churning page still gets its press. A quiet tree is the only state a
-    /// Back press can be attributed to: pressing into an animating transition
-    /// leaves no way to tell its pop from the transition's own rewrite.
+    /// The tree once it has stayed unchanged for <see cref="BackQuietWindow"/>,
+    /// bounded so a perpetually churning page still gets its press. A quiet
+    /// tree is the only state a Back press can be attributed to: pressing
+    /// into an animating transition leaves no way to tell its pop from the
+    /// transition's own rewrite. Two equal samples are not enough — a push
+    /// can hold one frame between animation steps while its settle window
+    /// still owns Back until Navigated.
     /// </summary>
     private static string SettledTree(AppiumDriver driver)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var deadline = DateTime.UtcNow.AddSeconds(3);
         var last = driver.PageSource;
-        while (DateTime.UtcNow < deadline)
+        var quietSince = DateTime.UtcNow;
+        while (DateTime.UtcNow < deadline && DateTime.UtcNow - quietSince < BackQuietWindow)
         {
             // Each sample is a full tree dump on the device; the poll cadence
             // keeps the dump loop from saturating the accessibility server.
             Thread.Sleep(100);
             var current = driver.PageSource;
-            if (string.Equals(current, last, StringComparison.Ordinal))
+            if (!string.Equals(current, last, StringComparison.Ordinal))
             {
-                return current;
+                last = current;
+                quietSince = DateTime.UtcNow;
             }
-            last = current;
         }
         return last;
     }
+
+    /// <summary>
+    /// The quiet span androidx's waitForIdle requires before it calls the
+    /// device idle — paid here once per Back instead of once per lookup.
+    /// </summary>
+    private static readonly TimeSpan BackQuietWindow = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// Whether a back press became a navigation: the tree changed and then

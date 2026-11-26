@@ -18,11 +18,12 @@ public sealed class AndroidBackNavigationTests
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
         new AndroidPlatformAdapter().GoBack(driver);
         Assert.Equal(1, executor.Presses);
-        // The helper must not return on the first rewrite: the pop counts
+        // The press waits out a full quiet window on the starting page, and
+        // the helper must not return on the first rewrite: the pop counts
         // only once the settled frame served twice in a row.
-        Assert.Equal(
-            new[] { "<preferences/>", "<preferences/>", "<preferences-pop/>", "<reader/>", "<reader/>" },
-            executor.Served);
+        var quiet = executor.Served.TakeWhile(frame => frame == "<preferences/>").Count();
+        Assert.True(quiet >= 5, $"pressed after only {quiet} quiet samples");
+        Assert.Equal(new[] { "<preferences-pop/>", "<reader/>", "<reader/>" }, executor.Served.Skip(quiet));
     }
 
     [Fact]
@@ -48,9 +49,13 @@ public sealed class AndroidBackNavigationTests
     {
         // A press inside the push's settle window is consumed, yet the push's
         // own rewrite still turns the tree — the false positive the one-shot
-        // verification could not tell from a pop. The press must land only
-        // after the push goes quiet.
-        var executor = new BackExecutor(pushFrames: new[] { "<push-mid/>", "<push-late/>", "<settings/>" });
+        // verification could not tell from a pop. The push holds a frame for
+        // two samples mid-animation, so two equal snapshots are not a settled
+        // page; the press must land only after the push goes quiet.
+        var executor = new BackExecutor(pushFrames: new[]
+        {
+            "<push-mid/>", "<push-mid/>", "<push-mid/>", "<push-late/>", "<settings/>"
+        });
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
         new AndroidPlatformAdapter().GoBack(driver);
         Assert.Equal(1, executor.Presses);
