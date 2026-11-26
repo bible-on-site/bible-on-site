@@ -1047,6 +1047,34 @@ describe("issues and PR administration", () => {
 	});
 	it("renders description, evidence, timeline and linked PRs", async () => {
 		mocks.search = { id: ID };
+		mocks.list.mockResolvedValue({
+			items: [
+				pr,
+				item({
+					...pr,
+					id: "00000000-0000-4000-8000-000000000003",
+					number: 3,
+					title: "הצעה שמוזגה",
+					state: "merged",
+				}),
+				item({
+					...pr,
+					id: "00000000-0000-4000-8000-000000000004",
+					number: 4,
+					title: "הצעה שנסגרה",
+					state: "closed",
+				}),
+				item({
+					...pr,
+					id: "00000000-0000-4000-8000-000000000005",
+					number: 5,
+					title: "הצעה שדורשת תיקון",
+					apiVersion: CONTRIBUTION_API_VERSION + 1,
+				}),
+			],
+			counts: { issues: 0, prs: 4, open: 2, closed: 2, all: 4 },
+			nextCursor: null,
+		});
 		issue.events.push({
 			id: "comment",
 			kind: "comment",
@@ -1068,6 +1096,12 @@ describe("issues and PR administration", () => {
 			"href",
 			`/?tab=prs&id=${PRID}&issueId=${ID}&state=all&view=changes`,
 		);
+		const linked = within(
+			screen.getByRole("region", { name: "הצעות השינוי של הפנייה" }),
+		);
+		expect(linked.getByText("מוזג", { exact: true })).toBeVisible();
+		expect(linked.getByText("סגור", { exact: true })).toBeVisible();
+		expect(linked.getByText("couldn't migrate to latest API")).toBeVisible();
 	});
 	it("opens an issue's filtered PR queue and carries the filters back from Changes", async () => {
 		unrelated = item({
@@ -1283,15 +1317,26 @@ describe("issues and PR administration", () => {
 		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
 			target: { value: "תגובה נפרדת שטרם נשלחה" },
 		});
-		fireEvent.click(screen.getByRole("tab", { name: /שינויים/ }));
+		const changes = screen.getByRole("tab", { name: /שינויים/ });
+		fireEvent.click(changes);
+		fireEvent.click(changes);
+		expect(mocks.navigate).toHaveBeenCalledTimes(1);
 		expect(screen.getByText("ישן")).toBeInTheDocument();
 		expect(screen.getByText("חדש")).toBeInTheDocument();
-		fireEvent.change(screen.getByLabelText("הערת סקירה (אופציונלית)"), {
+		const note = screen.getByLabelText("הערת סקירה (אופציונלית)");
+		fireEvent.change(note, {
 			target: { value: "הערת סקירה גלויה" },
 		});
+		mocks.update.mockRejectedValueOnce(new Error("צריך לטעון את ההצעה מחדש"));
 		fireEvent.click(screen.getByRole("button", { name: "אישור השינויים" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"צריך לטעון את ההצעה מחדש",
+		);
+		expect(note).toHaveValue("הערת סקירה גלויה");
+		fireEvent.click(screen.getByRole("button", { name: "אישור השינויים" }));
+		await waitFor(() => expect(note).toHaveValue(""));
 		await waitFor(() =>
-			expect(mocks.update).toHaveBeenCalledWith({
+			expect(mocks.update).toHaveBeenNthCalledWith(2, {
 				data: expect.objectContaining({
 					action: "approve",
 					body: "הערת סקירה גלויה",
@@ -1303,6 +1348,10 @@ describe("issues and PR administration", () => {
 			expect(mocks.update).toHaveBeenCalledWith({
 				data: expect.objectContaining({ action: "request_changes", body: "" }),
 			}),
+		);
+		fireEvent.click(screen.getByRole("tab", { name: /תיאור ודיון/ }));
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue(
+			"תגובה נפרדת שטרם נשלחה",
 		);
 	});
 	it("merges a doradsoft-authored PR without asking for another review", async () => {
@@ -1752,8 +1801,8 @@ describe("issues and PR administration", () => {
 			500,
 		);
 		expect(
-			validateContributionHomeSearch({ tab: "prs", id: PRID }),
-		).toMatchObject({ tab: "prs", id: PRID });
+			validateContributionHomeSearch({ tab: "prs", id: PRID, view: "changes" }),
+		).toMatchObject({ tab: "prs", id: PRID, view: "changes" });
 		expect(validateContributionHomeSearch({ tab: "invalid" }).tab).toBe(
 			"issues",
 		);
