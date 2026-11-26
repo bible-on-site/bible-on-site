@@ -15,6 +15,7 @@ import {
 	getArticleSummariesByPerekId,
 	getFurtherReadingSummariesByPerekId,
 } from "@/lib/articles";
+import { authorPortraitCacheKey } from "@/lib/authors/portrait-snapshot";
 import { getPerushimByPerekId } from "@/lib/perushim";
 import {
 	cachedPerKey,
@@ -28,7 +29,7 @@ import SeferDirect from "./SeferDirect";
 export const dynamic = "force-dynamic";
 
 const getCachedArticleSummaries = cachedPerKey(
-	"article-summaries",
+	authorPortraitCacheKey("article-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getArticleSummariesByPerekId(perekId),
@@ -42,7 +43,7 @@ const getCachedPerushim = cachedPerKey(
 );
 
 const getCachedFurtherReading = cachedPerKey(
-	"further-reading-summaries",
+	authorPortraitCacheKey("further-reading-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),

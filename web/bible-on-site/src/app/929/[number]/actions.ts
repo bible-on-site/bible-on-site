@@ -8,6 +8,7 @@ import {
 	getArticleSummariesByPerekIds,
 	getFurtherReadingSummariesByPerekIds,
 } from "@/lib/articles";
+import { authorPortraitCacheKey } from "@/lib/authors/portrait-snapshot";
 import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { formatDedication } from "@/lib/dedications/types";
 import { ExportError } from "@/lib/download/export-error";
@@ -47,7 +48,7 @@ import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
  * changes expire it; `false` revalidate keeps it out of ISR clocks.
  */
 const getCachedDateOverride = cachedPerKey(
-	"article-date-override",
+	authorPortraitCacheKey("article-date-override"),
 	(month: number, day: number) => `${month}:${day}`,
 	() => [COLLECTION_TAGS.articles, articleDateOverridesTag],
 	(month: number, day: number) => getArticleHebrewDateOverride(month, day),

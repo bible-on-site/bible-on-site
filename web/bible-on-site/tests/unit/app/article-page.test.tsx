@@ -306,6 +306,28 @@ describe("[slug] page", () => {
 			);
 		});
 
+		it.each([
+			["authors/caricatures/v2/high-res/1.png", "image/png"],
+			[
+				"authors/high-res/1.jpg?v=0123456789abcdef0123456789abcdef",
+				"image/jpeg",
+			],
+		])("uses the actual portrait MIME type for %s", async (key, type) => {
+			const imageUrl = `https://example.com/${key}`;
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				authorImageUrl: imageUrl,
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({ url: imageUrl, type }),
+			]);
+		});
+
 		it("uses content stripped of HTML when abstract is empty", async () => {
 			mockGetArticleById.mockResolvedValue({
 				...sampleArticle,

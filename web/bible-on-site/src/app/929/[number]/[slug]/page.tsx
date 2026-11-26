@@ -18,6 +18,7 @@ import {
 	getFurtherReadingSummariesByPerekId,
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
+import { authorPortraitCacheKey } from "../../../../lib/authors/portrait-snapshot";
 import {
 	getArticleDedications,
 	getSeferDedications,
@@ -132,14 +133,14 @@ export async function generateStaticParams({
  * invalidates exactly the data and routes that consume it.
  */
 const getCachedArticle = cachedPerKey(
-	"article",
+	authorPortraitCacheKey("article"),
 	(id: number) => String(id),
 	(key) => [COLLECTION_TAGS.articles, articleTag(Number(key))],
 	(id: number) => getArticleById(id),
 );
 
 const getCachedArticles = cachedPerKey(
-	"article-summaries",
+	authorPortraitCacheKey("article-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getArticleSummariesByPerekId(perekId),
@@ -153,7 +154,7 @@ const getCachedArticles = cachedPerKey(
  * tag on either side of it (old ∪ live covering rows).
  */
 const getCachedFurtherReading = cachedPerKey(
-	"further-reading-summaries",
+	authorPortraitCacheKey("further-reading-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),
@@ -281,7 +282,6 @@ export async function generateMetadata({
 						// rather than guessed.
 						url: article.authorImageUrl,
 						alt: article.authorName,
-						type: "image/jpeg",
 					},
 		});
 	}

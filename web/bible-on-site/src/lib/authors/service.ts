@@ -1,10 +1,11 @@
-import { assetsUrl } from "../assets-url";
 import { query } from "../api-client";
+import { assetsUrl } from "../assets-url";
 import {
 	getArticleMetrics,
 	metricOrFallback,
 	type ReadingMetric,
 } from "../reading-metrics";
+import { getAuthorPortraitKey } from "./portrait-snapshot";
 import type { AuthorArticle, AuthorDetails } from "./types";
 import { normalizeAuthorName } from "./url-utils";
 
@@ -55,15 +56,15 @@ async function checkS3Availability(): Promise<void> {
 }
 
 /**
- * Build the public URL for author images based on author ID.
- * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
- * Handles CDN, RustFS (dev) and AWS S3 (prod) URLs.
+ * Resolve the build's selected portrait for production assets, with the
+ * legacy JPEG as the fallback for missing entries and other asset buckets.
  */
 export function getAuthorImageUrl(authorId: number): string {
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
 	checkS3Availability();
 
-	return assetsUrl(`authors/high-res/${authorId}.jpg`);
+	const portraitKey = getAuthorPortraitKey(authorId);
+	return assetsUrl(portraitKey ?? `authors/high-res/${authorId}.jpg`);
 }
 
 /**

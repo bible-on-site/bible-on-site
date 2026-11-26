@@ -5,6 +5,7 @@ import {
 } from "@/data/parasha/parasha-units";
 import type { ArticleSummary } from "@/lib/articles";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { authorPortraitCacheKey } from "@/lib/authors/portrait-snapshot";
 import {
 	getPerushimForRanges,
 	type RangePerushSummary,
@@ -51,7 +52,7 @@ export const getParashaRangePerushim = cachedPerKey(
 );
 
 export const getParashaRangeArticles = cachedPerKey(
-	"parasha-range-article-summaries",
+	authorPortraitCacheKey("parasha-range-article-summaries"),
 	(unitId: number, scope: UnitSummaryScope) => `${unitId}:${scope}`,
 	(key) => {
 		const [unitId, scope] = key.split(":");
@@ -88,7 +89,7 @@ export const getMasoraRangePerushim = cachedPerKey(
 );
 
 export const getMasoraRangeArticles = cachedPerKey(
-	"range-article-summaries",
+	authorPortraitCacheKey("range-article-summaries"),
 	(unitId: number) => String(unitId),
 	(key) => [COLLECTION_TAGS.articles, masoraArticlesTag(Number(key))],
 	async (unitId: number) => {

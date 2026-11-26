@@ -7,6 +7,13 @@ jest.mock("../../../src/lib/api-client", () => ({
 	query: jest.fn(),
 }));
 
+jest.mock("node:fs", () => ({
+	...jest.requireActual("node:fs"),
+	readFileSync: jest.fn(),
+}));
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { query } from "../../../src/lib/api-client";
 import {
 	getAllAuthorSlugs,
@@ -16,6 +23,8 @@ import {
 } from "../../../src/lib/authors/service";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
+const mockReadFile = jest.mocked(readFileSync);
+const snapshotCacheKey = Symbol.for("bible-on-site.author-portrait-snapshot");
 
 describe("authors service", () => {
 	const originalEnv = process.env;
@@ -34,6 +43,127 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorImageUrl", () => {
+		beforeEach(() => {
+			mockReadFile.mockReturnValue("{}");
+		});
+
+		afterEach(() => {
+			Reflect.deleteProperty(globalThis, snapshotCacheKey);
+		});
+
+		function setProductionAssets() {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			delete process.env.S3_ENDPOINT;
+			delete process.env.S3_BUCKET;
+			delete process.env.ASSETS_BASE_URL;
+			delete process.env.S3_REGION;
+			delete process.env.AWS_REGION;
+		}
+
+		it("reads the selected portrait from the build snapshot once", () => {
+			setProductionAssets();
+			process.env.ASSETS_BASE_URL = "https://assets.example/";
+			mockReadFile.mockReturnValue(
+				JSON.stringify({
+					81: "authors/caricatures/future-release/high-res/81.png",
+				}),
+			);
+
+			expect(getAuthorImageUrl(81)).toBe(
+				"https://assets.example/authors/caricatures/future-release/high-res/81.png",
+			);
+			expect(getAuthorImageUrl(32)).toBe(
+				"https://assets.example/authors/high-res/32.jpg",
+			);
+			expect(mockReadFile).toHaveBeenCalledTimes(1);
+			expect(mockReadFile).toHaveBeenCalledWith(
+				join(process.cwd(), "public", "generated", "author-portraits.json"),
+				"utf8",
+			);
+		});
+
+		it("uses the versioned JPEG selected after an admin upload", () => {
+			setProductionAssets();
+			const key =
+				"authors/high-res/39.jpg?v=0123456789abcdef0123456789abcdef-2";
+			mockReadFile.mockReturnValue(JSON.stringify({ 39: key }));
+
+			expect(getAuthorImageUrl(39)).toBe(
+				`https://bible-on-site-assets.s3.il-central-1.amazonaws.com/${key}`,
+			);
+		});
+
+		it("falls back to the JPEG when the snapshot cannot be read", () => {
+			setProductionAssets();
+			mockReadFile.mockImplementationOnce(() => {
+				throw new Error("file not found");
+			});
+
+			expect(getAuthorImageUrl(25)).toBe(
+				"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/25.jpg",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Could not read the author portrait snapshot. Using legacy JPEGs.",
+				expect.any(Error),
+			);
+		});
+
+		it.each(["invalid JSON", "[]", "null", '"portrait"'])(
+			"falls back to the JPEG for an invalid snapshot body %s",
+			(body) => {
+				setProductionAssets();
+				mockReadFile.mockReturnValue(body);
+
+				expect(getAuthorImageUrl(62)).toBe(
+					"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/62.jpg",
+				);
+				const warnings = jest.mocked(console.warn).mock.calls;
+				expect(warnings).toHaveLength(1);
+				expect(warnings[0][0]).toMatch(/portrait snapshot.*legacy JPEGs/);
+			},
+		);
+
+		it("skips invalid entries and keeps valid entries in the same snapshot", () => {
+			setProductionAssets();
+			process.env.ASSETS_BASE_URL = "https://assets.example";
+			mockReadFile.mockReturnValue(
+				JSON.stringify({
+					25: "authors/caricatures/v2/high-res/26.png",
+					32: "authors/caricatures/../high-res/32.png",
+					62: "https://example.com/authors/caricatures/v2/high-res/62.png",
+					79: "authors/high-res/79.jpg?v=invalid",
+					80: { key: "authors/caricatures/v2/high-res/80.png" },
+					81: "authors/caricatures/v2/high-res/81.png",
+				}),
+			);
+
+			for (const id of [25, 32, 62, 79, 80]) {
+				expect(getAuthorImageUrl(id)).toBe(
+					`https://assets.example/authors/high-res/${id}.jpg`,
+				);
+			}
+			expect(getAuthorImageUrl(81)).toBe(
+				"https://assets.example/authors/caricatures/v2/high-res/81.png",
+			);
+			expect(console.warn).toHaveBeenCalledTimes(1);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Ignoring invalid author portrait snapshot entries. Using legacy JPEGs for affected authors.",
+			);
+		});
+
+		it("retains the legacy JPG for a non-production bucket", () => {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			delete process.env.S3_ENDPOINT;
+			delete process.env.ASSETS_BASE_URL;
+			process.env.S3_BUCKET = "bible-on-site-assets-test";
+			process.env.S3_REGION = "il-central-1";
+
+			expect(getAuthorImageUrl(81)).toBe(
+				"https://bible-on-site-assets-test.s3.il-central-1.amazonaws.com/authors/high-res/81.jpg",
+			);
+			expect(mockReadFile).not.toHaveBeenCalled();
+		});
+
 		it("builds MinIO URL when S3_ENDPOINT is set", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			process.env.S3_BUCKET = "my-bucket";
@@ -89,9 +219,12 @@ describe("authors service", () => {
 		it("skips check in production mode", () => {
 			jest.replaceProperty(process.env, "NODE_ENV", "production");
 			process.env.S3_ENDPOINT = "http://localhost:4566";
+			delete process.env.ASSETS_BASE_URL;
+			delete process.env.S3_BUCKET;
 
-			// Should not throw or fetch — early return in production
-			expect(() => getAuthorImageUrl(1)).not.toThrow();
+			expect(getAuthorImageUrl(1)).toBe(
+				"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
+			);
 		});
 	});
 

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { query } from "../../../lib/api-client";
 import { authorNameToSlug, getAuthorImageUrl } from "../../../lib/authors";
+import { authorPortraitCacheKey } from "../../../lib/authors/portrait-snapshot";
 import { buildAuthorsListGraph } from "../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../lib/seo/opengraph";
 import { JsonLd } from "../../components/JsonLd";
@@ -54,7 +55,7 @@ async function getAllAuthors(): Promise<AuthorSummary[]> {
  */
 const getCachedAuthors = unstable_cache(
 	async () => getAllAuthors(),
-	["all-authors"],
+	[authorPortraitCacheKey("all-authors")],
 	{
 		tags: ["authors"],
 		revalidate: false,

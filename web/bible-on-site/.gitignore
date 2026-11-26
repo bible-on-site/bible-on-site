@@ -69,6 +69,9 @@ tests/unit/components/err.txt
 /src/data/db/sefer-books/
 /public/generated/sefarim/
 
+# Build-time snapshot of the production author portrait manifest.
+/public/generated/author-portraits.json
+
 # Staged from web/shared/branding (scripts/stage-brand-assets.mjs, #3708)
 /public/fonts/
 /public/font-license.txt

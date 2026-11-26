@@ -10,6 +10,7 @@ import {
 	getArticleSummariesByPerekId,
 	getFurtherReadingSummariesByPerekId,
 } from "../../../lib/articles";
+import { authorPortraitCacheKey } from "../../../lib/authors/portrait-snapshot";
 import {
 	getPerekDedications,
 	getSeferDedications,
@@ -68,7 +69,7 @@ export const dynamicParams = false;
  * - Single page: revalidatePath('/929/{perekId}')
  */
 const getCachedArticleSummaries = cachedPerKey(
-	"article-summaries",
+	authorPortraitCacheKey("article-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getArticleSummariesByPerekId(perekId),
@@ -82,7 +83,7 @@ const getCachedArticleSummaries = cachedPerKey(
  * tag on either side of it (old ∪ live covering rows).
  */
 const getCachedFurtherReading = cachedPerKey(
-	"further-reading-summaries",
+	authorPortraitCacheKey("further-reading-summaries"),
 	(perekId: number) => String(perekId),
 	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
 	(perekId: number) => getFurtherReadingSummariesByPerekId(perekId),

@@ -11,6 +11,7 @@ import {
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { rangesRefSpans } from "@/data/parasha/parasha-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import { authorPortraitCacheKey } from "@/lib/authors/portrait-snapshot";
 import {
 	getMoedArticleSummaries,
 	getMoedBySlug,
@@ -64,7 +65,7 @@ const getCachedMoedPerushim = cachedPerKey(
  * range or explicit link emit moed:{slug} (dependencies.ts), so the tag
  * keeps the card list honest without waiting on the moed itself. */
 const getCachedMoedArticles = cachedPerKey(
-	"moed-article-summaries",
+	authorPortraitCacheKey("moed-article-summaries"),
 	(moed: Moed) => moed.slug,
 	(slug) => [COLLECTION_TAGS.articles, moedTag(slug)],
 	(moed) => getMoedArticleSummaries(moed.id, moed.ranges),

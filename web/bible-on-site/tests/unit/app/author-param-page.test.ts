@@ -119,6 +119,30 @@ describe("[authorParam] page", () => {
 			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
 		});
 
+		it.each([
+			["authors/caricatures/v2/high-res/1.png", "image/png"],
+			[
+				"authors/high-res/1.jpg?v=0123456789abcdef0123456789abcdef",
+				"image/jpeg",
+			],
+		])("uses the actual portrait MIME type for %s", async (key, type) => {
+			const imageUrl = `https://example.com/${key}`;
+			mockGetAuthorByName.mockResolvedValue({
+				id: 1,
+				name: "הרב לדוגמא",
+				details: "",
+				imageUrl,
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ authorParam: SLUG }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({ url: imageUrl, type }),
+			]);
+		});
+
 		it("returns author name in title when found by name slug", async () => {
 			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
