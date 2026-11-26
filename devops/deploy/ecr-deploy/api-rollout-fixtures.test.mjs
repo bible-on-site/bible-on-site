@@ -1,28 +1,32 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import stableStringify from "fast-json-stable-stringify";
+import { healthRoutes, PublicAPIMonitor } from "./api-public-monitor.mjs";
 import { APIRolloutAWS } from "./api-rollout-aws.mjs";
-import { PublicAPIMonitor, healthRoutes } from "./api-public-monitor.mjs";
+import {
+	ARN,
+	DISCOVERY_ID,
+	IMAGE_URI,
+	NAMESPACE_ID,
+	privateIP,
+	READY_CHECK,
+	SERVICE_ARN,
+} from "./api-rollout-state.mjs";
 import {
 	API_ACCOUNT,
 	API_CLUSTER,
 	API_SERVICE,
 	LEASE_PREFIX,
 } from "./api-task-protection.mjs";
-import {
-	ARN,
-	DISCOVERY_ID,
-	IMAGE_URI,
-	NAMESPACE_ID,
-	READY_CHECK,
-	SERVICE_ARN,
-	privateIP,
-} from "./api-rollout-state.mjs";
 
 export const NOW = Date.parse("2026-11-01T00:00:00Z");
 export const OLD_INSTANCE = "11111111-1111-4111-8111-111111111111";
 export const NEW_INSTANCE = "22222222-2222-4222-8222-222222222222";
 export const RESTORED_INSTANCE = "33333333-3333-4333-8333-333333333333";
+const servicePath = `${API_CLUSTER}/${API_SERVICE}/`;
+export const ROLLBACK_DEPLOYMENT_ARN = `${ARN}service-deployment/${servicePath}rollback`;
+const sourceRevision = `${ARN}service-revision/${servicePath}11`;
+const targetRevision = `${ARN}service-revision/${servicePath}22`;
 export const taskArn = (letter) =>
 	ARN + "task/" + API_CLUSTER + "/" + letter.repeat(32);
 export const definitionArn = (revision) =>
@@ -144,6 +148,8 @@ export function service(def = definition()) {
 		taskDefinition: def.taskDefinitionArn,
 		deployments: [
 			{
+				id: "ecs-svc/11",
+				status: "PRIMARY",
 				taskDefinition: def.taskDefinitionArn,
 				rolloutState: "COMPLETED",
 				failedTasks: 0,
@@ -155,6 +161,7 @@ export function task(def, image, letter = "a", at = -60000) {
 	return {
 		taskArn: taskArn(letter),
 		taskDefinitionArn: def.taskDefinitionArn,
+		startedBy: "ecs-svc/11",
 		clusterArn: ARN + "cluster/" + API_CLUSTER,
 		group: "service:" + API_SERVICE,
 		lastStatus: "RUNNING",
@@ -194,7 +201,7 @@ export function task(def, image, letter = "a", at = -60000) {
 }
 
 export class Backend {
-	constructor() {
+	constructor({ pinnedBaseline = false } = {}) {
 		this.at = 0;
 		this.calls = [];
 		this.records = [];
@@ -205,10 +212,16 @@ export class Backend {
 			...this.oldImages.manifests,
 			...this.newImages.manifests,
 		]);
-		this.definitions = new Map([[definitionArn(9), definition()]]);
-		this.current = definition();
-		this.original = definition();
-		this.old = task(this.current, this.oldImages.root);
+		const baselineDigest = pinnedBaseline
+			? this.oldImages.children.amd64
+			: this.oldImages.root;
+		this.original = definition(
+			9,
+			pinnedBaseline ? `${IMAGE_URI}@${baselineDigest}` : undefined,
+		);
+		this.current = structuredClone(this.original);
+		this.definitions = new Map([[definitionArn(9), this.original]]);
+		this.old = task(this.current, baselineDigest);
 		this.next = null;
 		this.started = null;
 		this.releasedAt = null;
@@ -219,6 +232,8 @@ export class Backend {
 		this.expiration = null;
 		this.published = false;
 		this.recovering = false;
+		this.restored = null;
+		this.rollbackAt = null;
 		this.updates = 0;
 	}
 	evolve() {
@@ -229,7 +244,7 @@ export class Backend {
 			elapsed >= (this.neverReady ? 35000 : 7000) ? "HEALTHY" : "UNKNOWN";
 		this.next.containers[0].healthStatus = this.next.healthStatus;
 		if (this.recovering) {
-			this.old.lastStatus = "RUNNING";
+			this.restored.lastStatus = "RUNNING";
 			this.next.lastStatus = "STOPPED";
 		} else
 			for (const [arn, at] of this.releaseTimes) {
@@ -237,6 +252,15 @@ export class Backend {
 				if (row && row !== this.next && this.at - at >= 5000)
 					row.lastStatus = "STOPPED";
 			}
+	}
+	beginRollback(source = this.old) {
+		this.rollbackAt = this.at;
+		this.recovering = true;
+		this.current = structuredClone(this.original);
+		this.restored = source;
+		this.restored.desiredStatus = "RUNNING";
+		this.allTasks.set(source.taskArn, source);
+		this.evolve();
 	}
 	state() {
 		this.evolve();
@@ -248,6 +272,7 @@ export class Backend {
 			const done = running.length === 1 && running[0] === this.next;
 			s.runningCount = running.length;
 			s.pendingCount = this.next.lastStatus === "PENDING" ? 1 : 0;
+			s.deployments[0].id = this.next.startedBy;
 			if (!done)
 				s.deployments = [
 					{
@@ -268,7 +293,7 @@ export class Backend {
 	instances() {
 		this.evolve();
 		const tasks = this.recovering
-			? [this.old]
+			? [this.restored]
 			: [...this.allTasks.values()].filter(
 					(row) =>
 						row !== this.next ||
@@ -458,6 +483,7 @@ export class Backend {
 					this.updates === 1 ? "b" : "c",
 					this.at + 5000,
 				);
+				this.next.startedBy = this.updates === 1 ? "ecs-svc/22" : "ecs-svc/33";
 				if (this.next.containers[0].image.includes("@"))
 					this.next.containers[0].imageDigest =
 						this.next.containers[0].image.split("@")[1];
@@ -473,32 +499,57 @@ export class Backend {
 							? []
 							: [
 									{
-										serviceDeploymentArn:
-											ARN +
-											"service-deployment/" +
-											API_CLUSTER +
-											"/" +
-											API_SERVICE +
-											"/owned",
+										serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN,
 									},
 								],
 				};
-			case "DescribeServiceDeployments":
+			case "DescribeServiceDeployments": {
+				const finished = this.recovering && this.at - this.rollbackAt >= 16000;
 				return {
 					serviceDeployments: [
 						{
+							serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN,
 							serviceArn: SERVICE_ARN,
-							status: "IN_PROGRESS",
-							sourceServiceRevisions: [{ arn: "source-revision" }],
+							clusterArn: `${ARN}cluster/${API_CLUSTER}`,
+							status: finished
+								? "ROLLBACK_SUCCESSFUL"
+								: this.recovering
+									? "ROLLBACK_IN_PROGRESS"
+									: "IN_PROGRESS",
+							sourceServiceRevisions: [
+								{
+									arn: sourceRevision,
+									requestedTaskCount: 1,
+									runningTaskCount: 1,
+									pendingTaskCount: 0,
+								},
+							],
+							targetServiceRevision: {
+								arn: targetRevision,
+								requestedTaskCount: finished ? 0 : 1,
+								runningTaskCount: 0,
+								pendingTaskCount: finished ? 0 : 1,
+							},
+							...(finished && {
+								finishedAt: new Date(NOW + this.rollbackAt + 16000),
+								rollback: {
+									serviceRevisionArn: sourceRevision,
+									startedAt: new Date(NOW + this.rollbackAt),
+								},
+							}),
 						},
 					],
 					failures: [],
+					$clock: clock,
 				};
+			}
 			case "DescribeServiceRevisions":
 				return {
 					serviceRevisions: [
 						{
+							serviceRevisionArn: sourceRevision,
 							serviceArn: SERVICE_ARN,
+							clusterArn: `${ARN}cluster/${API_CLUSTER}`,
 							taskDefinition: this.original.taskDefinitionArn,
 							containerImages: [
 								{ containerName: "api", imageDigest: this.oldImages.root },
@@ -508,9 +559,7 @@ export class Backend {
 					failures: [],
 				};
 			case "StopServiceDeployment":
-				this.recovering = true;
-				this.current = structuredClone(this.original);
-				this.evolve();
+				this.beginRollback();
 				return {};
 			default:
 				throw new Error("Unknown fake operation " + name);
@@ -556,6 +605,8 @@ class Monitor {
 		const b = this.backend;
 		let version = "0.1.100",
 			instance = this.legacy ? null : OLD_INSTANCE;
+		if (b.recovering && b.restored !== b.old && !this.legacy)
+			instance = RESTORED_INSTANCE;
 		if (
 			b.next &&
 			!b.recovering &&
@@ -573,8 +624,8 @@ class Monitor {
 	instance = PublicAPIMonitor.prototype.instance;
 	sawProcess = PublicAPIMonitor.prototype.sawProcess;
 }
-export function fixture() {
-	const backend = new Backend(),
+export function fixture(options) {
+	const backend = new Backend(options),
 		monitor = new Monitor(backend);
 	const record = (name, value) =>
 		backend.records.push({

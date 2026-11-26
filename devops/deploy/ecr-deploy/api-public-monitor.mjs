@@ -7,15 +7,20 @@ import { API_ORIGINS, HTTP_BUDGET_MS } from "./api-public-transport.mjs";
 
 const uuid =
 	/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-export const CONTRACT_QUERIES = {
+const CONTENT_CONTRACT_QUERIES = {
 	article: "query {articleById(id:495){id name abstract articleContent}}",
 	chapters: "query {perakim{perekId compiledSource}}",
 	dedications:
 		"query {dedications(context:{perekIds:[1]}){id expiresAt scopes{kind expiresAt}}}",
-	searchShabbat:
-		'query {searchArticles(phrase:"שבת",limit:10){total hits{articleId score}}}',
-	searchBereshit:
-		'query {searchArticles(phrase:"בראשית",limit:10){total hits{articleId score}}}',
+};
+const SEARCH_CONTRACT_LIMIT = 10;
+const SEARCH_CONTRACT_QUERIES = {
+	searchShabbat: `query {searchArticles(phrase:"שבת",limit:${SEARCH_CONTRACT_LIMIT}){total hits{articleId score}}}`,
+	searchBereshit: `query {searchArticles(phrase:"בראשית",limit:${SEARCH_CONTRACT_LIMIT}){total hits{articleId score}}}`,
+};
+export const CONTRACT_QUERIES = {
+	...CONTENT_CONTRACT_QUERIES,
+	...SEARCH_CONTRACT_QUERIES,
 };
 const routes = API_ORIGINS.flatMap((origin) => [
 	{ origin, path: "/health", status: "ok" },
@@ -27,6 +32,31 @@ export const healthRoutes = routes
 	.map(({ origin, path }) => origin + path);
 const sha = (value) =>
 	createHash("sha256").update(stableStringify(value)).digest("hex");
+
+function assertSearchContract(result, name) {
+	assert.ok(
+		Number.isSafeInteger(result?.total) &&
+			result.total >= SEARCH_CONTRACT_LIMIT &&
+			Array.isArray(result.hits) &&
+			result.hits.length === SEARCH_CONTRACT_LIMIT,
+		`Public search contract returned an incomplete page (${name})`,
+	);
+	const articleIds = new Set();
+	let previousScore = 1;
+	for (const hit of result.hits) {
+		assert.ok(
+			Number.isSafeInteger(hit?.articleId) &&
+				hit.articleId > 0 &&
+				!articleIds.has(hit.articleId) &&
+				Number.isFinite(hit.score) &&
+				hit.score > 0 &&
+				hit.score <= previousScore,
+			`Public search contract returned invalid ranked hits (${name})`,
+		);
+		articleIds.add(hit.articleId);
+		previousScore = hit.score;
+	}
+}
 
 export class PublicAPIMonitor {
 	constructor({
@@ -71,7 +101,11 @@ export class PublicAPIMonitor {
 			200,
 			"Public API returned an unsuccessful status",
 		);
-		assert.equal(data.errors, undefined, "Public GraphQL returned errors");
+		if (data.errors !== undefined) {
+			const error = new Error("Public GraphQL returned errors");
+			error.code = "PUBLIC_GRAPHQL_ERRORS";
+			throw error;
+		}
 		return {
 			data,
 			instance: response.headers.get("x-tanahpedia-instance"),
@@ -88,13 +122,16 @@ export class PublicAPIMonitor {
 		try {
 			const { data, instance, elapsedMs } = await this.read(route);
 			if (route.query) {
-				assert.deepEqual(
-					data.data.perakim
-						.map((item) => Number(item.perekId))
-						.sort((a, b) => a - b),
-					Array.from({ length: 929 }, (_, i) => i + 1),
-					"Public chapter identities changed",
-				);
+				const chapters = data.data?.perakim;
+				const ids = Array.isArray(chapters)
+					? chapters.map((item) => Number(item?.perekId)).sort((a, b) => a - b)
+					: [];
+				if (ids.length !== 929 || !ids.every((id, i) => id === i + 1)) {
+					throw Object.assign(new Error("Public chapter identities changed"), {
+						code: "PUBLIC_CHAPTER_IDENTITIES",
+						chapterCount: ids.length,
+					});
+				}
 			} else {
 				assert.deepEqual(Object.keys(data).sort(), ["status", "version"]);
 				assert.equal(data.status, route.status);
@@ -120,7 +157,14 @@ export class PublicAPIMonitor {
 				at,
 				route: route.origin + route.path,
 				elapsedMs: this.now() - at,
-				error: { name: error.name, code: error.code ?? null },
+				error: {
+					name: error.name,
+					code: error.code ?? null,
+					...(error.code === "PUBLIC_CHAPTER_IDENTITIES" &&
+					Number.isSafeInteger(error.chapterCount)
+						? { chapterCount: error.chapterCount }
+						: {}),
+				},
 			};
 		}
 		this.rows.push(row);
@@ -244,22 +288,33 @@ export class PublicAPIMonitor {
 						Array.from({ length: 929 }, (_, i) => i + 1),
 					);
 				}
+				if (Object.hasOwn(SEARCH_CONTRACT_QUERIES, name))
+					assertSearchContract(data.data?.searchArticles, name);
 				hashes[name] = sha(data.data);
 			}
 			results.push({ origin, hashes });
 		}
+		this.record("public-contracts", { version, requests: 14, results });
 		assert.deepEqual(
 			results[0].hashes,
 			results[1].hashes,
 			"Public alias contracts differ",
 		);
-		if (expected)
-			assert.deepEqual(
-				results,
-				expected,
-				"Public content or search contracts changed during deployment",
-			);
-		this.record("public-contracts", { version, requests: 14, results });
+		// A rebuild can change relevance scores even when the API version is
+		// unchanged. Check ranked results above and require both aliases to
+		// agree, then compare the content contracts with the pre-rollout values.
+		if (expected) {
+			for (const { origin, hashes } of results) {
+				const prior = expected.find((result) => result.origin === origin);
+				assert.ok(prior, "Public contract baseline is missing an alias");
+				for (const name of Object.keys(CONTENT_CONTRACT_QUERIES))
+					assert.equal(
+						hashes[name],
+						prior.hashes[name],
+						`Public content contracts changed during deployment (${name})`,
+					);
+			}
+		}
 		return results;
 	}
 }

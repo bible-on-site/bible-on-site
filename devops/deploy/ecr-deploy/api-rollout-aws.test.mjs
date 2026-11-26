@@ -9,6 +9,7 @@ import {
 	service,
 	sha,
 	task,
+	taskArn,
 } from "./api-rollout-fixtures.test.mjs";
 import {
 	ARN,
@@ -133,6 +134,40 @@ test("completion binds successful history to the current task, native image and 
 	f.calls.length = 0;
 	assert.equal(await f.aws.completion(f.state, f.next, f.image), true);
 	assert.deepEqual(f.calls, []);
+});
+
+test("native rollback accepts a newly started task running the verified source revision", async () => {
+	const f = completionFixture();
+	const originalTaskArn = taskArn("a");
+	const rollback = {
+		deploymentArn: f.deployment.serviceDeploymentArn,
+		source: f.revision.serviceRevisionArn,
+		target: f.deployment.sourceServiceRevisions[0].arn,
+	};
+	f.deployment.status = "ROLLBACK_SUCCESSFUL";
+	f.deployment.rollback = {
+		serviceRevisionArn: rollback.source,
+		startedAt: new Date(f.epoch + 75000),
+	};
+	[f.deployment.sourceServiceRevisions[0], f.deployment.targetServiceRevision] =
+		[
+			f.deployment.targetServiceRevision,
+			f.deployment.sourceServiceRevisions[0],
+		];
+
+	assert.equal(
+		await f.aws.completion(f.state, f.next, f.image, rollback),
+		true,
+	);
+	assert.equal(f.records[0].value.task, f.next.taskArn);
+	assert.notEqual(f.records[0].value.task, originalTaskArn);
+	f.state.service.deployments[0].rolloutState = "COMPLETED";
+	assert.equal(
+		await f.aws.completion(f.state, f.next, f.image, {
+			taskArn: originalTaskArn,
+		}),
+		false,
+	);
 });
 
 test("actual SDK completion serializes the bounded history lookup and deserializes its timestamps", async () => {

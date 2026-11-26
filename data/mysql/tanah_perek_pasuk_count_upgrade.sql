@@ -25,11 +25,10 @@ DEALLOCATE PREPARE pasukCountUpgrade;
 
 -- Readers (admin perakim, API Perek) select pasuk_count through
 -- tanah_perek_view. On databases whose structure predates the column the
--- stale view would hide it, so the view is refreshed here too — a view
--- carries no data, recreating it is safe to re-run, and the definition is
--- the same one tanah_static_structure.sql ships for fresh databases.
-DROP VIEW IF EXISTS tanah_perek_view;
-CREATE VIEW tanah_perek_view AS
+-- stale view would hide it. Replace the view in one statement so readers
+-- can keep using it during deployment. The definition matches the one
+-- tanah_static_structure.sql ships for fresh databases.
+CREATE OR REPLACE SQL SECURITY DEFINER VIEW tanah_perek_view AS
 SELECT p.id,
     p.id AS perek_id,
     s.id AS sefer_id,

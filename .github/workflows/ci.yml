@@ -3021,6 +3021,11 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      - name: Setup Node.js for production SQL preparation
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
       - name: Validate Production SQL Parser Compatibility
         working-directory: ${{ github.workspace }}
         run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only

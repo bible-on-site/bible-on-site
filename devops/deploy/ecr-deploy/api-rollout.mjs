@@ -43,6 +43,15 @@ function freshRecoveryWindow(monitor, index, version, instance) {
 	);
 }
 
+function errorLocation(error) {
+	return (
+		error.stack
+			?.split("\n")
+			.find((line) => /^\s+at /.test(line))
+			?.trim() ?? null
+	);
+}
+
 /** Recovery starts with a verified control-plane restore, even if public traffic
  * is currently unhealthy. All failed public samples remain in the journal.
  */
@@ -62,15 +71,22 @@ async function recover({
 	let lease = sourceLease,
 		retiring = baseline.task,
 		retiringVersion = baseline.public.version;
-	// A completed rollout has already retired the original source. Protect the
-	// exact replacement while restoring the old pin, so recovery also warms DNS.
+	// A rollout can retire the original source before failing. Protect the exact
+	// replacement while it is still serving so recovery can warm DNS.
 	if (sourceLease.released && replacement) {
 		const current = await aws.snapshot(baseline.task.taskArn);
-		unchanged(current, baseline, [target.taskDefinitionArn]);
+		unchanged(current, baseline, [
+			target.taskDefinitionArn,
+			baseline.definition.taskDefinitionArn,
+		]);
 		const task = current.tasks.find(
 			(row) => row.taskArn === replacement.taskArn,
 		);
-		if (task?.lastStatus === "RUNNING") {
+		if (
+			current.service.taskDefinition === target.taskDefinitionArn &&
+			task?.lastStatus === "RUNNING" &&
+			task.desiredStatus === "RUNNING"
+		) {
 			assertTask(task, target, replacement.image);
 			retiring = task;
 			retiringVersion = replacement.version;
@@ -97,10 +113,11 @@ async function recover({
 			reusedSource: restore.reusedSource,
 		});
 		const started = now();
+		const settledSource = restore.rollback?.taskArn;
 		let seen = null,
 			completionAt = null,
 			ecsCompleted = false,
-			ready = false,
+			ready = Boolean(settledSource),
 			visibility = null,
 			exclusive = null;
 		const candidateIndex = monitor.rows.length;
@@ -115,6 +132,7 @@ async function recover({
 			const old = state.tasks.find((task) => task.taskArn === retiring.taskArn);
 			const candidates = state.tasks.filter(
 				(task) =>
+					(!settledSource || task.taskArn === settledSource) &&
 					task.taskDefinitionArn === restore.definition.taskDefinitionArn &&
 					task.lastStatus === "RUNNING" &&
 					[restore.image.root, restore.image.child].includes(
@@ -179,6 +197,7 @@ async function recover({
 					state,
 					task,
 					restore.image,
+					restore.rollback,
 				);
 				const singleton =
 					currentCompletion &&
@@ -557,11 +576,7 @@ export async function runAPIRollout({
 		record("rollout-failed", {
 			name: error.name,
 			code: error.code ?? null,
-			location:
-				error.stack
-					?.split("\n")
-					.find((line) => /^\s+at /.test(line))
-					?.trim() ?? null,
+			location: errorLocation(error),
 			attempted,
 			protectedTask: lease.confirmed && !lease.released ? task.taskArn : null,
 			leaseKey: lease.key,
@@ -585,6 +600,7 @@ export async function runAPIRollout({
 				record("recovery-failed", {
 					name: recoveryError.name,
 					code: recoveryError.code ?? null,
+					location: errorLocation(recoveryError),
 					protectedTask:
 						lease.confirmed && !lease.released ? task.taskArn : null,
 					leaseKey: lease.key,

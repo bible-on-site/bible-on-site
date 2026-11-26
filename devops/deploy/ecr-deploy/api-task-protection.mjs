@@ -7,6 +7,8 @@ export const API_REGION = "il-central-1";
 export const LEASE_PREFIX = "tanahpedia:api-handover:";
 export const PROTECTION_MINUTES = 15;
 const taskPrefix = "arn:aws:ecs:il-central-1:250598594267:task/";
+const leaseNonce =
+	/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$/;
 
 export function assertAPITaskArn(task) {
 	assert.match(
@@ -39,10 +41,7 @@ export function expirySecond(value) {
 export class APITaskProtection {
 	constructor({ call, task, nonce, record = () => {} }) {
 		assertAPITaskArn(task);
-		assert.match(
-			nonce,
-			/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$/,
-		);
+		assert.match(nonce, leaseNonce);
 		this.call = call;
 		this.task = task;
 		this.key = LEASE_PREFIX + nonce;
@@ -131,13 +130,29 @@ export class APITaskProtection {
 	async grant() {
 		const tags = await this.tags(),
 			prior = await this.state();
+		const markerKeys = Object.keys(tags).filter((key) =>
+			key.startsWith(LEASE_PREFIX),
+		);
+		if (prior.protectionEnabled || markerKeys.length) {
+			this.record("protection-blocked", {
+				task: this.task,
+				protectionEnabled: prior.protectionEnabled,
+				markerCount: markerKeys.length,
+				markerKeys: markerKeys.filter((key) => {
+					const nonce = key.slice(LEASE_PREFIX.length);
+					return (
+						leaseNonce.test(nonce) && tags[key] === `${API_SERVICE}:${nonce}`
+					);
+				}),
+			});
+		}
 		assert.equal(
 			prior.protectionEnabled,
 			false,
 			"An existing task protection must remain unchanged",
 		);
 		assert.ok(
-			!Object.keys(tags).some((key) => key.startsWith(LEASE_PREFIX)),
+			markerKeys.length === 0,
 			"An existing task protection marker must remain unchanged",
 		);
 		this.record("protection-intent", {

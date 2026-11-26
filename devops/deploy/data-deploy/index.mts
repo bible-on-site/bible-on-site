@@ -31,6 +31,7 @@ import {
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mts";
+import { prepareCanonicalReferenceSQL } from "./canonical-reference.mts";
 import { buildDeployPayload } from "./deploy-payload.mts";
 import { invokeWithRestorationRetry } from "./lambda-invocation.mts";
 import sqlFiles from "./sql-files.json" with { type: "json" };
@@ -114,7 +115,10 @@ class DataDeployer extends DeployerBase {
 
 		for (const sqlFile of this.sqlFiles) {
 			const filePath = path.join(this.dataDir, sqlFile);
-			const content = fs.readFileSync(filePath);
+			const content = prepareCanonicalReferenceSQL(
+				sqlFile,
+				fs.readFileSync(filePath),
+			);
 
 			await s3Client.send(
 				new PutObjectCommand({
