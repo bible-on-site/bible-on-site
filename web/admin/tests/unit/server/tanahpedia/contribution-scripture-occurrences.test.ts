@@ -120,6 +120,40 @@ describe("canonical scripture occurrence candidates", () => {
 			/page/,
 		);
 	});
+
+	it("uses canonical parent and volume names while preserving Ezra as an exact volume", () => {
+		const source = [perek([qri("מִצְרַיִם")])];
+		const named = createScriptureOccurrenceIndex(
+			packScriptureCorpus([
+				{
+					name: "מלכים",
+					perekFrom: 288,
+					perakim: [],
+					additionals: [
+						{ name: "מלכים א", perekFrom: 288, perakim: source },
+						{ name: "מלכים ב", perekFrom: 310, perakim: source },
+					],
+				},
+				{
+					name: "עזרא",
+					perekFrom: 896,
+					perakim: [],
+					additionals: [
+						{ name: "עזרא", perekFrom: 896, perakim: source },
+						{ name: "נחמיה", perekFrom: 906, perakim: source },
+					],
+				},
+			]),
+		);
+		const citations = (book: string) =>
+			named
+				.search({ spellings: ["מצרים"], book })
+				.items.map((item) => item.citation);
+		expect(citations("מלכים")).toEqual(["מלכים א א א", "מלכים ב א א"]);
+		expect(citations("מלכים ב")).toEqual(["מלכים ב א א"]);
+		expect(citations("עזרא")).toEqual(["עזרא א א"]);
+		expect(citations("נחמיה")).toEqual(["נחמיה א א"]);
+	});
 });
 
 describe("reviewed scripture anchor validation", () => {

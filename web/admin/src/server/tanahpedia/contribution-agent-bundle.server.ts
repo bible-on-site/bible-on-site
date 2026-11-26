@@ -158,7 +158,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "scripture_occurrences",
 				description:
-					"Find candidate word spans in canonical Tanakh. Omit book for all books. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
+					"Find candidate word spans in canonical Tanakh. Omit book for all books. Use a Hebrew book name, for example שמואל for both volumes or שמואל א for a single volume. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
 				inputSchema: object(
 					{
 						spellings: {

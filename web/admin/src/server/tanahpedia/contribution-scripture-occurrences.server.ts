@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { ContributionAgentToolInputError } from "../../lib/tanahpedia/contribution-agent-tool-errors";
 import { toHebrewLetters } from "../../utils/hebrew";
 
 export interface ScriptureOccurrence {
@@ -36,16 +37,23 @@ type Segment = string | [written: string] | null;
 type Chapter = {
 	perekId: number;
 	book: string;
+	parentBook?: string;
 	chapter: number;
 	verses: Segment[][];
 };
 
 export function packScriptureCorpus(books: readonly CorpusBook[]): Chapter[] {
-	return books.flatMap((book) =>
-		(book.additionals ?? [book]).flatMap((volume) =>
+	return books.flatMap((book) => {
+		const volumes = book.additionals ?? [book];
+		// An exact volume name takes priority for catalogs such as Ezra/Nehemiah.
+		const parentBook = volumes.some((volume) => volume.name === book.name)
+			? {}
+			: { parentBook: book.name };
+		return volumes.flatMap((volume) =>
 			volume.perakim.map((perek, i) => ({
 				perekId: volume.perekFrom + i,
 				book: volume.name,
+				...parentBook,
 				chapter: i + 1,
 				verses: perek.pesukim.map(({ segments }) =>
 					segments.map(({ type, value }) => {
@@ -56,8 +64,8 @@ export function packScriptureCorpus(books: readonly CorpusBook[]): Chapter[] {
 					}),
 				),
 			})),
-		),
-	);
+		);
+	});
 }
 
 const consonants = (word: string) =>
@@ -138,7 +146,11 @@ export function createScriptureOccurrenceIndex(chapters: readonly Chapter[]) {
 	const byPerek = new Map(
 		chapters.map((chapter) => [chapter.perekId, chapter]),
 	);
-	const books = new Set(chapters.map((chapter) => chapter.book));
+	const books = new Set(
+		chapters.flatMap(({ book, parentBook }) =>
+			parentBook ? [book, parentBook] : [book],
+		),
+	);
 	const words = new Map<string, Posting[]>();
 	for (const chapter of chapters) {
 		for (const [verse, segments] of chapter.verses.entries()) {
@@ -159,7 +171,7 @@ export function createScriptureOccurrenceIndex(chapters: readonly Chapter[]) {
 	} {
 		const forms = parseSpellings(spellings);
 		if (book !== undefined && !books.has(book))
-			throw new Error("Unknown Hebrew scripture book name");
+			throw new ContributionAgentToolInputError("invalid_scripture_book");
 		assertPage(cursor, limit, 100);
 		const matches = new Map<
 			string,
@@ -176,7 +188,12 @@ export function createScriptureOccurrenceIndex(chapters: readonly Chapter[]) {
 					continue;
 				for (const posting of postings) {
 					const { chapter, verse: verseIndex, segment } = posting;
-					if (book !== undefined && chapter.book !== book) continue;
+					if (
+						book !== undefined &&
+						chapter.book !== book &&
+						chapter.parentBook !== book
+					)
+						continue;
 					const verse = chapter.verses[verseIndex];
 					const end = segment + form.length - 1;
 					if (end >= verse.length) continue;
