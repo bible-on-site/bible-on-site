@@ -2260,6 +2260,65 @@ mod tests {
         assert!(matches!(error, ServiceError::BadRequest(_)));
     }
 
+    /// The deploy order applies the person-places migration before the
+    /// commentator upgrade, so production can hold both place tables while
+    /// `tanahpedia_person_role_commentator` is still absent. A stored place
+    /// row must still block the delete in that state — the missing commentator
+    /// probe is the only one skipped.
+    #[tokio::test]
+    async fn delete_orphan_person_node_places_present_commentator_absent() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                // Both place tables deployed: death_place holds a row for this
+                // person, activity_place is empty; the commentator table is
+                // not yet migrated and contributes nothing.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        let executed_sql = format!("{:?}", transaction_log);
+        assert!(!executed_sql.contains("DELETE FROM"));
+    }
+
     /// A genuine database failure on the combined dependency guard is not a
     /// missing-schema signal: it must surface instead of falling back. The
     /// happy-path tail keeps a swallowed error visible — mistaking it for a
