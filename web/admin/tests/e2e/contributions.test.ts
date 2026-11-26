@@ -517,9 +517,37 @@ test.describe("Issues and typed pull requests", () => {
 			try {
 				await coldDiscussion.setViewportSize({ width: 390, height: 620 });
 				await coldDiscussion.goto(page.url());
+				const event = coldDiscussion.locator(`[id="${eventId}"]`);
+				await expect(event).toBeInViewport();
+				const anchorScroll = await coldDiscussion.evaluate(
+					() => window.scrollY,
+				);
+				const savedScroll = await coldDiscussion.evaluate(async () => {
+					const bottom =
+						document.documentElement.scrollHeight - window.innerHeight;
+					if (bottom > window.scrollY) {
+						await new Promise<void>((resolve) => {
+							window.addEventListener("scroll", () => resolve(), {
+								once: true,
+							});
+							window.scrollTo(0, bottom);
+						});
+					}
+					return window.scrollY;
+				});
+				expect(savedScroll).toBeGreaterThan(anchorScroll);
+				// Keep the saved scroll while activating the offscreen Changes tab.
+				await coldDiscussion
+					.getByRole("tab", { name: /^שינויים/ })
+					.evaluate((tab) => (tab as HTMLButtonElement).click());
 				await expect(
-					coldDiscussion.locator(`[id="${eventId}"]`),
-				).toBeInViewport();
+					coldDiscussion.getByRole("tabpanel", { name: /^שינויים/ }),
+				).toBeVisible();
+				await coldDiscussion.goBack();
+				await expect(event).toBeVisible();
+				await expect
+					.poll(() => coldDiscussion.evaluate(() => window.scrollY))
+					.toBe(savedScroll);
 			} finally {
 				await coldDiscussion.close();
 			}
