@@ -37,9 +37,11 @@ const TRIGGER: Record<
 export function AgentWorkStatus({
 	item,
 	agents = [],
+	showProposals = true,
 }: {
 	item: Contribution;
 	agents?: ContributionAgentSummary[];
+	showProposals?: boolean;
 }) {
 	const job = item.generation;
 	if (!job) return null;
@@ -124,17 +126,18 @@ export function AgentWorkStatus({
 					{job.error}
 				</p>
 			)}
-			{job.prIds.map((id, index) => (
-				<p key={id}>
-					<Link
-						className="contribution-link"
-						to="/pull-requests"
-						search={{ id }}
-					>
-						פתיחת הצעה {index + 1} לסקירה
-					</Link>
-				</p>
-			))}
+			{showProposals &&
+				job.prIds.map((id, index) => (
+					<p key={id}>
+						<Link
+							className="contribution-link"
+							to="/pull-requests"
+							search={{ id }}
+						>
+							פתיחת הצעה {index + 1} לסקירה
+						</Link>
+					</p>
+				))}
 		</section>
 	);
 }

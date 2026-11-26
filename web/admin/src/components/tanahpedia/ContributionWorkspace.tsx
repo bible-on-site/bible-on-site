@@ -61,6 +61,7 @@ export interface ContributionSearch {
 	q?: string;
 	state?: "open" | "closed" | "all";
 	assignee?: string;
+	view?: "changes";
 }
 export interface ContributionHomeSearch extends ContributionSearch {
 	tab?: "issues" | "prs";
@@ -84,6 +85,7 @@ export function validateContributionSearch(
 	return {
 		id: id(search.id),
 		issueId: id(search.issueId),
+		view: search.view === "changes" ? "changes" : undefined,
 		q: typeof search.q === "string" ? search.q.slice(0, 500) : undefined,
 		state:
 			search.state === "closed" || search.state === "all"
@@ -404,9 +406,70 @@ function AssignmentForm({
 	);
 }
 
+function LinkedPullRequests({
+	issue,
+	proposals,
+}: {
+	issue: Contribution;
+	proposals: Contribution[];
+}) {
+	if (!proposals.length) return null;
+	return (
+		<section
+			aria-labelledby="linked-proposals-title"
+			className="contribution-list contribution-linked-list"
+		>
+			<div className="contribution-list-head contribution-linked-heading">
+				<h2 id="linked-proposals-title">הצעות השינוי של הפנייה</h2>
+				<Link
+					className="contribution-link"
+					to="/"
+					search={{ tab: "prs", issueId: issue.id, state: "all" }}
+				>
+					לכל ההצעות
+				</Link>
+			</div>
+			{proposals.slice(0, 8).map((pr) => (
+				<div className="contribution-row" key={pr.id}>
+					<WorkflowIcon
+						kind="pr"
+						state={migrationBlocked(pr) ? "incompatible" : pr.state}
+					/>
+					<div className="contribution-row-content">
+						<Link
+							className="contribution-row-title"
+							to="/"
+							search={{
+								tab: "prs",
+								id: pr.id,
+								issueId: issue.id,
+								state: "all",
+								view: "changes",
+							}}
+						>
+							<bdi className="contribution-muted">#{pr.number}</bdi> {pr.title}
+						</Link>
+						<div className="contribution-row-meta">
+							{migrationBlocked(pr)
+								? CONTRIBUTION_UI.migrationFailed
+								: pr.state === "merged"
+									? "מוזג"
+									: pr.state === "closed"
+										? "סגור"
+										: REVIEW_LABELS[reviewStatus(pr)]}
+						</div>
+					</div>
+				</div>
+			))}
+		</section>
+	);
+}
+
 function Detail({
 	item,
 	all,
+	view,
+	onView,
 	actor,
 	busy,
 	act,
@@ -416,6 +479,8 @@ function Detail({
 }: {
 	item: Contribution;
 	all: Contribution[];
+	view?: ContributionSearch["view"];
+	onView: (view: ContributionSearch["view"]) => void;
 	agents: ContributionAgentSummary[];
 	actor?: Contributor;
 	busy: boolean;
@@ -423,8 +488,10 @@ function Detail({
 	edit: () => void;
 	refresh: () => void;
 }) {
-	const [tab, setTab] = useState("description"),
-		[comment, setComment] = useState("");
+	const [comment, setComment] = useState("");
+	const [reviewNote, setReviewNote] = useState("");
+	const tab =
+		item.kind === "pr" && view === "changes" ? "changes" : "description";
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
 	const articlePr = item.changes.some(
@@ -446,6 +513,9 @@ function Detail({
 	const linked = all.filter((other) => other.issueId === item.id);
 	const linkedIssue = all.find((other) => other.id === item.issueId);
 	const commentResponses = latestAgentResponses(item.events);
+	const submitReview = async (action: "approve" | "request_changes") => {
+		if (await act(action, { body: reviewNote })) setReviewNote("");
+	};
 	return (
 		<>
 			<div className="contribution-heading">
@@ -530,7 +600,7 @@ function Detail({
 					aria-controls="contribution-description"
 					id="description-tab"
 					type="button"
-					onClick={() => setTab("description")}
+					onClick={() => onView(undefined)}
 				>
 					תיאור ודיון{" "}
 					<span className="contribution-count">
@@ -544,7 +614,7 @@ function Detail({
 						aria-controls="contribution-changes"
 						id="changes-tab"
 						type="button"
-						onClick={() => setTab("changes")}
+						onClick={() => onView("changes")}
 					>
 						שינויים{" "}
 						<span className="contribution-count">{item.changes.length}</span>
@@ -591,6 +661,9 @@ function Detail({
 									<EvidenceList item={item} />
 								</div>
 							</article>
+							{item.kind === "issue" && (
+								<LinkedPullRequests issue={item} proposals={linked} />
+							)}
 							{item.revisionHistory?.map((snapshot) => (
 								<RevisionSnapshot
 									key={`${snapshot.revision}:${snapshot.version}`}
@@ -713,6 +786,21 @@ function Detail({
 												? "במיזוג ייבדק שהקישורים עדיין תואמים להשוואה. ההתקדמות נשמרת, ואם המיזוג נקטע אפשר להמשיך אותו בלי להחיל שוב קישורים שכבר נשמרו."
 												: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
 							</p>
+							{item.state === "open" &&
+								actor?.isDoradsoft &&
+								status !== "exempt" && (
+									<label className="contribution-review-note">
+										הערת סקירה (אופציונלית)
+										<textarea
+											className="contribution-input"
+											rows={2}
+											value={reviewNote}
+											maxLength={10000}
+											disabled={busy || articleMergePending}
+											onChange={(event) => setReviewNote(event.target.value)}
+										/>
+									</label>
+								)}
 							{item.state === "open" && (
 								<div className="contribution-form-actions">
 									{actor?.isDoradsoft && status !== "exempt" && (
@@ -721,9 +809,7 @@ function Detail({
 												className="contribution-button"
 												disabled={busy || articleMergePending}
 												type="button"
-												onClick={() =>
-													void act("request_changes", { body: comment })
-												}
+												onClick={() => void submitReview("request_changes")}
 											>
 												בקשת שינויים
 											</button>
@@ -733,7 +819,7 @@ function Detail({
 													busy || articleMergePending || status === "approved"
 												}
 												type="button"
-												onClick={() => void act("approve", { body: comment })}
+												onClick={() => void submitReview("approve")}
 											>
 												אישור השינויים
 											</button>
@@ -778,7 +864,11 @@ function Detail({
 							))}
 						</details>
 					)}
-					<AgentWorkStatus item={item} agents={agents} />
+					<AgentWorkStatus
+						item={item}
+						agents={agents}
+						showProposals={linked.length === 0}
+					/>
 				</div>
 				<aside className="contribution-sidebar">
 					<section>
@@ -839,29 +929,16 @@ function Detail({
 							</Link>
 						</section>
 					)}
-					{(linkedIssue || linked.length > 0) && (
+					{linkedIssue && (
 						<section>
 							<h3>דיונים מקושרים</h3>
-							{linkedIssue && (
-								<Link
-									className="contribution-link"
-									to="/"
-									search={{ id: linkedIssue.id, tab: "issues" }}
-								>
-									#{linkedIssue.number} {linkedIssue.title}
-								</Link>
-							)}
-							{linked.map((pr) => (
-								<p key={pr.id}>
-									<Link
-										className="contribution-link"
-										to="/"
-										search={{ id: pr.id, tab: "prs" }}
-									>
-										#{pr.number} {pr.title}
-									</Link>
-								</p>
-							))}
+							<Link
+								className="contribution-link"
+								to="/"
+								search={{ id: linkedIssue.id, tab: "issues" }}
+							>
+								#{linkedIssue.number} {linkedIssue.title}
+							</Link>
 						</section>
 					)}
 					{item.state !== "merged" && (
@@ -892,12 +969,29 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const editing = editingItem?.id === search.id ? editingItem : null;
 	const [actionError, setActionError] = useState("");
 	const path = "/";
+	const scope = kind === "pr" ? search.issueId : undefined;
 	const queueSearch = (
 		next: ContributionSearch = {},
 	): ContributionHomeSearch => ({
+		q: search.q,
+		state: search.state,
+		assignee: search.assignee,
+		issueId: scope,
 		...next,
 		tab: kind === "pr" ? "prs" : "issues",
 	});
+	const detail = useQuery({
+		queryKey: ["contribution", search.id],
+		queryFn: () => getContribution({ data: search.id as string }),
+		enabled: Boolean(search.id && search.id !== "new"),
+		staleTime: 0,
+		refetchInterval: (query) =>
+			query.state.data?.rebasePending ||
+			["queued", "running"].includes(query.state.data?.generation?.status ?? "")
+				? 2000
+				: false,
+	});
+	const item = detail.data;
 	const filters: ContributionListRequest =
 		search.id && search.id !== "new"
 			? { relatedTo: search.id }
@@ -906,9 +1000,17 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					state: search.state ?? "open",
 					q: search.q,
 					assignee: search.assignee as ContributionListRequest["assignee"],
+					...(scope ? { relatedTo: scope } : {}),
 				};
 	const list = useInfiniteQuery({
-		queryKey: ["contributions", "list", filters],
+		// The worker may finish on a different computer while the issue is open.
+		// Its new proposal IDs change this key as soon as the detail poll sees them.
+		queryKey: [
+			"contributions",
+			"list",
+			filters,
+			item?.kind === "issue" ? item.generation?.prIds : undefined,
+		],
 		queryFn: ({ pageParam }) =>
 			getContributions({
 				data: { ...filters, ...(pageParam ? { before: pageParam } : {}) },
@@ -922,17 +1024,6 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		queryFn: () => getContributionSession(),
 		staleTime: 0,
 	});
-	const detail = useQuery({
-		queryKey: ["contribution", search.id],
-		queryFn: () => getContribution({ data: search.id as string }),
-		enabled: Boolean(search.id && search.id !== "new"),
-		staleTime: 0,
-		refetchInterval: (query) =>
-			query.state.data?.rebasePending ||
-			["queued", "running"].includes(query.state.data?.generation?.status ?? "")
-				? 2000
-				: false,
-	});
 	const agents = useQuery({
 		queryKey: ["contributions", "agents"],
 		queryFn: () => getContributionAgents(),
@@ -943,7 +1034,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		enabled: search.id === "new" || Boolean(editing),
 	});
 	const needsLinkedIssue =
-		kind === "pr" && search.id === "new" && Boolean(search.issueId);
+		Boolean(scope) && (!search.id || search.id === "new");
 	const issue = useQuery({
 		queryKey: ["contribution", search.issueId],
 		queryFn: () => getContribution({ data: search.issueId as string }),
@@ -1001,7 +1092,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			refresh();
 			await navigate({
 				to: "/",
-				search: { id: item.id, tab: item.kind === "pr" ? "prs" : "issues" },
+				search: queueSearch({ id: item.id, view: search.view }),
 			});
 		},
 	});
@@ -1014,7 +1105,6 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		closed: 0,
 		all: 0,
 	};
-	const item = detail.data;
 	return (
 		<div className="contributions">
 			<div className="contribution-nav">
@@ -1157,6 +1247,14 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						key={item.id}
 						item={item}
 						all={all}
+						view={search.view}
+						onView={(view) => {
+							if (view !== search.view)
+								void navigate({
+									to: path,
+									search: queueSearch({ id: item.id, view }),
+								});
+						}}
 						agents={agents.data ?? []}
 						actor={session.data}
 						busy={mutation.isPending}
@@ -1171,7 +1269,22 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				<>
 					<div className="contribution-heading">
 						<div>
-							<h1>{kind === "issue" ? "פניות" : "הצעות שינוי"}</h1>
+							<h1>
+								{scope
+									? "הצעות השינוי של הפנייה"
+									: kind === "issue"
+										? "פניות"
+										: "הצעות שינוי"}
+							</h1>
+							{scope && issue.data && (
+								<Link
+									className="contribution-link"
+									to={path}
+									search={{ id: scope, tab: "issues" }}
+								>
+									<bdi>#{issue.data.number}</bdi> {issue.data.title}
+								</Link>
+							)}
 							<p>
 								{kind === "issue"
 									? "מה צריך לחקור, לתקן או להוסיף"
@@ -1283,7 +1396,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										<Link
 											className="contribution-row-title"
 											to={path}
-											search={queueSearch({ id: row.id })}
+											search={queueSearch({
+												id: row.id,
+												...(scope ? { view: "changes" } : {}),
+											})}
 										>
 											{row.title}
 										</Link>

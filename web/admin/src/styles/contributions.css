@@ -191,6 +191,19 @@
 	font-weight: 650;
 	color: #1f2328;
 }
+.contribution-linked-list {
+	margin-block: 20px;
+}
+.contribution-linked-heading {
+	align-items: baseline;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+.contribution-linked-heading h2 {
+	font-size: 16px;
+	font-weight: 650;
+}
 .contribution-row {
 	display: flex;
 	align-items: flex-start;
@@ -405,6 +418,17 @@
 	color: var(--muted);
 	font-size: 14px;
 	margin-bottom: 14px;
+}
+.contribution-review-note {
+	display: grid;
+	gap: 6px;
+	margin-block-end: 12px;
+	font-size: 14px;
+	font-weight: 550;
+}
+.contribution-review-note textarea {
+	resize: vertical;
+	font-weight: normal;
 }
 .contribution-form {
 	display: grid;

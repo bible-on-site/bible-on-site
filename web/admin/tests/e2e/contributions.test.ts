@@ -481,17 +481,21 @@ test.describe("Issues and typed pull requests", () => {
 			await expect(
 				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
+			const generatedProposal = page
+				.getByRole("region", { name: "הצעות השינוי של הפנייה" })
+				.getByRole("link", { name: /ערך לאברם לפי המקור/ });
+			await expect(generatedProposal).toBeVisible();
 			await capture(page, testInfo, "workstation-generation-completed");
-			await page
-				.getByRole("link", { name: "פתיחת הצעה 1 לסקירה", exact: true })
-				.click();
+			await generatedProposal.click();
 			await expect(
 				page.getByText("Local LLM", { exact: true }).first(),
 			).toBeVisible();
 			await expect(
 				page.getByRole("button", { name: "מיזוג PR", exact: true }),
 			).toBeDisabled();
-			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
+			await expect(
+				page.getByRole("tab", { name: "שינויים 1", exact: true }),
+			).toHaveAttribute("aria-selected", "true");
 			await expect(page.getByRole("table")).toContainText("אברם");
 			await capture(page, testInfo, "workstation-model-pr-review-gate");
 			const prId = new URL(page.url()).searchParams.get("id");

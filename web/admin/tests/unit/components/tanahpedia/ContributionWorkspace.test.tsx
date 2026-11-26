@@ -179,11 +179,20 @@ function show(kind: "issue" | "pr" = "issue") {
 	client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
-	return render(
+	const view = () => (
 		<QueryClientProvider client={client}>
 			<ContributionWorkspace kind={kind} />
-		</QueryClientProvider>,
+		</QueryClientProvider>
 	);
+	const mounted = render(view());
+	mocks.navigate.mockImplementation(({ search }) => {
+		if (Object.hasOwn(search, "view")) {
+			mocks.search = search;
+			mounted.rerender(view());
+		}
+		return Promise.resolve();
+	});
+	return mounted;
 }
 
 describe("issues and PR administration", () => {
@@ -1014,9 +1023,78 @@ describe("issues and PR administration", () => {
 			"href",
 			"https://example.com",
 		);
+		expect(screen.getByRole("link", { name: /#2 שינוי שם/ })).toHaveAttribute(
+			"href",
+			`/?tab=prs&id=${PRID}&issueId=${ID}&state=all&view=changes`,
+		);
+	});
+	it("opens an issue's filtered PR queue and carries the filters back from Changes", async () => {
+		const filters = {
+			issueId: ID,
+			state: "all",
+			q: pr.title,
+			assignee: "unassigned",
+		};
+		mocks.search = filters;
+		const queue = show("pr");
+		const link = await screen.findByRole("link", { name: pr.title });
+		expect(mocks.list).toHaveBeenCalledWith({
+			data: {
+				relatedTo: ID,
+				kind: "pr",
+				state: "all",
+				q: pr.title,
+				assignee: "unassigned",
+			},
+		});
+		const destination = new URL(
+			link.getAttribute("href") ?? "",
+			"https://fixture.invalid",
+		);
+		expect(Object.fromEntries(destination.searchParams)).toEqual({
+			...filters,
+			id: PRID,
+			tab: "prs",
+			view: "changes",
+		});
+		queue.unmount();
+		mocks.search = Object.fromEntries(destination.searchParams);
+		show("pr");
 		expect(
-			screen.getByRole("link", { name: /#2 שינוי שם/ }),
-		).toBeInTheDocument();
+			await screen.findByRole("tabpanel", { name: "שינויים 1" }),
+		).toBeVisible();
+		const back = screen.getByRole("link", { name: /חזרה לרשימה/ });
+		const returnUrl = new URL(
+			back.getAttribute("href") ?? "",
+			"https://fixture.invalid",
+		);
+		expect(Object.fromEntries(returnUrl.searchParams)).toEqual({
+			...filters,
+			tab: "prs",
+		});
+	});
+	it("shows new linked PRs after the detail poll receives the agent receipt", async () => {
+		mocks.search = { id: ID };
+		const counts = { issues: 1, prs: 1, open: 1, closed: 0, all: 1 };
+		mocks.list.mockResolvedValue({ items: [issue], counts, nextCursor: null });
+		show();
+		await screen.findByText(issue.description);
+		expect(
+			screen.queryByRole("region", { name: "הצעות השינוי של הפנייה" }),
+		).toBeNull();
+		mocks.list.mockResolvedValue({
+			items: [pr, issue],
+			counts,
+			nextCursor: null,
+		});
+		client.setQueryData(["contribution", ID], {
+			...issue,
+			generation: { status: "completed", prIds: [PRID] },
+		});
+		expect(
+			await screen.findByRole("link", { name: /#2 שינוי שם/ }),
+		).toBeVisible();
+		expect(mocks.list).toHaveBeenCalledTimes(2);
 	});
 	it("submits comments and explicit assignment changes", async () => {
 		mocks.search = { id: ID };
@@ -1065,19 +1143,28 @@ describe("issues and PR administration", () => {
 		show("pr");
 		await screen.findByText("תיאור מפורט");
 		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
+			target: { value: "תגובה נפרדת שטרם נשלחה" },
+		});
 		fireEvent.click(screen.getByRole("tab", { name: /שינויים/ }));
 		expect(screen.getByText("ישן")).toBeInTheDocument();
 		expect(screen.getByText("חדש")).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText("הערת סקירה (אופציונלית)"), {
+			target: { value: "הערת סקירה גלויה" },
+		});
 		fireEvent.click(screen.getByRole("button", { name: "אישור השינויים" }));
 		await waitFor(() =>
 			expect(mocks.update).toHaveBeenCalledWith({
-				data: expect.objectContaining({ action: "approve" }),
+				data: expect.objectContaining({
+					action: "approve",
+					body: "הערת סקירה גלויה",
+				}),
 			}),
 		);
 		fireEvent.click(screen.getByRole("button", { name: "בקשת שינויים" }));
 		await waitFor(() =>
 			expect(mocks.update).toHaveBeenCalledWith({
-				data: expect.objectContaining({ action: "request_changes" }),
+				data: expect.objectContaining({ action: "request_changes", body: "" }),
 			}),
 		);
 	});
@@ -1487,13 +1574,13 @@ describe("issues and PR administration", () => {
 			}),
 		);
 	});
-	it("cancels creation and returns to the matching queue", async () => {
+	it("cancels a linked draft and returns to the issue's PR queue", async () => {
 		mocks.search = { id: "new", issueId: ID };
 		show("pr");
 		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
 		expect(mocks.navigate).toHaveBeenCalledWith({
 			to: "/",
-			search: { tab: "prs" },
+			search: { tab: "prs", issueId: ID },
 		});
 	});
 	it("validates deep-link and filter state and exposes both routes", () => {
