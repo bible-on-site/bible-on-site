@@ -878,4 +878,37 @@ public class TanahpediaServiceTests
 
         metric.SourceHash.Should().BeEmpty();
     }
+
+    [Fact]
+    public void ImageLinkDto_ToModel_defaults_nullable_fields()
+    {
+        var link = new TanahpediaService.ImageLinkDto().ToModel();
+
+        link.Id.Should().BeEmpty();
+        link.OwnerKind.Should().BeEmpty();
+        link.OwnerId.Should().BeEmpty();
+        link.Image.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ImageDto_ToModel_defaults_nullable_fields_and_maps_the_rest()
+    {
+        var bare = new TanahpediaService.ImageDto().ToModel();
+        bare.ImageId.Should().BeEmpty();
+        bare.Url.Should().BeEmpty();
+        bare.AltText.Should().BeEmpty();
+
+        var image = new TanahpediaService.ImageDto
+        {
+            ImageId = "img-1",
+            Url = "https://cdn.example.com/a.jpg",
+            AltText = "תיאור",
+            Caption = "כיתוב",
+            CreditLine = "קרדיט",
+            IsPublicDomain = true,
+        }.ToModel();
+        image.ImageId.Should().Be("img-1");
+        image.Caption.Should().Be("כיתוב");
+        image.IsPublicDomain.Should().BeTrue();
+    }
 }

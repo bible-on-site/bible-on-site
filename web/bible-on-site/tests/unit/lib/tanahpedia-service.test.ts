@@ -997,6 +997,55 @@ describe("tanahpedia service", () => {
 				code: "ECONNREFUSED",
 			});
 		});
+
+		it("degrades entity images on missing schema and rethrows otherwise", async () => {
+			mockQuery.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+			await expect(getEntityImages("entity-1")).resolves.toEqual([]);
+
+			mockQuery.mockRejectedValueOnce(new Error("connection lost"));
+			await expect(getEntityImages("entity-1")).rejects.toThrow(
+				"connection lost",
+			);
+
+			mockQuery.mockRejectedValueOnce(new Error("connection lost"));
+			await expect(getEntityImagesForEntry("entry-1")).rejects.toThrow(
+				"connection lost",
+			);
+		});
+	});
+
+	describe("getEntitiesWithEntriesByRole", () => {
+		it("reads an empty listing while the role table is undeployed, rethrows other errors", async () => {
+			mockQuery.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+			await expect(
+				getEntitiesWithEntriesByRole("TANAH_COMMENTATOR"),
+			).resolves.toEqual([]);
+
+			mockQuery.mockRejectedValueOnce(new Error("connection lost"));
+			await expect(
+				getEntitiesWithEntriesByRole("TANAH_COMMENTATOR"),
+			).rejects.toThrow("connection lost");
+		});
+	});
+
+	describe("getCategoryCounts role-table degradation", () => {
+		it("keeps counting when the commentator table is undeployed, rethrows other errors", async () => {
+			mockQuery.mockImplementation((sql: string) =>
+				String(sql).includes("person_role_commentator")
+					? Promise.reject({ code: "ER_NO_SUCH_TABLE" })
+					: Promise.resolve([]),
+			);
+			await expect(getCategoryCounts()).resolves.toMatchObject({
+				TANAH_COMMENTATOR: 0,
+			});
+
+			mockQuery.mockImplementation((sql: string) =>
+				String(sql).includes("person_role_commentator")
+					? Promise.reject(new Error("connection lost"))
+					: Promise.resolve([]),
+			);
+			await expect(getCategoryCounts()).rejects.toThrow("connection lost");
+		});
 	});
 
 	describe("getPersonPlaceFacts", () => {

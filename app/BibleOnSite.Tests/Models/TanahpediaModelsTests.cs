@@ -227,6 +227,53 @@ public class TanahpediaModelsTests
         link.AttributionText.Should().Be("רישיון: קישור לרישיון");
     }
 
+    [Fact]
+    public void Image_RightsAndSourceFlags_CoverEachCombination()
+    {
+        new TanahpediaImage { IsPublicDomain = true, LicenseUrl = "https://x" }
+            .LicenseDisplay.Should().Be("נחלת הכלל");
+        new TanahpediaImage().LicenseDisplay.Should().BeNull();
+
+        var withUrl = new TanahpediaImage { SourceUrl = "https://x" };
+        withUrl.HasSourceLink.Should().BeTrue();
+        withUrl.HasPlainSource.Should().BeFalse();
+
+        var namedOnly = new TanahpediaImage { SourceName = "מקור" };
+        namedOnly.HasSourceLink.Should().BeFalse();
+        namedOnly.HasPlainSource.Should().BeTrue();
+
+        // A license URL under a public-domain flag is not a linkable license.
+        new TanahpediaImage { IsPublicDomain = true, LicenseUrl = "https://x" }
+            .HasLicenseLink.Should().BeFalse();
+        new TanahpediaImage { LicenseName = "CC" }
+            .HasPlainLicense.Should().BeTrue();
+        new TanahpediaImage { IsPublicDomain = true }
+            .HasPlainLicense.Should().BeTrue();
+        new TanahpediaImage().HasPlainLicense.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ImageLink_AttributionText_FallsBackToSourceUrl()
+    {
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { SourceUrl = "https://x" },
+        }.AttributionText.Should().Be("מקור: https://x");
+    }
+
+    [Fact]
+    public void ImageLink_CaptionText_TreatsEmptyStringsAsAbsent()
+    {
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Caption = "", CreditLine = "קרדיט" },
+        }.CaptionText.Should().Be("קרדיט");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Caption = "כיתוב", CreditLine = "" },
+        }.CaptionText.Should().Be("כיתוב");
+    }
+
     private static TanahpediaEntryStub Stub(string uniqueName, string title) => new()
     {
         Id = uniqueName,

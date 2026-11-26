@@ -170,6 +170,59 @@ describe("EntryImageGallery (#3769)", () => {
 		expect(screen.queryByText("נחלת הכלל")).not.toBeInTheDocument();
 	});
 
+	it("links a bare source URL with the fallback item label", () => {
+		render(
+			<EntryImageGallery
+				entryImages={[
+					link({
+						image: image({
+							sourceUrl: "https://commons.example.com/File:x.jpg",
+						}),
+					}),
+				]}
+				entityImages={[]}
+			/>,
+		);
+
+		expect(screen.getByRole("link", { name: "פריט המקור" })).toHaveAttribute(
+			"href",
+			"https://commons.example.com/File:x.jpg",
+		);
+		// A bare source name renders as text, not a link.
+		render(
+			<EntryImageGallery
+				entryImages={[
+					link({
+						image: image({ sourceName: "ארכיון", sourceUrl: null }),
+					}),
+				]}
+				entityImages={[]}
+			/>,
+		);
+		expect(screen.getAllByText("ארכיון").length).toBeGreaterThan(0);
+	});
+
+	it("credits the source name and lists modifications", () => {
+		render(
+			<EntryImageGallery
+				entryImages={[
+					link({
+						image: image({
+							sourceName: "ספריה הלאומית",
+							modifications: "חיתוך",
+						}),
+					}),
+				]}
+				entityImages={[]}
+			/>,
+		);
+
+		// The source name is the last credit fallback when no caption exists.
+		expect(screen.getAllByText("ספריה הלאומית").length).toBeGreaterThan(0);
+		expect(screen.getByText("חיתוך")).toBeTruthy();
+		expect(screen.getByText("שינויים")).toBeTruthy();
+	});
+
 	it("keeps a URL-only license reachable with a fallback link label", () => {
 		render(
 			<EntryImageGallery

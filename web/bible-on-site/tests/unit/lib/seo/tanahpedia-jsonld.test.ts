@@ -585,6 +585,38 @@ describe("seo/tanahpedia-jsonld", () => {
 			});
 		});
 
+		it("omits every optional field for a bare image", () => {
+			const node = pediaImageObject(
+				image({
+					width: null,
+					height: null,
+					caption: null,
+					creator: null,
+					creditLine: null,
+					sourceName: null,
+					sourceUrl: null,
+					licenseName: null,
+					licenseUrl: null,
+					isPublicDomain: false,
+				}),
+			);
+			expect(node).toEqual({
+				"@type": "ImageObject",
+				contentUrl: "https://cdn.example.com/avraham.jpg",
+				url: "https://cdn.example.com/avraham.jpg",
+				name: "דיוקן אברהם אבינו",
+			});
+		});
+
+		it("records a bare license name without license or acquireLicensePage URLs", () => {
+			const node = pediaImageObject(
+				image({ licenseUrl: null, sourceUrl: null }),
+			);
+			expect(node.copyrightNotice).toBe("CC BY-SA 4.0");
+			expect(node.license).toBeUndefined();
+			expect(node.acquireLicensePage).toBeUndefined();
+		});
+
 		it("keeps public domain distinct from a license — notice without license fields", () => {
 			const node = pediaImageObject(
 				image({
