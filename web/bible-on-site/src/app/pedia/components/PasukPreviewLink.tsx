@@ -72,15 +72,13 @@ async function fetchPasukPreview(
 			? `?perush=${encodeURIComponent(perush)}${note != null ? `&note=${note}` : ""}`
 			: "";
 		const res = await fetch(`/api/tanah/pasuk/${perekId}/${pasuk}${query}`);
-		if (!res.ok) {
-			previewCache.set(key, null);
-			return null;
-		}
+		// Failures are not cached: a transient error must not disable the
+		// preview for the rest of the session - the next hover retries.
+		if (!res.ok) return null;
 		const data: PasukPreviewData = await res.json();
 		previewCache.set(key, data);
 		return data;
 	} catch {
-		previewCache.set(key, null);
 		return null;
 	}
 }
