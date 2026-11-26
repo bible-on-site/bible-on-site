@@ -72,6 +72,8 @@ export function ImageUpload({
 	const handleChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
 			const file = e.target.files?.[0];
+			// Reset so picking the same file again fires another change event
+			e.target.value = "";
 			if (file) {
 				handleFile(file);
 			}
