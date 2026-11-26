@@ -21,8 +21,9 @@ public sealed class AndroidBackNavigationTests
         // The press waits out a full quiet window on the starting page, and
         // the helper must not return on the first rewrite: the pop counts
         // only once the settled frame served twice in a row.
+        var quietFor = executor.PressedAt!.Value - executor.FirstSampleAt!.Value;
+        Assert.True(quietFor >= TimeSpan.FromMilliseconds(500), $"pressed after only {quietFor.TotalMilliseconds}ms of quiet");
         var quiet = executor.Served.TakeWhile(frame => frame == "<preferences/>").Count();
-        Assert.True(quiet >= 5, $"pressed after only {quiet} quiet samples");
         Assert.Equal(new[] { "<preferences-pop/>", "<reader/>", "<reader/>" }, executor.Served.Skip(quiet));
     }
 
@@ -50,7 +51,7 @@ public sealed class AndroidBackNavigationTests
         // A press inside the push's settle window is consumed, yet the push's
         // own rewrite still turns the tree — the false positive the one-shot
         // verification could not tell from a pop. The push holds a frame for
-        // two samples mid-animation, so two equal snapshots are not a settled
+        // three samples mid-animation, so equal snapshots alone are not a settled
         // page; the press must land only after the push goes quiet.
         var executor = new BackExecutor(pushFrames: new[]
         {
@@ -78,6 +79,8 @@ public sealed class AndroidBackNavigationTests
         public int Presses { get; private set; }
         public int AcceptedPresses { get; private set; }
         public List<string> Served { get; } = new();
+        public DateTime? FirstSampleAt { get; private set; }
+        public DateTime? PressedAt { get; private set; }
         private readonly Dictionary<string, CommandInfo> _commands = [];
         private readonly Queue<string> _frames = new(pushFrames ?? Array.Empty<string>());
         private string _source = "<preferences/>";
@@ -98,6 +101,7 @@ public sealed class AndroidBackNavigationTests
                 {
                     _source = _frames.Dequeue();
                 }
+                FirstSampleAt ??= DateTime.UtcNow;
                 Served.Add(_source);
                 value = _source;
             }
@@ -105,6 +109,7 @@ public sealed class AndroidBackNavigationTests
             {
                 var swallow = swallowEveryPress || (swallowFirstPress && Presses == 0);
                 Presses++;
+                PressedAt ??= DateTime.UtcNow;
                 // The settle window owns every press while the tree is still
                 // rewriting itself; such a press never reaches the stack.
                 if (!swallow && _frames.Count == 0)
