@@ -262,9 +262,8 @@ describe("s3 image helpers", () => {
 				Bucket: "bucket-x",
 				ContentType: contentType,
 			});
-			expect(command.input.Key as string).toMatch(
-				new RegExp(`^pedia/images/.+\\.${ext}$`),
-			);
+			expect(command.input.Key as string).toMatch(/^pedia\/images\/.+/);
+			expect((command.input.Key as string).endsWith(`.${ext}`)).toBe(true);
 			expect(url).toContain(`pedia/images/`);
 			expect(url).toContain(`.${ext}`);
 		});
