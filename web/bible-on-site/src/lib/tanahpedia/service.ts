@@ -5,7 +5,6 @@ import {
 } from "../../../../shared/tanahpedia/index";
 import { isMissingMysqlSchema } from "../mysql-errors";
 import { query } from "../api-client";
-import { isMissingMysqlSchema } from "../mysql-errors";
 import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
 	CategoryHomepage,

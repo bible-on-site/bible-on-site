@@ -2125,6 +2125,10 @@ mod tests {
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
                         .to_string(),
                 )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
                 .into_connection(),
         );
 
@@ -2180,6 +2184,10 @@ mod tests {
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
                         .to_string(),
                 )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
                 .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
@@ -2222,12 +2230,17 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![dependency_count_row(0)],
                 ])
-                // death_place exists and holds a row; activity_place is absent.
+                // death_place exists and holds a row; activity_place and the
+                // commentator role table are absent.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![dependency_count_row(1)],
                 ])
                 .append_query_errors([sea_orm::DbErr::Custom(
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
                         .to_string(),
                 )])
                 .into_connection(),

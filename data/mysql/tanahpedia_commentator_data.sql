@@ -50,6 +50,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c1_person AND name_type_id = @c1_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -57,6 +59,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000001', @c1_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c1_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -77,6 +81,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000001', @c1_entry, @c1_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c1_entry AND entity_id = @c1_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -84,6 +90,8 @@ SELECT 's6c00000-0000-4000-8000-000000000101', N'החיד"א', @c1_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'החיד"א' AND entry_id = @c1_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000101'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -91,6 +99,8 @@ SELECT 's6c00000-0000-4000-8000-000000000102', N'חיד"א', @c1_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'חיד"א' AND entry_id = @c1_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000102'
 );
 
 -- -------------------------------------------
@@ -134,6 +144,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c2_person AND name_type_id = @c2_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000002'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -141,6 +153,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000002', @c2_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c2_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000002'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -161,6 +175,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000002', @c2_entry, @c2_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c2_entry AND entity_id = @c2_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000002'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -168,6 +184,8 @@ SELECT 's6c00000-0000-4000-8000-000000000201', N'האור שמח', @c2_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'האור שמח' AND entry_id = @c2_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000201'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -175,6 +193,8 @@ SELECT 's6c00000-0000-4000-8000-000000000202', N'בעל אור שמח', @c2_entr
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'בעל אור שמח' AND entry_id = @c2_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000202'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -182,6 +202,8 @@ SELECT 's6c00000-0000-4000-8000-000000000203', N'בעל משך חכמה', @c2_en
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'בעל משך חכמה' AND entry_id = @c2_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000203'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -189,6 +211,8 @@ SELECT 's6c00000-0000-4000-8000-000000000204', N'מאיר שמחה הכהן מד
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'מאיר שמחה הכהן מדווינסק' AND entry_id = @c2_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000204'
 );
 
 -- -------------------------------------------
@@ -232,6 +256,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c3_person AND name_type_id = @c3_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000003'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -239,6 +265,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000003', @c3_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c3_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000003'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -259,6 +287,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000003', @c3_entry, @c3_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c3_entry AND entity_id = @c3_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000003'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -266,6 +296,8 @@ SELECT 's6c00000-0000-4000-8000-000000000301', N'יעקב צבי מעקלענב�
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'יעקב צבי מעקלענבורג' AND entry_id = @c3_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000301'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -273,6 +305,8 @@ SELECT 's6c00000-0000-4000-8000-000000000302', N'בעל הכתב והקבלה', 
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'בעל הכתב והקבלה' AND entry_id = @c3_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000302'
 );
 
 -- -------------------------------------------
@@ -316,6 +350,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c4_person AND name_type_id = @c4_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000004'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -323,6 +359,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000004', @c4_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c4_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000004'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -343,6 +381,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000004', @c4_entry, @c4_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c4_entry AND entity_id = @c4_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000004'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -350,6 +390,8 @@ SELECT 's6c00000-0000-4000-8000-000000000401', N'ברוך הלוי עפשטיי�
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'ברוך הלוי עפשטיין' AND entry_id = @c4_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000401'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -357,6 +399,8 @@ SELECT 's6c00000-0000-4000-8000-000000000402', N'בעל תורה תמימה', @c
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'בעל תורה תמימה' AND entry_id = @c4_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000402'
 );
 
 -- -------------------------------------------
@@ -400,6 +444,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c5_person AND name_type_id = @c5_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000005'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -407,6 +453,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000005', @c5_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c5_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000005'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -427,6 +475,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000005', @c5_entry, @c5_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c5_entry AND entity_id = @c5_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000005'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -434,6 +484,8 @@ SELECT 's6c00000-0000-4000-8000-000000000501', N'אשר וסרטיל', @c5_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'אשר וסרטיל' AND entry_id = @c5_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000501'
 );
 
 -- -------------------------------------------
@@ -477,6 +529,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c6_person AND name_type_id = @c6_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000006'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -484,6 +538,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000006', @c6_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c6_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000006'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -504,6 +560,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000006', @c6_entry, @c6_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c6_entry AND entity_id = @c6_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000006'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -511,6 +569,8 @@ SELECT 's6c00000-0000-4000-8000-000000000601', N'רמ"א', @c6_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'רמ"א' AND entry_id = @c6_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000601'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -518,6 +578,8 @@ SELECT 's6c00000-0000-4000-8000-000000000602', N'הרמ"א', @c6_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הרמ"א' AND entry_id = @c6_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000602'
 );
 
 -- -------------------------------------------
@@ -561,6 +623,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c7_person AND name_type_id = @c7_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000007'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -568,6 +632,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000007', @c7_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c7_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000007'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -588,6 +654,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000007', @c7_entry, @c7_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c7_entry AND entity_id = @c7_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000007'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -595,6 +663,8 @@ SELECT 's6c00000-0000-4000-8000-000000000701', N'נצי"ב', @c7_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'נצי"ב' AND entry_id = @c7_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000701'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -602,6 +672,8 @@ SELECT 's6c00000-0000-4000-8000-000000000702', N'הנצי"ב', @c7_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הנצי"ב' AND entry_id = @c7_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000702'
 );
 
 -- -------------------------------------------
@@ -645,6 +717,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c8_person AND name_type_id = @c8_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000008'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -652,6 +726,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000008', @c8_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c8_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000008'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -672,6 +748,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000008', @c8_entry, @c8_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c8_entry AND entity_id = @c8_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000008'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -679,6 +757,8 @@ SELECT 's6c00000-0000-4000-8000-000000000801', N'הגר"א', @c8_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגר"א' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000801'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -686,6 +766,8 @@ SELECT 's6c00000-0000-4000-8000-000000000802', N'הגאון מוילנא', @c8_e
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגאון מוילנא' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000802'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -693,6 +775,8 @@ SELECT 's6c00000-0000-4000-8000-000000000803', N'הגאון מוילנה', @c8_e
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגאון מוילנה' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000803'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -700,6 +784,8 @@ SELECT 's6c00000-0000-4000-8000-000000000804', N'הגר"א מוילנא', @c8_en
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגר"א מוילנא' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000804'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -707,6 +793,8 @@ SELECT 's6c00000-0000-4000-8000-000000000805', N'הגר"א מוילנה', @c8_en
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגר"א מוילנה' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000805'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -714,6 +802,8 @@ SELECT 's6c00000-0000-4000-8000-000000000806', N'הגאון ר'' אליהו מו
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגאון ר'' אליהו מוילנא' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000806'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -721,6 +811,8 @@ SELECT 's6c00000-0000-4000-8000-000000000807', N'הגאון ר'' אליהו מו
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הגאון ר'' אליהו מוילנה' AND entry_id = @c8_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000807'
 );
 
 -- -------------------------------------------
@@ -764,6 +856,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c9_person AND name_type_id = @c9_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000009'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -771,6 +865,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000009', @c9_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c9_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000009'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -791,6 +887,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000009', @c9_entry, @c9_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c9_entry AND entity_id = @c9_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000009'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -798,6 +896,8 @@ SELECT 's6c00000-0000-4000-8000-000000000901', N'מלבי"ם', @c9_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'מלבי"ם' AND entry_id = @c9_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000901'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -805,6 +905,8 @@ SELECT 's6c00000-0000-4000-8000-000000000902', N'המלבי"ם', @c9_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'המלבי"ם' AND entry_id = @c9_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000000902'
 );
 
 -- -------------------------------------------
@@ -848,6 +950,8 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_name
 	WHERE person_id = @c10_person AND name_type_id = @c10_main_name_type
 		AND alt_group_id IS NULL
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_name WHERE id = 'n6c00000-0000-4000-8000-000000000010'
 );
 
 INSERT INTO tanahpedia_person_role_commentator (id, person_id)
@@ -855,6 +959,8 @@ SELECT 'r6c00000-0000-4000-8000-000000000010', @c10_person
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_person_role_commentator
 	WHERE person_id = @c10_person
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_person_role_commentator WHERE id = 'r6c00000-0000-4000-8000-000000000010'
 );
 
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at)
@@ -875,6 +981,8 @@ SELECT 'ee6c0000-0000-4000-8000-000000000010', @c10_entry, @c10_entity
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_entity
 	WHERE entry_id = @c10_entry AND entity_id = @c10_entity
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_entity WHERE id = 'ee6c0000-0000-4000-8000-000000000010'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -882,6 +990,8 @@ SELECT 's6c00000-0000-4000-8000-000000001001', N'הרוגצ''ובר', @c10_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הרוגצ''ובר' AND entry_id = @c10_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000001001'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -889,6 +999,8 @@ SELECT 's6c00000-0000-4000-8000-000000001002', N'רוגצ''ובר', @c10_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'רוגצ''ובר' AND entry_id = @c10_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000001002'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -896,6 +1008,8 @@ SELECT 's6c00000-0000-4000-8000-000000001003', N'הרוגצ''ובי', @c10_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'הרוגצ''ובי' AND entry_id = @c10_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000001003'
 );
 
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
@@ -903,4 +1017,6 @@ SELECT 's6c00000-0000-4000-8000-000000001004', N'רוגצ''ובי', @c10_entry
 WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry_synonym
 	WHERE name = N'רוגצ''ובי' AND entry_id = @c10_entry
+) AND NOT EXISTS (
+	SELECT 1 FROM tanahpedia_entry_synonym WHERE id = 's6c00000-0000-4000-8000-000000001004'
 );
