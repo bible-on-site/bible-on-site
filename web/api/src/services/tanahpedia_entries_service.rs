@@ -1362,4 +1362,85 @@ mod tests {
         assert_eq!(homepage.layout_type, "MAP");
         assert_eq!(homepage.content.as_deref(), Some("<p>מפת המקומות</p>"));
     }
+
+    /// Every person-role key maps to its own role table — including the
+    /// commentator table added with #3769.
+    #[test]
+    fn person_role_table_covers_every_role_key() {
+        assert_eq!(
+            person_role_table("PROPHET"),
+            "tanahpedia_person_role_prophet"
+        );
+        assert_eq!(person_role_table("KING"), "tanahpedia_person_role_king");
+        assert_eq!(
+            person_role_table("TANAH_COMMENTATOR"),
+            "tanahpedia_person_role_commentator"
+        );
+    }
+
+    /// Pending-deploy schema gaps read as empty in every dialect phrasing
+    /// MySQL uses for a missing table/column.
+    #[test]
+    fn missing_schema_detection_covers_mysql_error_phrasings() {
+        for message in [
+            "Table 'tanah.x' doesn't exist",
+            "Unknown table 'tanah.x'",
+            "Unknown column 'x' in 'field list'",
+            "Error 1146",
+            "Error 1054",
+        ] {
+            assert!(
+                is_missing_mysql_schema(&DbErr::Custom(message.to_string())),
+                "{message}"
+            );
+        }
+        assert!(!is_missing_mysql_schema(&DbErr::Custom(
+            "Connection lost".to_string()
+        )));
+    }
+
+    /// A real failure on the role aggregate is fatal — only its
+    /// pending-deploy schema gap reads as zero rows.
+    #[tokio::test]
+    async fn get_category_counts_fails_on_a_non_schema_role_error() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+
+        let result = get_category_counts(&db).await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    /// The commentator-role listing degrades to empty while its table is
+    /// pending deploy, and stays fatal on a real failure.
+    #[tokio::test]
+    async fn role_listing_degrades_on_missing_schema_and_fails_otherwise() {
+        let missing = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([DbErr::Custom(
+                    "Table 'tanah.tanahpedia_person_role_commentator' doesn't exist".to_string(),
+                )])
+                .into_connection(),
+        );
+        let entities = get_entities_with_entries(&missing, "PERSON", Some("TANAH_COMMENTATOR"))
+            .await
+            .unwrap();
+        assert!(entities.is_empty());
+
+        let failing = mock_db_with_error("Connection lost");
+        let result = get_entities_with_entries(&failing, "PERSON", Some("TANAH_COMMENTATOR")).await;
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
 }

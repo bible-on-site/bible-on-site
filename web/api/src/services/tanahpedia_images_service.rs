@@ -1762,4 +1762,433 @@ mod tests {
             Some("SKIPPED")
         );
     }
+
+    fn non_schema_db(table: &str) -> Database {
+        Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([DbErr::Custom(format!("connection reset reading {table}"))])
+                .into_connection(),
+        )
+    }
+
+    /// A real DB failure (not a pending-deploy schema gap) is fatal — only
+    /// missing tables/columns degrade to an empty listing.
+    #[tokio::test]
+    async fn public_reads_fail_on_non_schema_errors() {
+        assert!(
+            get_entry_images(&non_schema_db("tanahpedia_entry_image"), "e1")
+                .await
+                .is_err()
+        );
+        assert!(
+            get_entity_images_for_entry(&non_schema_db("tanahpedia_entity_image"), "e1")
+                .await
+                .is_err()
+        );
+    }
+
+    /// Public-domain assets drop the license pair on both the public and the
+    /// editor shape — the rights states are mutually exclusive.
+    #[tokio::test]
+    async fn public_domain_links_hide_the_license_fields() {
+        let mut public_domain_row = link_row("l1", "en1", "img1", false);
+        public_domain_row.insert("is_public_domain".to_string(), true.into());
+
+        let entity_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![public_domain_row.clone()],
+                ])
+                .into_connection(),
+        );
+        let links = get_entity_images(&entity_db, "en1").await.unwrap();
+        assert_eq!(links.len(), 1);
+        assert!(links[0].image.is_public_domain);
+        assert!(links[0].image.license_name.is_none());
+        assert!(links[0].image.license_url.is_none());
+
+        let editor_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![public_domain_row],
+                ])
+                .into_connection(),
+        );
+        let full = get_entry_image_links_editor(&editor_db, "e1")
+            .await
+            .unwrap();
+        assert_eq!(full.len(), 1);
+        assert_eq!(full[0].owner_kind, "ENTRY");
+        assert!(full[0].image.license_name.is_none());
+        assert!(full[0].image.license_url.is_none());
+        assert_eq!(full[0].image.permission_evidence.as_deref(), Some("evidence"));
+    }
+
+    /// A public-domain asset record reads back without the license pair.
+    #[tokio::test]
+    async fn get_image_asset_hides_license_when_public_domain() {
+        let mut model = image_model("img1");
+        model.is_public_domain = true;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![model]])
+                .into_connection(),
+        );
+
+        let asset = get_image_asset(&db, "img1").await.unwrap().unwrap();
+        assert!(asset.is_public_domain);
+        assert!(asset.license_name.is_none());
+        assert!(asset.license_url.is_none());
+    }
+
+    /// Out-of-range dimensions are a client error, not a silent narrowing —
+    /// MySQL stores them as SMALLINT UNSIGNED.
+    #[tokio::test]
+    async fn put_image_asset_rejects_out_of_range_dimensions() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        for dimension in [-1, 65536] {
+            let result = put_image_asset(
+                &db,
+                &WebsiteRevalidator::new(None, None),
+                asset_input(|i| i.width = Some(dimension)),
+            )
+            .await;
+            assert!(result.is_err(), "{dimension}");
+        }
+    }
+
+    /// Public-domain writes persist without a license — even license values
+    /// the caller sent are dropped before the insert.
+    #[tokio::test]
+    async fn put_image_asset_public_domain_drops_license_values() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![]])
+                .append_exec_results([exec_result(1)])
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![{
+                    let mut model = image_model("img1");
+                    model.is_public_domain = true;
+                    model.license_name = None;
+                    model.license_url = None;
+                    model
+                }]])
+                .into_connection(),
+        );
+
+        let asset = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|i| {
+                i.is_public_domain = Some(true);
+                i.license_name = Some("CC BY-SA 4.0".to_string());
+                i.license_url = Some("https://creativecommons.org/".to_string());
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert!(asset.is_public_domain);
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(!log.contains("CC BY-SA"), "{log}");
+    }
+
+    /// The post-commit asset re-read must always find the row just written —
+    /// a missing row is an internal inconsistency, not a client error.
+    #[tokio::test]
+    async fn put_image_asset_fails_when_the_written_row_cannot_be_read_back() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![]])
+                .append_exec_results([exec_result(1)])
+                // get_image_asset re-read after commit → nothing
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![]])
+                .into_connection(),
+        );
+
+        let result = put_image_asset(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            asset_input(|_| {}),
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    /// Both link writers reject a blank image id / blank entry id up front.
+    #[tokio::test]
+    async fn link_mutations_reject_blank_entity_image_and_entry() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let no_image = put_entity_image_link(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntityImageLinkInput {
+                id: None,
+                entity_id: "en1".to_string(),
+                image_id: " ".to_string(),
+                sort_order: None,
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(no_image.is_err());
+
+        let no_entry = put_entry_image_link(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntryImageLinkInput {
+                id: None,
+                entry_id: " ".to_string(),
+                image_id: "img1".to_string(),
+                sort_order: None,
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(no_entry.is_err());
+    }
+
+    /// Links cannot attach to a missing owner or a missing asset — both are
+    /// client errors before any write.
+    #[tokio::test]
+    async fn put_link_rejects_missing_owner_and_missing_asset() {
+        let missing_entry = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .into_connection(),
+        );
+        let result = put_entry_image_link(
+            &missing_entry,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntryImageLinkInput {
+                id: None,
+                entry_id: "ghost".to_string(),
+                image_id: "img1".to_string(),
+                sort_order: None,
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(result.is_err());
+
+        let missing_entity = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+                .into_connection(),
+        );
+        let result = put_entity_image_link(
+            &missing_entity,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntityImageLinkInput {
+                id: None,
+                entity_id: "ghost".to_string(),
+                image_id: "img1".to_string(),
+                sort_order: None,
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(result.is_err());
+
+        let missing_asset = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "en1",
+                )]])
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![]])
+                .into_connection(),
+        );
+        let result = put_entity_image_link(
+            &missing_asset,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntityImageLinkInput {
+                id: None,
+                entity_id: "en1".to_string(),
+                image_id: "ghost".to_string(),
+                sort_order: None,
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    /// An explicit `sortOrder` on attach wins over the MAX+1 default.
+    #[tokio::test]
+    async fn put_entry_image_link_honors_an_explicit_sort_order() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "e1",
+                )]])
+                .append_query_results::<image::Model, Vec<image::Model>, _>([vec![image_model(
+                    "img1",
+                )]])
+                .append_exec_results([exec_result(1)])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![link_row("generated", "e1", "img1", false)],
+                ])
+                .into_connection(),
+        );
+
+        let link = put_entry_image_link(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntryImageLinkInput {
+                id: None,
+                entry_id: "e1".to_string(),
+                image_id: "img1".to_string(),
+                sort_order: Some(7),
+                is_primary: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(link.id, "generated");
+        assert_eq!(link.owner_kind, "ENTRY");
+    }
+
+    /// The post-commit link re-read must always find the row just written.
+    #[tokio::test]
+    async fn put_link_fails_when_the_written_row_cannot_be_read_back() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "en1",
+                )]])
+                .append_exec_results([exec_result(1)])
+                // link_row_by_id after commit → nothing
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+
+        let result = put_entity_image_link(
+            &db,
+            &WebsiteRevalidator::new(None, None),
+            TanahpediaEntityImageLinkInput {
+                id: Some("l1".to_string()),
+                entity_id: "en1".to_string(),
+                image_id: "img1".to_string(),
+                sort_order: Some(2),
+                is_primary: None,
+            },
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    /// Removing a link whose owner row vanished mid-write still reports the
+    /// delete but expires nothing — the owner is unrecoverable.
+    #[tokio::test]
+    async fn remove_links_without_resolvable_owners_expire_nothing() {
+        // Entity link: row gone before the owner lookup, delete still lands.
+        let entity_gone = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity_image::Model, Vec<entity_image::Model>, _>([vec![]])
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let result =
+            remove_entity_image_link(&entity_gone, &WebsiteRevalidator::new(None, None), "l1")
+                .await
+                .unwrap();
+        assert!(result.affected);
+        assert_eq!(result.revalidation, None);
+
+        // Entity link: nothing deleted → nothing expires.
+        let no_row = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity_image::Model, Vec<entity_image::Model>, _>([vec![]])
+                .append_exec_results([exec_result(0)])
+                .into_connection(),
+        );
+        let result = remove_entity_image_link(&no_row, &WebsiteRevalidator::new(None, None), "l1")
+            .await
+            .unwrap();
+        assert!(!result.affected);
+        assert_eq!(result.revalidation, None);
+
+        // Entry link: link row exists but the entry row is already gone —
+        // the unique-name lookup resolves nothing.
+        let entry_gone = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_image::Model, Vec<entry_image::Model>, _>([vec![
+                    entry_link_model("l2", "e1"),
+                ]])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let result = remove_entry_image_link(&entry_gone, &WebsiteRevalidator::new(None, None), "l2")
+            .await
+            .unwrap();
+        assert!(result.affected);
+        assert_eq!(result.revalidation, None);
+
+        // Entry link: nothing deleted → nothing expires.
+        let no_row = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_image::Model, Vec<entry_image::Model>, _>([vec![]])
+                .append_exec_results([exec_result(0)])
+                .into_connection(),
+        );
+        let result = remove_entry_image_link(&no_row, &WebsiteRevalidator::new(None, None), "l2")
+            .await
+            .unwrap();
+        assert!(!result.affected);
+        assert_eq!(result.revalidation, None);
+    }
+
+    /// Clearing a primary on an owner with no links (or a vanished entry)
+    /// reports no rows affected and expires nothing.
+    #[tokio::test]
+    async fn clear_primary_on_linkless_owners_is_a_noop() {
+        let no_links = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results([exec_result(0)])
+                .into_connection(),
+        );
+        let result =
+            clear_entity_primary_image(&no_links, &WebsiteRevalidator::new(None, None), "en1")
+                .await
+                .unwrap();
+        assert!(!result.affected);
+        assert_eq!(result.revalidation, None);
+
+        // Entry exists-check resolves nothing but the write still lands:
+        // no gallery surface can be named, so nothing expires.
+        let entry_gone = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_exec_results([exec_result(1)])
+                .into_connection(),
+        );
+        let result =
+            clear_entry_primary_image(&entry_gone, &WebsiteRevalidator::new(None, None), "e1")
+                .await
+                .unwrap();
+        assert!(result.affected);
+        assert_eq!(result.revalidation, None);
+
+        let no_links = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "e1",
+                )]])
+                .append_exec_results([exec_result(0)])
+                .into_connection(),
+        );
+        let result =
+            clear_entry_primary_image(&no_links, &WebsiteRevalidator::new(None, None), "e1")
+                .await
+                .unwrap();
+        assert!(!result.affected);
+        assert_eq!(result.revalidation, None);
+    }
 }

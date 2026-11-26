@@ -227,4 +227,74 @@ mod tests {
         assert_eq!(units[0]["wordCount"], 10);
         assert_eq!(units[1]["cumulativeWords"], 20);
     }
+
+    /// One JOIN row in the shape `ImageLinkRow` reads — link fields plus the
+    /// attached image record (#3769).
+    fn image_link_row() -> std::collections::BTreeMap<String, sea_orm::Value> {
+        use sea_orm::Value;
+        [
+            ("id", "l1".into()),
+            ("owner_id", "entry-x".into()),
+            ("sort_order", 0_i16.into()),
+            ("is_primary", true.into()),
+            ("image_id", "img1".into()),
+            ("url", "https://cdn.example.com/img.jpg".into()),
+            ("width", 800_u16.into()),
+            ("height", 600_u16.into()),
+            ("alt_text", "תיאור התמונה".into()),
+            ("caption", Value::String(None)),
+            ("creator", Value::String(None)),
+            ("credit_line", Value::String(None)),
+            ("source_name", "Wikimedia Commons".into()),
+            ("source_url", Value::String(None)),
+            ("license_name", "CC BY-SA 4.0".into()),
+            ("license_url", Value::String(None)),
+            ("is_public_domain", false.into()),
+            ("modifications", Value::String(None)),
+            ("permission_evidence", "evidence".into()),
+            ("is_public", true.into()),
+            ("revision", 1_i32.into()),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value))
+        .collect()
+    }
+
+    /// The complex `images`/`entityImages` fields resolve each gallery scope
+    /// on demand (#3769): entry-scope links first, then the batched
+    /// entity-scope query over the entry's linked entities.
+    #[tokio::test]
+    async fn images_and_entity_images_resolve_the_public_links() {
+        use sea_orm::Value;
+        use std::collections::BTreeMap;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // `images` — entry-scope link rows
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![image_link_row()],
+                ])
+                // `entityImages` — batched entity-scope link rows
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![image_link_row()],
+                ])
+                .into_connection(),
+        );
+        let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .data(db)
+            .finish();
+
+        let res = schema
+            .execute(
+                "{ entry { images { id ownerKind ownerId isPrimary image { imageId url } } entityImages { id ownerKind image { imageId } } } }",
+            )
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let entry = res.data.into_json().unwrap()["entry"].clone();
+        assert_eq!(entry["images"][0]["id"], "l1");
+        assert_eq!(entry["images"][0]["ownerKind"], "ENTRY");
+        assert_eq!(entry["images"][0]["image"]["imageId"], "img1");
+        assert_eq!(entry["entityImages"][0]["ownerKind"], "ENTITY");
+        assert_eq!(entry["entityImages"][0]["image"]["imageId"], "img1");
+    }
 }
