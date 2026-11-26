@@ -37,8 +37,11 @@ cd devops
 bun run deploy:data
 ```
 
-The validator and deployer share `data-deploy/sql-files.json`. The validator resolves
-SQL paths from its own location, so it also works from other working directories.
+The validator and deployer share `data-deploy/sql-files.json` and use Node to
+prepare the canonical reference SQL. That preparation creates missing tables,
+loads reference rows and verse counts into temporary tables, and applies the
+verified rows to the live tables in one transaction. The validator resolves SQL
+paths from its own location, so it also works from other working directories.
 Parsing is the default and never selects a database from `DB_URL`. Execution
 requires an explicit `--db` URL and the `pymysql` driver; use that mode only with
 a disposable local database because the SQL includes injected table/view drops.

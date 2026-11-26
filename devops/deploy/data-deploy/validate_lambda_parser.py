@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from tempfile import gettempdir
@@ -138,11 +139,24 @@ def parse_file(filepath):
     size = os.path.getsize(filepath)
     if size > 10 * 1024 * 1024:
         return simulate_streaming_parse(filepath)
-    else:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
-        content = preprocess_sql(content)
-        return parse_statements(content)
+    canonical = {
+        "tanah_static_structure.sql",
+        "tanah_sefarim_and_perakim_data.sql",
+        "tanah_perek_pasuk_count_data.sql",
+    }
+    filepath = Path(filepath)
+    if filepath.name in canonical:
+        return parse_statements(preprocess_sql(prepare_reference_file(filepath)))
+    with filepath.open(encoding="utf-8") as f:
+        return parse_statements(preprocess_sql(f.read()))
+
+
+def prepare_reference_file(filepath):
+    """Use the same canonical SQL emitted by the production uploader."""
+    return subprocess.check_output(
+        ["node", str(Path(__file__).with_name("canonical-reference.mts")), filepath.name, str(filepath)],
+        encoding="utf-8",
+    )
 
 
 _CREATE_KEYWORDS_RE = re.compile(
@@ -224,7 +238,7 @@ _VALID_STATEMENT_STARTS = {
     "ALTER", "ANALYZE", "BEGIN", "CALL", "COMMIT", "CREATE", "DEALLOCATE",
     "DELETE", "DROP", "EXECUTE", "GRANT", "INSERT", "LOAD", "LOCK",
     "OPTIMIZE", "PREPARE", "RENAME", "REPLACE", "REVOKE", "SELECT", "SET",
-    "TRUNCATE", "UNLOCK", "UPDATE", "WITH",
+    "START", "TRUNCATE", "UNLOCK", "UPDATE", "WITH",
 }
 
 
