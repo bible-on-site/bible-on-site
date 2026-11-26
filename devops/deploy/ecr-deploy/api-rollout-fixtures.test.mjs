@@ -1,28 +1,32 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import stableStringify from "fast-json-stable-stringify";
+import { healthRoutes, PublicAPIMonitor } from "./api-public-monitor.mjs";
 import { APIRolloutAWS } from "./api-rollout-aws.mjs";
-import { PublicAPIMonitor, healthRoutes } from "./api-public-monitor.mjs";
+import {
+	ARN,
+	DISCOVERY_ID,
+	IMAGE_URI,
+	NAMESPACE_ID,
+	privateIP,
+	READY_CHECK,
+	SERVICE_ARN,
+} from "./api-rollout-state.mjs";
 import {
 	API_ACCOUNT,
 	API_CLUSTER,
 	API_SERVICE,
 	LEASE_PREFIX,
 } from "./api-task-protection.mjs";
-import {
-	ARN,
-	DISCOVERY_ID,
-	IMAGE_URI,
-	NAMESPACE_ID,
-	READY_CHECK,
-	SERVICE_ARN,
-	privateIP,
-} from "./api-rollout-state.mjs";
 
 export const NOW = Date.parse("2026-11-01T00:00:00Z");
 export const OLD_INSTANCE = "11111111-1111-4111-8111-111111111111";
 export const NEW_INSTANCE = "22222222-2222-4222-8222-222222222222";
 export const RESTORED_INSTANCE = "33333333-3333-4333-8333-333333333333";
+const servicePath = `${API_CLUSTER}/${API_SERVICE}/`;
+export const ROLLBACK_DEPLOYMENT_ARN = `${ARN}service-deployment/${servicePath}rollback`;
+const sourceRevision = `${ARN}service-revision/${servicePath}11`;
+const targetRevision = `${ARN}service-revision/${servicePath}22`;
 export const taskArn = (letter) =>
 	ARN + "task/" + API_CLUSTER + "/" + letter.repeat(32);
 export const definitionArn = (revision) =>
@@ -144,6 +148,8 @@ export function service(def = definition()) {
 		taskDefinition: def.taskDefinitionArn,
 		deployments: [
 			{
+				id: "ecs-svc/11",
+				status: "PRIMARY",
 				taskDefinition: def.taskDefinitionArn,
 				rolloutState: "COMPLETED",
 				failedTasks: 0,
@@ -155,6 +161,7 @@ export function task(def, image, letter = "a", at = -60000) {
 	return {
 		taskArn: taskArn(letter),
 		taskDefinitionArn: def.taskDefinitionArn,
+		startedBy: "ecs-svc/11",
 		clusterArn: ARN + "cluster/" + API_CLUSTER,
 		group: "service:" + API_SERVICE,
 		lastStatus: "RUNNING",
@@ -219,6 +226,7 @@ export class Backend {
 		this.expiration = null;
 		this.published = false;
 		this.recovering = false;
+		this.rollbackAt = null;
 		this.updates = 0;
 	}
 	evolve() {
@@ -237,6 +245,12 @@ export class Backend {
 				if (row && row !== this.next && this.at - at >= 5000)
 					row.lastStatus = "STOPPED";
 			}
+	}
+	beginRollback() {
+		this.rollbackAt = this.at;
+		this.recovering = true;
+		this.current = structuredClone(this.original);
+		this.evolve();
 	}
 	state() {
 		this.evolve();
@@ -473,32 +487,57 @@ export class Backend {
 							? []
 							: [
 									{
-										serviceDeploymentArn:
-											ARN +
-											"service-deployment/" +
-											API_CLUSTER +
-											"/" +
-											API_SERVICE +
-											"/owned",
+										serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN,
 									},
 								],
 				};
-			case "DescribeServiceDeployments":
+			case "DescribeServiceDeployments": {
+				const finished = this.recovering && this.at - this.rollbackAt >= 16000;
 				return {
 					serviceDeployments: [
 						{
+							serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN,
 							serviceArn: SERVICE_ARN,
-							status: "IN_PROGRESS",
-							sourceServiceRevisions: [{ arn: "source-revision" }],
+							clusterArn: `${ARN}cluster/${API_CLUSTER}`,
+							status: finished
+								? "ROLLBACK_SUCCESSFUL"
+								: this.recovering
+									? "ROLLBACK_IN_PROGRESS"
+									: "IN_PROGRESS",
+							sourceServiceRevisions: [
+								{
+									arn: sourceRevision,
+									requestedTaskCount: 1,
+									runningTaskCount: 1,
+									pendingTaskCount: 0,
+								},
+							],
+							targetServiceRevision: {
+								arn: targetRevision,
+								requestedTaskCount: finished ? 0 : 1,
+								runningTaskCount: 0,
+								pendingTaskCount: finished ? 0 : 1,
+							},
+							...(finished && {
+								finishedAt: new Date(NOW + this.rollbackAt + 16000),
+								rollback: {
+									serviceRevisionArn: sourceRevision,
+									startedAt: new Date(NOW + this.rollbackAt),
+								},
+							}),
 						},
 					],
 					failures: [],
+					$clock: clock,
 				};
+			}
 			case "DescribeServiceRevisions":
 				return {
 					serviceRevisions: [
 						{
+							serviceRevisionArn: sourceRevision,
 							serviceArn: SERVICE_ARN,
+							clusterArn: `${ARN}cluster/${API_CLUSTER}`,
 							taskDefinition: this.original.taskDefinitionArn,
 							containerImages: [
 								{ containerName: "api", imageDigest: this.oldImages.root },
@@ -508,9 +547,7 @@ export class Backend {
 					failures: [],
 				};
 			case "StopServiceDeployment":
-				this.recovering = true;
-				this.current = structuredClone(this.original);
-				this.evolve();
+				this.beginRollback();
 				return {};
 			default:
 				throw new Error("Unknown fake operation " + name);

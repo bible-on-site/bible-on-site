@@ -111,6 +111,10 @@ protections and foreign tags remain untouched. AWS can acknowledge a legacy
 task ARN and return fractional expiration seconds while subsequent reads use
 the long ARN and whole seconds; normalize only those verified observations.
 An uncertain grant is preserved for investigation rather than cleared blindly.
+If an expired grant still has a marker, use the handover journal and the ECS
+deployment record to identify its owner. Confirm the owner has finished, the
+service is stable, and scale-in protection is disabled on the exact task before
+removing just that tag with production change approval.
 
 After an owned protection-clear receipt is acknowledged and protection is read
 back as disabled, ECS can retire the old task before its temporary tag is
@@ -141,7 +145,10 @@ that the router can already discover the replacement.
 
 Require the old task to stop, one completed deployment and only the new healthy
 Cloud Map address, then observe another cache window and repeat all 14 public
-contract checks. Keep 30 seconds from AWS task start for readiness, 180 seconds
+contract checks. The article, chapter and dedication hashes must match the
+baseline. Both aliases must return the same complete, correctly ranked search
+pages. Rankings, scores and totals can change when the search index is rebuilt.
+Keep 30 seconds from AWS task start for readiness, 180 seconds
 from replacement observation for ECS completion and 300 seconds overall.
 Public health, readiness and 929 chapter identities are sampled at one request
 per second, with a 2-second whole-request deadline and no retries. Reuse verified
@@ -172,7 +179,9 @@ until that normal release path is preserved and verified.
 On a rollout or public-contract failure, initiate control-plane recovery before
 requiring a fresh healthy public baseline. For an ongoing deployment, verify
 the recorded source revision's definition and immutable image, then request
-ECS rollback to that revision. For a completed deployment, protect the exact
+ECS rollback to that revision. Require the exact rollback record to report
+`ROLLBACK_SUCCESSFUL`, with one running task on the restored revision and none
+on the failed revision. For a completed deployment, protect the exact
 replacement while restoring the saved old native-child pin, and apply the
 same discovery/public visibility window before retiring it. Verify actual
 digest, readiness, completed singleton, discovery and public contracts. Keep

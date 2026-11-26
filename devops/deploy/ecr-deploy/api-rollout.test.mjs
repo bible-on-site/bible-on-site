@@ -6,6 +6,7 @@ import {
 	fixture,
 	NEW_INSTANCE,
 	ownedTags,
+	ROLLBACK_DEPLOYMENT_ARN,
 	taskArn,
 } from "./api-rollout-fixtures.test.mjs";
 import { IMAGE_URI, LIMITS } from "./api-rollout-state.mjs";
@@ -115,7 +116,10 @@ function laggingHistoryFixture(successAt = 115000) {
 	f.backend.hook = async (name, input) => {
 		if (name === "ListServiceDeployments" && !input.status)
 			return { serviceDeployments: [{ serviceDeploymentArn: deploymentArn }] };
-		if (name === "DescribeServiceDeployments")
+		if (
+			name === "DescribeServiceDeployments" &&
+			input.serviceDeploymentArns[0] === deploymentArn
+		)
 			return {
 				serviceDeployments: [
 					{
@@ -266,6 +270,163 @@ test("a public 502 triggers control-plane rollback before any fresh public basel
 	assert.ok(f.backend.records.some((row) => row.name === "recovery-completed"));
 });
 
+test("native rollback uses exact history when the restored primary summary lags", async () => {
+	const f = fixture();
+	f.monitor.failPublic = true;
+	f.backend.mutateService = (value) => {
+		if (f.backend.recovering) {
+			value.deployments[0].rolloutState = "IN_PROGRESS";
+			value.deployments.push({
+				id: "ecs-svc/22",
+				status: "INACTIVE",
+				rolloutState: "FAILED",
+			});
+		}
+	};
+	f.backend.hook = async (name, input) => {
+		if (name === "ListServiceDeployments" && !input.status)
+			return {
+				serviceDeployments: [
+					{ serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN },
+					{
+						serviceDeploymentArn: ROLLBACK_DEPLOYMENT_ARN.replace(
+							/rollback$/,
+							"initial",
+						),
+					},
+				],
+			};
+	};
+	await assert.rejects(runAPIRollout(f), /sample failed/);
+	const proof = f.backend.records.find(
+		(row) => row.name === "rollback-completed-proof",
+	);
+	assert.equal(proof.value.serviceDeploymentArn, ROLLBACK_DEPLOYMENT_ARN);
+	assert.equal(proof.value.legacyRolloutState, "IN_PROGRESS");
+	assert.equal(proof.value.task, f.backend.old.taskArn);
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
+	assert.ok(
+		f.backend.releasedAt >= f.backend.rollbackAt + 16000 + LIMITS.cache,
+	);
+	assert.ok(
+		f.backend.calls.every(
+			(row) => row.name !== "ListServiceDeployments" || row.input.status,
+		),
+	);
+});
+
+test("native rollback waits for delayed revision counts before releasing protection", async () => {
+	const f = fixture();
+	f.monitor.failPublic = true;
+	const call = f.aws.call;
+	f.aws.call = async (operation, input) => {
+		const result = await call(operation, input);
+		if (operation === "DescribeServiceDeployments") {
+			const deployment = result.serviceDeployments[0];
+			if (
+				deployment.status === "ROLLBACK_SUCCESSFUL" &&
+				f.backend.at - f.backend.rollbackAt < 21000
+			)
+				deployment.targetServiceRevision.pendingTaskCount = 1;
+		}
+		return result;
+	};
+	await assert.rejects(runAPIRollout(f), /sample failed/);
+	assert.ok(
+		f.backend.releasedAt >= f.backend.rollbackAt + 21000 + LIMITS.cache,
+	);
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
+});
+
+for (const [trigger, expectedStops] of [
+	["DescribeServiceDeployments", 0],
+	["StopServiceDeployment", 1],
+]) {
+	test(`native rollback follows an automatic rollback that wins the ${trigger} race`, async () => {
+		const f = fixture();
+		f.monitor.failPublic = true;
+		f.backend.hook = async (operation) => {
+			if (operation !== trigger || f.backend.recovering) return;
+			f.backend.beginRollback();
+			f.backend.at += 16000;
+			if (trigger === "StopServiceDeployment") {
+				throw Object.assign(new Error("ECS already rolled back"), {
+					name: "ConflictException",
+				});
+			}
+		};
+		await assert.rejects(runAPIRollout(f), /sample failed/);
+		assert.equal(f.backend.updates, 1);
+		assert.equal(
+			f.backend.calls.filter((row) => row.name === "StopServiceDeployment")
+				.length,
+			expectedStops,
+		);
+		assert.ok(
+			f.backend.records.some((row) => row.name === "rollback-completed-proof"),
+		);
+		assert.equal(f.backend.protected, false);
+		assert.deepEqual(ownedTags(f.backend), []);
+	});
+}
+
+test("a stop conflict without matching rollback readback retains protection", async () => {
+	const f = fixture();
+	f.monitor.failPublic = true;
+	f.backend.hook = async (operation) => {
+		if (operation === "StopServiceDeployment") {
+			throw Object.assign(new Error("ECS stop conflict"), {
+				name: "ConflictException",
+			});
+		}
+	};
+	await assert.rejects(runAPIRollout(f), /rollout and recovery failed/);
+	assert.equal(f.backend.protected, true);
+	assert.equal(ownedTags(f.backend).length, 1);
+	assert.equal(f.backend.releasedAt, null);
+	assert.equal(
+		f.backend.calls.filter((row) => row.name === "StopServiceDeployment")
+			.length,
+		1,
+	);
+});
+
+for (const [label, change] of [
+	[
+		"a different restored revision",
+		(deployment) => {
+			deployment.rollback.serviceRevisionArn =
+				deployment.targetServiceRevision.arn;
+		},
+	],
+	[
+		"a surviving target task",
+		(deployment) => {
+			deployment.targetServiceRevision.runningTaskCount = 1;
+		},
+	],
+]) {
+	test(`native rollback retains protection with ${label}`, async () => {
+		const f = fixture();
+		f.monitor.failPublic = true;
+		const call = f.aws.call;
+		f.aws.call = async (operation, input) => {
+			const result = await call(operation, input);
+			if (operation === "DescribeServiceDeployments") {
+				const deployment = result.serviceDeployments[0];
+				if (deployment.status === "ROLLBACK_SUCCESSFUL") change(deployment);
+			}
+			return result;
+		};
+		await assert.rejects(runAPIRollout(f), /rollout and recovery failed/);
+		assert.equal(f.backend.protected, true);
+		assert.equal(ownedTags(f.backend).length, 1);
+		assert.equal(f.backend.releasedAt, null);
+	});
+}
+
 test("30s readiness failure restores the already-running source with the existing budgets", async () => {
 	const f = fixture();
 	f.backend.neverReady = true;
@@ -346,6 +507,7 @@ test("ambiguous recovery preserves owned protection and records the exact bounde
 	);
 	assert.equal(failed.value.protectedTask, taskArn("a"));
 	assert.ok(Number.isFinite(failed.value.expiration));
+	assert.match(failed.value.location, /APIRolloutAWS\.rollback/);
 	assert.equal(f.monitor.running, false);
 });
 
@@ -400,6 +562,35 @@ test("post-completion recovery protects the replacement before restoring the old
 		[...f.backend.otherLeases.values()].every(
 			(lease) => !lease.protected && Object.keys(lease.tags).length === 0,
 		),
+	);
+});
+
+test("automatic rollback after source protection cleared reuses the restored source", async () => {
+	const f = fixture();
+	const wait = f.wait;
+	f.wait = async (ms) => {
+		if (f.backend.releasedAt !== null && !f.backend.recovering) {
+			assert.equal(f.backend.old.lastStatus, "RUNNING");
+			assert.notEqual(
+				f.backend.current.taskDefinitionArn,
+				f.backend.original.taskDefinitionArn,
+			);
+			f.backend.beginRollback();
+			f.backend.at += 16000;
+			f.monitor.rows.push({ passed: false, route: "public-sample" });
+		}
+		await wait(ms);
+	};
+	await assert.rejects(
+		runAPIRollout({ ...f, imageMode: "pinned" }),
+		/sample failed/,
+	);
+	assert.equal(f.backend.updates, 1);
+	assert.equal(f.backend.current.taskDefinitionArn, definitionArn(9));
+	assert.ok(f.backend.records.some((row) => row.name === "recovery-completed"));
+	assert.equal(f.backend.otherLeases.size, 0);
+	assert.ok(
+		f.backend.calls.every((row) => row.name !== "StopServiceDeployment"),
 	);
 });
 

@@ -41,6 +41,25 @@ const configurations = [
 	"EventBridgeClient",
 	"STSClient",
 ];
+const clusterArn = `${ARN}cluster/${API_CLUSTER}`;
+const revisionPrefix = `${ARN}service-revision/${API_CLUSTER}/${API_SERVICE}/`;
+const deploymentPrefix = `${ARN}service-deployment/${API_CLUSTER}/${API_SERVICE}/`;
+const rolloutInProgress = ["PENDING", "IN_PROGRESS"];
+const rollbackStarted = [
+	"ROLLBACK_REQUESTED",
+	"ROLLBACK_IN_PROGRESS",
+	"ROLLBACK_SUCCESSFUL",
+];
+
+function taskRevision(task) {
+	assert.match(task.startedBy, /^ecs-svc\/[0-9]+$/);
+	return revisionPrefix + task.startedBy.slice("ecs-svc/".length);
+}
+
+function revisionCounts(row) {
+	return [row.requestedTaskCount, row.runningTaskCount, row.pendingTaskCount];
+}
+
 export function createAWSCaller(config, options = {}) {
 	assert.equal(config.accountId, API_ACCOUNT);
 	assert.equal(config.region, API_REGION);
@@ -111,7 +130,7 @@ export class APIRolloutAWS {
 		this.record = record;
 		this.recordedCompletions = new Set();
 	}
-	async completion(state, task, image) {
+	async completion(state, task, image, rollback = null) {
 		const service = state.service;
 		assert.equal(service.serviceArn, SERVICE_ARN);
 		if (
@@ -124,10 +143,11 @@ export class APIRolloutAWS {
 		)
 			return false;
 		if (service.taskDefinition !== task.taskDefinitionArn) return false;
-		assert.equal(task.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		assert.equal(task.clusterArn, clusterArn);
 		assert.ok(
 			[image.root, image.child].includes(task.containers[0].imageDigest),
 		);
+		if (rollback) return this.rollbackCompletion(service, task, rollback);
 		if (completed(service)) return true;
 		// Deployment history can finish before DescribeServices retires its legacy
 		// rollout summary. Keep the summary intact and verify the exact revision.
@@ -136,7 +156,7 @@ export class APIRolloutAWS {
 		);
 		assert.equal(primaries.length, 1, "Ambiguous primary API deployment");
 		const primary = primaries[0];
-		assert.match(task.startedBy, /^ecs-svc\/[0-9]+$/);
+		const expectedRevision = taskRevision(task);
 		if (
 			primary.id !== task.startedBy ||
 			primary.taskDefinition !== task.taskDefinitionArn
@@ -146,12 +166,6 @@ export class APIRolloutAWS {
 			primary.createdAt instanceof Date &&
 				Number.isFinite(primary.createdAt.getTime()),
 		);
-		const revisionPrefix =
-			ARN + "service-revision/" + API_CLUSTER + "/" + API_SERVICE + "/";
-		const expectedRevision =
-			revisionPrefix + task.startedBy.slice("ecs-svc/".length);
-		const deploymentPrefix =
-			ARN + "service-deployment/" + API_CLUSTER + "/" + API_SERVICE + "/";
 		const listed = await this.call("ListServiceDeployments", {
 			cluster: API_CLUSTER,
 			service: API_SERVICE,
@@ -166,26 +180,13 @@ export class APIRolloutAWS {
 		);
 		if (!listed.serviceDeployments.length) return false;
 		const arn = listed.serviceDeployments[0].serviceDeploymentArn;
-		assert.ok(
-			typeof arn === "string" &&
-				arn.startsWith(deploymentPrefix) &&
-				/^[a-zA-Z0-9_-]+$/.test(arn.slice(deploymentPrefix.length)),
-		);
-		const result = await this.call("DescribeServiceDeployments", {
-			serviceDeploymentArns: [arn],
-		});
-		assert.equal(result.failures?.length ?? 0, 0);
-		assert.equal(result.serviceDeployments?.length, 1);
-		const deployment = result.serviceDeployments[0];
-		assert.equal(deployment.serviceDeploymentArn, arn);
-		assert.equal(deployment.serviceArn, SERVICE_ARN);
-		assert.equal(deployment.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		const { deployment, serverDate } = await this.describeDeployment(arn);
 		assert.equal(
 			deployment.targetServiceRevision?.arn,
 			expectedRevision,
 			"API completion belongs to another revision",
 		);
-		if (["PENDING", "IN_PROGRESS"].includes(deployment.status)) return false;
+		if (rolloutInProgress.includes(deployment.status)) return false;
 		assert.equal(
 			deployment.status,
 			"SUCCESSFUL",
@@ -213,16 +214,13 @@ export class APIRolloutAWS {
 				deployment.startedAt instanceof Date &&
 				Number.isFinite(deployment.startedAt.getTime()) &&
 				deployment.finishedAt >= deployment.startedAt &&
-				deployment.finishedAt.getTime() <=
-					Date.parse(result.$clock?.serverDate) + 1000,
+				deployment.finishedAt.getTime() <= Date.parse(serverDate) + 1000,
 			"Missing bounded API completion time",
 		);
-		const counts = (row) => [
-			row.requestedTaskCount,
-			row.runningTaskCount,
-			row.pendingTaskCount,
-		];
-		assert.deepEqual(counts(deployment.targetServiceRevision), [1, 1, 0]);
+		assert.deepEqual(
+			revisionCounts(deployment.targetServiceRevision),
+			[1, 1, 0],
+		);
 		assert.ok(
 			Array.isArray(deployment.sourceServiceRevisions) &&
 				deployment.sourceServiceRevisions.length > 0,
@@ -234,7 +232,7 @@ export class APIRolloutAWS {
 					source.arn !== expectedRevision,
 			);
 			assert.deepEqual(
-				counts(source),
+				revisionCounts(source),
 				[0, 0, 0],
 				"API source revision has not retired",
 			);
@@ -247,7 +245,7 @@ export class APIRolloutAWS {
 		const revision = revisions.serviceRevisions[0];
 		assert.equal(revision.serviceRevisionArn, expectedRevision);
 		assert.equal(revision.serviceArn, SERVICE_ARN);
-		assert.equal(revision.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		assert.equal(revision.clusterArn, clusterArn);
 		assert.equal(revision.taskDefinition, task.taskDefinitionArn);
 		assert.equal(revision.containerImages?.length, 1);
 		assert.equal(revision.containerImages[0].containerName, "api");
@@ -268,6 +266,96 @@ export class APIRolloutAWS {
 				legacyRolloutState: primary.rolloutState,
 			});
 			this.recordedCompletions.add(arn);
+		}
+		return true;
+	}
+
+	async describeDeployment(arn) {
+		assert.ok(
+			typeof arn === "string" &&
+				arn.startsWith(deploymentPrefix) &&
+				/^[a-zA-Z0-9_-]+$/.test(arn.slice(deploymentPrefix.length)),
+		);
+		const result = await this.call("DescribeServiceDeployments", {
+			serviceDeploymentArns: [arn],
+		});
+		assert.equal(result.failures?.length ?? 0, 0);
+		assert.equal(result.serviceDeployments?.length, 1);
+		const deployment = result.serviceDeployments[0];
+		assert.equal(deployment.serviceDeploymentArn, arn);
+		assert.equal(deployment.serviceArn, SERVICE_ARN);
+		assert.equal(deployment.clusterArn, clusterArn);
+		return { deployment, serverDate: result.$clock?.serverDate };
+	}
+	async rollbackCompletion(service, task, rollback) {
+		// A native rollback restores a previously deployed revision. Its original
+		// deployment history cannot prove this rollback finished.
+		const primaries = service.deployments.filter(
+			(row) => row.status === "PRIMARY",
+		);
+		const [primary] = primaries;
+		if (
+			primaries.length !== 1 ||
+			primary?.id !== task.startedBy ||
+			primary?.taskDefinition !== task.taskDefinitionArn
+		)
+			return false;
+		if (!rollback.deploymentArn)
+			return task.taskArn === rollback.taskArn && completed(service);
+		const source = taskRevision(task);
+		assert.equal(
+			source,
+			rollback.source,
+			"Rollback source task changed revisions",
+		);
+		const { deployment, serverDate } = await this.describeDeployment(
+			rollback.deploymentArn,
+		);
+		assert.equal(deployment.targetServiceRevision?.arn, rollback.target);
+		assert.equal(deployment.sourceServiceRevisions?.length, 1);
+		const restored = deployment.sourceServiceRevisions[0];
+		assert.equal(restored.arn, source);
+		if (
+			[
+				...rolloutInProgress,
+				"ROLLBACK_REQUESTED",
+				"ROLLBACK_IN_PROGRESS",
+			].includes(deployment.status)
+		)
+			return false;
+		assert.equal(
+			deployment.status,
+			"ROLLBACK_SUCCESSFUL",
+			"API rollback did not succeed",
+		);
+		assert.equal(deployment.rollback?.serviceRevisionArn, source);
+		// Revision summaries can remain stale after the terminal status arrives.
+		if (
+			!isDeepStrictEqual(revisionCounts(restored), [1, 1, 0]) ||
+			!isDeepStrictEqual(
+				revisionCounts(deployment.targetServiceRevision),
+				[0, 0, 0],
+			)
+		)
+			return false;
+		assert.ok(
+			deployment.finishedAt instanceof Date &&
+				deployment.rollback.startedAt instanceof Date &&
+				deployment.finishedAt >= deployment.rollback.startedAt &&
+				deployment.finishedAt.getTime() <= Date.parse(serverDate) + 1000,
+			"Missing bounded API rollback completion time",
+		);
+		if (!this.recordedCompletions.has(rollback.deploymentArn)) {
+			this.record("rollback-completed-proof", {
+				serviceDeploymentArn: rollback.deploymentArn,
+				serviceRevisionArn: source,
+				task: task.taskArn,
+				taskDefinition: task.taskDefinitionArn,
+				imageDigest: task.containers[0].imageDigest,
+				finishedAt: deployment.finishedAt.toISOString(),
+				legacyRolloutState: primary.rolloutState,
+			});
+			this.recordedCompletions.add(rollback.deploymentArn);
 		}
 		return true;
 	}
@@ -561,6 +649,7 @@ export class APIRolloutAWS {
 					definition: baseline.definition,
 					image: baseline.image,
 					reusedSource: true,
+					rollback: { taskArn: baseline.task.taskArn },
 				};
 			}
 		}
@@ -568,8 +657,7 @@ export class APIRolloutAWS {
 			cluster: API_CLUSTER,
 			service: API_SERVICE,
 			status: [
-				"PENDING",
-				"IN_PROGRESS",
+				...rolloutInProgress,
 				"ROLLBACK_REQUESTED",
 				"ROLLBACK_IN_PROGRESS",
 			],
@@ -581,22 +669,27 @@ export class APIRolloutAWS {
 		);
 		if (listed.serviceDeployments.length) {
 			const arn = listed.serviceDeployments[0].serviceDeploymentArn;
-			const result = await this.call("DescribeServiceDeployments", {
-				serviceDeploymentArns: [arn],
-			});
-			assert.equal(result.failures?.length ?? 0, 0);
-			assert.equal(result.serviceDeployments?.length, 1);
-			const deployment = result.serviceDeployments[0];
-			assert.equal(deployment.serviceArn, SERVICE_ARN);
+			const { deployment } = await this.describeDeployment(arn);
 			assert.equal(deployment.sourceServiceRevisions.length, 1);
 			const source = deployment.sourceServiceRevisions[0].arn;
+			assert.equal(source, taskRevision(baseline.task));
+			const targetRevision = deployment.targetServiceRevision?.arn;
+			assert.ok(
+				typeof targetRevision === "string" &&
+					targetRevision.startsWith(revisionPrefix) &&
+					/^[0-9]+$/.test(targetRevision.slice(revisionPrefix.length)) &&
+					targetRevision !== source,
+				"Missing distinct API rollback target revision",
+			);
 			const revisions = await this.call("DescribeServiceRevisions", {
 				serviceRevisionArns: [source],
 			});
 			assert.equal(revisions.failures?.length ?? 0, 0);
 			assert.equal(revisions.serviceRevisions?.length, 1);
 			const revision = revisions.serviceRevisions[0];
+			assert.equal(revision.serviceRevisionArn, source);
 			assert.equal(revision.serviceArn, SERVICE_ARN);
+			assert.equal(revision.clusterArn, clusterArn);
 			assert.equal(
 				revision.taskDefinition,
 				baseline.definition.taskDefinitionArn,
@@ -609,25 +702,43 @@ export class APIRolloutAWS {
 				),
 				"Rollback revision lost its immutable image binding",
 			);
-			if (
-				!["ROLLBACK_REQUESTED", "ROLLBACK_IN_PROGRESS"].includes(
-					deployment.status,
-				)
-			) {
+			if (!rollbackStarted.includes(deployment.status)) {
+				assert.ok(
+					rolloutInProgress.includes(deployment.status),
+					"API deployment is no longer eligible to stop",
+				);
 				this.record("rollback-intent", {
 					serviceDeploymentArn: arn,
 					sourceRevision: source,
 					oldImage: baseline.image,
 				});
-				await this.call("StopServiceDeployment", {
-					serviceDeploymentArn: arn,
-					stopType: "ROLLBACK",
-				});
+				try {
+					await this.call("StopServiceDeployment", {
+						serviceDeploymentArn: arn,
+						stopType: "ROLLBACK",
+					});
+				} catch (error) {
+					if (error.name !== "ConflictException") throw error;
+					// The circuit breaker may start rollback between Describe and Stop.
+					const { deployment: observed } = await this.describeDeployment(arn);
+					if (
+						!rollbackStarted.includes(observed.status) ||
+						observed.targetServiceRevision?.arn !== targetRevision ||
+						observed.sourceServiceRevisions?.length !== 1 ||
+						observed.sourceServiceRevisions[0].arn !== source
+					)
+						throw error;
+				}
 			}
 			return {
 				definition: baseline.definition,
 				image: baseline.image,
 				reusedSource: true,
+				rollback: {
+					deploymentArn: arn,
+					source,
+					target: targetRevision,
+				},
 			};
 		}
 		// Completed deployments cannot be stopped. Restore an immutable native pin.

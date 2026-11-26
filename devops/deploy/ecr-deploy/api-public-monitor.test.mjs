@@ -19,6 +19,17 @@ function reverseKeys(value) {
 		);
 	return value;
 }
+
+function rankedSearch(total = 200, firstId = 495) {
+	return {
+		total,
+		hits: Array.from({ length: 10 }, (_, i) => ({
+			articleId: firstId + i,
+			score: (10 - i) / 10,
+		})),
+	};
+}
+
 function fixture() {
 	let at = 0;
 	const calls = [],
@@ -43,7 +54,7 @@ function fixture() {
 						perakim: Array.from({ length: f.chapters ?? 929 }, (_, i) => ({
 							perekId: i + 1,
 							...(query.includes("compiledSource")
-								? { compiledSource: "מקור" + i }
+								? { compiledSource: (f.compiledSource ?? "מקור") + i }
 								: {}),
 						})),
 					},
@@ -59,21 +70,16 @@ function fixture() {
 					},
 				};
 			else if (query.includes("dedications"))
-				data = { data: { dedications: [] } };
+				data = { data: { dedications: f.dedications ?? [] } };
 			else {
 				assert.ok(Object.values(CONTRACT_QUERIES).includes(query));
 				data = {
 					data: {
-						searchArticles: {
-							total: 2,
-							hits: [
-								{ articleId: 495, score: f.score ?? 1.5 },
-								{ articleId: 496, score: 1.0 },
-							],
-						},
+						searchArticles: f.searchResults
+							? f.searchResults(url, query)
+							: rankedSearch(),
 					},
 				};
-				if (f.reverseHits) data.data.searchArticles.hits.reverse();
 			}
 		}
 		if (f.extraKey) data.extra = true;
@@ -184,7 +190,7 @@ for (const [name, change, route] of [
 	["readiness failure", { readyStatus: "starting" }, 1],
 	["unexpected version", { version: "0.2.0" }, 0],
 	["invalid marker", { instance: "private-ip" }, 0],
-	["missing chapter", { chapters: 928 }, 2],
+	["partial chapter data", { chapters: 33 }, 2],
 	["GraphQL error", { graphqlError: true }, 2],
 	["transport error", { error: new Error("canary must remain private") }, 0],
 ])
@@ -194,6 +200,14 @@ for (const [name, change, route] of [
 		Object.assign(f, change);
 		const row = await f.monitor.sample(route);
 		assert.equal(row.passed, false);
+		if (change.graphqlError)
+			assert.equal(row.error.code, "PUBLIC_GRAPHQL_ERRORS");
+		if (change.chapters)
+			assert.deepEqual(row.error, {
+				name: "Error",
+				code: "PUBLIC_CHAPTER_IDENTITIES",
+				chapterCount: 33,
+			});
 		assert.throws(() => f.monitor.assertHealthy(), /sample failed/);
 		assert.equal(JSON.stringify(f.events).includes("private"), false);
 		f.status = 200;
@@ -220,7 +234,7 @@ test("one background sample per second stops cleanly", async () => {
 	f.monitor.assertHealthy();
 });
 
-test("fourteen contracts compare content, search ranking and scores without logging content", async () => {
+test("fourteen contracts compare both aliases and journal content hashes before rejecting a change", async () => {
 	const f = fixture(),
 		baseline = await f.monitor.contracts(f.version, null, OLD_INSTANCE);
 	assert.equal(f.calls.length, 14);
@@ -232,11 +246,25 @@ test("fourteen contracts compare content, search ranking and scores without logg
 		baseline,
 	);
 	assert.equal(JSON.stringify(f.events).includes('"content"'), false);
-	f.content = "changed";
-	await assert.rejects(
-		f.monitor.contracts(f.version, baseline),
-		/contracts changed/,
-	);
+	for (const [field, query, changed] of [
+		["content", "article", "changed article canary"],
+		["compiledSource", "chapters", "changed source canary"],
+		["dedications", "dedications", [{ id: 1, scopes: [] }]],
+	]) {
+		f[field] = changed;
+		await assert.rejects(
+			f.monitor.contracts(f.version, baseline),
+			/Public content contracts changed/,
+		);
+		const observation = f.events.at(-1);
+		assert.equal(observation.name, "public-contracts");
+		assert.notEqual(
+			observation.value.results[0].hashes[query],
+			baseline[0].hashes[query],
+		);
+		assert.equal(JSON.stringify(observation).includes("canary"), false);
+		delete f[field];
+	}
 	f.articleId = 1;
 	await assert.rejects(f.monitor.contracts(f.version));
 });
@@ -252,23 +280,80 @@ test("contracts reject changed readiness versions, markers and chapter identitie
 	await assert.rejects(f.monitor.contracts(f.version));
 });
 
-test("contract hashes canonicalize object keys while preserving ranking and scores", async () => {
+test("search rebuilds may change ranking, scores and counts when both aliases agree", async () => {
 	const f = fixture(),
 		baseline = await f.monitor.contracts(f.version);
 	f.reverseObjectKeys = true;
 	assert.deepEqual(await f.monitor.contracts(f.version, baseline), baseline);
-	f.score = 1.6;
-	await assert.rejects(
-		f.monitor.contracts(f.version, baseline),
-		/contracts changed/,
+	const rebuilt = rankedSearch(330, 508);
+	rebuilt.hits[0].score = 0.95;
+	f.searchResults = () => rebuilt;
+	const actual = await f.monitor.contracts(f.version, baseline);
+	assert.notEqual(
+		actual[0].hashes.searchShabbat,
+		baseline[0].hashes.searchShabbat,
 	);
-	f.score = 1.5;
-	f.reverseHits = true;
+	assert.notEqual(
+		actual[0].hashes.searchBereshit,
+		baseline[0].hashes.searchBereshit,
+	);
+	assert.deepEqual(actual[0].hashes, actual[1].hashes);
+	f.searchResults = (url, query) =>
+		url === API_ORIGINS[0] + "/" && query.includes("שבת")
+			? rebuilt
+			: rankedSearch();
 	await assert.rejects(
 		f.monitor.contracts(f.version, baseline),
-		/contracts changed/,
+		/Public alias contracts differ/,
+	);
+	const observation = f.events.at(-1);
+	assert.equal(observation.name, "public-contracts");
+	assert.notEqual(
+		observation.value.results[0].hashes.searchShabbat,
+		observation.value.results[1].hashes.searchShabbat,
 	);
 });
+
+for (const [label, result, error] of [
+	["missing search result", () => null, /incomplete page/],
+	["fractional total", () => rankedSearch(10.5), /incomplete page/],
+	["collapsed result count", () => rankedSearch(9), /incomplete page/],
+	[
+		"truncated hits",
+		() => ({ ...rankedSearch(), hits: [] }),
+		/incomplete page/,
+	],
+	[
+		"unsorted results",
+		() => {
+			const search = rankedSearch();
+			search.hits.reverse();
+			return search;
+		},
+		/invalid ranked hits/,
+	],
+])
+	test(`search contracts reject ${label}`, async () => {
+		const f = fixture();
+		const baseline = await f.monitor.contracts(f.version);
+		f.searchResults = result;
+		await assert.rejects(f.monitor.contracts(f.version, baseline), error);
+	});
+
+for (const [label, hit] of [
+	["invalid article ID", { articleId: 0, score: 1 }],
+	["duplicate article ID", { articleId: 496, score: 1 }],
+	["invalid score type", { articleId: 495, score: "1" }],
+	["score above one", { articleId: 495, score: 1.1 }],
+	["nonpositive score", { articleId: 495, score: 0 }],
+])
+	test(`search contracts reject ${label}`, async () => {
+		const f = fixture();
+		const search = rankedSearch();
+		search.hits[0] = hit;
+		f.searchResults = () => search;
+		await assert.rejects(f.monitor.contracts(f.version), /invalid ranked hits/);
+	});
 
 test("a background observer failure is retained and prevents a healthy result", async () => {
 	const f = fixture();

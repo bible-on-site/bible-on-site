@@ -229,13 +229,40 @@ test("an existing protection is neither renewed nor cleared", async () => {
 	aws.protected = true;
 	await assert.rejects(lease.grant(), /existing task protection/);
 	assert.equal(writes(aws).length, 0);
+	assert.deepEqual(aws.events, [
+		{
+			name: "protection-blocked",
+			value: {
+				task: TASK,
+				protectionEnabled: true,
+				markerCount: 0,
+				markerKeys: [],
+			},
+		},
+	]);
 });
 test("another protection marker remains untouched", async () => {
 	const { aws, lease } = fixture();
-	aws.tags[`${LEASE_PREFIX}foreign`] = "other";
+	const previousNonce = "22222222-2222-4222-8222-222222222222";
+	const oldMarker = LEASE_PREFIX + previousNonce;
+	const malformedMarker = LEASE_PREFIX + "foreign";
+	const mismatchedMarker = LEASE_PREFIX + "a".repeat(32);
+	aws.tags[oldMarker] = API_SERVICE + ":" + previousNonce;
+	aws.tags[malformedMarker] = "other";
+	aws.tags[mismatchedMarker] = "other";
 	await assert.rejects(lease.grant(), /existing task protection marker/);
 	assert.equal(writes(aws).length, 0);
-	assert.equal(aws.tags[`${LEASE_PREFIX}foreign`], "other");
+	assert.deepEqual(aws.events, [
+		{
+			name: "protection-blocked",
+			value: {
+				task: TASK,
+				protectionEnabled: false,
+				markerCount: 3,
+				markerKeys: [oldMarker],
+			},
+		},
+	]);
 });
 test("a lost grant acknowledgement is reconciled without another grant", async () => {
 	const { aws, lease } = fixture();
