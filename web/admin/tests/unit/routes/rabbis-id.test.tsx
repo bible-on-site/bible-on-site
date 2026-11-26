@@ -16,6 +16,11 @@ const server = vi.hoisted(() => ({
 	deleteAuthor: vi.fn(),
 	uploadAuthorImage: vi.fn(),
 	params: { id: "7" },
+	imageUpload: null as null | {
+		currentImageUrl?: string;
+		onUpload: (file: File) => Promise<void>;
+		onRemove?: () => void;
+	},
 }));
 
 vi.mock("~/server/authors", () => ({
@@ -28,7 +33,14 @@ vi.mock("~/server/s3", () => ({
 	uploadAuthorImage: server.uploadAuthorImage,
 }));
 vi.mock("~/components/ImageUpload", () => ({
-	ImageUpload: () => <div data-testid="image-upload" />,
+	ImageUpload: (props: {
+		currentImageUrl?: string;
+		onUpload: (file: File) => Promise<void>;
+		onRemove?: () => void;
+	}) => {
+		server.imageUpload = props;
+		return <div data-testid="image-upload" />;
+	},
 }));
 vi.mock("~/components/AutoSaveIndicator", () => ({
 	AutoSaveIndicator: () => <div data-testid="autosave" />,
@@ -52,6 +64,12 @@ const author = {
 	details: "פרטים",
 	imageUrl: "",
 };
+
+function getImageUploadProps() {
+	const props = server.imageUpload;
+	if (props === null) throw new Error("ImageUpload props were not captured");
+	return props;
+}
 
 function renderPage() {
 	const client = new QueryClient({
@@ -108,6 +126,52 @@ describe("RabbiEditPage", () => {
 				.getByRole("button", { name: "שומר..." })
 				.querySelector(".animate-spin"),
 		).toBeInTheDocument();
+	});
+
+	it("uploads the picked image and resolves only after the upload finishes", async () => {
+		let resolveUpload: (value: unknown) => void = () => undefined;
+		server.uploadAuthorImage.mockReturnValue(
+			new Promise((resolve) => {
+				resolveUpload = resolve;
+			}),
+		);
+		renderPage();
+		await waitFor(() => expect(server.imageUpload).not.toBeNull());
+
+		let settled = false;
+		const uploadPromise = getImageUploadProps().onUpload(
+			new File(["image-bytes"], "portrait.png", { type: "image/png" }),
+		).then(() => {
+			settled = true;
+		});
+
+		await waitFor(() =>
+			expect(server.uploadAuthorImage).toHaveBeenCalledWith({
+				data: {
+					authorId: 7,
+					fileName: "portrait.png",
+					contentType: "image/png",
+					base64Data: expect.any(String),
+				},
+			}),
+		);
+		expect(settled).toBe(false);
+
+		resolveUpload({});
+		await uploadPromise;
+		expect(settled).toBe(true);
+	});
+
+	it("propagates image upload failures so ImageUpload can surface them", async () => {
+		server.uploadAuthorImage.mockRejectedValue(new Error("s3 offline"));
+		renderPage();
+		await waitFor(() => expect(server.imageUpload).not.toBeNull());
+
+		await expect(
+			getImageUploadProps().onUpload(
+				new File(["image-bytes"], "portrait.png", { type: "image/png" }),
+			),
+		).rejects.toThrow("s3 offline");
 	});
 
 	it("deletes the rabbi only after the confirm dialog approves", async () => {

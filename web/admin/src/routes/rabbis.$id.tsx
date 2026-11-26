@@ -122,21 +122,22 @@ function RabbiEditPage() {
 				return;
 			}
 			// Convert file to base64 for server function
-			const reader = new FileReader();
-			reader.onload = async (e) => {
-				const base64 = e.target?.result as string;
-				await uploadAuthorImage({
-					data: {
-						authorId,
-						fileName: file.name,
-						contentType: file.type,
-						base64Data: base64.split(",")[1], // Remove data:... prefix
-					},
-				});
-				queryClient.invalidateQueries({ queryKey: ["author", authorId] });
-				queryClient.invalidateQueries({ queryKey: ["authors"] });
-			};
-			reader.readAsDataURL(file);
+			const base64 = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = (e) => resolve(e.target?.result as string);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(file);
+			});
+			await uploadAuthorImage({
+				data: {
+					authorId,
+					fileName: file.name,
+					contentType: file.type,
+					base64Data: base64.split(",")[1], // Remove data:... prefix
+				},
+			});
+			queryClient.invalidateQueries({ queryKey: ["author", authorId] });
+			queryClient.invalidateQueries({ queryKey: ["authors"] });
 		},
 		[authorId, queryClient],
 	);
