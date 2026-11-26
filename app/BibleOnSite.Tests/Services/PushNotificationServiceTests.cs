@@ -274,6 +274,34 @@ public class PushNotificationServiceTests
     }
 
     [Fact]
+    public async Task SetEnabledAsync_Disable_WhenInitFaults_StillDisables()
+    {
+        var (service, platform, prefs, _, _) = CreateService();
+        prefs.DailyPerekPushEnabled = true; // an existing opt-in the disable must clear
+        platform.FailInitialize = true;
+
+        var result = await service.SetEnabledAsync(false, CancellationToken.None);
+
+        // Opt-out does not need a successful warm-up: the wiring already ran,
+        // and a failed unsubscribe is covered by PendingUnsubscribeKey.
+        result.Should().Be(PushEnableResult.Disabled);
+        prefs.DailyPerekPushEnabled.Should().BeFalse("the failed init must not skip clearing the opt-in");
+        platform.Unsubscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_Enable_WhenInitFaults_ReportsFailed()
+    {
+        var (service, platform, prefs, _, _) = CreateService();
+        platform.FailInitialize = true;
+
+        var result = await service.SetEnabledAsync(true, CancellationToken.None);
+
+        result.Should().Be(PushEnableResult.Failed);
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SetEnabledAsync_Reenable_ClearsPendingUnsubscribe()
     {
         var (service, platform, prefs, store, registry) = CreateService();

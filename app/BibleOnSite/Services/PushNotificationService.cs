@@ -224,7 +224,11 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"[Push] platform init failed: {ex.Message}");
-            return PushEnableResult.Failed;
+            // Opt-out still settles locally — the wiring the unsubscribe needs
+            // already ran, and DisableAsync persists a retry marker when the
+            // unsubscribe itself fails. Reporting Failed here would bounce the
+            // settings toggle back on even though opt-out fully succeeded.
+            return enabled ? PushEnableResult.Failed : await DisableAsync(ct);
         }
         return enabled ? await EnableAsync(ct) : await DisableAsync(ct);
     }
