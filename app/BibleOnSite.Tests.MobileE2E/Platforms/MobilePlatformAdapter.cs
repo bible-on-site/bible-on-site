@@ -437,20 +437,22 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     public override By FlyoutScroller => By.XPath("//android.widget.ScrollView[@scrollable='true']");
     public override void GoBack(AppiumDriver driver)
     {
-        // pressBack reports success even when the app drops the key: it can
-        // land while a navigation push or pop is still animating and MAUI
-        // never starts the pop. The idle-quiet lookups used to hide this —
-        // every wait ended only after the transitions settled, so the key
-        // always pressed into a quiet page. With the idle wait disabled the
-        // waits accept a pushed page mid-animation, and a press dropped in
-        // that window leaves the stack one page deep (the flyout/preferences
-        // tests then sit on the preferences root until their wait expires).
-        // Confirm the tree turned and settled, reissuing the key once — the
-        // same one-retry idiom the iOS back gesture uses for dropped
+        // The shell consumes every Back that lands inside the Navigating to
+        // Navigated settle window (NavigationSettleWatch) — re-entering the
+        // pipeline there can pop the page beneath the transitioning one, so
+        // a press in that window is dropped by design and pressBack still
+        // reports success. The idle-quiet lookups used to hide this because
+        // every wait ended only after transitions settled; with the idle
+        // wait disabled the waits accept a pushed page mid-animation, the
+        // press is consumed, and the flyout/preferences tests sit one page
+        // deep until their wait expires. Press only into a quiet tree — a
+        // change observed afterwards is then the press's own pop, not the
+        // tail of the push it raced — confirm the turn, and reissue once,
+        // the same one-retry idiom the iOS back gesture uses for dropped
         // navigation input.
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var before = driver.PageSource;
+            var before = SettledTree(driver);
             driver.Navigate().Back();
             if (PageTurned(driver, before))
             {
@@ -460,12 +462,38 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     }
 
     /// <summary>
+    /// The tree once consecutive snapshots agree, bounded so a perpetually
+    /// churning page still gets its press. A quiet tree is the only state a
+    /// Back press can be attributed to: pressing into an animating transition
+    /// leaves no way to tell its pop from the transition's own rewrite.
+    /// </summary>
+    private static string SettledTree(AppiumDriver driver)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var last = driver.PageSource;
+        while (DateTime.UtcNow < deadline)
+        {
+            // Each sample is a full tree dump on the device; the poll cadence
+            // keeps the dump loop from saturating the accessibility server.
+            Thread.Sleep(100);
+            var current = driver.PageSource;
+            if (string.Equals(current, last, StringComparison.Ordinal))
+            {
+                return current;
+            }
+            last = current;
+        }
+        return last;
+    }
+
+    /// <summary>
     /// Whether a back press became a navigation: the tree changed and then
     /// went quiet again. The pop animation rewrites the tree for a few
-    /// hundred milliseconds, and a press landing inside it is dropped the
+    /// hundred milliseconds, and a press landing inside it is consumed the
     /// same way, so the press is confirmed only once consecutive snapshots
     /// agree. A tree that changed without settling still proves the press
-    /// landed; one that never changed does not.
+    /// landed — nothing else mutates a tree that was quiet at press time —
+    /// one that never changed does not.
     /// </summary>
     private static bool PageTurned(AppiumDriver driver, string before)
     {
@@ -487,8 +515,6 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
                 changed = true;
                 last = current;
             }
-            // Each sample is a full tree dump on the device; the poll cadence
-            // keeps the dump loop from saturating the accessibility server.
             Thread.Sleep(100);
         }
         return changed;
