@@ -653,4 +653,4 @@ export function fixture(options) {
 }
 
 export const ownedTags = (backend) =>
-	Object.keys(backend.tags).filt
+	Object.keys(backend.tags).filter((key) => key.startsWith(LEASE_PREFIX));
