@@ -470,6 +470,7 @@ function Detail({
 	all,
 	view,
 	onView,
+	discussionSearch,
 	actor,
 	busy,
 	act,
@@ -481,6 +482,7 @@ function Detail({
 	all: Contribution[];
 	view?: ContributionSearch["view"];
 	onView: (view: ContributionSearch["view"]) => void;
+	discussionSearch: ContributionHomeSearch;
 	agents: ContributionAgentSummary[];
 	actor?: Contributor;
 	busy: boolean;
@@ -868,6 +870,7 @@ function Detail({
 						item={item}
 						agents={agents}
 						showProposals={linked.length === 0}
+						discussionSearch={tab === "changes" ? discussionSearch : undefined}
 					/>
 				</div>
 				<aside className="contribution-sidebar">
@@ -970,6 +973,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const [actionError, setActionError] = useState("");
 	const path = "/";
 	const scope = kind === "pr" ? search.issueId : undefined;
+	const detailId = search.id === "new" ? undefined : search.id;
 	const queueSearch = (
 		next: ContributionSearch = {},
 	): ContributionHomeSearch => ({
@@ -981,9 +985,9 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		tab: kind === "pr" ? "prs" : "issues",
 	});
 	const detail = useQuery({
-		queryKey: ["contribution", search.id],
-		queryFn: () => getContribution({ data: search.id as string }),
-		enabled: Boolean(search.id && search.id !== "new"),
+		queryKey: ["contribution", detailId],
+		queryFn: () => getContribution({ data: detailId as string }),
+		enabled: Boolean(detailId),
 		staleTime: 0,
 		refetchInterval: (query) =>
 			query.state.data?.rebasePending ||
@@ -992,16 +996,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				: false,
 	});
 	const item = detail.data;
-	const filters: ContributionListRequest =
-		search.id && search.id !== "new"
-			? { relatedTo: search.id }
-			: {
-					kind,
-					state: search.state ?? "open",
-					q: search.q,
-					assignee: search.assignee as ContributionListRequest["assignee"],
-					...(scope ? { relatedTo: scope } : {}),
-				};
+	const filters: ContributionListRequest = detailId
+		? { relatedTo: detailId }
+		: {
+				kind,
+				state: search.state ?? "open",
+				q: search.q,
+				assignee: search.assignee as ContributionListRequest["assignee"],
+				...(scope ? { relatedTo: scope } : {}),
+			};
 	const list = useInfiniteQuery({
 		// The worker may finish on a different computer while the issue is open.
 		// Its new proposal IDs change this key as soon as the detail poll sees them.
@@ -1011,6 +1014,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			filters,
 			item?.kind === "issue" ? item.generation?.prIds : undefined,
 		],
+		enabled: !detailId || kind === "pr" || Boolean(item),
 		queryFn: ({ pageParam }) =>
 			getContributions({
 				data: { ...filters, ...(pageParam ? { before: pageParam } : {}) },
@@ -1028,17 +1032,18 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		queryKey: ["contributions", "agents"],
 		queryFn: () => getContributionAgents(),
 	});
-	const catalogue = useQuery({
-		queryKey: ["contributions", "catalogue"],
-		queryFn: () => getContributionCatalogue(),
-		enabled: search.id === "new" || Boolean(editing),
-	});
-	const needsLinkedIssue =
-		Boolean(scope) && (!search.id || search.id === "new");
+	const needsLinkedIssue = Boolean(scope) && !detailId;
 	const issue = useQuery({
 		queryKey: ["contribution", search.issueId],
 		queryFn: () => getContribution({ data: search.issueId as string }),
 		enabled: needsLinkedIssue,
+	});
+	const scopeIssue = issue.data?.kind === "issue" ? issue.data : undefined;
+	const scopeCanCreate = !scope || scopeIssue?.state === "open";
+	const catalogue = useQuery({
+		queryKey: ["contributions", "catalogue"],
+		queryFn: () => getContributionCatalogue(),
+		enabled: search.id === "new" || Boolean(editing),
 	});
 	const refresh = () => {
 		void queryClient.invalidateQueries({ queryKey: ["contributions"] });
@@ -1183,7 +1188,9 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							</p>
 						</div>
 					</div>
-					{catalogue.data && (!needsLinkedIssue || issue.data) ? (
+					{needsLinkedIssue && issue.data && !scopeCanCreate ? (
+						<p role="status">אפשר לפתוח PR מקושר רק לפנייה פתוחה.</p>
+					) : catalogue.data && (editing || scopeCanCreate) ? (
 						<div className="contribution-card">
 							<div className="contribution-card-body">
 								<ContributionComposer
@@ -1193,7 +1200,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									kind={kind}
 									agents={agents.data ?? []}
 									initial={editing ?? undefined}
-									linkedIssue={issue.data}
+									linkedIssue={scopeIssue}
 									catalogue={catalogue.data}
 									previewArticle={(id) =>
 										getContributionArticleLinkPreview({ data: id })
@@ -1248,6 +1255,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						item={item}
 						all={all}
 						view={search.view}
+						discussionSearch={queueSearch({ id: item.id })}
 						onView={(view) => {
 							if (view !== search.view)
 								void navigate({
@@ -1276,13 +1284,13 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										? "פניות"
 										: "הצעות שינוי"}
 							</h1>
-							{scope && issue.data && (
+							{scopeIssue && (
 								<Link
 									className="contribution-link"
 									to={path}
-									search={{ id: scope, tab: "issues" }}
+									search={{ id: scopeIssue.id, tab: "issues" }}
 								>
-									<bdi>#{issue.data.number}</bdi> {issue.data.title}
+									<bdi>#{scopeIssue.number}</bdi> {scopeIssue.title}
 								</Link>
 							)}
 							<p>
@@ -1291,13 +1299,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									: "סקירה, ראיות ומיזוג של שינויים מובנים"}
 							</p>
 						</div>
-						<Link
-							className="contribution-button primary"
-							to={path}
-							search={queueSearch({ id: "new" })}
-						>
-							{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
-						</Link>
+						{scopeCanCreate && (
+							<Link
+								className="contribution-button primary"
+								to={path}
+								search={queueSearch({ id: "new" })}
+							>
+								{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
+							</Link>
+						)}
 					</div>
 					<div className="contribution-filters">
 						<input

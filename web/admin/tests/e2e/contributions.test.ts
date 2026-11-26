@@ -504,7 +504,15 @@ test.describe("Issues and typed pull requests", () => {
 			await page
 				.getByRole("button", { name: "שמירת שיוך והפעלת סוכן", exact: true })
 				.click();
-			await page.getByRole("tab", { name: /^תיאור ודיון/ }).click();
+			await page
+				.getByRole("region", { name: "פעילות הסוכן" })
+				.getByRole("link", { name: "אירוע 1", exact: true })
+				.click();
+			const eventId = new URL(page.url()).hash.slice(1);
+			expect(eventId).toMatch(/^contribution-event-/);
+			await expect(page.locator(`[id="${eventId}"]`)).toContainText(
+				"שינה שיוך",
+			);
 			await page
 				.getByLabel("הוספת תגובה", { exact: true })
 				.fill("יש להסביר שההצעה עוסקת במטא-נתונים בלבד");

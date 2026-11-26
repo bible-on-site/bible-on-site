@@ -377,6 +377,7 @@
 }
 .contribution-event {
 	position: relative;
+	scroll-margin-top: 5rem;
 	margin-bottom: 22px;
 	font-size: 14px;
 }
