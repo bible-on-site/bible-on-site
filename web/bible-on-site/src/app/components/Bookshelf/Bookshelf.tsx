@@ -392,7 +392,12 @@ function BookBlock({
 					style={{
 						...topStyle,
 						...pageEdgeStyle,
-						border: `${coverEdge}px solid ${baseColor}`,
+						// Longhands only: a shorthand `border` mixed with
+						// `borderTopColor` trips React's shorthand/non-shorthand
+						// warning on rerender.
+						borderWidth: `${coverEdge}px`,
+						borderStyle: "solid",
+						borderColor: baseColor,
 						borderTopColor: spineColor,
 						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
