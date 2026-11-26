@@ -68,10 +68,12 @@ function getPortraitSnapshot(): PortraitSnapshot | undefined {
 	if (!store[snapshotKey]) {
 		const keys = readPortraitSnapshot();
 		const sortedEntries = [...keys].sort(([a], [b]) => a - b);
-		const digest = createHash("sha256")
-			.update(JSON.stringify(sortedEntries))
-			.digest("hex");
-		store[snapshotKey] = { keys, digest };
+		const hash = createHash("sha256");
+		// Validated IDs and storage keys cannot contain the NUL separator.
+		for (const [id, key] of sortedEntries) {
+			hash.update(`${id}\0${key}\0`);
+		}
+		store[snapshotKey] = { keys, digest: hash.digest("hex") };
 	}
 
 	return store[snapshotKey];
