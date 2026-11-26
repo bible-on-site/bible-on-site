@@ -94,20 +94,24 @@ describe("versioned contribution agent declarations", () => {
 		});
 		expect(bundle.system).toContain("returned integer perekId/pasuk/pasukTo");
 	});
-	it("explains how to supply a canonical Sefer or volume in the occurrence tool declaration", () => {
-		const tool = buildContributionAgentBundle().tools.find(
-			(tool) => tool.name === "scripture_occurrences",
+	it("guides occurrence searches to the exact Sefer or Additional returned by the Perek reader", () => {
+		const { tools } = buildContributionAgentBundle();
+		const tool = tools.find((tool) => tool.name === "scripture_occurrences");
+		expect(tool?.description).toContain(
+			"copy the book field from a scripture_chapter result",
 		);
-		expect(tool?.description).toContain("Perek lookup");
 		expect(tool?.inputSchema).toMatchObject({
 			properties: {
 				book: {
 					description: expect.stringContaining(
-						"שמואל for both volumes or שמואל א or שמואל ב for one volume",
+						"שמואל, מלכים, and דברי הימים each search both Additionals. Search עזרא and נחמיה separately",
 					),
 				},
 			},
 		});
+		expect(
+			tools.find((tool) => tool.name === "scripture_chapter")?.description,
+		).toContain("Pesukim in a Perek");
 	});
 	it("permits only declared tool action shapes and the supplied final decoder schema", () => {
 		const bundle = buildContributionAgentBundle(),

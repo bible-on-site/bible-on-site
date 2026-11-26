@@ -62,7 +62,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			`parent_child: after:{parentId,childId,relationshipType:${FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.join("|")},parentRole:${FAMILY_PARENT_ROLES.join("|")},sourceCitation?,altGroupId?,birthOrder?}`,
 			`union: after:{person1Id,person2Id,unionType:${FAMILY_UNION_TYPES.join("|")},unionOrder?,startDate?,endDate?,endReason:${FAMILY_UNION_END_REASONS.join("|")}|null,sourceCitation?,personSourceCitation?,altGroupId?}`,
 			"place: after:{placeId,modernName?,latitude:number|null,longitude:number|null,altGroupId?}; targetId identifies an existing place-identification row, not the place",
-			"place_profile: one place per PR. In after, provide entry:{title,uniqueName,displayName} and omit targetId for a new place. For an existing place use its place ID and set entry:null. Search scripture_occurrences across all books for a whole-Tanakh survey. For after.occurrences, copy exact {perekId,pasukNumber,segmentStart,segmentEnd,text} from the tool or select inclusive ordinal ranges with {spellings,selected:[{from,to}]}. For a book-filtered search also provide the exact same book in the selection; ordinals belong only to that query. When revising the same place PR across batches, add includeExisting:true to the ordinal selection to retain all saved spans and append only the newly selected spans. Otherwise the selection replaces the saved spans. Never use includeExisting for a new proposal. Keep the same place and preserve metadata that feedback did not ask to change. Review the context for every selected match, keep separate spans for repeated mentions, and describe uncertain and excluded matches in the PR. Include identification:{modernName,latitude,longitude,basis:consensus|commentary,citation,coordinateCitation} only when the reviewed evidence supports both the identity and the location. For an ancient commentary's identification use basis:commentary and cite the commentary and reliable modern coordinates separately. Otherwise set identification:null.",
+			"place_profile: one place per PR. In after, provide entry:{title,uniqueName,displayName} and omit targetId for a new place. For an existing place use its place ID and set entry:null. Omit book in scripture_occurrences to survey the whole Tanah. For after.occurrences, copy exact {perekId,pasukNumber,segmentStart,segmentEnd,text} from the tool or select inclusive ordinal ranges with {spellings,selected:[{from,to}]}. If you filter by a Sefer or Additional, copy the same book field into the selection because the ordinals belong to that query. When revising the same place PR across batches, add includeExisting:true to the ordinal selection to retain all saved spans and append only the newly selected spans. Otherwise the selection replaces the saved spans. Never use includeExisting for a new proposal. Keep the same place and preserve metadata that feedback did not ask to change. Review the context for every selected match, keep separate spans for repeated mentions, and describe uncertain and excluded matches in the PR. Include identification:{modernName,latitude,longitude,basis:consensus|commentary,citation,coordinateCitation} only when the reviewed evidence supports both the identity and the location. For an ancient commentary's identification use basis:commentary and cite the commentary and reliable modern coordinates separately. Otherwise set identification:null.",
 			"metadata: existing entity targetId required; after:{displayName}",
 			`entry: after:{title,uniqueName,entityType:${ADMIN_CREATABLE_ENTITY_TYPES.join("|")},displayName}; creates empty body only`,
 			"alias_mapping: after:{name,targets:[{entryId,label}]}; complete destination set; existing targetId identifies the alias",
@@ -158,7 +158,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "scripture_occurrences",
 				description:
-					"Find candidate word spans in canonical Tanakh. Omit book for the whole Tanakh. To filter, use the exact Hebrew Sefer or volume name from a Perek lookup. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
+					"Find candidate word spans in the Tanah. To filter by a Sefer or Additional, copy the book field from a scripture_chapter result. Omit book for the whole Tanah. Returns exact pointed text, zero-based inclusive segment indices, Pasuk context, zero-based candidate ordinals, total and nextCursor. Review the context before accepting a candidate.",
 				inputSchema: object(
 					{
 						spellings: {
@@ -170,7 +170,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 						book: {
 							type: "string",
 							description:
-								"Exact Hebrew Sefer name from Perek coordinates.seferName, or the exact volume name in the scripture_chapter book field. Use שמואל for both volumes or שמואל א or שמואל ב for one volume. Omit this field for the whole Tanakh.",
+								"Exact Hebrew Sefer or Additional name from the scripture_chapter book field. The aliases שמואל, מלכים, and דברי הימים each search both Additionals. Search עזרא and נחמיה separately to cover both. Omit this field for the whole Tanah.",
 						},
 						cursor: { type: "integer", minimum: 0 },
 						limit: { type: "integer", minimum: 1, maximum: 100 },
@@ -181,7 +181,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "scripture_chapter",
 				description:
-					"Read canonical pointed verses in a Perek to discover places and check narrative context. Find IDs with search kind perek. Returns the exact Sefer or volume name in book, plus total and nextCursor. Only count returned verses as read.",
+					"Read canonical pointed Pesukim in a Perek to discover places and check narrative context. Find IDs with search kind perek. Returns the exact Sefer or Additional name in book, plus total and nextCursor. Count only the returned Pesukim as read.",
 				inputSchema: object(
 					{
 						perekId: { type: "integer", minimum: 1 },

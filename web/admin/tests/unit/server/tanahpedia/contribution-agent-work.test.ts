@@ -1082,6 +1082,53 @@ describe("assignment-driven leased contribution work", () => {
 		},
 	);
 
+	it.each([
+		{ perekId: 842, expected: "עזרא", other: "נחמיה" },
+		{ perekId: 852, expected: "נחמיה", other: "עזרא" },
+	])(
+		"reads the exact $expected filter from the Perek and excludes $other",
+		async ({ perekId, expected, other }) => {
+			const context = await vi.importActual<
+				typeof import("~/server/tanahpedia/contribution-agent-context.server")
+			>("~/server/tanahpedia/contribution-agent-context.server");
+			mocks.tool.mockImplementation(context.readContributionAgentTool);
+			const input = await claim();
+			const perek = await readContributionWorkerContext({
+				...input,
+				name: "scripture_chapter",
+				arguments: { perekId, limit: 1 },
+			});
+			expect(perek.data).toMatchObject({
+				book: expected,
+				citation: `${expected} א`,
+			});
+			if (!perek.receipt) throw new Error("Expected a Perek read receipt");
+			const book = (perek.data as { book: string }).book;
+			const occurrences = await readContributionWorkerContext({
+				...input,
+				receipts: [perek.receipt],
+				name: "scripture_occurrences",
+				arguments: { book, spellings: ["ירושלם", "ירושלים"], limit: 100 },
+			});
+			expect(occurrences).toMatchObject({
+				data: {
+					items: expect.arrayContaining([
+						expect.objectContaining({ citation: `${expected} א ב` }),
+					]),
+					nextCursor: null,
+				},
+				receipt: { arguments: { book: expected } },
+			});
+			expect(occurrences.data).not.toMatchObject({
+				items: expect.arrayContaining([
+					expect.objectContaining({
+						citation: expect.stringMatching(`^${other} `),
+					}),
+				]),
+			});
+		},
+	);
+
 	it("returns compatible current-call feedback for an unknown Sefer and preserves replay and corpus failures", async () => {
 		const context = await vi.importActual<
 			typeof import("~/server/tanahpedia/contribution-agent-context.server")
