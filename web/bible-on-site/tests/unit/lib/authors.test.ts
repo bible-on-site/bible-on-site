@@ -34,6 +34,43 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorImageUrl", () => {
+		it("serves a released portrait from a versioned PNG URL in production", () => {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			delete process.env.S3_ENDPOINT;
+			process.env.S3_BUCKET = "bible-on-site-assets";
+			process.env.ASSETS_BASE_URL = "https://assets.example/";
+
+			expect(getAuthorImageUrl(81)).toBe(
+				"https://assets.example/authors/caricatures/v20261126/high-res/81.png",
+			);
+		});
+
+		it.each([25, 32, 62, 99])(
+			"retains the legacy JPG in production for unreleased author %i",
+			(authorId) => {
+				jest.replaceProperty(process.env, "NODE_ENV", "production");
+				delete process.env.S3_ENDPOINT;
+				delete process.env.S3_BUCKET;
+				process.env.ASSETS_BASE_URL = "https://assets.example";
+
+				expect(getAuthorImageUrl(authorId)).toBe(
+					`https://assets.example/authors/high-res/${authorId}.jpg`,
+				);
+			},
+		);
+
+		it("retains the legacy JPG for a non-production bucket", () => {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			delete process.env.S3_ENDPOINT;
+			delete process.env.ASSETS_BASE_URL;
+			process.env.S3_BUCKET = "bible-on-site-assets-test";
+			process.env.S3_REGION = "il-central-1";
+
+			expect(getAuthorImageUrl(81)).toBe(
+				"https://bible-on-site-assets-test.s3.il-central-1.amazonaws.com/authors/high-res/81.jpg",
+			);
+		});
+
 		it("builds MinIO URL when S3_ENDPOINT is set", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			process.env.S3_BUCKET = "my-bucket";
@@ -89,9 +126,12 @@ describe("authors service", () => {
 		it("skips check in production mode", () => {
 			jest.replaceProperty(process.env, "NODE_ENV", "production");
 			process.env.S3_ENDPOINT = "http://localhost:4566";
+			delete process.env.ASSETS_BASE_URL;
+			delete process.env.S3_BUCKET;
 
-			// Should not throw or fetch — early return in production
-			expect(() => getAuthorImageUrl(1)).not.toThrow();
+			expect(getAuthorImageUrl(1)).toBe(
+				"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
+			);
 		});
 	});
 

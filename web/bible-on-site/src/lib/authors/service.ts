@@ -1,5 +1,5 @@
-import { assetsUrl } from "../assets-url";
 import { query } from "../api-client";
+import { assetsUrl } from "../assets-url";
 import {
 	getArticleMetrics,
 	metricOrFallback,
@@ -20,6 +20,15 @@ interface ArticleRow {
 	name: string;
 	abstract: string | null;
 }
+
+// Inventory of the immutable PNGs staged in the shared production asset bucket.
+const portraitRelease = "authors/caricatures/v20261126/high-res";
+const releasedPortraitIds = new Set([
+	1, 4, 5, 6, 7, 9, 10, 11, 12, 19, 20, 21, 22, 23, 24, 26, 27, 28, 31, 33, 34,
+	35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
+	55, 56, 57, 58, 59, 60, 61, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
+	75, 77, 78, 79, 80, 81,
+]);
 
 // Track if we've already warned about S3 unavailability (avoid spam)
 let s3WarningShown = false;
@@ -55,13 +64,22 @@ async function checkS3Availability(): Promise<void> {
 }
 
 /**
- * Build the public URL for author images based on author ID.
- * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
- * Handles CDN, RustFS (dev) and AWS S3 (prod) URLs.
+ * Resolve the website's versioned portraits and the legacy JPEG fallback.
+ * The release lives in the public production bucket; local fixtures still use JPEGs.
  */
 export function getAuthorImageUrl(authorId: number): string {
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
 	checkS3Availability();
+
+	const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
+	if (
+		process.env.NODE_ENV === "production" &&
+		!process.env.S3_ENDPOINT &&
+		bucket === "bible-on-site-assets" &&
+		releasedPortraitIds.has(authorId)
+	) {
+		return assetsUrl(`${portraitRelease}/${authorId}.png`);
+	}
 
 	return assetsUrl(`authors/high-res/${authorId}.jpg`);
 }
