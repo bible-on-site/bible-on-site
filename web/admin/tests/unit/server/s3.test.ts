@@ -262,10 +262,14 @@ describe("s3 image helpers", () => {
 				Bucket: "bucket-x",
 				ContentType: contentType,
 			});
-			expect(command.input.Key as string).toMatch(/^pedia\/images\/.+/);
-			expect((command.input.Key as string).endsWith(`.${ext}`)).toBe(true);
-			expect(url).toContain(`pedia/images/`);
-			expect(url).toContain(`.${ext}`);
+			const key = command.input.Key as string;
+			const keyMatch = key.match(/^pedia\/images\/([^/]+)\.([^./]+)$/);
+			const stem = keyMatch?.[1];
+			if (!stem) {
+				throw new Error(`upload key must keep a nonempty filename stem: ${key}`);
+			}
+			expect(keyMatch?.[2]).toBe(ext);
+			expect(url).toContain(`pedia/images/${stem}.${ext}`);
 		});
 	});
 
@@ -356,7 +360,8 @@ describe("s3 image helpers", () => {
 			const command = sendMock.mock.calls[0]?.[0] as {
 				input: Record<string, unknown>;
 			};
-			expect((command.input.Body as Buffer).length).toBe(totalSize);
+			const expectedBody = Buffer.concat([first, second]);
+			expect((command.input.Body as Buffer).equals(expectedBody)).toBe(true);
 		});
 
 		it("rejects an invalid chunk index", async () => {
@@ -437,7 +442,7 @@ describe("s3 image helpers", () => {
 			}
 		});
 
-		it("evicts expired and oldest pending uploads when the map is full", async () => {
+		it("cleans expired reservations and evicts the oldest after the cap is exceeded", async () => {
 			vi.useFakeTimers();
 			try {
 				const { createPediaImageUpload, uploadPediaImageChunk } =
@@ -447,22 +452,44 @@ describe("s3 image helpers", () => {
 					data: { contentType: "image/png", totalSize: 10 },
 				});
 				vi.setSystemTime(1_000_000 + 11 * 60 * 1000);
-				for (let i = 0; i < 16; i++) {
+				// This create sweeps the expired reservation before capacity math.
+				const oldest = await createPediaImageUpload({
+					data: { contentType: "image/png", totalSize: 10 },
+				});
+				const secondOldest = await createPediaImageUpload({
+					data: { contentType: "image/png", totalSize: 10 },
+				});
+				// oldest + secondOldest + these fourteen reach the live-upload cap.
+				for (let i = 0; i < 14; i++) {
 					await createPediaImageUpload({
 						data: { contentType: "image/png", totalSize: 10 },
 					});
 				}
-				// The expired upload was cleaned up during the first create calls,
-				// and the map stayed capped at 16 live uploads.
-				await expect(
-					uploadPediaImageChunk({
-						data: {
-							uploadId: stale.uploadId,
-							chunkIndex: 0,
-							base64Data: Buffer.alloc(10).toString("base64"),
-						},
-					}),
-				).rejects.toThrow("Upload expired or was not found");
+				// The seventeenth live create crosses the cap and must evict only
+				// the insertion-oldest reservation before inserting the new one.
+				await createPediaImageUpload({
+					data: { contentType: "image/png", totalSize: 10 },
+				});
+
+				const secondStillLive = await uploadPediaImageChunk({
+					data: {
+						uploadId: secondOldest.uploadId,
+						chunkIndex: 0,
+						base64Data: Buffer.alloc(10).toString("base64"),
+					},
+				});
+				expect(secondStillLive.complete).toBe(true);
+				for (const uploadId of [stale.uploadId, oldest.uploadId]) {
+					await expect(
+						uploadPediaImageChunk({
+							data: {
+								uploadId,
+								chunkIndex: 0,
+								base64Data: Buffer.alloc(10).toString("base64"),
+							},
+						}),
+					).rejects.toThrow("Upload expired or was not found");
+				}
 			} finally {
 				vi.useRealTimers();
 			}

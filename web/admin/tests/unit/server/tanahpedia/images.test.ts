@@ -1,14 +1,19 @@
 import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryMock, queryOneMock, randomUUIDMock } = vi.hoisted(
-	() => ({
-		executeMock: vi.fn(),
-		queryMock: vi.fn(),
-		queryOneMock: vi.fn(),
-		randomUUIDMock: vi.fn(() => "fixed-uuid"),
-	}),
-);
+const {
+	executeMock,
+	queryMock,
+	queryOneMock,
+	randomUUIDMock,
+	revalidateWebsiteMock,
+} = vi.hoisted(() => ({
+	executeMock: vi.fn(),
+	queryMock: vi.fn(),
+	queryOneMock: vi.fn(),
+	randomUUIDMock: vi.fn(() => "fixed-uuid"),
+	revalidateWebsiteMock: vi.fn(async () => true),
+}));
 
 vi.mock("node:crypto", async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -39,14 +44,44 @@ vi.mock("~/server/db", () => ({
 		queryOneMock(...args),
 }));
 
+// Keep the queue implementation available to the rest of the suite while
+// making each write's invocation/skip decision directly observable here.
+vi.mock("~/server/website-revalidate", async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	revalidateWebsite: revalidateWebsiteMock,
+}));
+
 // The revalidation surface queries the db for paths; keeping it out of the
 // query-mock queue leaves query responses for the function under test.
 vi.mock("~/server/tanahpedia/paths", () => ({
 	pediaChangesForEntryIds: vi.fn(async (ids: string[]) =>
-		ids.map((id) => ({ type: "pedia-entry", id })),
+		ids.length
+			? [
+					{
+						changes: ids.map((id) => ({
+							kind: "pedia-entry",
+							uniqueName: id,
+							entityTypes: [],
+							synonymNames: [],
+							refPerekIds: [],
+						})),
+					},
+				]
+			: [],
 	),
 	pediaChangesForEntities: vi.fn(async (ids: string[]) =>
-		ids.map((id) => ({ type: "pedia-entity", id })),
+		ids.length
+			? [
+					{
+						changes: ids.map((id) => ({
+							kind: "pedia-entity",
+							entityId: id,
+							entryUniqueNames: [],
+							refPerekIds: [],
+						})),
+					},
+				]
+			: [],
 	),
 	pediaChangesForPersons: vi.fn(async () => []),
 }));
@@ -96,6 +131,7 @@ describe("tanahpedia images api (#3769)", () => {
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 		randomUUIDMock.mockClear().mockReturnValue("fixed-uuid");
+		revalidateWebsiteMock.mockReset().mockResolvedValue(true);
 	});
 
 	it("bundles entry links and a group per linked entity", async () => {
@@ -401,18 +437,20 @@ describe("tanahpedia images api (#3769)", () => {
 		).rejects.toThrow("Image link disappeared after write");
 	});
 
-	it("skips revalidation when a link remove clears nothing", async () => {
+	it("skips revalidation when a link remove clears nothing or loses its owner", async () => {
 		queryOneMock.mockResolvedValueOnce({ ownerId: "en-1" });
 		executeMock.mockResolvedValueOnce({ affectedRows: 0 });
 		await expect(
 			removeImageLink({ data: { ownerKind: "ENTITY", id: "ghost" } }),
 		).resolves.toEqual({ removed: false });
+		expect(revalidateWebsiteMock).not.toHaveBeenCalled();
 
 		queryOneMock.mockResolvedValueOnce(null); // owner row not resolvable
 		executeMock.mockResolvedValueOnce({ affectedRows: 1 });
 		await expect(
 			removeImageLink({ data: { ownerKind: "ENTITY", id: "link-9" } }),
 		).resolves.toEqual({ removed: true });
+		expect(revalidateWebsiteMock).not.toHaveBeenCalled();
 	});
 
 	it("reports cleared:false when no primary was set", async () => {
@@ -432,6 +470,19 @@ describe("tanahpedia images api (#3769)", () => {
 		expect(executeMock.mock.calls[0][0]).toContain(
 			"DELETE FROM tanahpedia_entry_image",
 		);
+		expect(revalidateWebsiteMock).toHaveBeenNthCalledWith(1, [
+			{
+				changes: [
+					{
+						kind: "pedia-entry",
+						uniqueName: "entry-1",
+						entityTypes: [],
+						synonymNames: [],
+						refPerekIds: [],
+					},
+				],
+			},
+		]);
 
 		await expect(
 			clearPrimaryImage({
@@ -441,5 +492,17 @@ describe("tanahpedia images api (#3769)", () => {
 		expect(executeMock.mock.calls[1][0]).toContain(
 			"tanahpedia_entity_image",
 		);
+		expect(revalidateWebsiteMock).toHaveBeenNthCalledWith(2, [
+			{
+				changes: [
+					{
+						kind: "pedia-entity",
+						entityId: "en-1",
+						entryUniqueNames: [],
+						refPerekIds: [],
+					},
+				],
+			},
+		]);
 	});
 });
