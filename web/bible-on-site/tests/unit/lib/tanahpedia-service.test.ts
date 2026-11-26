@@ -1030,12 +1030,21 @@ describe("tanahpedia service", () => {
 
 	describe("getCategoryCounts role-table degradation", () => {
 		it("keeps counting when the commentator table is undeployed, rethrows other errors", async () => {
-			mockQuery.mockImplementation((sql: string) =>
-				String(sql).includes("person_role_commentator")
-					? Promise.reject({ code: "ER_NO_SUCH_TABLE" })
-					: Promise.resolve([]),
-			);
+			mockQuery.mockImplementation((sql: string) => {
+				if (String(sql).includes("person_role_commentator")) {
+					return Promise.reject({ code: "ER_NO_SUCH_TABLE" });
+				}
+				if (String(sql).includes("person_role_prophet")) {
+					return Promise.resolve([
+						{ role: "PROPHET", cnt: 5 },
+						{ role: "KING", cnt: 3 },
+					]);
+				}
+				return Promise.resolve([]);
+			});
 			await expect(getCategoryCounts()).resolves.toMatchObject({
+				PROPHET: 5,
+				KING: 3,
 				TANAH_COMMENTATOR: 0,
 			});
 

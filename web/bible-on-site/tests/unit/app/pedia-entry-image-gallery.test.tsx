@@ -188,8 +188,8 @@ describe("EntryImageGallery (#3769)", () => {
 			"href",
 			"https://commons.example.com/File:x.jpg",
 		);
-		// A bare source name renders as text, not a link.
-		render(
+		// A bare source name renders as text in the concise credit, not a link.
+		const { container } = render(
 			<EntryImageGallery
 				entryImages={[
 					link({
@@ -199,11 +199,15 @@ describe("EntryImageGallery (#3769)", () => {
 				entityImages={[]}
 			/>,
 		);
-		expect(screen.getAllByText("ארכיון").length).toBeGreaterThan(0);
+		const credit = container.querySelector("figcaption > span");
+		expect(credit?.textContent).toBe("ארכיון");
+		expect(
+			screen.queryByRole("link", { name: "ארכיון" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("credits the source name and lists modifications", () => {
-		render(
+		const { container } = render(
 			<EntryImageGallery
 				entryImages={[
 					link({
@@ -218,7 +222,10 @@ describe("EntryImageGallery (#3769)", () => {
 		);
 
 		// The source name is the last credit fallback when no caption exists.
-		expect(screen.getAllByText("ספריה הלאומית").length).toBeGreaterThan(0);
+		// Provenance lists it too, so pin this assertion to the caption's
+		// concise-credit element rather than accepting either occurrence.
+		const credit = container.querySelector("figcaption > span");
+		expect(credit?.textContent).toBe("ספריה הלאומית");
 		expect(screen.getByText("חיתוך")).toBeTruthy();
 		expect(screen.getByText("שינויים")).toBeTruthy();
 	});
