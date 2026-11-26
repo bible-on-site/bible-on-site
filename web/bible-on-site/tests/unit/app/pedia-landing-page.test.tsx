@@ -173,3 +173,15 @@ test.each([
 		expect(getTodayInTanahEntities).toHaveBeenCalledWith(1, expectedDay);
 	},
 );
+
+test("honors MOCK_DATE over the system clock for today's Hebrew date", async () => {
+	// 21 Sivan 5784 — a different Hebrew day/month than the fake clock's.
+	process.env.MOCK_DATE = "2024-06-27T12:00:00+03:00";
+	render(await TanahpediaLandingPage());
+	delete process.env.MOCK_DATE;
+	const mocked = constructTsetAwareHDate(new Date("2024-06-27T12:00:00+03:00"));
+	expect(getTodayInTanahEntities).toHaveBeenCalledWith(
+		mocked.getUniformMonth(),
+		mocked.day,
+	);
+});

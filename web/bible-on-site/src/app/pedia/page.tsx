@@ -15,6 +15,7 @@ import {
 	getCachedRecentEntrySummaries,
 	getCachedTodayInTanahEntities,
 } from "@/lib/tanahpedia/loaders";
+import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
 
@@ -30,7 +31,7 @@ export const metadata: Metadata = pageMetadata({
 export const dynamic = "force-dynamic";
 
 export default async function TanahpediaLandingPage() {
-	const today = constructTsetAwareHDate(new Date());
+	const today = constructTsetAwareHDate(getCurrentDate());
 	const hebrewMonth = today.getUniformMonth();
 	const hebrewDay = today.day;
 	const hebrewDateStr = today.toTraditionalHebrewString();

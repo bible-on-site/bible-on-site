@@ -158,6 +158,7 @@ import type {
 import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type { Perek } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 
 const range = (
 	startPerek: number,
@@ -309,6 +310,17 @@ describe("ParashaSefer", () => {
 			currentUnitSummaries.perushim,
 		);
 		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("dates the blank commentary pages from the mock-date cookie when it is set", () => {
+		// 21 Sivan 5784 — a different Hebrew date than the real clock's.
+		document.cookie = "mock-date=2024-06-27T12:00:00+03:00";
+		render(<ParashaSefer {...baseProps()} />);
+		document.cookie =
+			"mock-date=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+		const expected = constructTsetAwareHDate(
+			new Date("2024-06-27T12:00:00+03:00"),
+		).toTraditionalHebrewString();
+		expect(mockBlankPages.get("1:torah")?.hebrewDateStr).toBe(expected);
 	});
 	it("updates commentary selection without rerendering scripture", () => {
 		render(<ParashaSefer {...baseProps()} />);

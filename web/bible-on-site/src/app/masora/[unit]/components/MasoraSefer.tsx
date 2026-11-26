@@ -33,6 +33,7 @@ import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import { rangesPerekIds } from "@/lib/reading/ranges";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import unitPageStyles from "../page.module.css";
 import {
@@ -174,7 +175,7 @@ const MasoraSefer = (props: {
 	};
 
 	const hebrewDateStr = useMemo(
-		() => constructTsetAwareHDate(new Date()).toTraditionalHebrewString(),
+		() => constructTsetAwareHDate(getCurrentDate()).toTraditionalHebrewString(),
 		[],
 	);
 
