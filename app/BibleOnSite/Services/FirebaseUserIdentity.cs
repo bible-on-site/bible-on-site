@@ -107,6 +107,26 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
         }
     }
 
+    public async Task<string?> GetIdTokenAsync(CancellationToken cancellationToken)
+    {
+        if (Auth?.CurrentUser is not { } user)
+        {
+            return null;
+        }
+        try
+        {
+            var result = await user.GetIdTokenResultAsync(false).WaitAsync(cancellationToken);
+            return result.Token;
+        }
+#pragma warning disable S2221 // Deliberate failure boundary: token failure means no verifiable identity, not an app failure.
+        catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — token failure means no verifiable identity, not an app failure.
+        {
+#pragma warning restore S2221
+            Console.Error.WriteLine($"[PreferencesSync] Firebase ID token unavailable ({ex.Message})");
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_authGate)

@@ -1,4 +1,5 @@
 #if MAUI
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,7 +20,7 @@ internal partial class PushJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// Durable push-state store honoring the #1097 no-Advertising-ID design: on
-/// iOS the notification user id lives in Keychain (<see cref="ISecureStorage"/>)
+/// iOS the pre-auth compatibility key lives in Keychain (<see cref="ISecureStorage"/>)
 /// and survives reinstall; on Android and other MAUI platforms it lives in
 /// preferences (<see cref="IPreferences"/>), which Auto Backup restores.
 /// </summary>
@@ -115,17 +116,20 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
         _baseUrl = baseUrl;
     }
 
-    public async Task RegisterAsync(PushDeviceRegistration registration, CancellationToken ct)
+    public async Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync(
-            $"{_baseUrl()}/api/push/device",
-            registration,
-            PushJsonContext.Default.PushDeviceRegistration,
-            ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl()}/api/push/device")
+        {
+            Content = JsonContent.Create(
+                registration,
+                PushJsonContext.Default.PushDeviceRegistration),
+        };
+        request.Headers.Authorization = new("Bearer", authToken);
+        using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task UnregisterAsync(string userId, CancellationToken ct)
+    public async Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{_baseUrl()}/api/push/device")
         {
@@ -133,6 +137,10 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
                 new PushDeviceUnregistration(userId),
                 PushJsonContext.Default.PushDeviceUnregistration),
         };
+        if (authToken is not null)
+        {
+            request.Headers.Authorization = new("Bearer", authToken);
+        }
         using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }

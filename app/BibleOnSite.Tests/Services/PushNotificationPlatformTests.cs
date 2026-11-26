@@ -39,11 +39,14 @@ public class HttpPushDeviceRegistryTests
         var registration = new PushDeviceRegistration(
             "user-1", "fid-1", "token-1", "android", ["daily_perek"], "5.1.8");
 
-        await registry.RegisterAsync(registration, CancellationToken.None);
+        await registry.RegisterAsync(registration, "firebase-id-token", CancellationToken.None);
 
         handler.LastRequest.Should().NotBeNull();
         handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
         handler.LastRequest.RequestUri!.ToString().Should().Be("https://site.example/api/push/device");
+        handler.LastRequest.Headers.Authorization.Should().NotBeNull();
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be("firebase-id-token");
         using var doc = JsonDocument.Parse(handler.LastBody!);
         var root = doc.RootElement;
         root.GetProperty("userId").GetString().Should().Be("user-1");
@@ -61,12 +64,29 @@ public class HttpPushDeviceRegistryTests
         using var http = new HttpClient(handler);
         var registry = CreateRegistry(http);
 
-        await registry.UnregisterAsync("user-1", CancellationToken.None);
+        await registry.UnregisterAsync("user-1", "firebase-id-token", CancellationToken.None);
 
         handler.LastRequest!.Method.Should().Be(HttpMethod.Delete);
         handler.LastRequest.RequestUri!.ToString().Should().Be("https://site.example/api/push/device");
+        handler.LastRequest.Headers.Authorization.Should().NotBeNull();
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be("firebase-id-token");
         using var doc = JsonDocument.Parse(handler.LastBody!);
         doc.RootElement.GetProperty("userId").GetString().Should().Be("user-1");
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_WithoutCredentialOmitsAuthorizationHeader()
+    {
+        var handler = new CaptureHandler(HttpStatusCode.OK);
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
+
+        await registry.UnregisterAsync("legacy-user", null, CancellationToken.None);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Delete);
+        handler.LastRequest.Headers.Authorization.Should().BeNull();
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        doc.RootElement.GetProperty("userId").GetString().Should().Be("legacy-user");
     }
 
     [Fact]
@@ -78,7 +98,7 @@ public class HttpPushDeviceRegistryTests
 
         await registry
             .Invoking(r => r.RegisterAsync(
-                new PushDeviceRegistration("u", "i", "t", "android", [], "1"), CancellationToken.None))
+                new PushDeviceRegistration("u", "i", "t", "android", [], "1"), "auth", CancellationToken.None))
             .Should().ThrowAsync<HttpRequestException>();
     }
 }

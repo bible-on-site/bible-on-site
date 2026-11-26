@@ -34,9 +34,10 @@ steps before delivery can be verified end to end.
    flaky network. A failed unsubscribe records `push.pending_unsubscribe`
    (FCM keeps topic membership server-side) and `ApplyEnabledPreferenceAsync`
    retries it on every launch — including launches where the preference is
-   already off. A successful re-opt-in clears the marker. The `DELETE` uses
-   the persisted `push.user_id` when the instance identity is not yet
-   resolved, so a fresh process still unregisters the earlier row.
+   already off. A successful re-opt-in clears the marker. The client deletes
+   a surviving pre-auth row through the legacy lane and the verified row
+   through the authenticated lane; local topic unsubscribe is already the
+   delivery opt-out even if either registry cleanup is unreachable.
 5. **Startup**: `LoadingPage` re-applies the stored opt-in once per launch —
    idempotent topic re-subscription covers reinstalls and token churn. A
    system-level revocation keeps the stored intent (it records user intent,
@@ -45,26 +46,32 @@ steps before delivery can be verified end to end.
 ## Identity (no Advertising ID)
 
 Per the #1097 discussion, the notification identity is *not* the Advertising
-ID and not the raw FID:
+ID. Registration ownership is verified with the app's existing silent Firebase
+anonymous-authentication session:
 
-- `user_id` — durable notification identity, seeded from the Firebase
-  Installation ID on first registration (GUID when FID is unavailable).
-  Persisted in iOS Keychain (`SecureStorage`, survives reinstall) and Android
-  preferences (restored by Auto Backup — `android:allowBackup` is already on).
-  A reinstall that loses both stores re-seeds a new id and the backend
-  re-links by `(user_id, installation_id)`.
-- `installation_id` — the Firebase Installation ID (FID). Rotates on
-  reinstall/data-wipe; sent on every registration so the backend can re-link
-  a rotating installation to the durable `user_id`.
-- `token` — the FCM registration token. Rotates on token refresh; every
-  `TokenChanged` re-syncs the registration when opted in.
+- `user_id` — the verified anonymous Firebase Auth uid of the installation.
+  The server verifies the Firebase Auth ID token sent in
+  `Authorization: Bearer …` and requires the token subject to equal the row's
+  `userId`; it is stored redundantly as `auth_user_id` so ownership is
+  explicit in the table.
+- `installation_id` — the Firebase Installation ID (FID). It is rotation and
+  migration metadata, **not** a credential. Firebase Installation auth tokens
+  have no documented server-side verification surface, so they are not used.
+- `token` — the FCM registration token. It is delivery metadata and migration
+  evidence when paired with the legacy registration key, never proof by
+  itself of ownership.
 
-The FID is **not** an authentication credential — the contract treats
-`user_id` + `installation_id` + `token` as an unauthenticated upsert row,
-matching the web-push subscription route's model (subscription rows are
-self-claimed by the device that holds them; the daily-perek payload is
-non-personal public content). If a future feature needs authenticated
-delivery, layer Firebase Anonymous Auth sign-in on top and send an ID token.
+An anonymous auth uid is installation-local: reinstalling or wiping app data
+normally creates a new uid. The durable pre-auth `push.user_id` compatibility
+key is therefore not re-seeded or trusted as a credential. On the first
+verified registration after upgrade the client sends it once as
+`legacyUserId`; the server replaces that legacy row only when the unbound row
+is still unbound and carries the same non-empty installation id or the same
+FCM token as the verified request. This recovers the common upgrade path
+without letting a caller migrate a row merely because it knows the legacy id.
+After a successful migration the client clears the compatibility key. A lost
+legacy row is safe because FCM topic membership, not the registry row, is the
+actual delivery subscription.
 
 ## Backend contract
 
@@ -80,44 +87,52 @@ POST body (`PushDeviceRegistration`, camelCase, `JsonSerializerDefaults.Web`):
 
 ```json
 {
-  "userId": "fid-or-guid",
+  "userId": "verified-firebase-auth-uid",
   "installationId": "fcm-installation-id",
   "token": "fcm-registration-token",
   "platform": "android" | "ios",
   "topics": ["daily_perek"],
-  "appVersion": "5.1.8"
+  "appVersion": "5.1.8",
+  "legacyUserId": "optional-pre-auth-key-during-upgrade"
 }
 ```
 
-DELETE body: `{ "userId": "fid-or-guid" }`.
+DELETE body: `{ "userId": "verified-firebase-auth-uid" }`; verified clients also send the same bearer token used for POST.
 
 Semantics the backend implements (`src/lib/app-push/service.ts`):
 
-- **Upsert by `userId`**: a row carries one current `(installationId, token)`
-  pair; a changed token replaces it (token rotation), a changed installation
-  id replaces the stale installation (reinstall). Rows live in
-  `tanah_push_device` (`data/mysql/tanah_push_device_upgrade.sql`).
+- **Verified upsert by `userId`**: the bearer Firebase Auth ID token is
+  RS256-verified against Google's securetoken certificates, with issuer and
+  audience bound to `tanah-al-haperek`. The verified subject must equal
+  `userId`; the row stores it as `auth_user_id`. A changed token replaces it
+  (token rotation), but only for the same verified installation. A different
+  installation receives 403. Rows live in `tanah_push_device`
+  (`data/mysql/tanah_push_device_upgrade.sql`).
 - **Topics**: sender publishes the daily perek to the FCM topic
   `daily_perek`. `topics` is stored only to reflect/debug; the source of
   truth is the device's FCM topic subscription — the sender uses the topic,
   not per-token fan-out.
-- **DELETE** removes the row entirely (opt-out).
+- **DELETE** removes the row entirely after the same verified-owner check.
+  A request without a bearer token is the supported pre-auth compatibility
+  lane and can remove only rows whose `auth_user_id` is still NULL. It can
+  never remove an auth-bound row. Local FCM topic unsubscribe remains the
+  real delivery opt-out in every client generation.
 - **Stale-token cleanup**: only a genuine dead-token verdict drops the row —
   `404 NOT_FOUND`, or `400` whose `FcmError` detail carries `UNREGISTERED`
   (the HTTP v1 mapping of legacy `NotRegistered`/`InvalidRegistration`).
   Other 400s are message-shape errors and leave the row alone.
-- No authentication is required (public daily-perek content), matching the
-  self-claimed-row model of `/api/push/subscription`. `POST` reports itself
-  unconfigured (404) until the FCM service account is deployed; `DELETE`
-  always works so opt-out is never blocked.
+- `POST` reports itself unconfigured (404) until the FCM service account is
+  deployed. Identity verification outages answer 503 rather than accepting an
+  unverified write. `DELETE` remains available without service-account
+  configuration so opt-out is never blocked.
 - Anonymous writes stay bounded (#3500): `POST` attempts are rate-limited
   per router-supplied client address (429, a budget shared with
   `/api/push/subscription`), and `tanah_push_device` caps new identities at
   25,000 rows — an existing `userId` always upserts past the cap.
 
 Registration is deduplicated client-side by a stored
-`(user|installation|token|topics)` fingerprint — a routine launch only re-POSTs
-when something actually rotated.
+`(user|installation|token|topics|legacy-key)` fingerprint — a routine launch
+only re-POSTs when something actually rotated.
 
 ### Sender
 

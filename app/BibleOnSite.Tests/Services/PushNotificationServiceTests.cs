@@ -88,30 +88,58 @@ public class PushNotificationServiceTests
 
     private sealed class FakeRegistry : IPushDeviceRegistry
     {
-        public List<PushDeviceRegistration> Registrations { get; } = [];
-        public List<string> Unregistrations { get; } = [];
+        public List<(PushDeviceRegistration Registration, string AuthToken)> Registrations { get; } = [];
+        public List<(string UserId, string? AuthToken)> Unregistrations { get; } = [];
         public bool FailNext { get; set; }
 
 #pragma warning disable S1172 // Fake satisfies the registry contract; ct is interface-required but unused.
-        public Task RegisterAsync(PushDeviceRegistration registration, CancellationToken ct)
+        public Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
         {
             if (FailNext)
             {
                 throw new HttpRequestException("not deployed");
             }
-            Registrations.Add(registration);
+            Registrations.Add((registration, authToken));
             return Task.CompletedTask;
         }
-        public Task UnregisterAsync(string userId, CancellationToken ct)
+        public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
         {
             if (FailNext)
             {
                 throw new HttpRequestException("not deployed");
             }
-            Unregistrations.Add(userId);
+            Unregistrations.Add((userId, authToken));
             return Task.CompletedTask;
         }
 #pragma warning restore S1172
+    }
+
+    private sealed class FakeIdentity : IUserIdentity
+    {
+        public string? UserId { get; set; } = "auth-uid-1";
+        public string? IdToken { get; set; } = "firebase-id-token";
+        public bool FailSignIn { get; set; }
+        public bool FailToken { get; set; }
+        public int EnsureCalls { get; private set; }
+
+#pragma warning disable CS0067 // Fake satisfies the identity contract; no test needs the event.
+        public event EventHandler? UserChanged;
+#pragma warning restore CS0067
+
+        public Task EnsureSignedInAsync(CancellationToken cancellationToken)
+        {
+            EnsureCalls++;
+            if (FailSignIn)
+            {
+                throw new InvalidOperationException("sign-in failed");
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetIdTokenAsync(CancellationToken cancellationToken) =>
+            FailToken
+                ? Task.FromException<string?>(new InvalidOperationException("token failed"))
+                : Task.FromResult(IdToken);
     }
 
     private sealed class FaultingStateStore : IPushStateStore
@@ -147,7 +175,7 @@ public class PushNotificationServiceTests
         var store = new InMemoryPushStateStore();
         var registry = new FakeRegistry();
         var service = PushNotificationService.CreateForTesting(
-            platform, prefs, store, registry, () => "9.9.9");
+            platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         return (service, platform, prefs, store, registry);
     }
 
@@ -163,13 +191,42 @@ public class PushNotificationServiceTests
         platform.Subscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
         platform.InitializeCalls.Should().Be(1);
         registry.Registrations.Should().ContainSingle();
-        var row = registry.Registrations[0];
+        var row = registry.Registrations[0].Registration;
         row.Token.Should().Be("fcm-token");
         row.InstallationId.Should().Be("fid-123");
-        row.UserId.Should().Be("fid-123", "the FID seeds the durable user identity");
+        row.UserId.Should().Be("auth-uid-1", "the verified anonymous Firebase identity owns the row");
+        registry.Registrations[0].AuthToken.Should().Be("firebase-id-token");
         row.Platform.Should().Be("other", "the test host is neither Android nor iOS");
         row.Topics.Should().Equal(PushNotificationService.DailyPerekTopic);
         row.AppVersion.Should().Be("9.9.9");
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_WithPreAuthStoredKey_SendsLegacyMigrationEvidenceOnce()
+    {
+        var (service, _, _, store, registry) = CreateService();
+        await store.SetAsync("push.user_id", "legacy-user", CancellationToken.None);
+
+        await service.SetEnabledAsync(true, CancellationToken.None);
+
+        var row = registry.Registrations.Should().ContainSingle().Subject.Registration;
+        row.UserId.Should().Be("auth-uid-1");
+        row.LegacyUserId.Should().Be("legacy-user");
+        (await store.GetAsync("push.user_id", CancellationToken.None)).Should().BeNull(
+            "a successful migration clears the compatibility key");
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_DisableWithPreAuthStoredKey_UsesLegacyAndVerifiedDeleteLanes()
+    {
+        var (service, _, _, store, registry) = CreateService();
+        await store.SetAsync("push.user_id", "legacy-user", CancellationToken.None);
+
+        await service.SetEnabledAsync(false, CancellationToken.None);
+
+        registry.Unregistrations.Should().Equal(
+            ("legacy-user", null),
+            ("auth-uid-1", "firebase-id-token"));
     }
 
     [Fact]
@@ -244,7 +301,7 @@ public class PushNotificationServiceTests
         result.Should().Be(PushEnableResult.Disabled);
         prefs.DailyPerekPushEnabled.Should().BeFalse();
         platform.Unsubscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
-        registry.Unregistrations.Should().Equal("fid-123");
+        registry.Unregistrations.Should().Equal(("auth-uid-1", "firebase-id-token"));
     }
 
     [Fact]
@@ -263,7 +320,7 @@ public class PushNotificationServiceTests
         // run even though the preference is off — otherwise the FCM topic
         // membership outlives the toggle and the device keeps receiving pushes.
         platform.FailUnsubscribe = false;
-        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, new FakeRegistry(), () => "9.9.9");
+        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, new FakeRegistry(), () => "9.9.9", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
 
@@ -316,7 +373,7 @@ public class PushNotificationServiceTests
         // Re-opt-in re-subscribed and cleared the marker, so this opt-out's
         // unsubscribe is a normal one — no deferred retry on the next launch.
         platform.Unsubscribed.Should().HaveCount(2);
-        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
         platform.Unsubscribed.Should().HaveCount(2);
     }
@@ -329,11 +386,11 @@ public class PushNotificationServiceTests
 
         // A fresh instance has no resolved _userId; the persisted identity
         // from the original registration must still drive the unregister.
-        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         var result = await relaunch.SetEnabledAsync(false, CancellationToken.None);
 
         result.Should().Be(PushEnableResult.Disabled);
-        registry.Unregistrations.Should().Equal("fid-123");
+        registry.Unregistrations.Should().Equal(("auth-uid-1", "firebase-id-token"));
     }
 
     [Fact]
@@ -404,12 +461,12 @@ public class PushNotificationServiceTests
         prefs.Load();
         var store = new InMemoryPushStateStore();
         var registry = new FakeRegistry();
-        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         await service.SetEnabledAsync(true, CancellationToken.None);
 
         // Second launch (new instance, same stores): apply re-subscribes the
         // topic but must not re-POST an identical registration.
-        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
 
         registry.Registrations.Should().ContainSingle();
@@ -425,34 +482,35 @@ public class PushNotificationServiceTests
         await service.LastTokenResync!;
 
         registry.Registrations.Should().HaveCount(2);
-        registry.Registrations[1].Token.Should().Be("fcm-token-2");
-        registry.Registrations[1].UserId.Should().Be("fid-123");
+        registry.Registrations[1].Registration.Token.Should().Be("fcm-token-2");
+        registry.Registrations[1].Registration.UserId.Should().Be("auth-uid-1");
         service.CurrentToken.Should().Be("fcm-token-2");
     }
 
     [Fact]
-    public async Task Identity_WithoutFid_GeneratesAndPersistsUserId()
+    public async Task Identity_WithoutFid_StillUsesVerifiedAuthUserId()
     {
         var platform = new FakePlatformClient { InstallationId = null };
         var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         prefs.Load();
         var store = new InMemoryPushStateStore();
         var registry = new FakeRegistry();
-        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
 
         await service.SetEnabledAsync(true, CancellationToken.None);
-        var firstId = registry.Registrations[0].UserId;
+        var firstId = registry.Registrations[0].Registration.UserId;
 
-        // Relaunch with a different FID — the stored user id must win so a
-        // rotating token re-links to the same identity (per the issue design).
+        // A rotating FID is registration metadata only; the verified auth uid
+        // remains the row identity across the relaunch.
         var relaunchPlatform = new FakePlatformClient { InstallationId = "fid-new" };
-        var relaunch = PushNotificationService.CreateForTesting(relaunchPlatform, prefs, store, registry, () => "9.9.9");
+        var relaunch = PushNotificationService.CreateForTesting(relaunchPlatform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
 
-        firstId.Should().NotBeNullOrEmpty();
+        firstId.Should().Be("auth-uid-1");
+        registry.Registrations[0].Registration.InstallationId.Should().BeEmpty();
         registry.Registrations.Should().HaveCount(2);
-        registry.Registrations[1].UserId.Should().Be(firstId);
-        registry.Registrations[1].InstallationId.Should().Be("fid-new");
+        registry.Registrations[1].Registration.UserId.Should().Be(firstId);
+        registry.Registrations[1].Registration.InstallationId.Should().Be("fid-new");
     }
 
     [Fact]
@@ -604,21 +662,59 @@ public class PushNotificationServiceTests
     }
 
     [Fact]
-    public async Task SetEnabledAsync_WhenIdentityFetchFails_StillEnablesWithFallbackUserId()
+    public async Task SetEnabledAsync_WhenPlatformCredentialFetchFails_StillEnablesWithoutRegistration()
     {
         var platform = new FakePlatformClient { FailTokens = true };
         var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         prefs.Load();
         var store = new InMemoryPushStateStore();
         var registry = new FakeRegistry();
-        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9");
+        var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
 
         var result = await service.SetEnabledAsync(true, CancellationToken.None);
 
         result.Should().Be(PushEnableResult.Enabled);
         platform.Subscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
         registry.Registrations.Should().BeEmpty("a row without a token is useless — nothing to register");
-        service.NotificationUserId.Should().NotBeNullOrEmpty("the GUID fallback still seeds identity");
+        service.NotificationUserId.Should().Be("auth-uid-1");
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_WhenIdentitySignInFails_StillEnablesWithoutRegistration()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        prefs.Load();
+        var registry = new FakeRegistry();
+        var service = PushNotificationService.CreateForTesting(
+            platform, prefs, new InMemoryPushStateStore(), registry, () => "9.9.9",
+            new FakeIdentity { FailSignIn = true });
+
+        var result = await service.SetEnabledAsync(true, CancellationToken.None);
+
+        result.Should().Be(PushEnableResult.Enabled, "local topic opt-in never depends on backend identity");
+        platform.Subscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+        registry.Registrations.Should().BeEmpty("an unverified installation must not self-assert a registration owner");
+        service.NotificationUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_WhenAuthTokenFails_StillEnablesWithoutRegistration()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        prefs.Load();
+        var registry = new FakeRegistry();
+        var service = PushNotificationService.CreateForTesting(
+            platform, prefs, new InMemoryPushStateStore(), registry, () => "9.9.9",
+            new FakeIdentity { FailToken = true });
+
+        var result = await service.SetEnabledAsync(true, CancellationToken.None);
+
+        result.Should().Be(PushEnableResult.Enabled);
+        platform.Subscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+        registry.Registrations.Should().BeEmpty("the server requires a verifiable bearer token");
+        service.NotificationUserId.Should().Be("auth-uid-1");
     }
 
     [Fact]
@@ -687,8 +783,13 @@ public class PushNotificationServiceTests
         NullPushPlatformClient.Instance.RaiseTapped(new Dictionary<string, string>());
         NullPushPlatformClient.Instance.RaiseTokenRefreshed("t");
         await NullPushDeviceRegistry.Instance.RegisterAsync(
-            new PushDeviceRegistration("u", "i", "t", "android", [], "1"), CancellationToken.None);
-        await NullPushDeviceRegistry.Instance.UnregisterAsync("u", CancellationToken.None);
+            new PushDeviceRegistration("u", "i", "t", "android", [], "1"), "auth", CancellationToken.None);
+        await NullPushDeviceRegistry.Instance.UnregisterAsync("u", "auth", CancellationToken.None);
+
+        AnonymousUserIdentity.Instance.UserId.Should().BeNull();
+        ((IUserIdentity)AnonymousUserIdentity.Instance).IsSignedIn.Should().BeFalse();
+        await AnonymousUserIdentity.Instance.EnsureSignedInAsync(CancellationToken.None);
+        (await AnonymousUserIdentity.Instance.GetIdTokenAsync(CancellationToken.None)).Should().BeNull();
 
         var store = new InMemoryPushStateStore();
         await store.SetAsync("k", "v", CancellationToken.None);
@@ -746,14 +847,14 @@ public class PushNotificationServiceTests
         var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var store = new FaultingStateStore { FailSetKey = "push.pending_unsubscribe" };
         var registry = new FakeRegistry();
-        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1", new FakeIdentity());
         await service.SetEnabledAsync(true, CancellationToken.None);
         platform.FailUnsubscribe = true;
 
         (await service.SetEnabledAsync(false, CancellationToken.None)).Should().Be(PushEnableResult.Disabled);
 
         prefs.DailyPerekPushEnabled.Should().BeFalse();
-        registry.Unregistrations.Should().Equal("fid-123");
+        registry.Unregistrations.Should().Equal(("auth-uid-1", "firebase-id-token"));
     }
 
     [Theory]
@@ -772,7 +873,7 @@ public class PushNotificationServiceTests
         registry.Registrations.Should().BeEmpty();
         platform.Permission = PushPermissionState.Granted;
         platform.FailSubscribe = false;
-        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
         registry.Registrations.Should().ContainSingle();
     }
@@ -790,7 +891,7 @@ public class PushNotificationServiceTests
             .Should().Be(PushNotificationService.DailyPerekTopic);
         prefs.DailyPerekPushEnabled.Should().BeFalse();
         platform.FailUnsubscribe = false;
-        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1", new FakeIdentity());
         await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
         (await store.GetAsync("push.pending_unsubscribe", CancellationToken.None)).Should().BeNull();
         registry.Registrations.Should().BeEmpty();
@@ -803,7 +904,7 @@ public class PushNotificationServiceTests
         var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var store = new FaultingStateStore();
         var registry = new FakeRegistry();
-        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1", new FakeIdentity());
         await service.SetEnabledAsync(true, CancellationToken.None);
         store.FailGetKey = "push.registration_fingerprint";
 
@@ -816,7 +917,7 @@ public class PushNotificationServiceTests
         platform.RaiseTokenRefreshed("rotated-token");
         await service.LastTokenResync!;
         registry.Registrations.Should().HaveCount(2);
-        registry.Registrations[1].Token.Should().Be("rotated-token");
+        registry.Registrations[1].Registration.Token.Should().Be("rotated-token");
     }
 
     [Fact]

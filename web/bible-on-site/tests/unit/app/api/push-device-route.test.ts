@@ -1,6 +1,8 @@
 /** @jest-environment node */
 const mockSave = jest.fn();
 const mockDelete = jest.fn();
+const mockDeleteLegacy = jest.fn();
+const mockVerify = jest.fn();
 const mockConfigured = jest.fn();
 const mockAllowed = jest.fn();
 jest.mock("@/lib/app-push", () => {
@@ -10,6 +12,8 @@ jest.mock("@/lib/app-push", () => {
 		isDeviceRegistryConfigured: () => mockConfigured(),
 		saveDevice: (...args: unknown[]) => mockSave(...args),
 		deleteDevice: (...args: unknown[]) => mockDelete(...args),
+		deleteLegacyDevice: (...args: unknown[]) => mockDeleteLegacy(...args),
+		verifyFirebaseIdToken: (...args: unknown[]) => mockVerify(...args),
 	};
 });
 jest.mock("@/lib/rate-limit", () => {
@@ -22,7 +26,11 @@ jest.mock("@/lib/rate-limit", () => {
 jest.mock("server-only", () => ({}));
 
 import { DELETE, POST } from "@/app/api/push/device/route";
-import { DeviceStoreFullError } from "@/lib/app-push";
+import {
+	DeviceOwnershipError,
+	DeviceStoreFullError,
+	FirebaseIdentityUnavailableError,
+} from "@/lib/app-push";
 
 const device = {
 	userId: "d7f3a1b2c4d5e6f7a8b9c0",
@@ -39,9 +47,10 @@ const privateFailure = () =>
 		}),
 		{ token: device.token, body: "private request body" },
 	);
-const request = (method: string, body: unknown) =>
+const request = (method: string, body: unknown, authenticated = true) =>
 	new Request("http://localhost/api/push/device", {
 		method,
+		headers: authenticated ? { authorization: "Bearer valid.jwt.token" } : {},
 		body: typeof body === "string" ? body : JSON.stringify(body),
 	});
 
@@ -50,6 +59,8 @@ describe("/api/push/device", () => {
 		jest.clearAllMocks();
 		mockConfigured.mockReturnValue(true);
 		mockAllowed.mockReturnValue(true);
+		mockVerify.mockResolvedValue({ userId: device.userId });
+		mockSave.mockResolvedValue(false);
 		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
 	afterEach(() => {
@@ -66,7 +77,7 @@ describe("/api/push/device", () => {
 				request("DELETE", { userId: device.userId }),
 			);
 			expect(await response.json()).toEqual({ registered: false });
-			expect(mockDelete).toHaveBeenCalledWith(device.userId);
+			expect(mockDelete).toHaveBeenCalledWith(device.userId, device.userId);
 		});
 	});
 
@@ -109,8 +120,58 @@ describe("/api/push/device", () => {
 		it("stores a valid registration", async () => {
 			const response = await POST(request("POST", device));
 			expect(response.status).toBe(201);
-			expect(await response.json()).toEqual({ registered: true });
-			expect(mockSave).toHaveBeenCalledWith(device);
+			expect(await response.json()).toEqual({
+				registered: true,
+				legacyMigrated: false,
+			});
+			expect(mockSave).toHaveBeenCalledWith(device, device.userId);
+		});
+
+		it("requires a bearer credential", async () => {
+			const response = await POST(request("POST", device, false));
+
+			expect(response.status).toBe(401);
+			expect(mockVerify).not.toHaveBeenCalled();
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("rejects an invalid bearer credential", async () => {
+			mockVerify.mockResolvedValue(null);
+
+			const response = await POST(request("POST", device));
+
+			expect(response.status).toBe(401);
+			expect(mockVerify).toHaveBeenCalledWith("valid.jwt.token");
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("reports verification infrastructure as unavailable rather than forged", async () => {
+			mockVerify.mockRejectedValue(new FirebaseIdentityUnavailableError());
+
+			const response = await POST(request("POST", device));
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toEqual({
+				error: "Identity verification unavailable",
+			});
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("rejects a verified identity that does not match the claimed registration owner", async () => {
+			mockVerify.mockResolvedValue({ userId: "other-installation" });
+
+			const response = await POST(request("POST", device));
+
+			expect(response.status).toBe(403);
+			expect(mockSave).not.toHaveBeenCalled();
+		});
+
+		it("maps registry ownership rejection to 403", async () => {
+			mockSave.mockRejectedValue(new DeviceOwnershipError());
+
+			const response = await POST(request("POST", device));
+
+			expect(response.status).toBe(403);
 		});
 
 		it("bounds anonymous writes per client address (#3500)", async () => {
@@ -137,9 +198,7 @@ describe("/api/push/device", () => {
 		it("returns 503 when the device store is at its bound", async () => {
 			mockSave.mockRejectedValue(new DeviceStoreFullError());
 			expect((await POST(request("POST", device))).status).toBe(503);
-			expect(console.error).toHaveBeenCalledWith(
-				"Push device store is full",
-			);
+			expect(console.error).toHaveBeenCalledWith("Push device store is full");
 		});
 
 		it.each([
@@ -167,7 +226,62 @@ describe("/api/push/device", () => {
 				request("DELETE", { userId: device.userId }),
 			);
 			expect(await response.json()).toEqual({ registered: false });
-			expect(mockDelete).toHaveBeenCalledWith(device.userId);
+			expect(mockDelete).toHaveBeenCalledWith(device.userId, device.userId);
+		});
+
+		it("uses the unbound-row compatibility lane without a bearer credential", async () => {
+			const response = await DELETE(
+				request("DELETE", { userId: "legacy-user" }, false),
+			);
+
+			expect(response.status).toBe(200);
+			expect(mockVerify).not.toHaveBeenCalled();
+			expect(mockDeleteLegacy).toHaveBeenCalledWith("legacy-user");
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("rejects an invalid bearer credential", async () => {
+			mockVerify.mockResolvedValue(null);
+
+			const response = await DELETE(
+				request("DELETE", { userId: device.userId }),
+			);
+
+			expect(response.status).toBe(401);
+			expect(mockDelete).not.toHaveBeenCalled();
+			expect(mockDeleteLegacy).not.toHaveBeenCalled();
+		});
+
+		it("reports verification infrastructure as unavailable", async () => {
+			mockVerify.mockRejectedValue(new FirebaseIdentityUnavailableError());
+
+			const response = await DELETE(
+				request("DELETE", { userId: device.userId }),
+			);
+
+			expect(response.status).toBe(503);
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("rejects a verified identity that does not match the claimed row", async () => {
+			mockVerify.mockResolvedValue({ userId: "other-installation" });
+
+			const response = await DELETE(
+				request("DELETE", { userId: device.userId }),
+			);
+
+			expect(response.status).toBe(403);
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("maps registry ownership rejection to 403", async () => {
+			mockDelete.mockRejectedValue(new DeviceOwnershipError());
+
+			const response = await DELETE(
+				request("DELETE", { userId: device.userId }),
+			);
+
+			expect(response.status).toBe(403);
 		});
 
 		it.each(["null", JSON.stringify({ userId: "has space" }), "{}"])(

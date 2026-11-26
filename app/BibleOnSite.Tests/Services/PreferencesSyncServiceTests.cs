@@ -35,6 +35,9 @@ public class PreferencesSyncServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task<string?> GetIdTokenAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<string?>(UserId is null ? null : $"token-for-{UserId}");
+
         public void SignIn(string userId)
         {
             UserId = userId;
