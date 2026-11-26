@@ -484,6 +484,59 @@ describe("ArticleEditPage", () => {
 		expect(server.updateArticle).not.toHaveBeenCalled();
 	});
 
+	it(
+		"keeps edits typed while a save is in flight",
+		{ timeout: 15_000 },
+		async () => {
+			let resolveSave: ((value: unknown) => void) | undefined;
+			server.updateArticle.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveSave = resolve;
+					}),
+			);
+			// The post-save refetch returns the persisted snapshot, which
+			// differs from the value typed while the save was in flight.
+			server.getArticle
+				.mockResolvedValueOnce(article)
+				.mockResolvedValue({ ...article, name: "השם השמור" });
+			renderPage();
+			const nameInput = (await screen.findByLabelText(
+				/שם המאמר/,
+			)) as HTMLInputElement;
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() =>
+				expect(server.updateArticle).toHaveBeenCalledTimes(1),
+			);
+
+			fireEvent.change(nameInput, {
+				target: { value: "נערך תוך כדי שמירה" },
+			});
+			expect(nameInput.value).toBe("נערך תוך כדי שמירה");
+
+			await act(async () => resolveSave?.({ ...article, name: "השם השמור" }));
+			await waitFor(() =>
+				expect(server.getArticle).toHaveBeenCalledTimes(2),
+			);
+
+			// The refetch must not revert the field, and the next autosave
+			// must persist the value the user actually typed.
+			await waitFor(() =>
+				expect(nameInput.value).toBe("נערך תוך כדי שמירה"),
+			);
+			await waitFor(
+				() =>
+					expect(server.updateArticle).toHaveBeenLastCalledWith({
+						data: expect.objectContaining({
+							name: "נערך תוך כדי שמירה",
+						}),
+					}),
+				{ timeout: 5000 },
+			);
+		},
+	);
+
 	it("queues the unmount save behind a save still in flight", async () => {
 		const resolvers: Array<(value: unknown) => void> = [];
 		server.updateArticle.mockImplementation(
