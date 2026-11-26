@@ -113,10 +113,11 @@ async function recover({
 			reusedSource: restore.reusedSource,
 		});
 		const started = now();
+		const settledSource = restore.rollback?.taskArn;
 		let seen = null,
 			completionAt = null,
 			ecsCompleted = false,
-			ready = false,
+			ready = Boolean(settledSource),
 			visibility = null,
 			exclusive = null;
 		const candidateIndex = monitor.rows.length;
@@ -131,6 +132,7 @@ async function recover({
 			const old = state.tasks.find((task) => task.taskArn === retiring.taskArn);
 			const candidates = state.tasks.filter(
 				(task) =>
+					(!settledSource || task.taskArn === settledSource) &&
 					task.taskDefinitionArn === restore.definition.taskDefinitionArn &&
 					task.lastStatus === "RUNNING" &&
 					[restore.image.root, restore.image.child].includes(

@@ -17,10 +17,20 @@ import argparse
 import json
 import os
 import re
-import subprocess
+# Run the fixed repository Node helper for the SQL we validate below.
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
+from shutil import which
 from tempfile import gettempdir
+
+
+DATA_DIRECTORY = Path(__file__).resolve().parents[3] / "data" / "mysql"
+CANONICAL_REFERENCE_FILES = frozenset({
+    "tanah_static_structure.sql",
+    "tanah_sefarim_and_perakim_data.sql",
+    "tanah_perek_pasuk_count_data.sql",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -139,13 +149,8 @@ def parse_file(filepath):
     size = os.path.getsize(filepath)
     if size > 10 * 1024 * 1024:
         return simulate_streaming_parse(filepath)
-    canonical = {
-        "tanah_static_structure.sql",
-        "tanah_sefarim_and_perakim_data.sql",
-        "tanah_perek_pasuk_count_data.sql",
-    }
     filepath = Path(filepath)
-    if filepath.name in canonical:
+    if filepath.name in CANONICAL_REFERENCE_FILES:
         return parse_statements(preprocess_sql(prepare_reference_file(filepath)))
     with filepath.open(encoding="utf-8") as f:
         return parse_statements(preprocess_sql(f.read()))
@@ -153,8 +158,17 @@ def parse_file(filepath):
 
 def prepare_reference_file(filepath):
     """Use the same canonical SQL emitted by the production uploader."""
-    return subprocess.check_output(
-        ["node", str(Path(__file__).with_name("canonical-reference.mts")), filepath.name, str(filepath)],
+    source = filepath.resolve(strict=True)
+    if source.parent != DATA_DIRECTORY or source.name not in CANONICAL_REFERENCE_FILES:
+        raise ValueError("Expected a canonical reference input from data/mysql")
+    node = which("node")
+    if not node:
+        raise RuntimeError("Node.js is required to prepare canonical reference SQL")
+    executable = Path(node).resolve(strict=True)
+    helper = Path(__file__).resolve().with_name("canonical-reference.mts")
+    # Pass only the fixed helper and its allowlisted source without a shell.
+    return subprocess.check_output(  # nosec B603
+        [str(executable), str(helper), source.name, str(source)],
         encoding="utf-8",
     )
 
@@ -283,8 +297,7 @@ def main():
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parents[2]
-    data_dir = repo_root / "data" / "mysql"
+    data_dir = DATA_DIRECTORY
 
     manifest_path = script_dir / "sql-files.json"
     with open(manifest_path, "r", encoding="utf-8") as manifest_file:

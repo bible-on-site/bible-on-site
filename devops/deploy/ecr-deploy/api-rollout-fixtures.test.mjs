@@ -201,7 +201,7 @@ export function task(def, image, letter = "a", at = -60000) {
 }
 
 export class Backend {
-	constructor() {
+	constructor({ pinnedBaseline = false } = {}) {
 		this.at = 0;
 		this.calls = [];
 		this.records = [];
@@ -212,10 +212,16 @@ export class Backend {
 			...this.oldImages.manifests,
 			...this.newImages.manifests,
 		]);
-		this.definitions = new Map([[definitionArn(9), definition()]]);
-		this.current = definition();
-		this.original = definition();
-		this.old = task(this.current, this.oldImages.root);
+		const baselineDigest = pinnedBaseline
+			? this.oldImages.children.amd64
+			: this.oldImages.root;
+		this.original = definition(
+			9,
+			pinnedBaseline ? `${IMAGE_URI}@${baselineDigest}` : undefined,
+		);
+		this.current = structuredClone(this.original);
+		this.definitions = new Map([[definitionArn(9), this.original]]);
+		this.old = task(this.current, baselineDigest);
 		this.next = null;
 		this.started = null;
 		this.releasedAt = null;
@@ -226,6 +232,7 @@ export class Backend {
 		this.expiration = null;
 		this.published = false;
 		this.recovering = false;
+		this.restored = null;
 		this.rollbackAt = null;
 		this.updates = 0;
 	}
@@ -237,7 +244,7 @@ export class Backend {
 			elapsed >= (this.neverReady ? 35000 : 7000) ? "HEALTHY" : "UNKNOWN";
 		this.next.containers[0].healthStatus = this.next.healthStatus;
 		if (this.recovering) {
-			this.old.lastStatus = "RUNNING";
+			this.restored.lastStatus = "RUNNING";
 			this.next.lastStatus = "STOPPED";
 		} else
 			for (const [arn, at] of this.releaseTimes) {
@@ -246,10 +253,13 @@ export class Backend {
 					row.lastStatus = "STOPPED";
 			}
 	}
-	beginRollback() {
+	beginRollback(source = this.old) {
 		this.rollbackAt = this.at;
 		this.recovering = true;
 		this.current = structuredClone(this.original);
+		this.restored = source;
+		this.restored.desiredStatus = "RUNNING";
+		this.allTasks.set(source.taskArn, source);
 		this.evolve();
 	}
 	state() {
@@ -262,6 +272,7 @@ export class Backend {
 			const done = running.length === 1 && running[0] === this.next;
 			s.runningCount = running.length;
 			s.pendingCount = this.next.lastStatus === "PENDING" ? 1 : 0;
+			s.deployments[0].id = this.next.startedBy;
 			if (!done)
 				s.deployments = [
 					{
@@ -282,7 +293,7 @@ export class Backend {
 	instances() {
 		this.evolve();
 		const tasks = this.recovering
-			? [this.old]
+			? [this.restored]
 			: [...this.allTasks.values()].filter(
 					(row) =>
 						row !== this.next ||
@@ -472,6 +483,7 @@ export class Backend {
 					this.updates === 1 ? "b" : "c",
 					this.at + 5000,
 				);
+				this.next.startedBy = this.updates === 1 ? "ecs-svc/22" : "ecs-svc/33";
 				if (this.next.containers[0].image.includes("@"))
 					this.next.containers[0].imageDigest =
 						this.next.containers[0].image.split("@")[1];
@@ -593,6 +605,8 @@ class Monitor {
 		const b = this.backend;
 		let version = "0.1.100",
 			instance = this.legacy ? null : OLD_INSTANCE;
+		if (b.recovering && b.restored !== b.old && !this.legacy)
+			instance = RESTORED_INSTANCE;
 		if (
 			b.next &&
 			!b.recovering &&
@@ -610,8 +624,8 @@ class Monitor {
 	instance = PublicAPIMonitor.prototype.instance;
 	sawProcess = PublicAPIMonitor.prototype.sawProcess;
 }
-export function fixture() {
-	const backend = new Backend(),
+export function fixture(options) {
+	const backend = new Backend(options),
 		monitor = new Monitor(backend);
 	const record = (name, value) =>
 		backend.records.push({
@@ -639,4 +653,4 @@ export function fixture() {
 }
 
 export const ownedTags = (backend) =>
-	Object.keys(backend.tags).filter((key) => key.startsWith(LEASE_PREFIX));
+	Object.keys(backend.tags).filt

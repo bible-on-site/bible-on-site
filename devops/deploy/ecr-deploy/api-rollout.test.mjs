@@ -6,7 +6,9 @@ import {
 	fixture,
 	NEW_INSTANCE,
 	ownedTags,
+	RESTORED_INSTANCE,
 	ROLLBACK_DEPLOYMENT_ARN,
+	task,
 	taskArn,
 } from "./api-rollout-fixtures.test.mjs";
 import { IMAGE_URI, LIMITS } from "./api-rollout-state.mjs";
@@ -592,6 +594,46 @@ test("automatic rollback after source protection cleared reuses the restored sou
 	assert.ok(
 		f.backend.calls.every((row) => row.name !== "StopServiceDeployment"),
 	);
+});
+
+test("completed automatic rollback reuses a recreated task on the original revision", async () => {
+	const f = fixture({ pinnedBaseline: true });
+	f.monitor.failFinalContracts = true;
+	const contracts = f.monitor.contracts.bind(f.monitor);
+	f.monitor.contracts = async (version, expected, instance) => {
+		if (version === f.version) {
+			assert.equal(f.backend.old.lastStatus, "STOPPED");
+			f.backend.beginRollback(
+				task(
+					f.backend.original,
+					f.backend.oldImages.children.amd64,
+					"c",
+					f.backend.at,
+				),
+			);
+			f.backend.at += LIMITS.readiness + 1000;
+		}
+		return contracts(version, expected, instance);
+	};
+	await assert.rejects(
+		runAPIRollout({ ...f, imageMode: "pinned" }),
+		/changed contract/,
+	);
+	assert.equal(f.backend.updates, 1);
+	assert.equal(f.backend.current.taskDefinitionArn, definitionArn(9));
+	assert.equal(
+		f.backend.records.find((row) => row.name === "rollback-prepared")?.value
+			.definition,
+		definitionArn(9),
+	);
+	assert.equal(f.backend.old.lastStatus, "STOPPED");
+	assert.equal(f.backend.otherLeases.size, 0);
+	assert.equal(
+		f.backend.records.find((row) => row.name === "recovery-completed")?.value
+			.task,
+		taskArn("c"),
+	);
+	assert.equal(f.monitor.contractCalls.at(-1)?.instance, RESTORED_INSTANCE);
 });
 
 test("pre-mutation checks leave another ongoing deployment alone and remove only our lease", async () => {

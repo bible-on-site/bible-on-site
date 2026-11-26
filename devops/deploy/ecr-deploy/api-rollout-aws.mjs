@@ -44,6 +44,7 @@ const configurations = [
 const clusterArn = `${ARN}cluster/${API_CLUSTER}`;
 const revisionPrefix = `${ARN}service-revision/${API_CLUSTER}/${API_SERVICE}/`;
 const deploymentPrefix = `${ARN}service-deployment/${API_CLUSTER}/${API_SERVICE}/`;
+const deploymentId = /^ecs-svc\/[0-9]+$/;
 const rolloutInProgress = ["PENDING", "IN_PROGRESS"];
 const rollbackStarted = [
 	"ROLLBACK_REQUESTED",
@@ -52,7 +53,7 @@ const rollbackStarted = [
 ];
 
 function taskRevision(task) {
-	assert.match(task.startedBy, /^ecs-svc\/[0-9]+$/);
+	assert.match(task.startedBy, deploymentId);
 	return revisionPrefix + task.startedBy.slice("ecs-svc/".length);
 }
 
@@ -296,6 +297,7 @@ export class APIRolloutAWS {
 		const [primary] = primaries;
 		if (
 			primaries.length !== 1 ||
+			task.desiredStatus !== "RUNNING" ||
 			primary?.id !== task.startedBy ||
 			primary?.taskDefinition !== task.taskDefinitionArn
 		)
@@ -620,15 +622,16 @@ export class APIRolloutAWS {
 	}
 	async rollback(baseline, target, fallback) {
 		const current = await this.service();
+		const definitions = [
+			target.taskDefinitionArn,
+			baseline.definition.taskDefinitionArn,
+		];
 		assert.ok(
 			isDeepStrictEqual(fingerprint(current), fingerprint(baseline.service)),
 			"Service settings changed before recovery",
 		);
 		assert.ok(
-			[
-				target.taskDefinitionArn,
-				baseline.definition.taskDefinitionArn,
-			].includes(current.taskDefinition),
+			definitions.includes(current.taskDefinition),
 			"Another deployment owns the service",
 		);
 		if (
@@ -636,11 +639,32 @@ export class APIRolloutAWS {
 			current.taskDefinition === baseline.definition.taskDefinitionArn
 		) {
 			const state = await this.snapshot(baseline.task.taskArn);
+			assert.ok(
+				isDeepStrictEqual(
+					fingerprint(state.service),
+					fingerprint(baseline.service),
+				),
+				"Service settings changed during recovery snapshot",
+			);
+			assert.ok(
+				definitions.includes(state.service.taskDefinition),
+				"Another deployment owns the service",
+			);
+			const [primary] = state.service.deployments;
 			const source = state.tasks.find(
-				(task) => task.taskArn === baseline.task.taskArn,
+				(task) => task.taskArn === state.active[0],
 			);
 			if (
+				completed(state.service) &&
+				state.service.taskDefinition ===
+					baseline.definition.taskDefinitionArn &&
 				state.active.length === 1 &&
+				source?.desiredStatus === "RUNNING" &&
+				deploymentId.test(source.startedBy) &&
+				source.startedBy === baseline.task.startedBy &&
+				primary.status === "PRIMARY" &&
+				primary.id === source.startedBy &&
+				primary.taskDefinition === source.taskDefinitionArn &&
 				healthy(source) &&
 				discoveryMatches(state.instances, [source])
 			) {
@@ -649,7 +673,7 @@ export class APIRolloutAWS {
 					definition: baseline.definition,
 					image: baseline.image,
 					reusedSource: true,
-					rollback: { taskArn: baseline.task.taskArn },
+					rollback: { taskArn: source.taskArn },
 				};
 			}
 		}

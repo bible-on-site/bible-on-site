@@ -77,6 +77,19 @@ class LocalConnection:
 
 
 class LambdaParserSafetyTests(unittest.TestCase):
+    def test_canonical_preparer_rejects_inputs_outside_its_repo_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            foreign = Path(directory) / "tanah_static_structure.sql"
+            foreign.write_text("SELECT 1;", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "canonical reference input"):
+                VALIDATOR.prepare_reference_file(foreign)
+
+    def test_canonical_preparer_explains_a_missing_node_runtime(self):
+        source = ROOT / "data" / "mysql" / "tanah_static_structure.sql"
+        with patch.object(VALIDATOR, "which", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "Node.js is required"):
+                VALIDATOR.prepare_reference_file(source)
+
     def execute_sql(self, connection, sql, streaming):
         if streaming:
             LAMBDA.execute_sql_streaming(ChunkedBody(sql), connection)
