@@ -135,6 +135,52 @@ export const TANAH_MEDIA_PERSON_TABLES: SchemaTableDoc[] = [
 			{ column: "alt_group_id", sqlType: "char(36) NULL", nullable: true },
 		],
 	},
+	{
+		table: "tanahpedia_person_birth_place",
+		purpose: "מקום לידה - מקום מקושר או טקסט חופשי (בדיוק אחד מהם)",
+		columns: [
+			{ column: "id", sqlType: "char(36) PK", nullable: false },
+			{ column: "person_id", sqlType: "char(36) FK", nullable: false },
+			{
+				column: "place_id",
+				sqlType: "char(36) NULL FK → place",
+				nullable: true,
+			},
+			{ column: "place_text", sqlType: "varchar(255) NULL", nullable: true },
+			{ column: "alt_group_id", sqlType: "char(36) NULL", nullable: true },
+		],
+	},
+	{
+		table: "tanahpedia_person_death_place",
+		purpose: "מקום פטירה - מקום מקושר או טקסט חופשי (בדיוק אחד מהם)",
+		columns: [
+			{ column: "id", sqlType: "char(36) PK", nullable: false },
+			{ column: "person_id", sqlType: "char(36) FK", nullable: false },
+			{
+				column: "place_id",
+				sqlType: "char(36) NULL FK → place",
+				nullable: true,
+			},
+			{ column: "place_text", sqlType: "varchar(255) NULL", nullable: true },
+			{ column: "alt_group_id", sqlType: "char(36) NULL", nullable: true },
+		],
+	},
+	{
+		table: "tanahpedia_person_activity_place",
+		purpose:
+			"מקום פעילות - מקום מקושר או טקסט חופשי (בדיוק אחד מהם); ייתכנו מספר שורות לאיש",
+		columns: [
+			{ column: "id", sqlType: "char(36) PK", nullable: false },
+			{ column: "person_id", sqlType: "char(36) FK", nullable: false },
+			{
+				column: "place_id",
+				sqlType: "char(36) NULL FK → place",
+				nullable: true,
+			},
+			{ column: "place_text", sqlType: "varchar(255) NULL", nullable: true },
+			{ column: "alt_group_id", sqlType: "char(36) NULL", nullable: true },
+		],
+	},
 ];
 
 export const TANAH_MEDIA_PLACE_TABLES: SchemaTableDoc[] = [

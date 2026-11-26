@@ -322,6 +322,24 @@ query PersonDetails($personId: String!) {
     deathDates
     deathCauses
     birthPlaceIds
+    birthPlaces {
+      id
+      placeId
+      placeText
+      altGroupId
+    }
+    deathPlaces {
+      id
+      placeId
+      placeText
+      altGroupId
+    }
+    activityPlaces {
+      id
+      placeId
+      placeText
+      altGroupId
+    }
     tanahSources {
       perekId
       pasukNumber
@@ -336,11 +354,16 @@ name type), sex, birth/death date, death cause, birth place id, and entity-level
 citation. `sexes` remains the compact value list; `sexRows` is the lossless form containing
 the stable row id and `altGroupId` needed for read-after-write comparison. Each list field can
 have more than one entry because the schema allows multiple alternate-opinion rows per person
-(`altGroupId`). Errors with `NOT_FOUND` when the person (or its linked entity) doesn't exist.
+(`altGroupId`). `birthPlaceIds` keeps the legacy linked-place-ids-only view; `birthPlaces`,
+`deathPlaces` and `activityPlaces` are the lossless place facts — each row carries exactly
+one of `placeId` (a linked place entity) or `placeText` (a free-text place name kept
+when no place entity exists; surrounding whitespace is trimmed on write). Errors with
+`NOT_FOUND` when the person (or its linked entity) doesn't exist.
 
 These queries only read `tanahpedia_entity`, `tanahpedia_person`, `tanahpedia_person_name`,
 `tanahpedia_person_sex`, `tanahpedia_person_birth_date`, `tanahpedia_person_death_date`,
-`tanahpedia_person_death_cause`, `tanahpedia_person_birth_place`, `tanahpedia_person_union`,
+`tanahpedia_person_death_cause`, `tanahpedia_person_birth_place`,
+`tanahpedia_person_death_place`, `tanahpedia_person_activity_place`, `tanahpedia_person_union`,
 `tanahpedia_person_parent_child`, `tanahpedia_entity_tanah_source`, and their `lookup_*`
 tables — they do not expose or modify any other table. Deeply-typed reads for non-person
 entity domains (e.g. a place's coordinates, an event's date range, a war's participants) are

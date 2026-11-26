@@ -103,6 +103,29 @@
 	margin-bottom: 28px;
 }
 
+.personPlacesSection {
+  margin-bottom: 28px;
+}
+
+.personPlacesList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personPlacesRow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.personPlacesRow dt {
+  font-weight: 600;
+  color: var(--accent-900);
+  white-space: nowrap;
+}
+
 .categoryGrid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

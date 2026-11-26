@@ -28,6 +28,7 @@
 	"tanahpedia_alter_mention_decoration.sql",
 	"tanahpedia_alter_entry_synonym.sql",
 	"tanahpedia_alter_normalized_name.sql",
+	"tanahpedia_alter_person_places.sql",
 	"tanahpedia_person_role_commentator_upgrade.sql",
 	"tanahpedia_images_upgrade.sql",
 	"tanahpedia_remove_simchat_torah_placeholder.sql",

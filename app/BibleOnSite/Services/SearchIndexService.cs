@@ -20,7 +20,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     };
     private readonly ConcurrentDictionary<string, string> _ready = new();
     private readonly Dictionary<string, Task> _buildTasks = new();
-    private readonly Task _initialization;
+    private Task _initialization;
     private bool _disposed;
     private readonly object _buildSync = new();
     private string? _stagedAwaitingNotes;
@@ -474,9 +474,32 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
     }
 
+    // A faulted or canceled init must not poison every later call — recreate
+    // the task on the next request, the same retry _buildTasks applies.
+    private Task GetInitializationTask()
+    {
+        lock (_buildSync)
+        {
+            if (_initialization.IsFaulted || _initialization.IsCanceled)
+            {
+                _initialization = Task.Run(ReinitializeAsync);
+            }
+            return _initialization;
+        }
+    }
+
+    // A failed attempt can leave _index bound to the bad file image — reopen
+    // it before probing again, the same close/recreate the file-swap uses.
+    private async Task ReinitializeAsync()
+    {
+        await _index.CloseAsync();
+        _index = new SQLiteAsyncConnection(_indexPath);
+        await InitializeIndexAsync();
+    }
+
     private async Task EnsureIndexAsync(string table)
     {
-        await _initialization;
+        await GetInitializationTask();
         string? stagedIndex = null;
         var notesSettled = true;
         if (table == "verses" && _notes != null)

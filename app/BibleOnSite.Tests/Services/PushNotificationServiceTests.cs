@@ -28,11 +28,11 @@ public class PushNotificationServiceTests
         public Task InitializeAsync(CancellationToken ct)
         {
             InitializeCalls++;
-            if (FailInitialize)
-            {
-                throw new InvalidOperationException("init failed");
-            }
-            return Task.CompletedTask;
+            // Async fault shape (not a sync throw): real platform clients are
+            // async, so the service caches a faulted task rather than nothing.
+            return FailInitialize
+                ? Task.FromException(new InvalidOperationException("init failed"))
+                : Task.CompletedTask;
         }
         public Task<PushPermissionState> GetPermissionStateAsync(CancellationToken ct) => Task.FromResult(Permission);
         public Task<PushPermissionState> RequestPermissionAsync(CancellationToken ct)
@@ -274,6 +274,34 @@ public class PushNotificationServiceTests
     }
 
     [Fact]
+    public async Task SetEnabledAsync_Disable_WhenInitFaults_StillDisables()
+    {
+        var (service, platform, prefs, _, _) = CreateService();
+        prefs.DailyPerekPushEnabled = true; // an existing opt-in the disable must clear
+        platform.FailInitialize = true;
+
+        var result = await service.SetEnabledAsync(false, CancellationToken.None);
+
+        // Opt-out does not need a successful warm-up: the wiring already ran,
+        // and a failed unsubscribe is covered by PendingUnsubscribeKey.
+        result.Should().Be(PushEnableResult.Disabled);
+        prefs.DailyPerekPushEnabled.Should().BeFalse("the failed init must not skip clearing the opt-in");
+        platform.Unsubscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_Enable_WhenInitFaults_ReportsFailed()
+    {
+        var (service, platform, prefs, _, _) = CreateService();
+        platform.FailInitialize = true;
+
+        var result = await service.SetEnabledAsync(true, CancellationToken.None);
+
+        result.Should().Be(PushEnableResult.Failed);
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SetEnabledAsync_Reenable_ClearsPendingUnsubscribe()
     {
         var (service, platform, prefs, store, registry) = CreateService();
@@ -510,6 +538,69 @@ public class PushNotificationServiceTests
             service.EnsureInitializedAsync(CancellationToken.None));
 
         platform.InitializeCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task EnsureInitializedAsync_WhenFirstAttemptFaults_RetriesOnNextCall()
+    {
+        var (service, platform, _, _, _) = CreateService();
+        platform.FailInitialize = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.EnsureInitializedAsync(CancellationToken.None));
+
+        platform.FailInitialize = false;
+        await service.EnsureInitializedAsync(CancellationToken.None);
+
+        platform.InitializeCalls.Should().Be(2, "a faulted init must not be cached forever");
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_WhenPlatformInitFaults_RecoversOnNextAttempt()
+    {
+        var (service, platform, prefs, _, registry) = CreateService();
+        platform.FailInitialize = true;
+        (await service.SetEnabledAsync(true, CancellationToken.None)).Should().Be(PushEnableResult.Failed);
+
+        platform.FailInitialize = false;
+        var result = await service.SetEnabledAsync(true, CancellationToken.None);
+
+        result.Should().Be(PushEnableResult.Enabled);
+        prefs.DailyPerekPushEnabled.Should().BeTrue();
+        platform.InitializeCalls.Should().Be(2);
+        registry.Registrations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ApplyEnabledPreferenceAsync_WhenSubscribeFaults_RetriesOnNextAttempt()
+    {
+        var (service, platform, prefs, _, registry) = CreateService();
+        prefs.DailyPerekPushEnabled = true;
+        platform.FailSubscribe = true;
+
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        platform.Subscribed.Should().BeEmpty("the subscribe faulted before recording the topic");
+        platform.FailSubscribe = false;
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        platform.Subscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+        registry.Registrations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ApplyEnabledPreferenceAsync_WhenApplySucceedsLaterCallsAreNoOps()
+    {
+        var (service, platform, prefs, _, _) = CreateService();
+        prefs.DailyPerekPushEnabled = true;
+        platform.FailSubscribe = true;
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+        platform.FailSubscribe = false;
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        platform.Subscribed.Should().ContainSingle("a recovered apply still runs at most once per launch");
     }
 
     [Fact]

@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
-import { JsonLd } from "@/app/components/JsonLd";
-import { ReadingProgress } from "@/app/components/ReadingProgress";
-import { ReadingTime } from "@/app/components/ReadingTime";
 import {
 	DedicationLines,
 	dedicationLines,
 } from "@/app/components/dedications/DedicationLines";
+import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
 import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
@@ -29,6 +29,7 @@ import {
 	getEntryImages,
 	getEntryOccurrences,
 	getPersonFamilySummary,
+	getPersonPlaceFacts,
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
 import {
@@ -40,6 +41,7 @@ import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-para
 import { EntryImageGallery } from "../components/EntryImageGallery";
 import { EntryOccurrencesTable } from "../components/EntryOccurrencesTable";
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
+import { PersonPlaceFactsSection } from "../components/PersonPlaceFacts";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
 import styles from "../page.module.css";
@@ -112,6 +114,7 @@ export async function EntryView({ slug }: { slug: string }) {
 	const [
 		siblingEntries,
 		personFamily,
+		personPlaces,
 		placeMapMarkers,
 		occurrences,
 		entryDedications,
@@ -123,6 +126,9 @@ export async function EntryView({ slug }: { slug: string }) {
 			: getAllEntrySummaries(500, 0),
 		personEntity
 			? getPersonFamilySummary(personEntity.entityId, personEntity.entityName)
+			: Promise.resolve(null),
+		personEntity
+			? getPersonPlaceFacts(personEntity.entityId)
 			: Promise.resolve(null),
 		getPlaceMapMarkersForEntry(entry.id),
 		getEntryOccurrences(entry.id),
@@ -223,6 +229,8 @@ export async function EntryView({ slug }: { slug: string }) {
 					<TanahpediaPlacesMap markers={placeMapMarkers} />
 				</section>
 			) : null}
+
+			{personPlaces ? <PersonPlaceFactsSection facts={personPlaces} /> : null}
 
 			{personFamily ? <PersonFamilyTree summary={personFamily} /> : null}
 

@@ -24,29 +24,33 @@ internal sealed class AndroidPushPlatformClient : IPushPlatformClient
 
     public bool IsSupported => true;
 
+    /// <summary>Keeps the plugin event wiring to one subscription across warm-up retries.</summary>
+    private readonly PushWarmUpGate _warmUp = new();
+
 #pragma warning disable S1172 // Interface contract keeps ct; plugin/permission calls take no token.
-    public async Task InitializeAsync(CancellationToken ct)
+    public Task InitializeAsync(CancellationToken ct)
     {
         FirebaseCloudMessagingImplementation.ChannelId = ChannelId;
         FirebaseCloudMessagingImplementation.SmallIconRef = Resource.Mipmap.appicon;
+        return _warmUp.RunAsync(WireMessaging, WarmUpMessagingAsync);
+    }
+
+    private void WireMessaging()
+    {
         var messaging = CrossFirebaseCloudMessaging.Current;
         messaging.NotificationTapped += OnNotificationTapped;
         messaging.TokenChanged += OnTokenChanged;
         messaging.Error += OnError;
         CreateNotificationChannel();
-        try
-        {
-            // Play-services check + token warm-up; a valid install raises
-            // TokenChanged through OnNewToken/OnTokenRefreshAsync.
-            await messaging.CheckIfValidAsync();
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: a missing Play-services install degrades push, not the app
-        catch (Exception ex) //NOSONAR — a missing Play-services install degrades push, not the app.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Push] validity check failed: {ex.Message}");
-        }
     }
+
+    // Play-services check + token warm-up; a valid install raises TokenChanged
+    // through OnNewToken/OnTokenRefreshAsync. A failure propagates so
+    // PushNotificationService's cached init task faults and the next
+    // EnsureInitializedAsync retries — the gate keeps the retry from
+    // re-subscribing the plugin events.
+    private static Task WarmUpMessagingAsync() =>
+        CrossFirebaseCloudMessaging.Current.CheckIfValidAsync();
 
     private static void CreateNotificationChannel()
     {
@@ -197,8 +201,18 @@ internal sealed class AndroidPushPlatformClient : IPushPlatformClient
         {
             // Ensures the service + event wiring exist before the plugin
             // dispatches the tap — the queued-notification path depends on a
-            // subscriber being attached.
+            // subscriber being attached. A failed warm-up must not swallow the
+            // tap: the intent is dispatched below either way.
             await PushNotificationService.Instance.EnsureInitializedAsync(CancellationToken.None);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: a failed init must not drop the notification tap
+        catch (Exception ex) //NOSONAR — a failed init must not drop the notification tap.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Push] init before tap failed: {ex.Message}");
+        }
+        try
+        {
             FirebaseCloudMessagingImplementation.OnNewIntent(intent);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: a malformed launch intent is log-only

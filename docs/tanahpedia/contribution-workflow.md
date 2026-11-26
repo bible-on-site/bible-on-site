@@ -68,12 +68,12 @@ Local structured generation follows [Ollama structured outputs](https://docs.oll
 ## Supported changes
 
 All additional category types reviewed by the user are included. The current
-contract has 46 operation kinds; family choices use the nine existing API types.
+contract has 48 operation kinds; family choices use the nine existing API types.
 
 | Category | Structured changes |
 | --- | --- |
 | Family | Biological, adoptive, step and foster parenthood; marriage, pilegesh, forbidden-with-gentile, banned-incest and betrothal unions; their roles, order, dates and source citations |
-| Person | Display/MAIN name, additional names and nicknames, human/divine name giver, sex, birth/death dates, death cause, birthplace |
+| Person | Display/MAIN name, additional names and nicknames, human/divine name giver, sex, birth/death dates, death cause, birth/death/activity places — each fact either a linked place entity or a free-text alternative, with several activity places allowed |
 | Roles | Prophet and king roles, reign dates and nation |
 | Places | Modern identification, paired coordinates, alternative identifications |
 | Events | Locations and date ranges |

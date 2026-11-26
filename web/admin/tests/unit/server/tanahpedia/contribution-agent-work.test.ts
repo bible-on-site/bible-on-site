@@ -1146,10 +1146,10 @@ describe("assignment-driven leased contribution work", () => {
 			mocks.tool.mock.invocationCallOrder[lockedReads[0].index],
 		);
 	});
-	it("uses API five article read receipts to resolve the same PR with known nested identities", async () => {
+	it("uses API six article read receipts to resolve the same PR with known nested identities", async () => {
 		const input = await claim();
-		expect(input.apiVersion).toBe(5);
-		expect(agent().installedVersion).toBe("tanahpedia-agents-v13");
+		expect(input.apiVersion).toBe(6);
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v14");
 		mocks.tool.mockResolvedValue({
 			data: {
 				kind: "target:article_links",

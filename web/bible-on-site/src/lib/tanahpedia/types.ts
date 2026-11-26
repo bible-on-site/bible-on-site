@@ -583,6 +583,24 @@ export interface PersonFamilySummary {
 	siblings: PersonFamilyRelatedPerson[];
 }
 
+/** One resolved person place fact: linked entry or the stored free text. */
+export interface PersonPlaceFact {
+	/** יישות המקום או הטקסט החופשי כפי ששמר העורך */
+	label: string;
+	/** הערך הראשון של יישות המקום (כשהעובדה מקושרת); null לטקסט חופשי */
+	entryUniqueName: string | null;
+}
+
+/**
+ * מקום לידה / מקומות פעילות / מקום פטירה של איש — שורות קנוניות בלבד
+ * (alt_group_id IS NULL), כל אחת מקום מקושר או טקסט חופשי.
+ */
+export interface PersonPlaceFacts {
+	birth: PersonPlaceFact | null;
+	activity: PersonPlaceFact[];
+	death: PersonPlaceFact | null;
+}
+
 /** Marker for Tanahpedia places map (OpenStreetMap; no API key). */
 export interface PlaceMapMarker {
 	placeId: string;

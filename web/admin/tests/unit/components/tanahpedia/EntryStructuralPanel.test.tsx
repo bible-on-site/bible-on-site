@@ -14,9 +14,11 @@ const {
 	createEntityMock,
 	deleteEntityExternalReferenceMock,
 	getEntryStructuralContextMock,
+	getPlacesMock,
 	removeEntityMock,
 	replacePlaceIdentificationsMock,
 	updateEntityDisplayNameMock,
+	updateFamilyPersonNodeMock,
 	updatePersonMainNameMock,
 	updatePersonSexMock,
 	updateSayingDateMock,
@@ -25,9 +27,11 @@ const {
 	createEntityMock: vi.fn(),
 	deleteEntityExternalReferenceMock: vi.fn(),
 	getEntryStructuralContextMock: vi.fn(),
+	getPlacesMock: vi.fn(),
 	removeEntityMock: vi.fn(),
 	replacePlaceIdentificationsMock: vi.fn(),
 	updateEntityDisplayNameMock: vi.fn(),
+	updateFamilyPersonNodeMock: vi.fn(),
 	updatePersonMainNameMock: vi.fn(),
 	updatePersonSexMock: vi.fn(),
 	updateSayingDateMock: vi.fn(),
@@ -48,6 +52,14 @@ vi.mock("~/server/tanahpedia/structural", () => ({
 
 vi.mock("~/server/tanahpedia/entries", () => ({
 	removeEntity: removeEntityMock,
+}));
+
+vi.mock("~/server/tanahpedia/family", () => ({
+	updateFamilyPersonNode: updateFamilyPersonNodeMock,
+}));
+
+vi.mock("~/server/tanahpedia/places", () => ({
+	getPlaces: getPlacesMock,
 }));
 
 vi.mock("~/server/tanahpedia/external-references", () => ({
@@ -78,12 +90,14 @@ describe("EntryStructuralPanel", () => {
 			entryId: "entry-1",
 			linkedEntities: [],
 		});
+		getPlacesMock.mockReset().mockResolvedValue([]);
 		for (const mock of [
 			createEntityMock,
 			deleteEntityExternalReferenceMock,
 			removeEntityMock,
 			replacePlaceIdentificationsMock,
 			updateEntityDisplayNameMock,
+			updateFamilyPersonNodeMock,
 			updatePersonMainNameMock,
 			updatePersonSexMock,
 			updateSayingDateMock,
@@ -193,6 +207,9 @@ describe("EntryStructuralPanel", () => {
 							mainNameRowId: "main-name-row",
 							sex: "MALE",
 							sexRowId: "sex-row",
+							birthPlace: null,
+							deathPlace: null,
+							activityPlaces: [],
 						},
 						place: null,
 						externalReferences: [
@@ -283,6 +300,280 @@ describe("EntryStructuralPanel", () => {
 			});
 		});
 
+		it("saves linked and free-text person place facts", async () => {
+			getPlacesMock.mockResolvedValue([
+				{ id: "place-1", entity_id: "place-entity", name: "ירושלים" },
+			]);
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+			const controls = within(card as HTMLElement);
+
+			// Free-text birth place: pick the text option then type the name.
+			fireEvent.change(await controls.findByLabelText("מקום לידה"), {
+				target: { value: "__free_text__" },
+			});
+			fireEvent.change(controls.getByPlaceholderText("שם המקום"), {
+				target: { value: " דבינסק " },
+			});
+			// Linked death place from the catalogue.
+			fireEvent.change(controls.getByLabelText("מקום פטירה"), {
+				target: { value: "place-1" },
+			});
+			// One activity place, linked.
+			fireEvent.click(controls.getByRole("button", { name: "+ מקום" }));
+			const activitySelect = card.querySelector(
+				'select[id^="ap-person-entity-"]',
+			);
+			if (!activitySelect) throw new Error("Expected activity place select");
+			fireEvent.change(activitySelect, { target: { value: "place-1" } });
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+
+			await waitFor(() =>
+				expect(updateFamilyPersonNodeMock).toHaveBeenCalledWith({
+					data: {
+						entityId: "person-entity",
+						birthPlaceId: null,
+						birthPlaceText: "דבינסק",
+						birthPlaceOriginal: null,
+						deathPlaceId: "place-1",
+						deathPlaceText: null,
+						deathPlaceOriginal: null,
+						activityPlaces: [{ id: null, placeId: "place-1", placeText: null }],
+						removedActivityPlaces: [],
+					},
+				}),
+			);
+		});
+
+		it("rejects saving an empty free-text place fact", async () => {
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+			const controls = within(card as HTMLElement);
+
+			fireEvent.change(await controls.findByLabelText("מקום לידה"), {
+				target: { value: "__free_text__" },
+			});
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+
+			expect(await controls.findByRole("alert")).toHaveTextContent(
+				"הזן טקסט חופשי או בחר מקום מקושר",
+			);
+			expect(updateFamilyPersonNodeMock).not.toHaveBeenCalled();
+		});
+
+		it("renders stored place facts, edits rows, and clears facts", async () => {
+			getPlacesMock.mockResolvedValue([
+				{ id: "place-1", entity_id: "place-entity", name: "ירושלים" },
+			]);
+			getEntryStructuralContextMock.mockResolvedValue({
+				entryId: "entry-1",
+				linkedEntities: [
+					{
+						linkId: "person-link",
+						entityId: "person-entity",
+						entityType: "PERSON",
+						displayName: "יעקב",
+						person: {
+							personId: "person-id",
+							mainName: "יעקב",
+							mainNameRowId: "main-name-row",
+							sex: "MALE",
+							sexRowId: "sex-row",
+							// Linked to a place missing from the catalogue.
+							birthPlace: {
+								id: "b1",
+								placeId: "place-9",
+								placeText: null,
+								placeName: "ארץ ישראל",
+							},
+							deathPlace: {
+								id: "d1",
+								placeId: null,
+								placeText: "מצרים",
+								placeName: null,
+							},
+							activityPlaces: [
+								// Linked to a place missing from the catalogue, no name.
+								{
+									id: "a1",
+									placeId: "place-8",
+									placeText: null,
+									placeName: null,
+								},
+								{ id: "a2", placeId: null, placeText: "חרן", placeName: null },
+								// A row without a persisted id gets a positional key.
+								{
+									id: "",
+									placeId: "place-1",
+									placeText: null,
+									placeName: "ירושלים",
+								},
+								// A degenerate row with neither id nor text
+								// renders as an empty free-text draft.
+								{
+									id: "a4",
+									placeId: null,
+									placeText: null,
+									placeName: null,
+								},
+							],
+						},
+						place: null,
+						externalReferences: [],
+					},
+				],
+			});
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+			const controls = within(card as HTMLElement);
+
+			// A linked place missing from the catalogue keeps an option carrying
+			// the stored entity name so the select stays coherent.
+			const birthSelect = (await controls.findByLabelText(
+				"מקום לידה",
+			)) as HTMLSelectElement;
+			expect(birthSelect).toHaveValue("place-9");
+			expect(
+				within(birthSelect).getByRole("option", { name: "ארץ ישראל" }),
+			).toBeInTheDocument();
+
+			// Free-text death and activity places show their stored text inputs.
+			expect(controls.getByLabelText("מקום פטירה")).toHaveValue(
+				"__free_text__",
+			);
+			const textInputs = controls.getAllByPlaceholderText("שם המקום");
+			expect(textInputs[0]).toHaveValue("מצרים");
+			expect(textInputs[1]).toHaveValue("חרן");
+			expect(textInputs[2]).toHaveValue("");
+
+			const activitySelects = () =>
+				Array.from(
+					card.querySelectorAll('select[id^="ap-person-entity-"]'),
+				) as HTMLSelectElement[];
+			expect(activitySelects()).toHaveLength(4);
+			// placeName null → the fallback option shows the raw place id.
+			expect(activitySelects()[0]).toHaveValue("place-8");
+			expect(
+				within(activitySelects()[0]).getByRole("option", { name: "place-8" }),
+			).toBeInTheDocument();
+			expect(activitySelects()[1]).toHaveValue("__free_text__");
+			expect(activitySelects()[2]).toHaveValue("place-1");
+			expect(activitySelects()[3]).toHaveValue("__free_text__");
+
+			// Retarget the first activity row and delete the last two —
+			// the degenerate empty row would fail validation on save.
+			fireEvent.change(activitySelects()[0], { target: { value: "place-1" } });
+			fireEvent.click(controls.getAllByRole("button", { name: "מחק" })[3]);
+			fireEvent.click(controls.getAllByRole("button", { name: "מחק" })[2]);
+			expect(activitySelects()).toHaveLength(2);
+
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+			await waitFor(() =>
+				expect(updateFamilyPersonNodeMock).toHaveBeenCalledWith({
+					data: {
+						entityId: "person-entity",
+						birthPlaceId: "place-9",
+						birthPlaceText: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-9",
+							placeText: null,
+						},
+						deathPlaceId: null,
+						deathPlaceText: "מצרים",
+						deathPlaceOriginal: {
+							id: "d1",
+							placeId: null,
+							placeText: "מצרים",
+						},
+						activityPlaces: [
+							{
+								id: "a1",
+								placeId: "place-1",
+								placeText: null,
+								originalPlaceId: "place-8",
+								originalPlaceText: null,
+							},
+							{
+								id: "a2",
+								placeId: null,
+								placeText: "חרן",
+								originalPlaceId: null,
+								originalPlaceText: "חרן",
+							},
+						],
+						// The loaded "" and "a4" rows were deleted; only persisted ids
+						// are sent back (with their loaded values as the CAS token),
+						// so the server deletes just "a4".
+						removedActivityPlaces: [
+							{
+								id: "a4",
+								originalPlaceId: null,
+								originalPlaceText: null,
+							},
+						],
+					},
+				}),
+			);
+
+			// Clearing a fact via the "-" option sends nulls on save.
+			fireEvent.change(birthSelect, { target: { value: "" } });
+			fireEvent.change(controls.getByLabelText("מקום פטירה"), {
+				target: { value: "" },
+			});
+			fireEvent.click(controls.getByRole("button", { name: "שמור מקומות" }));
+			await waitFor(() =>
+				expect(updateFamilyPersonNodeMock).toHaveBeenCalledWith({
+					data: {
+						entityId: "person-entity",
+						birthPlaceId: null,
+						birthPlaceText: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-9",
+							placeText: null,
+						},
+						deathPlaceId: null,
+						deathPlaceText: null,
+						deathPlaceOriginal: {
+							id: "d1",
+							placeId: null,
+							placeText: "מצרים",
+						},
+						activityPlaces: [
+							{
+								id: "a1",
+								placeId: "place-1",
+								placeText: null,
+								originalPlaceId: "place-8",
+								originalPlaceText: null,
+							},
+							{
+								id: "a2",
+								placeId: null,
+								placeText: "חרן",
+								originalPlaceId: null,
+								originalPlaceText: "חרן",
+							},
+						],
+						removedActivityPlaces: [
+							{
+								id: "a4",
+								originalPlaceId: null,
+								originalPlaceText: null,
+							},
+						],
+					},
+				}),
+			);
+		});
+
 		it("edits place identifications including a newly added row", async () => {
 			renderPanel();
 			const id = await screen.findByText("place-entity");
@@ -352,6 +643,9 @@ describe("EntryStructuralPanel", () => {
 							mainNameRowId: null,
 							sex: null,
 							sexRowId: null,
+							birthPlace: null,
+							deathPlace: null,
+							activityPlaces: [],
 						},
 						place: null,
 						externalReferences: [],

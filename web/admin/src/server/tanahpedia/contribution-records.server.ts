@@ -13,6 +13,7 @@ import type {
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
 import { saveEntryTitleRevisioned } from "./revisions";
+import { isMissingMysqlSchemaOrColumn } from "./sql-helpers";
 
 export interface ContributionReference {
 	id: string | number;
@@ -278,10 +279,18 @@ export async function structuredContributionCatalogue(conn: PoolConnection) {
 		after: ChangeState;
 	}[] = [];
 	for (const [kind, spec] of Object.entries(CONTRIBUTION_RECORDS)) {
-		const rows = await txQuery<ChangeState & { id: string }>(
-			conn,
-			`SELECT r.id,${columns(spec)} FROM ${spec.table} r${spec.where ? ` WHERE ${spec.where}` : ""} ORDER BY r.id`,
-		);
+		let rows: (ChangeState & { id: string })[];
+		try {
+			rows = await txQuery<ChangeState & { id: string }>(
+				conn,
+				`SELECT r.id,${columns(spec)} FROM ${spec.table} r${spec.where ? ` WHERE ${spec.where}` : ""} ORDER BY r.id`,
+			);
+		} catch (error) {
+			// A not-yet-deployed structured table/column reads as an empty
+			// catalogue section until its approved migration lands.
+			if (isMissingMysqlSchemaOrColumn(error)) continue;
+			throw error;
+		}
 		for (const { id, ...state } of rows) {
 			const after = normalize(kind as ContributionRecordKind, state);
 			const subject = spec.updateOnly

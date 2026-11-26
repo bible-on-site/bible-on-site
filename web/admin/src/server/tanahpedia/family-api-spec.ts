@@ -30,6 +30,23 @@ export type FamilyUnionEndReason = (typeof FAMILY_UNION_END_REASONS)[number];
 
 export type FamilyNameType = (typeof FAMILY_NAME_TYPES)[number];
 
+/**
+ * A person place fact is either a linked place entity (placeId) or a
+ * free-text alternative (placeText) — exactly one of the two, never both.
+ * `id` keeps the existing row identity so retained rows are updated in
+ * place rather than re-created under new ids.
+ */
+export interface FamilyPersonPlace {
+	id?: string | null;
+	placeId?: string | null;
+	placeText?: string | null;
+	/** The values the editor loaded for this row — a CAS token so a
+	 * contribution merge editing the row in place is detected rather than
+	 * overwritten. Sent only for persisted rows (id set). */
+	originalPlaceId?: string | null;
+	originalPlaceText?: string | null;
+}
+
 export interface CreateFamilyPersonInput {
 	displayName: string;
 	sex?: "MALE" | "FEMALE" | "UNKNOWN" | null;
@@ -38,6 +55,10 @@ export interface CreateFamilyPersonInput {
 	deathDate?: number | null;
 	deathCause?: string | null;
 	birthPlaceId?: string | null;
+	birthPlaceText?: string | null;
+	deathPlaceId?: string | null;
+	deathPlaceText?: string | null;
+	activityPlaces?: FamilyPersonPlace[] | null;
 	isProphet?: boolean;
 	isKing?: boolean;
 	isCommentator?: boolean;
@@ -51,6 +72,22 @@ export interface UpdateFamilyPersonInput {
 	deathDate?: number | null;
 	deathCause?: string | null;
 	birthPlaceId?: string | null;
+	birthPlaceText?: string | null;
+	/** The canonical birth-place row the editor loaded (null = none loaded).
+	 * The save fails when the locked row no longer matches it, so a
+	 * contribution merge cannot be overwritten silently. */
+	birthPlaceOriginal?: FamilyPersonPlace | null;
+	deathPlaceId?: string | null;
+	deathPlaceText?: string | null;
+	deathPlaceOriginal?: FamilyPersonPlace | null;
+	activityPlaces?: FamilyPersonPlace[] | null;
+	/** Canonical activity-place rows the editor explicitly removed — only
+	 * these may be deleted; a locked row outside kept + removed ids means the
+	 * list changed under the editor and the save is rejected. Each entry
+	 * carries the loaded values (`originalPlaceId`/`originalPlaceText`) as a
+	 * CAS token so a contribution merge editing the row in place is detected
+	 * instead of deleted unseen. */
+	removedActivityPlaces?: FamilyPersonPlace[];
 	isProphet?: boolean;
 	isKing?: boolean;
 	isCommentator?: boolean;
@@ -135,7 +172,7 @@ export interface DeleteUnionLinkInput {
  * This file is the source of truth for request shapes used by admin RPC endpoints.
  */
 export const FAMILY_API_SPEC = {
-	version: 1,
+	version: 2,
 	operations: {
 		createFamilyPersonNode: {
 			input: "CreateFamilyPersonInput",

@@ -7,6 +7,7 @@ import {
 	ENTITY_TYPES,
 	get3DModels,
 	getAllEntityTypeParams,
+	getAllEntrySummaries,
 	getAllEntrySynonymNames,
 	getAllEntryUniqueNames,
 	getAnimalsByClassification,
@@ -14,6 +15,7 @@ import {
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
+	getEntityTypeEntrySummaries,
 	getEntries,
 	getEntriesByEntityType,
 	getEntriesBySynonym,
@@ -22,14 +24,13 @@ import {
 	getEntryByUniqueName,
 	getEntryImages,
 	getEntryOccurrences,
-	getAllEntrySummaries,
-	getEntityTypeEntrySummaries,
-	getRecentEntrySummaries,
 	getPersonFamilySummary,
+	getPersonPlaceFacts,
 	getPlaceIdentifications,
 	getPlaceMapMarkers,
 	getPlaceMapMarkersForEntry,
 	getRecentEntries,
+	getRecentEntrySummaries,
 } from "../../../src/lib/tanahpedia/service";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -995,6 +996,132 @@ describe("tanahpedia service", () => {
 			await expect(getEntryImages("entry-1")).rejects.toMatchObject({
 				code: "ECONNREFUSED",
 			});
+		});
+	});
+
+	describe("getPersonPlaceFacts", () => {
+		it("returns null when the entity has no person row", async () => {
+			mockQuery.mockResolvedValueOnce([]);
+
+			await expect(getPersonPlaceFacts("entity-x")).resolves.toBeNull();
+			expect(mockQuery).toHaveBeenCalledTimes(1);
+		});
+
+		it("resolves linked places to their first entry and keeps free text", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ personId: "person-1" }])
+				.mockResolvedValueOnce([
+					{
+						fact: "birth",
+						placeName: null,
+						placeText: " דבינסק ",
+						entryUniqueName: null,
+					},
+					{
+						fact: "activity",
+						placeName: "ירושלים",
+						placeText: null,
+						entryUniqueName: "ירושלים",
+					},
+					{
+						fact: "activity",
+						placeName: null,
+						placeText: "שושן הבירה",
+						entryUniqueName: null,
+					},
+					{
+						fact: "death",
+						placeName: "טבריה",
+						placeText: null,
+						entryUniqueName: "טבריה",
+					},
+				]);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toEqual({
+				birth: { label: "דבינסק", entryUniqueName: null },
+				activity: [
+					{ label: "ירושלים", entryUniqueName: "ירושלים" },
+					{ label: "שושן הבירה", entryUniqueName: null },
+				],
+				death: { label: "טבריה", entryUniqueName: "טבריה" },
+			});
+		});
+
+		it("returns null when the person has no place facts", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ personId: "person-1" }])
+				.mockResolvedValueOnce([]);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toBeNull();
+		});
+
+		it("keeps the first birth/death fact when duplicate rows arrive", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ personId: "person-1" }])
+				.mockResolvedValueOnce([
+					{
+						fact: "birth",
+						placeName: "ארץ ישראל",
+						placeText: null,
+						entryUniqueName: "ארץ-ישראל",
+					},
+					{
+						fact: "birth",
+						placeName: "אור כשדים",
+						placeText: null,
+						entryUniqueName: "אור-כשדים",
+					},
+					{
+						fact: "death",
+						placeName: "חברון",
+						placeText: null,
+						entryUniqueName: "חברון",
+					},
+					{
+						fact: "death",
+						placeName: "מצרים",
+						placeText: null,
+						entryUniqueName: "מצרים",
+					},
+				]);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toEqual({
+				birth: { label: "ארץ ישראל", entryUniqueName: "ארץ-ישראל" },
+				activity: [],
+				death: { label: "חברון", entryUniqueName: "חברון" },
+			});
+		});
+
+		it("skips rows that have neither a linked name nor text", async () => {
+			mockQuery
+				.mockResolvedValueOnce([{ personId: "person-1" }])
+				.mockResolvedValueOnce([
+					{
+						fact: "birth",
+						placeName: null,
+						placeText: "   ",
+						entryUniqueName: null,
+					},
+				]);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toBeNull();
+		});
+
+		it("degrades to null while the place-fact schema is not deployed", async () => {
+			const error = Object.assign(new Error("no such table"), {
+				code: "ER_NO_SUCH_TABLE",
+			});
+			mockQuery.mockRejectedValueOnce(error);
+
+			await expect(getPersonPlaceFacts("entity-1")).resolves.toBeNull();
+		});
+
+		it("propagates real query failures", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("connection lost"));
+
+			await expect(getPersonPlaceFacts("entity-1")).rejects.toThrow(
+				"connection lost",
+			);
 		});
 	});
 });

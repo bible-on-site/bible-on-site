@@ -5,6 +5,8 @@ import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { removeEntity } from "~/server/tanahpedia/entries";
+import { updateFamilyPersonNode } from "~/server/tanahpedia/family";
+import { getPlaces, type TanahpediaPlace } from "~/server/tanahpedia/places";
 import {
 	createEntityAndLinkToEntry,
 	getEntryStructuralContext,
@@ -17,6 +19,7 @@ import {
 	updatePersonSex,
 	updateSayingDate,
 } from "~/server/tanahpedia/structural";
+import type { PersonPlaceFactRow } from "~/server/tanahpedia/structural-loader.server";
 import { EntityExternalReferences } from "./EntityExternalReferences";
 import { ExistingEntityPicker } from "./ExistingEntityPicker";
 
@@ -35,6 +38,124 @@ type LinkedPlaceRow = LinkedEntityStructural & {
 	place: NonNullable<LinkedEntityStructural["place"]>;
 };
 
+const PLACE_TEXT_OPTION = "__free_text__";
+
+/** Each fact is either a linked place entity or a free-text alternative. */
+interface PlaceFactDraft {
+	mode: "place" | "text";
+	placeId: string;
+	placeText: string;
+}
+
+interface ActivityFactDraft extends PlaceFactDraft {
+	key: string;
+	/** Existing row id; new drafts have none and insert a fresh row. */
+	id?: string;
+}
+
+function factToDraft(fact: PersonPlaceFactRow): PlaceFactDraft;
+function factToDraft(
+	fact: PersonPlaceFactRow | null | undefined,
+): PlaceFactDraft | null;
+function factToDraft(
+	fact: PersonPlaceFactRow | null | undefined,
+): PlaceFactDraft | null {
+	if (!fact) return null;
+	if (fact.placeId)
+		return { mode: "place", placeId: fact.placeId, placeText: "" };
+	return { mode: "text", placeId: "", placeText: fact.placeText ?? "" };
+}
+
+function activityToDraft(
+	fact: PersonPlaceFactRow,
+	index: number,
+): ActivityFactDraft {
+	return {
+		key: fact.id || `new-${index}`,
+		id: fact.id || undefined,
+		...factToDraft(fact),
+	};
+}
+
+/**
+ * One place-fact picker: a select of place entities plus a free-text
+ * alternative, mirroring the place_id/place_text exclusive pair.
+ * `draft === null` means "no fact" (allowed only when `allowNone`).
+ */
+function PlaceFactRow({
+	id,
+	places,
+	allowNone,
+	draft,
+	onChange,
+	fallbackName,
+}: {
+	id: string;
+	places: TanahpediaPlace[];
+	allowNone: boolean;
+	draft: PlaceFactDraft | null;
+	onChange: (draft: PlaceFactDraft | null) => void;
+	fallbackName?: string | null;
+}) {
+	const selectValue = !draft
+		? ""
+		: draft.mode === "text"
+			? PLACE_TEXT_OPTION
+			: draft.placeId;
+	return (
+		<div className="flex flex-1 gap-2">
+			<select
+				id={id}
+				value={selectValue}
+				onChange={(e) => {
+					const value = e.target.value;
+					if (value === "") onChange(null);
+					else if (value === PLACE_TEXT_OPTION)
+						onChange({
+							mode: "text",
+							placeId: "",
+							placeText: draft?.placeText ?? "",
+						});
+					else onChange({ mode: "place", placeId: value, placeText: "" });
+				}}
+				className="border border-gray-300 rounded-md px-2 py-2 text-sm"
+			>
+				{allowNone && <option value="">-</option>}
+				{draft?.mode === "place" &&
+					draft.placeId &&
+					!places.some((p) => p.id === draft.placeId) && (
+						<option value={draft.placeId}>
+							{fallbackName ?? draft.placeId}
+						</option>
+					)}
+				{places.map((p) => (
+					<option key={p.id} value={p.id}>
+						{p.name}
+					</option>
+				))}
+				<option value={PLACE_TEXT_OPTION}>טקסט חופשי…</option>
+			</select>
+			{draft?.mode === "text" && (
+				<input
+					value={draft.placeText}
+					onChange={(e) => onChange({ ...draft, placeText: e.target.value })}
+					placeholder="שם המקום"
+					className="flex-1 border border-gray-300 rounded-md px-2 py-2 text-sm"
+				/>
+			)}
+		</div>
+	);
+}
+
+function assertPlaceDraft(draft: PlaceFactDraft | null): void {
+	/* v8 ignore next 2 -- a "place" draft only ever comes from a non-empty
+	   select option or a stored placeId, so the id is always set */
+	if (draft?.mode === "place" && !draft.placeId)
+		throw new Error("בחר מקום מקושר או עבור לטקסט חופשי");
+	if (draft?.mode === "text" && !draft.placeText.trim())
+		throw new Error("הזן טקסט חופשי או בחר מקום מקושר");
+}
+
 function PersonCard({
 	row,
 	onSaved,
@@ -48,12 +169,35 @@ function PersonCard({
 	const [displayName, setDisplayName] = useState(row.displayName);
 	const [mainName, setMainName] = useState(p.mainName ?? "");
 	const [sex, setSex] = useState<PersonSex | "">(p.sex ?? "");
+	const [birthPlace, setBirthPlace] = useState<PlaceFactDraft | null>(() =>
+		factToDraft(p.birthPlace),
+	);
+	const [deathPlace, setDeathPlace] = useState<PlaceFactDraft | null>(() =>
+		factToDraft(p.deathPlace),
+	);
+	const [activityPlaces, setActivityPlaces] = useState<ActivityFactDraft[]>(
+		() => p.activityPlaces.map(activityToDraft),
+	);
 
 	useEffect(() => {
 		setDisplayName(row.displayName);
 		setMainName(p.mainName ?? "");
 		setSex(p.sex ?? "");
 	}, [row.displayName, p.mainName, p.sex]);
+	useEffect(() => {
+		setBirthPlace(factToDraft(p.birthPlace));
+	}, [p.birthPlace]);
+	useEffect(() => {
+		setDeathPlace(factToDraft(p.deathPlace));
+	}, [p.deathPlace]);
+	useEffect(() => {
+		setActivityPlaces(p.activityPlaces.map(activityToDraft));
+	}, [p.activityPlaces]);
+
+	const { data: places = [] } = useQuery({
+		queryKey: ["tanahpedia-places"],
+		queryFn: () => getPlaces(),
+	});
 
 	const mutEntity = useMutation({
 		mutationFn: () =>
@@ -87,6 +231,70 @@ function PersonCard({
 		onSuccess: onSaved,
 	});
 
+	const mutPlaces = useMutation({
+		mutationFn: () => {
+			assertPlaceDraft(birthPlace);
+			assertPlaceDraft(deathPlace);
+			for (const draft of activityPlaces) assertPlaceDraft(draft);
+			// CAS tokens: the facts the editor loaded, so a concurrent
+			// contribution merge is detected rather than overwritten.
+			const keptIds = new Set(
+				activityPlaces.map((draft) => draft.id).filter(Boolean),
+			);
+			return updateFamilyPersonNode({
+				data: {
+					entityId: row.entityId,
+					birthPlaceId:
+						birthPlace?.mode === "place" ? birthPlace.placeId : null,
+					birthPlaceText:
+						birthPlace?.mode === "text" ? birthPlace.placeText.trim() : null,
+					birthPlaceOriginal: p.birthPlace
+						? {
+								id: p.birthPlace.id,
+								placeId: p.birthPlace.placeId,
+								placeText: p.birthPlace.placeText,
+							}
+						: null,
+					deathPlaceId:
+						deathPlace?.mode === "place" ? deathPlace.placeId : null,
+					deathPlaceText:
+						deathPlace?.mode === "text" ? deathPlace.placeText.trim() : null,
+					deathPlaceOriginal: p.deathPlace
+						? {
+								id: p.deathPlace.id,
+								placeId: p.deathPlace.placeId,
+								placeText: p.deathPlace.placeText,
+							}
+						: null,
+					activityPlaces: activityPlaces.map((draft) => {
+						const loaded = draft.id
+							? p.activityPlaces.find((fact) => fact.id === draft.id)
+							: undefined;
+						return {
+							id: draft.id ?? null,
+							placeId: draft.mode === "place" ? draft.placeId : null,
+							placeText: draft.mode === "text" ? draft.placeText.trim() : null,
+							...(loaded
+								? {
+										originalPlaceId: loaded.placeId,
+										originalPlaceText: loaded.placeText,
+									}
+								: {}),
+						};
+					}),
+					removedActivityPlaces: p.activityPlaces
+						.filter((fact) => fact.id !== "" && !keptIds.has(fact.id))
+						.map((fact) => ({
+							id: fact.id,
+							originalPlaceId: fact.placeId,
+							originalPlaceText: fact.placeText,
+						})),
+				},
+			});
+		},
+		onSuccess: onSaved,
+	});
+
 	const mutRemove = useMutation({
 		mutationFn: () => removeEntity({ data: row.linkId }),
 		onSuccess: onSaved,
@@ -96,6 +304,7 @@ function PersonCard({
 		mutEntity.isPending ||
 		mutMain.isPending ||
 		mutSex.isPending ||
+		mutPlaces.isPending ||
 		mutRemove.isPending;
 
 	return (
@@ -192,6 +401,110 @@ function PersonCard({
 				>
 					שמור מין
 				</button>
+			</div>
+			<div className="space-y-2">
+				<span className="block text-sm font-medium text-gray-700">
+					מקומות (מקום מקושר או טקסט חופשי)
+				</span>
+				<div>
+					<label
+						htmlFor={`bp-${row.entityId}`}
+						className="block text-xs text-gray-600 mb-1"
+					>
+						מקום לידה
+					</label>
+					<PlaceFactRow
+						id={`bp-${row.entityId}`}
+						places={places}
+						allowNone
+						draft={birthPlace}
+						onChange={setBirthPlace}
+						fallbackName={p.birthPlace?.placeName}
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor={`dp-${row.entityId}`}
+						className="block text-xs text-gray-600 mb-1"
+					>
+						מקום פטירה
+					</label>
+					<PlaceFactRow
+						id={`dp-${row.entityId}`}
+						places={places}
+						allowNone
+						draft={deathPlace}
+						onChange={setDeathPlace}
+						fallbackName={p.deathPlace?.placeName}
+					/>
+				</div>
+				<div>
+					<div className="flex justify-between items-center">
+						<span className="text-xs text-gray-600">מקומות פעילות</span>
+						<button
+							type="button"
+							onClick={() =>
+								setActivityPlaces((prev) => [
+									...prev,
+									{
+										key: `new-${Date.now()}`,
+										mode: "text",
+										placeId: "",
+										placeText: "",
+									},
+								])
+							}
+							className="text-sm text-blue-600 hover:text-blue-800"
+						>
+							+ מקום
+						</button>
+					</div>
+					{activityPlaces.map((draft, index) => (
+						<div key={draft.key} className="flex gap-2 items-center mt-2">
+							<PlaceFactRow
+								id={`ap-${row.entityId}-${index}`}
+								places={places}
+								allowNone={false}
+								draft={draft}
+								onChange={(next) =>
+									setActivityPlaces((prev) => {
+										/* v8 ignore if -- allowNone is false here, so PlaceFactRow
+										   never emits null; the מחק button is the remove path */
+										if (next === null)
+											return prev.filter((_, i) => i !== index);
+										return prev.map((d, i) =>
+											i === index ? { ...d, ...next } : d,
+										);
+									})
+								}
+							/>
+							<button
+								type="button"
+								onClick={() =>
+									setActivityPlaces((prev) =>
+										prev.filter((_, i) => i !== index),
+									)
+								}
+								className="text-sm text-red-600"
+							>
+								מחק
+							</button>
+						</div>
+					))}
+				</div>
+				<button
+					type="button"
+					disabled={busy}
+					onClick={() => mutPlaces.mutate()}
+					className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+				>
+					שמור מקומות
+				</button>
+				{mutPlaces.error && (
+					<p role="alert" className="text-sm text-red-600">
+						{mutPlaces.error.message}
+					</p>
+				)}
 			</div>
 			<EntityExternalReferences
 				entityId={row.entityId}
