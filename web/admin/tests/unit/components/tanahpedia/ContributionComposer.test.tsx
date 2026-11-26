@@ -746,12 +746,15 @@ describe("contribution composer", () => {
 			),
 		);
 	});
-	it("builds a new family operation with a numeric birth order", async () => {
+	it("builds a maternal relationship with a numeric birth order", async () => {
 		const { submit } = setup("pr");
 		description();
 		fireEvent.change(screen.getByLabelText("הורה"), { target: { value: ID } });
 		fireEvent.change(screen.getByLabelText("ילד"), {
 			target: { value: OTHER },
+		});
+		fireEvent.change(screen.getByLabelText("תפקיד ההורה"), {
+			target: { value: "MOTHER" },
 		});
 		fireEvent.change(screen.getByLabelText("סדר לידה"), {
 			target: { value: "2" },
@@ -767,6 +770,7 @@ describe("contribution composer", () => {
 								birthOrder: 2,
 								parentId: ID,
 								childId: OTHER,
+								parentRole: "MOTHER",
 							}),
 						}),
 					],

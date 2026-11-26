@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
-import type { PlaceProfileBase } from "~/lib/tanahpedia/contribution-place-profile";
+import {
+	type PlaceProfileBase,
+	validatePlaceProfile,
+} from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -106,8 +109,7 @@ export async function readChangeState(
 	if (kind === "article_links")
 		return (await readArticleLinkState(conn, targetId)) as unknown as State;
 	if (kind === "place_profile") {
-		const input = validateChange({ kind, targetId, after: context });
-		if (input.kind !== kind) throw new Error("Invalid place profile");
+		const input = validatePlaceProfile({ targetId, after: context });
 		return (await readPlaceProfileBase(
 			conn,
 			targetId,

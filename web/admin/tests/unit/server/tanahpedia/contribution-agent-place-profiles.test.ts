@@ -6,6 +6,7 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { parseContributionAgentResult } from "~/server/tanahpedia/contribution-agent-output.server";
 import {
+	agentPlaceProfileVariants,
 	assertAgentPlaceEvidence,
 	assertAgentPlaceReferences,
 	materializeAgentPlaceChanges,
@@ -251,6 +252,133 @@ it("limits agent place operations to the explicit scope and one place per PR", (
 	).toThrow(/one place per PR/);
 });
 
+it("limits a revision to the saved target and retains reviewed spans without new reads", () => {
+	const noReads = {
+		...catalogue,
+		places: [],
+		scriptureOccurrencePages: undefined,
+	};
+	const saved = placePr().changes[0];
+	const current = { ...saved, after: { ...change.after, entry: null } };
+	expect(agentPlaceProfileVariants(noReads, undefined, [current])).toEqual([
+		expect.objectContaining({
+			properties: expect.objectContaining({
+				targetId: { enum: [id] },
+				after: expect.objectContaining({
+					properties: expect.objectContaining({
+						entry: { type: "null" },
+						occurrences: expect.objectContaining({ type: "array" }),
+					}),
+				}),
+			}),
+		}),
+	]);
+	const creation = agentPlaceProfileVariants(noReads, issue.scope, []);
+	expect(creation).toHaveLength(1);
+	expect(creation?.[0].properties).not.toHaveProperty("targetId");
+	expect(agentPlaceProfileVariants(noReads, undefined, [saved])).toEqual([
+		expect.objectContaining({
+			properties: expect.objectContaining({
+				targetId: { enum: [id] },
+				after: expect.objectContaining({
+					properties: expect.objectContaining({
+						entry: expect.objectContaining({ type: "object" }),
+					}),
+				}),
+			}),
+		}),
+	]);
+
+	const [profile] = validateChanges([
+		{ ...change, targetId: id, after: current.after },
+	]);
+	if (profile.kind !== "place_profile")
+		throw new Error("Expected place profile");
+	expect(() =>
+		assertAgentPlaceReferences(profile, noReads, [current]),
+	).not.toThrow();
+	expect(() => assertAgentPlaceReferences(profile, noReads, [])).toThrow(
+		/place it did not read/,
+	);
+	expect(() =>
+		assertAgentPlaceReferences(
+			{ ...profile, after: { ...profile.after, occurrences: [second] } },
+			noReads,
+			[current],
+		),
+	).toThrow(/occurrence it did not read/);
+	const replacement = choose([{ from: 0, to: 0 }])[0];
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...replacement, targetId: id }],
+			placePr(),
+			noReads,
+		),
+	).toThrow(/previously read/);
+});
+
+it("advertises append only when revising the same place PR with read pages available", () => {
+	const appendPath =
+		"properties.after.properties.occurrences.anyOf.1.properties.includeExisting";
+	const revision = agentPlaceProfileVariants(
+		catalogue,
+		undefined,
+		placePr().changes,
+	);
+	expect(revision).toHaveLength(1);
+	expect(revision?.[0]).toHaveProperty(appendPath, { type: "boolean" });
+	const creations = agentPlaceProfileVariants(catalogue, issue.scope, []);
+	expect(creations).toHaveLength(2);
+	for (const schema of creations ?? [])
+		expect(schema).not.toHaveProperty(appendPath);
+});
+
+it("rejects a draft that both edits an existing place and creates a new one", () => {
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...change, targetId: id }],
+			issue,
+			catalogue,
+		),
+	).toThrow(/existing place profile cannot create an entry/);
+});
+
+it("rejects a single bare change object from an issue instead of converting it into a PR", () => {
+	expect(() =>
+		parseContributionAgentResult(
+			JSON.stringify({
+				outcome: "implemented",
+				summary: "מצרים",
+				responses: [],
+				pullRequests: [proposal(change)],
+			}),
+			issue,
+			catalogue,
+		),
+	).toThrow(/requires 1-40 typed changes/);
+});
+
+it("rejects a non-boolean append flag rather than treating it as permission to retain spans", () => {
+	const selection = {
+		spellings,
+		selected: [{ from: 0, to: 0 }],
+		includeExisting: "false",
+	};
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[
+				{
+					...change,
+					targetId: id,
+					after: { ...change.after, occurrences: selection },
+				},
+			],
+			placePr(),
+			catalogue,
+		),
+	).toThrow(/includeExisting must be a boolean/);
+});
+
 it("expands only explicitly selected ordinals from replayed pages", () => {
 	const response = parseContributionAgentResult(
 		JSON.stringify({
@@ -323,6 +451,32 @@ it("rejects missing pages, mismatched searches, duplicate selections and inconsi
 			scriptureOccurrencePages: [
 				pages[0],
 				{ ...pages[0], items: [second, first] },
+			],
+		}),
+	).toThrow(/same candidate/);
+});
+
+it("accepts repeat reads of the same ordinal and rejects changed text at that coordinate", () => {
+	const selection = choose([{ from: 0, to: 1 }]);
+	const repeated = {
+		...pages[0],
+		cursor: 1,
+		items: [{ ...second }],
+	};
+	expect(
+		materializeAgentPlaceChanges(selection, issue, {
+			...catalogue,
+			scriptureOccurrencePages: [pages[0], repeated],
+		}),
+	).toEqual([
+		{ ...change, after: { ...change.after, occurrences: [first, second] } },
+	]);
+	expect(() =>
+		materializeAgentPlaceChanges(selection, issue, {
+			...catalogue,
+			scriptureOccurrencePages: [
+				pages[0],
+				{ ...repeated, items: [{ ...second, text: "מִצְרָיְמָה" }] },
 			],
 		}),
 	).toThrow(/same candidate/);
@@ -413,6 +567,30 @@ it("rejects duplicate place drafts before persistence", async () => {
 			{ issue, provider: "local_llm", modelCatalogue: catalogue },
 			{
 				content: JSON.stringify({ pullRequests: [draft, draft] }),
+				model: "local-test",
+			},
+		),
+	).rejects.toThrow(/at most one PR for each place/);
+});
+
+it("rejects two proposals for the same existing place even when their titles and spans differ", async () => {
+	const existingPlace = (word: typeof first) =>
+		proposal([
+			{
+				...change,
+				targetId: id,
+				after: { entry: null, occurrences: [word], identification: null },
+			},
+		]);
+	const drafts = [
+		existingPlace(first),
+		{ ...existingPlace(second), title: "עוד אזכור במצרים" },
+	];
+	await expect(
+		createGeneratedContributionPrs(
+			{ issue, provider: "local_llm", modelCatalogue: catalogue },
+			{
+				content: JSON.stringify({ pullRequests: drafts }),
 				model: "local-test",
 			},
 		),
