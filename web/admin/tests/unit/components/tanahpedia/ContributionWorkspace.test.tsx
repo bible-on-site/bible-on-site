@@ -18,6 +18,7 @@ import { contributionSnapshot } from "~/lib/tanahpedia/contributions";
 
 const mocks = vi.hoisted(() => ({
 	search: {} as Record<string, unknown>,
+	hash: "",
 	navigate: vi.fn(),
 	list: vi.fn(),
 	session: vi.fn(),
@@ -38,6 +39,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-router", () => ({
 	useNavigate: () => mocks.navigate,
 	useSearch: () => mocks.search,
+	useLocation: (options: { select: (location: { hash: string }) => string }) =>
+		options.select({ hash: mocks.hash }),
 	Link: ({
 		to,
 		search,
@@ -262,6 +265,7 @@ describe("issues and PR administration", () => {
 	);
 	beforeEach(() => {
 		mocks.search = {};
+		mocks.hash = "";
 		unrelated = undefined;
 		for (const mock of [
 			mocks.navigate,
@@ -1211,6 +1215,23 @@ describe("issues and PR administration", () => {
 			q: "שינוי",
 			state: "all",
 		});
+	});
+	it("looks up a cold contribution-event fragment after the discussion mounts", async () => {
+		mocks.search = { id: PRID, issueId: ID };
+		mocks.hash = "contribution-event-event";
+		const findElement = vi.spyOn(document, "getElementById");
+		try {
+			show("pr");
+			await screen.findByRole("tabpanel", { name: /תיאור ודיון/ });
+			expect(findElement).toHaveBeenCalledWith(mocks.hash);
+			expect(
+				findElement.mock.results.find(
+					(_, index) => findElement.mock.calls[index][0] === mocks.hash,
+				)?.value,
+			).toBeInstanceOf(HTMLElement);
+		} finally {
+			findElement.mockRestore();
+		}
 	});
 	it("submits comments and explicit assignment changes", async () => {
 		mocks.search = { id: ID };

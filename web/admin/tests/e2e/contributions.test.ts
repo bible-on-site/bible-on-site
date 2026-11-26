@@ -513,6 +513,16 @@ test.describe("Issues and typed pull requests", () => {
 			await expect(page.locator(`[id="${eventId}"]`)).toContainText(
 				"שינה שיוך",
 			);
+			const coldDiscussion = await page.context().newPage();
+			try {
+				await coldDiscussion.setViewportSize({ width: 390, height: 620 });
+				await coldDiscussion.goto(page.url());
+				await expect(
+					coldDiscussion.locator(`[id="${eventId}"]`),
+				).toBeInViewport();
+			} finally {
+				await coldDiscussion.close();
+			}
 			await page
 				.getByLabel("הוספת תגובה", { exact: true })
 				.fill("יש להסביר שההצעה עוסקת במטא-נתונים בלבד");

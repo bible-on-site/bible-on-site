@@ -4,9 +4,14 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import {
+	Link,
+	useLocation,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
 	CONTRIBUTION_API_VERSION,
@@ -494,6 +499,12 @@ function Detail({
 	const [reviewNote, setReviewNote] = useState("");
 	const tab =
 		item.kind === "pr" && view === "changes" ? "changes" : "description";
+	const hash = useLocation({ select: (location) => location.hash });
+	useEffect(() => {
+		// A directly opened link can render before the proposal query finishes.
+		if (tab === "description" && hash.startsWith("contribution-event-"))
+			document.getElementById(hash)?.scrollIntoView?.();
+	}, [hash, tab]);
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
 	const articlePr = item.changes.some(
