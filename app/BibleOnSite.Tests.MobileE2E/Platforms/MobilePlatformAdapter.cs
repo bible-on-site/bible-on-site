@@ -463,7 +463,9 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
     /// <summary>
     /// The tree once it has stayed unchanged for <see cref="BackQuietWindow"/>,
-    /// bounded so a perpetually churning page still gets its press. A quiet
+    /// bounded by the shell's own 2s consume bound (NavigationSettleWatch):
+    /// past it no transition owns Back, so a perpetually churning page gets
+    /// its press without waiting longer than the guard could. A quiet
     /// tree is the only state a Back press can be attributed to: pressing
     /// into an animating transition leaves no way to tell its pop from the
     /// transition's own rewrite. Two equal samples are not enough — a push
@@ -472,7 +474,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     /// </summary>
     private static string SettledTree(AppiumDriver driver)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(3);
+        var deadline = DateTime.UtcNow.AddSeconds(2);
         var last = driver.PageSource;
         var quietSince = DateTime.UtcNow;
         while (DateTime.UtcNow < deadline && DateTime.UtcNow - quietSince < BackQuietWindow)
