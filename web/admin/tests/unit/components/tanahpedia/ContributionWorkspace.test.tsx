@@ -184,7 +184,7 @@ function articleChange(): Contribution["changes"][number] {
 	};
 }
 let issue: Contribution, pr: Contribution, client: QueryClient;
-let unrelated: Contribution | undefined;
+let extraRows: Contribution[];
 function completedJob(
 	overrides: Partial<ContributionGeneration>,
 ): ContributionGeneration {
@@ -266,7 +266,7 @@ describe("issues and PR administration", () => {
 	beforeEach(() => {
 		mocks.search = {};
 		mocks.hash = "";
-		unrelated = undefined;
+		extraRows = [];
 		for (const mock of [
 			mocks.navigate,
 			mocks.list,
@@ -304,7 +304,7 @@ describe("issues and PR administration", () => {
 			],
 		});
 		mocks.list.mockImplementation(async ({ data }) => {
-			const all = unrelated ? [issue, pr, unrelated] : [issue, pr];
+			const all = [issue, pr, ...extraRows];
 			const parentId = all.find((row) => row.id === data.relatedTo)?.issueId;
 			const base = all.filter(
 				(row) =>
@@ -1047,34 +1047,29 @@ describe("issues and PR administration", () => {
 	});
 	it("renders description, evidence, timeline and linked PRs", async () => {
 		mocks.search = { id: ID };
-		mocks.list.mockResolvedValue({
-			items: [
-				pr,
-				item({
-					...pr,
-					id: "00000000-0000-4000-8000-000000000003",
-					number: 3,
-					title: "הצעה שמוזגה",
-					state: "merged",
-				}),
-				item({
-					...pr,
-					id: "00000000-0000-4000-8000-000000000004",
-					number: 4,
-					title: "הצעה שנסגרה",
-					state: "closed",
-				}),
-				item({
-					...pr,
-					id: "00000000-0000-4000-8000-000000000005",
-					number: 5,
-					title: "הצעה שדורשת תיקון",
-					apiVersion: CONTRIBUTION_API_VERSION + 1,
-				}),
-			],
-			counts: { issues: 0, prs: 4, open: 2, closed: 2, all: 4 },
-			nextCursor: null,
-		});
+		extraRows.push(
+			item({
+				...pr,
+				id: "00000000-0000-4000-8000-000000000003",
+				number: 3,
+				title: "הצעה שמוזגה",
+				state: "merged",
+			}),
+			item({
+				...pr,
+				id: "00000000-0000-4000-8000-000000000004",
+				number: 4,
+				title: "הצעה שנסגרה",
+				state: "closed",
+			}),
+			item({
+				...pr,
+				id: "00000000-0000-4000-8000-000000000005",
+				number: 5,
+				title: "הצעה שדורשת תיקון",
+				apiVersion: CONTRIBUTION_API_VERSION + 1,
+			}),
+		);
 		issue.events.push({
 			id: "comment",
 			kind: "comment",
@@ -1104,13 +1099,14 @@ describe("issues and PR administration", () => {
 		expect(linked.getByText("couldn't migrate to latest API")).toBeVisible();
 	});
 	it("opens an issue's filtered PR queue and carries the filters back from Changes", async () => {
-		unrelated = item({
+		const unrelated = item({
 			...pr,
 			id: "00000000-0000-4000-8000-000000000003",
 			number: 3,
 			title: `${pr.title} ללא פנייה מקושרת`,
 			issueId: null,
 		});
+		extraRows.push(unrelated);
 		const filters = {
 			issueId: ID,
 			state: "all",
