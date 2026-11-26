@@ -115,6 +115,12 @@ function ArticleEditPage() {
 	/* Once an article exists, later saves update it — even ones queued while
 	   the create was still in flight. */
 	const savedIdRef = useRef<number | null>(null);
+	/* Every user edit bumps editVersionRef; a save records the version it
+	   carried. Unsaved edits exist while the two differ — a query refetch
+	   must not reset form state over them, and a save that lands behind
+	   newer edits must not mark the form clean. */
+	const editVersionRef = useRef(0);
+	const savedVersionRef = useRef(0);
 
 	useEffect(() => {
 		latestRef.current = { formData, hasChanges };
@@ -173,9 +179,10 @@ function ArticleEditPage() {
 		(author) => author.id === formData.author_id,
 	);
 
-	// Initialize form with article data
+	// Initialize form with article data. A refetch (e.g. the invalidation a
+	// save fires) must not clobber edits that arrived after that save.
 	useEffect(() => {
-		if (article) {
+		if (article && editVersionRef.current === savedVersionRef.current) {
 			contentRef.current = article.content ?? "";
 			setFormData({
 				perek_id: article.perek_id,
@@ -215,7 +222,6 @@ function ArticleEditPage() {
 				queryKey: ["articles", "perek", savedArticle.perek_id],
 			});
 			setLastSaved(new Date());
-			setHasChanges(false);
 
 			/* A save fired while unmounting (leaving the page inside the
 			   debounce window) must not hijack the user's navigation. */
@@ -245,6 +251,7 @@ function ArticleEditPage() {
 
 	const handleFieldChange = useCallback(
 		<K extends keyof ArticleFormData>(field: K, value: ArticleFormData[K]) => {
+			editVersionRef.current += 1;
 			setFormData((prev) => ({ ...prev, [field]: value }));
 			setHasChanges(true);
 		},
@@ -252,6 +259,7 @@ function ArticleEditPage() {
 	);
 
 	const handleContentChange = useCallback((content: string) => {
+		editVersionRef.current += 1;
 		contentRef.current = content;
 		setFormData((prev) => ({ ...prev, content }));
 		setHasChanges(true);
@@ -260,10 +268,19 @@ function ArticleEditPage() {
 	/* FIFO queue on the tail promise: saves run strictly one at a time, so
 	   several queued writes can't overtake or interleave. */
 	const saveLatest = (data: ArticleFormData) => {
+		const version = editVersionRef.current;
 		const tail = inFlightSaveRef.current ?? Promise.resolve();
 		inFlightSaveRef.current = tail.then(() =>
 			saveMutation.mutateAsync(data).then(
-				() => true,
+				() => {
+					savedVersionRef.current = version;
+					// Only the newest edit's save clears the dirty flag — edits
+					// typed while it was in flight still need their own save.
+					if (editVersionRef.current === version) {
+						setHasChanges(false);
+					}
+					return true;
+				},
 				() => false,
 			),
 		);
