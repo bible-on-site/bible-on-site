@@ -177,6 +177,26 @@ describe("tanahpedia entry server functions", () => {
 			expect(String(sql)).not.toContain("tanahpedia_person");
 			expect(params).toEqual(["PERSON"]);
 		});
+
+		it("reads an empty listing while the role table is undeployed", async () => {
+			mocks.query.mockRejectedValue({ code: "ER_NO_SUCH_TABLE" });
+
+			await expect(
+				listTanahpediaEntriesForAdmin({
+					data: { category: "TANAH_COMMENTATOR" },
+				}),
+			).resolves.toEqual([]);
+		});
+
+		it("propagates a real database error from the role listing", async () => {
+			mocks.query.mockRejectedValue(new Error("connection lost"));
+
+			await expect(
+				listTanahpediaEntriesForAdmin({
+					data: { category: "PROPHET" },
+				}),
+			).rejects.toThrow("connection lost");
+		});
 	});
 
 	describe("getTanahpediaCategoryCounts", () => {
@@ -211,6 +231,33 @@ describe("tanahpedia entry server functions", () => {
 			expect(result.counts.CHAYA).toBe(0);
 			expect(result.labels).toMatchObject({ PERSON: "אישים" });
 			expect(mocks.query).toHaveBeenCalledTimes(3);
+		});
+
+		it("degrades role counts to zero while the role tables are undeployed", async () => {
+			mocks.query.mockImplementation((sql: string) => {
+				if (String(sql).includes("person_role_prophet")) {
+					return Promise.reject({ code: "ER_NO_SUCH_TABLE" });
+				}
+				return Promise.resolve([]);
+			});
+
+			const result = await getTanahpediaCategoryCounts();
+
+			expect(result.counts.PROPHET).toBe(0);
+			expect(result.counts.TANAH_COMMENTATOR).toBe(0);
+		});
+
+		it("propagates a real database error from the role counts", async () => {
+			mocks.query.mockImplementation((sql: string) => {
+				if (String(sql).includes("person_role_prophet")) {
+					return Promise.reject(new Error("connection lost"));
+				}
+				return Promise.resolve([]);
+			});
+
+			await expect(getTanahpediaCategoryCounts()).rejects.toThrow(
+				"connection lost",
+			);
 		});
 	});
 

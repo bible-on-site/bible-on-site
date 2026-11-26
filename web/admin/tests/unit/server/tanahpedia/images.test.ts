@@ -315,6 +315,115 @@ describe("tanahpedia images api (#3769)", () => {
 		).rejects.toThrow("VALIDATION");
 	});
 
+	it("stores null license fields when the asset is public domain", async () => {
+		queryMock.mockResolvedValue([]);
+		queryOneMock.mockResolvedValueOnce({ ...ASSET_ROW, isPublicDomain: 1 });
+
+		await putImageAsset({
+			data: {
+				url: "u",
+				altText: "a",
+				isPublicDomain: true,
+				licenseName: "CC BY-SA 4.0",
+				licenseUrl: "https://x",
+			},
+		});
+
+		const [, params] = executeMock.mock.calls[0];
+		// license_name, license_url positions in the INSERT column order
+		expect(params[10]).toBeNull();
+		expect(params[11]).toBeNull();
+		expect(params[12]).toBe(1);
+	});
+
+	it("fails when the written asset cannot be read back", async () => {
+		queryMock.mockResolvedValue([]);
+		queryOneMock.mockResolvedValueOnce(null);
+
+		await expect(
+			putImageAsset({ data: { url: "u", altText: "a" } }),
+		).rejects.toThrow("Image asset disappeared after write");
+	});
+
+	it("rejects attaching an image asset that does not exist", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "entry-1" }) // owner exists
+			.mockResolvedValueOnce(null); // image missing
+
+		await expect(
+			putImageLink({
+				data: { ownerKind: "ENTRY", ownerId: "entry-1", imageId: "ghost" },
+			}),
+		).rejects.toThrow("התמונה לא נמצאה");
+	});
+
+	it("rejects a link write whose owner row is missing", async () => {
+		queryOneMock.mockResolvedValueOnce(null); // assertOwnerExists finds nothing
+
+		await expect(
+			putImageLink({
+				data: { ownerKind: "ENTITY", ownerId: "ghost", imageId: "img" },
+			}),
+		).rejects.toThrow("הישות לא נמצאה");
+	});
+
+	it("falls back to sort order 0 when the owner has no links", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "en-1" }) // owner
+			.mockResolvedValueOnce({ id: "img-1" }) // image
+			.mockResolvedValueOnce(null); // MAX(sort_order) + 1 → null → 0
+		queryMock.mockResolvedValueOnce([
+			{ ...LINK_ROW, id: "fixed-uuid", ownerId: "en-1", sortOrder: 0 },
+		]);
+
+		await putImageLink({
+			data: { ownerKind: "ENTITY", ownerId: "en-1", imageId: "img-1" },
+		});
+
+		const [insertSql, insertParams] = executeMock.mock.calls[0];
+		expect(insertSql).toContain("INSERT INTO tanahpedia_entity_image");
+		expect(insertParams[3]).toBe(0);
+	});
+
+	it("fails when the written link cannot be read back", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "entry-1" });
+		queryMock.mockResolvedValueOnce([]); // linkRows → nothing matches
+
+		await expect(
+			putImageLink({
+				data: {
+					id: "link-1",
+					ownerKind: "ENTRY",
+					ownerId: "entry-1",
+					sortOrder: 1,
+				},
+			}),
+		).rejects.toThrow("Image link disappeared after write");
+	});
+
+	it("skips revalidation when a link remove clears nothing", async () => {
+		queryOneMock.mockResolvedValueOnce({ ownerId: "en-1" });
+		executeMock.mockResolvedValueOnce({ affectedRows: 0 });
+		await expect(
+			removeImageLink({ data: { ownerKind: "ENTITY", id: "ghost" } }),
+		).resolves.toEqual({ removed: false });
+
+		queryOneMock.mockResolvedValueOnce(null); // owner row not resolvable
+		executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+		await expect(
+			removeImageLink({ data: { ownerKind: "ENTITY", id: "link-9" } }),
+		).resolves.toEqual({ removed: true });
+	});
+
+	it("reports cleared:false when no primary was set", async () => {
+		executeMock.mockResolvedValueOnce({ affectedRows: 0 });
+		await expect(
+			clearPrimaryImage({
+				data: { ownerKind: "ENTRY", ownerId: "entry-1" },
+			}),
+		).resolves.toEqual({ cleared: false });
+	});
+
 	it("removes a link and clears primaries, reporting row counts", async () => {
 		queryOneMock.mockResolvedValueOnce({ ownerId: "entry-1" });
 		await expect(

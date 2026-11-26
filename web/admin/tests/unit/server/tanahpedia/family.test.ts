@@ -165,6 +165,27 @@ describe("tanahpedia family api", () => {
 		);
 	});
 
+	it("writes the commentator role on create when isCommentator is set", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "name-type-main" })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null);
+		executeMock.mockResolvedValue(undefined);
+
+		await createFamilyPersonNode({
+			data: { displayName: "Rashi", isCommentator: true },
+		});
+
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_role_commentator"),
+			expect.any(Array),
+		);
+	});
+
 	it("rejects a whitespace-only deathCause on create", async () => {
 		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
 
@@ -1201,6 +1222,34 @@ describe("tanahpedia family api", () => {
 			);
 			expect(executeMock.mock.calls[5]?.[0]).toContain(
 				"tanahpedia_person_role_king",
+			);
+		});
+
+		it("writes the commentator role when isCommentator is set", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", isCommentator: true },
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				expect.stringContaining("tanahpedia_person_role_commentator"),
+				expect.arrayContaining(["person-1"]),
+			);
+		});
+
+		it("clears the commentator role when isCommentator is false", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", isCommentator: false },
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_role_commentator WHERE person_id = ?",
+				["person-1"],
 			);
 		});
 

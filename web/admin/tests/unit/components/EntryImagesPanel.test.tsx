@@ -285,6 +285,87 @@ describe("EntryImagesPanel", () => {
 		);
 	});
 
+	it("renders the credit fallbacks and empty editor fields for sparse assets", async () => {
+		renderPanel({
+			entryLinks: [
+				link({
+					image: asset({ creditLine: null, creator: "יוצר בלבד" }),
+				}),
+				link({
+					id: "link-2",
+					sortOrder: 1,
+					image: asset({
+						imageId: "img-2",
+						altText: "דל קרדיט",
+						creditLine: null,
+						creator: null,
+						caption: null,
+						sourceName: null,
+						sourceUrl: null,
+						licenseName: null,
+						licenseUrl: null,
+						modifications: null,
+						permissionEvidence: null,
+						width: null,
+						height: null,
+					}),
+				}),
+			],
+			entityGroups: [],
+		});
+		expect(await screen.findByText("יוצר בלבד")).toBeTruthy();
+		expect(screen.getByText("ללא קרדיט")).toBeTruthy();
+
+		// Every nullable field starts as an empty string in the editor draft.
+		fireEvent.click(screen.getAllByText("ערוך פרטים")[1]);
+		const urlInput = screen.getByPlaceholderText("https://…") as HTMLInputElement;
+		expect(urlInput.value).toBe("https://cdn.example.com/image.jpg");
+		const numeric = Array.from(
+			document.querySelectorAll<HTMLInputElement>("input"),
+		).filter((input) => input.inputMode === "numeric");
+		for (const input of numeric) expect(input.value).toBe("");
+	});
+
+	it("opens the new-image editor attached to an entity scope", async () => {
+		renderPanel();
+		await screen.findByText("תמונת ישות");
+		fireEvent.click(screen.getAllByText("+ הוסף תמונה")[1]);
+		expect(screen.getByText(/תמונה חדשה/)).toBeTruthy();
+		expect(screen.getByText(/תקשר לישות/)).toBeTruthy();
+	});
+
+	it("reports an upload that finishes without an image URL", async () => {
+		mocks.uploadPediaImageChunk.mockImplementation(() =>
+			Promise.resolve({ complete: true, receivedBytes: 3 }),
+		);
+		const { container } = renderPanel({ entryLinks: [], entityGroups: [] });
+		await screen.findByText("אין תמונות מקושרות.");
+		fireEvent.click(screen.getByText("+ הוסף תמונה"));
+		const fileInput = container.querySelector<HTMLInputElement>(
+			'input[type="file"]',
+		);
+		const file = new File([new Uint8Array([1, 2, 3])], "scan.jpg", {
+			type: "image/jpeg",
+		});
+		fireEvent.change(fileInput as HTMLInputElement, {
+			target: { files: [file] },
+		});
+		expect(await screen.findByText(/שגיאת שרת/)).toBeTruthy();
+	});
+
+	it("shows the saving state while an asset save is in flight", async () => {
+		let resolveSave: ((value: { imageId: string }) => void) | undefined;
+		mocks.putImageAsset.mockImplementation(
+			() => new Promise((resolve) => (resolveSave = resolve)),
+		);
+		renderPanel({ entryLinks: [], entityGroups: [] });
+		await screen.findByText("אין תמונות מקושרות.");
+		fireEvent.click(screen.getByText("+ הוסף תמונה"));
+		fireEvent.click(screen.getByText("שמור תמונה"));
+		expect(await screen.findByText("שומר…")).toBeTruthy();
+		resolveSave?.({ imageId: "img-new" });
+	});
+
 	it("surfaces mutation errors and cancels the editor", async () => {
 		mocks.putImageAsset.mockRejectedValue(new Error("db failed"));
 		renderPanel({ entryLinks: [], entityGroups: [] });
