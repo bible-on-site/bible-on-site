@@ -122,6 +122,7 @@ describe("ImageUpload", () => {
 	});
 
 	it("clears the file input after picking so the same file can be re-picked", () => {
+		const valueSetter = vi.spyOn(HTMLInputElement.prototype, "value", "set");
 		const onUpload = vi.fn(() => new Promise<void>(() => undefined));
 		const { container } = render(<ImageUpload onUpload={onUpload} />);
 
@@ -129,7 +130,7 @@ describe("ImageUpload", () => {
 		fireEvent.change(input, { target: { files: [imageFile()] } });
 
 		expect(onUpload).toHaveBeenCalledTimes(1);
-		expect(input.value).toBe("");
+		expect(valueSetter).toHaveBeenCalledWith("");
 	});
 
 	it("clears the preview and reports upload failures", async () => {
