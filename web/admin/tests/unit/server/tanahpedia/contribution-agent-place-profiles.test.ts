@@ -73,10 +73,14 @@ const change = {
 const choose = (
 	selected: { from: number; to: number }[],
 	variants = spellings,
+	options: { book?: string; includeExisting?: boolean } = {},
 ) => [
 	{
 		...change,
-		after: { ...change.after, occurrences: { spellings: variants, selected } },
+		after: {
+			...change.after,
+			occurrences: { spellings: variants, selected, ...options },
+		},
 	},
 ];
 const proposal = (changes: unknown, evidenceIndexes = [0, 1]) => ({
@@ -84,6 +88,144 @@ const proposal = (changes: unknown, evidenceIndexes = [0, 1]) => ({
 	description: "אזכורי מקום",
 	evidenceIndexes,
 	changes,
+});
+
+const placePr = (occurrences = [first]): Contribution => ({
+	...issue,
+	kind: "pr",
+	scope: undefined,
+	changes: [
+		{
+			kind: "place_profile",
+			targetId: id,
+			before: null,
+			after: {
+				...change.after,
+				occurrences: occurrences.map((word) => ({ ...word })),
+			},
+			labels: {},
+		},
+	],
+});
+
+it("appends read ordinal ranges to the same place PR without copying saved spans or duplicates", () => {
+	const pr = placePr([first, third]);
+	const selection = choose([{ from: 0, to: 1 }], spellings, {
+		includeExisting: true,
+	});
+	const result = parseContributionAgentResult(
+		JSON.stringify({
+			outcome: "revised",
+			summary: "הוספת אזכורים",
+			responses: [],
+			draft: {
+				changes: [{ ...selection[0], targetId: id }],
+			},
+		}),
+		pr,
+		catalogue,
+	);
+	expect(result.draft?.changes).toEqual([
+		{
+			...change,
+			targetId: id,
+			after: { ...change.after, occurrences: [first, third, second] },
+		},
+	]);
+	const noAppend = choose([{ from: 1, to: 1 }], spellings, {
+		includeExisting: false,
+	});
+	expect(
+		materializeAgentPlaceChanges(
+			[{ ...noAppend[0], targetId: id }],
+			pr,
+			catalogue,
+		),
+	).toEqual([
+		{
+			...change,
+			targetId: id,
+			after: { ...change.after, occurrences: [second] },
+		},
+	]);
+});
+
+it("refuses to append to a new proposal or to append unread, conflicting, or over-limit spans", () => {
+	const append = (from: number, to = from) =>
+		choose([{ from, to }], spellings, { includeExisting: true })[0];
+	const pr = placePr();
+	expect(() =>
+		materializeAgentPlaceChanges([append(0)], issue, catalogue),
+	).toThrow(/same place PR/);
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...append(2), targetId: id }],
+			pr,
+			catalogue,
+		),
+	).toThrow(/previously read/);
+	const emptySelection = choose([], spellings, { includeExisting: true })[0];
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...emptySelection, targetId: id }],
+			pr,
+			catalogue,
+		),
+	).toThrow(/ranges that were read/);
+	const stale = placePr([{ ...first, text: "מִצְרַיִם" }]);
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...append(0), targetId: id }],
+			stale,
+			catalogue,
+		),
+	).toThrow(/disagrees with the existing word span/);
+	const proposed = append(1);
+	const rename = {
+		...proposed,
+		targetId: id,
+		after: {
+			...proposed.after,
+			entry: { ...entry, uniqueName: "כנען" },
+		},
+	};
+	expect(() => materializeAgentPlaceChanges([rename], pr, catalogue)).toThrow(
+		/place entry identity/,
+	);
+	const full = placePr(
+		Array.from({ length: 1600 }, (_, i) => ({ ...first, perekId: 500 + i })),
+	);
+	expect(() =>
+		materializeAgentPlaceChanges(
+			[{ ...append(1), targetId: id }],
+			full,
+			catalogue,
+		),
+	).toThrow(/1600/);
+});
+
+it("binds ordinals to the exact book filter and grounds explicit words from the same returned page", () => {
+	const filtered = {
+		...catalogue,
+		scriptureOccurrencePages: [
+			{ ...pages[0], total: 1, items: [second], book: "שמות" },
+		],
+	};
+	const replacement = choose([{ from: 0, to: 0 }], spellings, { book: "שמות" });
+	expect(materializeAgentPlaceChanges(replacement, issue, filtered)).toEqual([
+		{ ...change, after: { ...change.after, occurrences: [second] } },
+	]);
+	expect(() =>
+		materializeAgentPlaceChanges(replacement, issue, catalogue),
+	).toThrow(/previously read/);
+	expect(() =>
+		materializeAgentPlaceChanges(choose([{ from: 0, to: 0 }]), issue, filtered),
+	).toThrow(/previously read/);
+	const input = validateChanges([
+		{ ...change, after: { ...change.after, occurrences: [second] } },
+	])[0];
+	if (input.kind !== "place_profile") throw new Error("Expected place profile");
+	expect(() => assertAgentPlaceReferences(input, filtered, [])).not.toThrow();
 });
 
 it("limits agent place operations to the explicit scope and one place per PR", () => {

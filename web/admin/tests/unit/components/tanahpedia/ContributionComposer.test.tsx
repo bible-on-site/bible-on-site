@@ -143,6 +143,8 @@ describe("contribution composer", () => {
 			description: "תיאור",
 			assignee: { kind: "unassigned" },
 			evidence: [],
+			issueId: OTHER,
+			closeIssue: true,
 			changes: [
 				{
 					kind: "place_profile",
@@ -155,6 +157,9 @@ describe("contribution composer", () => {
 		} as unknown as Contribution;
 		const { submit } = setup("pr", { initial });
 		expect(screen.getByLabelText("סוג שינוי")).toHaveValue("place_profile");
+		expect(
+			screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג"),
+		).toBeChecked();
 		expect(screen.getByLabelText("כותרת הערך")).toHaveValue("מסה ומריבה");
 		expect(screen.getByLabelText("בסיס הזיהוי")).toHaveValue("commentary");
 		expect(screen.getByLabelText("מקור לקואורדינטות")).toHaveValue("מפת מדידה");
@@ -170,6 +175,8 @@ describe("contribution composer", () => {
 		await waitFor(() =>
 			expect(submit).toHaveBeenCalledWith(
 				expect.objectContaining({
+					issueId: OTHER,
+					closeIssue: true,
 					changes: [
 						{
 							kind: "place_profile",
@@ -184,6 +191,33 @@ describe("contribution composer", () => {
 				}),
 			),
 		);
+	});
+
+	it("defaults a place PR from a free-form issue to staying open and keeps an explicit choice", () => {
+		const linkedIssue = {
+			id: OTHER,
+			kind: "issue",
+			evidence: [],
+		} as unknown as Contribution;
+		setup("pr", { linkedIssue });
+		const changeKind = screen.getByLabelText("סוג שינוי");
+		const closeIssue = screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג");
+
+		expect(closeIssue).toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+		expect(closeIssue).not.toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		expect(closeIssue).toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+
+		fireEvent.click(closeIssue);
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+		expect(closeIssue).toBeChecked();
+
+		fireEvent.click(closeIssue);
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		expect(closeIssue).not.toBeChecked();
 	});
 
 	it("starts a linked place PR in place mode without closing its discovery issue", async () => {

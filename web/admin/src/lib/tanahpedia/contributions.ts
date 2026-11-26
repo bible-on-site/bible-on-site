@@ -32,7 +32,10 @@ import {
 	contributionRecordId,
 } from "./contribution-identifiers";
 import {
+	type PlaceProfileBase,
+	type PlaceProfileChange,
 	type PlaceProfileInput,
+	placeProfileHasEffect,
 	validatePlaceProfile,
 } from "./contribution-place-profile";
 import {
@@ -886,6 +889,11 @@ export function contributionHasEffect(change: ReviewedChange): boolean {
 		return articleLinksHaveEffect(
 			validateArticleLinkState(change.before),
 			change.after as unknown as ArticleLinkChange,
+		);
+	if (change.kind === "place_profile")
+		return placeProfileHasEffect(
+			change.before as unknown as PlaceProfileBase | null,
+			change.after as unknown as PlaceProfileChange,
 		);
 	return (
 		!sameState(change.before, change.after) ||

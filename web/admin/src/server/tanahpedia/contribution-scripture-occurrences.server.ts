@@ -184,8 +184,8 @@ export function createScriptureOccurrenceIndex(chapters: readonly Chapter[]) {
 						form
 							.slice(1)
 							.some(
-								(token, i) =>
-									consonants(surface(verse[segment + i + 1])) !== token,
+								(expectedWord, i) =>
+									consonants(surface(verse[segment + i + 1])) !== expectedWord,
 							)
 					)
 						continue;

@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
 	names: vi.fn(),
 	source: vi.fn(),
 	article: vi.fn(),
+	scriptureOccurrences: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({
 	txQueryOne: mocks.one,
@@ -54,6 +55,13 @@ vi.mock("~/server/tanahpedia/contribution-specials.server", () => ({
 vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
 	readArticleLinkContext: mocks.article,
 }));
+vi.mock(
+	"~/server/tanahpedia/contribution-scripture-occurrences.server",
+	() => ({
+		searchScriptureOccurrences: mocks.scriptureOccurrences,
+		readScriptureChapter: vi.fn(),
+	}),
+);
 vi.mock("~/server/tanahpedia/revisions", () => ({
 	saveEntryTitleRevisioned: vi.fn(),
 }));
@@ -116,6 +124,44 @@ function snapshot(revision: number): ContributionRevisionSnapshot {
 function emptyCatalogue(): AgentCatalogue {
 	return { people: [], places: [], entities: [], targets: [], references: {} };
 }
+
+it("grounds a book-filtered Scripture search in the same exact occurrence coordinates", async () => {
+	const anchor = {
+		perekId: 51,
+		pasukNumber: 1,
+		segmentStart: 5,
+		segmentEnd: 5,
+		text: "מִצְרָ֑יְמָה",
+	};
+	const match = { ...anchor, citation: "שמות א א", verseText: anchor.text };
+	mocks.scriptureOccurrences.mockResolvedValueOnce({
+		items: [match],
+		total: 3,
+		nextCursor: 2,
+	});
+	const args = { spellings: ["מצרימה"], book: "שמות", cursor: 1, limit: 1 };
+	const result = await readContributionAgentTool(
+		conn,
+		item,
+		"scripture_occurrences",
+		args,
+	);
+	expect(mocks.scriptureOccurrences).toHaveBeenCalledWith(args);
+	expect(result.data).toEqual({
+		items: [{ ...match, ordinal: 1 }],
+		total: 3,
+		nextCursor: 2,
+	});
+	expect(result.catalogue.scriptureOccurrencePages).toEqual([
+		{
+			spellings: args.spellings,
+			book: "שמות",
+			cursor: 1,
+			total: 3,
+			items: [anchor],
+		},
+	]);
+});
 
 function relatedFixture(count: number) {
 	item.kind = "issue";

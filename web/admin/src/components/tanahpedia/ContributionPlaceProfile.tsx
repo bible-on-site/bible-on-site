@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
 	MAX_PLACE_OCCURRENCES,
+	type PlaceProfileBase,
 	type PlaceProfileChange,
 	type PlaceWordOccurrence,
 	placeOccurrenceKey,
@@ -180,7 +181,7 @@ export function ContributionPlaceProfileFields({
 }: {
 	value: PlaceProfileDraft;
 	targetId: string;
-	places: readonly { id: string; name: string }[];
+	places: readonly { id: string; name: string; hasEntry?: number }[];
 	onChange: (value: PlaceProfileDraft, targetId: string) => void;
 }) {
 	const [page, setPage] = useState(0);
@@ -248,6 +249,7 @@ export function ContributionPlaceProfileFields({
 						{places.map((place) => (
 							<option key={place.id} value={place.id}>
 								{place.name}
+								{place.hasEntry === 0 ? " (ללא ערך לקישור)" : ""}
 							</option>
 						))}
 					</select>
@@ -427,7 +429,7 @@ export function ContributionPlaceProfileDiff({
 	change: ReviewedChange;
 }) {
 	const [page, setPage] = useState(0);
-	const before = change.before as unknown as PlaceProfileChange | null;
+	const before = change.before as unknown as PlaceProfileBase | null;
 	const after = change.after as unknown as PlaceProfileChange | null;
 	if (!after) return null;
 	const existing = new Set(before?.occurrences.map(placeOccurrenceKey));
@@ -441,6 +443,7 @@ export function ContributionPlaceProfileDiff({
 	);
 	const start = currentPage * PAGE_SIZE;
 	const point = after.identification;
+	const storedPoint = before?.identification;
 	return (
 		<>
 			{after.entry ? (
@@ -460,6 +463,12 @@ export function ContributionPlaceProfileDiff({
 			) : (
 				<p className="contribution-diff-note">
 					מקום קיים: <bdi>{change.labels.place ?? change.targetId}</bdi>
+					{Boolean(before?.entryAddresses?.length) && (
+						<>
+							{" "}
+							· <bdi>{before?.entryAddresses.join(", ")}</bdi>
+						</>
+					)}
 				</p>
 			)}
 			<section
@@ -513,7 +522,7 @@ export function ContributionPlaceProfileDiff({
 					className="contribution-diff-note"
 					aria-label="זיהוי וקואורדינטות"
 				>
-					<h4>{before?.identification ? "זיהוי שכבר קיים" : "זיהוי מוצע"}</h4>
+					<h4>{storedPoint ? "זיהוי שכבר קיים" : "זיהוי מוצע"}</h4>
 					<dl>
 						<div>
 							<dt>האתר המזוהה</dt>
@@ -525,7 +534,13 @@ export function ContributionPlaceProfileDiff({
 						</div>
 						<div>
 							<dt>מקור לזיהוי</dt>
-							<dd>{contributionCitation(point.citation)}</dd>
+							<dd>
+								{contributionCitation(point.citation)}
+								{storedPoint &&
+									!storedPoint.citations.includes(point.citation) && (
+										<span className="added"> · מקור להוספה</span>
+									)}
+							</dd>
 						</div>
 						<div>
 							<dt>קואורדינטות</dt>
@@ -537,7 +552,13 @@ export function ContributionPlaceProfileDiff({
 						</div>
 						<div>
 							<dt>מקור לקואורדינטות</dt>
-							<dd>{contributionCitation(point.coordinateCitation)}</dd>
+							<dd>
+								{contributionCitation(point.coordinateCitation)}
+								{storedPoint &&
+									!storedPoint.citations.includes(point.coordinateCitation) && (
+										<span className="added"> · מקור להוספה</span>
+									)}
+							</dd>
 						</div>
 					</dl>
 				</section>

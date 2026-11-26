@@ -995,6 +995,45 @@ describe("assignment-driven leased contribution work", () => {
 		expect(mocks.create).not.toHaveBeenCalled();
 		expect(mocks.revise).not.toHaveBeenCalled();
 	});
+	it.each([
+		[
+			"scripture_occurrences",
+			{ spellings: ["מצרים"], book: "שמות", limit: 100 },
+		],
+		["scripture_chapter", { perekId: 51, cursor: 2, limit: 25 }],
+		["place_profile_words", { cursor: 1, limit: 50 }],
+	])(
+		"dispatches declared %s reads and emits an exact replay receipt",
+		async (name, args) => {
+			const input = await claim();
+			const result = {
+				data: { items: [{ text: "מִצְרָיְמָה" }], total: 1, nextCursor: null },
+				catalogue: empty,
+			};
+			mocks.tool.mockResolvedValueOnce(result);
+			const read = await readContributionWorkerContext({
+				...input,
+				name,
+				arguments: args,
+			});
+			expect(mocks.tool).toHaveBeenCalledWith(
+				expect.anything(),
+				current(),
+				name,
+				args,
+			);
+			expect(read).toMatchObject({
+				data: result.data,
+				receipt: {
+					name,
+					arguments: args,
+					hash: createHash("sha256")
+						.update(canonicalJson(result))
+						.digest("hex"),
+				},
+			});
+		},
+	);
 	it("does not turn lease, stale context or prior-receipt rejection into recoverable input feedback", async () => {
 		const input = await claim(),
 			request = {

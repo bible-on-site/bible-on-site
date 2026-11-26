@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
-import type { PlaceProfileChange } from "~/lib/tanahpedia/contribution-place-profile";
+import type { PlaceProfileBase } from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -108,7 +108,11 @@ export async function readChangeState(
 	if (kind === "place_profile") {
 		const input = validateChange({ kind, targetId, after: context });
 		if (input.kind !== kind) throw new Error("Invalid place profile");
-		return readPlaceProfileBase(conn, targetId, input.after);
+		return (await readPlaceProfileBase(
+			conn,
+			targetId,
+			input.after,
+		)) as unknown as State | null;
 	}
 	if (isContributionRecordKind(kind))
 		return readContributionRecord(conn, kind, targetId);
@@ -341,7 +345,7 @@ export async function applyChange(
 			conn,
 			placeId,
 			input.after,
-			change.before as unknown as PlaceProfileChange | null,
+			change.before as unknown as PlaceProfileBase | null,
 		);
 		return;
 	}
@@ -569,9 +573,12 @@ export async function contributionCatalogue(conn: PoolConnection) {
 			conn,
 			"SELECT p.id, e.name FROM tanahpedia_person p JOIN tanahpedia_entity e ON e.id = p.entity_id ORDER BY e.name LIMIT 2000",
 		),
-		txQuery<{ id: string; name: string }>(
+		txQuery<{ id: string; name: string; hasEntry: number }>(
 			conn,
-			"SELECT p.id, e.name FROM tanahpedia_place p JOIN tanahpedia_entity e ON e.id = p.entity_id ORDER BY e.name LIMIT 2000",
+			`SELECT p.id,e.name,EXISTS(
+				SELECT 1 FROM tanahpedia_entry_entity ee JOIN tanahpedia_entry entry ON entry.id=ee.entry_id
+				WHERE ee.entity_id=p.entity_id AND entry.unique_name<>''
+			) AS hasEntry FROM tanahpedia_place p JOIN tanahpedia_entity e ON e.id=p.entity_id ORDER BY e.name LIMIT 2000`,
 		),
 		txQuery<{ id: string; name: string; entityType: string }>(
 			conn,

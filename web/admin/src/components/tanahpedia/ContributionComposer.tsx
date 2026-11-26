@@ -49,7 +49,7 @@ import {
 export interface ContributionCatalogue {
 	references?: Record<string, { id: string | number; name: string }[]>;
 	people: { id: string; name: string }[];
-	places: { id: string; name: string }[];
+	places: { id: string; name: string; hasEntry?: number }[];
 	entities: { id: string; name: string; entityType: string }[];
 	targets: {
 		kind: string;
@@ -692,9 +692,11 @@ export function ContributionComposer({
 				),
 			],
 	);
-	const [closeIssue, setCloseIssue] = useState(
-		initial?.closeIssue ?? linkedIssue?.scope?.kind !== "place_profile",
-	);
+	const [closeIssueChoice, setCloseIssueChoice] = useState(initial?.closeIssue);
+	const closeIssue =
+		closeIssueChoice ??
+		(linkedIssue?.scope?.kind !== "place_profile" &&
+			!changes.some((change) => change.kind === "place_profile"));
 	const [error, setError] = useState("");
 	return (
 		<form
@@ -978,7 +980,7 @@ export function ContributionComposer({
 						<input
 							type="checkbox"
 							checked={closeIssue}
-							onChange={(event) => setCloseIssue(event.target.checked)}
+							onChange={(event) => setCloseIssueChoice(event.target.checked)}
 						/>{" "}
 						סגירת הפנייה המקושרת לאחר מיזוג
 					</span>

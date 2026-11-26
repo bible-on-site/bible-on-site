@@ -73,20 +73,25 @@ export function agentPlaceProfileVariants(
 		? {
 				anyOf: [
 					explicit,
-					object({
-						spellings: {
-							type: "array",
-							minItems: 1,
-							maxItems: 16,
-							items: text(160),
+					object(
+						{
+							spellings: {
+								type: "array",
+								minItems: 1,
+								maxItems: 16,
+								items: text(160),
+							},
+							selected: {
+								type: "array",
+								minItems: 1,
+								maxItems: MAX_PLACE_OCCURRENCES,
+								items: object({ from: integer(0), to: integer(0) }),
+							},
+							book: text(),
+							...(current ? { includeExisting: { type: "boolean" } } : {}),
 						},
-						selected: {
-							type: "array",
-							minItems: 1,
-							maxItems: MAX_PLACE_OCCURRENCES,
-							items: object({ from: integer(0), to: integer(0) }),
-						},
-					}),
+						["spellings", "selected"],
+					),
 				],
 			}
 		: explicit;
@@ -106,14 +111,13 @@ export function agentPlaceProfileVariants(
 }
 
 function expandSelection(
-	value: unknown,
+	selection: Record<string, unknown>,
 	pages: readonly ScriptureOccurrencePage[],
 ): PlaceWordOccurrence[] {
-	const selection = record(value, "place occurrence selection");
-	rejectUnknown(selection, ["spellings", "selected"]);
-	const { spellings, selected } = selection;
+	const { spellings, selected, book } = selection;
 	if (
 		!Array.isArray(spellings) ||
+		(book !== undefined && typeof book !== "string") ||
 		!Array.isArray(selected) ||
 		selected.length === 0 ||
 		selected.length > MAX_PLACE_OCCURRENCES
@@ -123,7 +127,8 @@ function expandSelection(
 	const indexed = new Map<number, PlaceWordOccurrence>();
 	let total: number | undefined;
 	for (const page of pages) {
-		if (JSON.stringify(page.spellings) !== query) continue;
+		if (page.book !== book || JSON.stringify(page.spellings) !== query)
+			continue;
 		total ??= page.total;
 		if (total !== page.total || page.cursor + page.items.length > total)
 			throw new Error("Scripture occurrence pages disagree on the result size");
@@ -177,6 +182,29 @@ function expandSelection(
 	return result;
 }
 
+function appendPlaceOccurrences(
+	existing: readonly PlaceWordOccurrence[],
+	selected: readonly PlaceWordOccurrence[],
+): PlaceWordOccurrence[] {
+	const combined = new Map(
+		existing.map((word) => [placeOccurrenceKey(word), word]),
+	);
+	for (const word of selected) {
+		const key = placeOccurrenceKey(word);
+		const previous = combined.get(key);
+		if (previous && previous.text !== word.text)
+			throw new Error(
+				"A selected occurrence disagrees with the existing word span",
+			);
+		if (!previous) combined.set(key, word);
+	}
+	if (combined.size > MAX_PLACE_OCCURRENCES)
+		throw new Error(
+			`A place proposal supports at most ${MAX_PLACE_OCCURRENCES} exact word occurrences`,
+		);
+	return [...combined.values()];
+}
+
 export function materializeAgentPlaceChanges(
 	raw: unknown,
 	item: Contribution,
@@ -210,15 +238,43 @@ export function materializeAgentPlaceChanges(
 			"A revised place proposal must preserve its place identity",
 		);
 	if (Array.isArray(after.occurrences)) return raw;
+	const selection = record(after.occurrences, "place occurrence selection");
+	rejectUnknown(selection, [
+		"spellings",
+		"selected",
+		"book",
+		"includeExisting",
+	]);
+	const { includeExisting } = selection;
+	if (includeExisting !== undefined && typeof includeExisting !== "boolean")
+		throw new Error("includeExisting must be a boolean");
+	if (includeExisting && !current?.after)
+		throw new Error(
+			"Only a revision of the same place PR may include existing occurrences",
+		);
+	const selected = expandSelection(
+		selection,
+		catalogue.scriptureOccurrencePages ?? [],
+	);
+	let occurrences = selected;
+	if (includeExisting && current?.after) {
+		const previous = validatePlaceProfile({ ...current }, true).after;
+		if (
+			previous.entry &&
+			record(after.entry, "place entry").uniqueName !==
+				previous.entry.uniqueName
+		)
+			throw new Error(
+				"An occurrence append must preserve the place entry identity",
+			);
+		occurrences = appendPlaceOccurrences(previous.occurrences, selected);
+	}
 	return [
 		{
 			...change,
 			after: {
 				...after,
-				occurrences: expandSelection(
-					after.occurrences,
-					catalogue.scriptureOccurrencePages ?? [],
-				),
+				occurrences,
 			},
 		},
 	];

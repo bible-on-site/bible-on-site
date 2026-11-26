@@ -818,24 +818,23 @@ export async function readContributionAgentTool(
 			limit: args.limit,
 		});
 		const cursor = args.cursor ?? 0;
-		if (args.book === undefined) {
-			reader.catalogue.scriptureOccurrencePages = [
-				{
-					spellings: args.spellings,
-					cursor,
-					total: data.total,
-					items: data.items.map(
-						({ perekId, pasukNumber, segmentStart, segmentEnd, text }) => ({
-							perekId,
-							pasukNumber,
-							segmentStart,
-							segmentEnd,
-							text,
-						}),
-					),
-				},
-			];
-		}
+		reader.catalogue.scriptureOccurrencePages = [
+			{
+				spellings: args.spellings,
+				...(args.book === undefined ? {} : { book: args.book }),
+				cursor,
+				total: data.total,
+				items: data.items.map(
+					({ perekId, pasukNumber, segmentStart, segmentEnd, text }) => ({
+						perekId,
+						pasukNumber,
+						segmentStart,
+						segmentEnd,
+						text,
+					}),
+				),
+			},
+		];
 		return {
 			data: {
 				...data,

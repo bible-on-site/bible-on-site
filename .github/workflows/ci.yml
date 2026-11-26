@@ -4293,8 +4293,9 @@ jobs:
     with:
       module_name: admin
       module_directory: web/admin
-      # Keep in sync with admin extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships", "web/shared/branding"]'
+      # Keep in sync with admin extraModulePaths and the floating corpus
+      # pattern in devops/github/ci/determine-changes.ts.
+      extra_module_paths: '["web/shared/bulletin-join/index.ts", "web/shared/revalidate/index.ts", "web/shared/tanahpedia/index.ts", "web/shared/reading-metrics", "web/shared/article-relationships", "web/shared/branding", "web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json"]'
       module_version: ${{ needs.package_admin.outputs.module_version }}
       # ARM64-only delivery (#3794): a single native archive bound to
       # released_arm64_artifact_name; no canonical amd64 asset is published.

@@ -24,7 +24,11 @@ describe("typed contribution diff", () => {
 					{
 						kind: "place_profile",
 						targetId: "place",
-						before: { occurrences: [kept], entry: null, identification: null },
+						before: {
+							occurrences: [kept],
+							entryAddresses: ["כתובת-יעד"],
+							identification: { id: "point", citations: ["מקור זיהוי"] },
+						},
 						after: {
 							entry: null,
 							occurrences: [kept, newSpan],
@@ -56,6 +60,9 @@ describe("typed contribution diff", () => {
 		expect(identification.getByText("זיהוי לפי פירוש")).toBeVisible();
 		expect(identification.getByText("מקור זיהוי")).toBeVisible();
 		expect(identification.getByText("מקור מדידה")).toBeVisible();
+		expect(identification.getByText("זיהוי שכבר קיים")).toBeVisible();
+		expect(identification.getByText(/מקור להוספה/)).toBeVisible();
+		expect(screen.getByText("כתובת-יעד")).toBeVisible();
 		expect(identification.getByText("30.1, 32.2")).toBeVisible();
 	});
 

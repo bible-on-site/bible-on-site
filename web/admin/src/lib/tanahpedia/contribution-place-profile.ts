@@ -13,6 +13,7 @@ export interface PlaceWordOccurrence {
 
 export interface ScriptureOccurrencePage {
 	spellings: string[];
+	book?: string;
 	cursor: number;
 	total: number;
 	items: PlaceWordOccurrence[];
@@ -29,6 +30,12 @@ export interface PlaceProfileChange {
 		citation: string;
 		coordinateCitation: string;
 	} | null;
+}
+
+export interface PlaceProfileBase {
+	entryAddresses: string[];
+	occurrences: PlaceWordOccurrence[];
+	identification: { id: string; citations: string[] } | null;
 }
 
 export type PlaceProfileInput = {
@@ -75,6 +82,68 @@ function readOccurrence(value: unknown): PlaceWordOccurrence {
 		segmentEnd: boundedInteger(raw.segmentEnd, "segmentEnd", segmentStart),
 		text: textField(raw.text, "occurrence text", 500),
 	};
+}
+
+function readOccurrences(value: unknown) {
+	if (!Array.isArray(value) || value.length > MAX_PLACE_OCCURRENCES)
+		throw new Error(
+			`A place proposal supports at most ${MAX_PLACE_OCCURRENCES} exact word occurrences`,
+		);
+	const occurrences = value.map(readOccurrence);
+	if (new Set(occurrences.map(placeOccurrenceKey)).size !== occurrences.length)
+		throw new Error(
+			"Each word occurrence can only appear once per place proposal",
+		);
+	return occurrences;
+}
+
+export function placeIdentificationCitations(
+	identification: NonNullable<PlaceProfileChange["identification"]>,
+) {
+	return [
+		...new Set([identification.citation, identification.coordinateCitation]),
+	];
+}
+
+export function validatePlaceProfileBase(value: unknown): PlaceProfileBase {
+	const base = record(value, "place profile base");
+	const { entryAddresses, identification } = base;
+	if (
+		!Array.isArray(entryAddresses) ||
+		entryAddresses.some((address) => typeof address !== "string" || !address)
+	)
+		throw new Error("Invalid place entry addresses");
+	const point = identification === null ? null : record(identification);
+	if (point && (!Array.isArray(point.citations) || point.citations.length > 2))
+		throw new Error("Invalid place identification citations");
+	return {
+		entryAddresses,
+		occurrences: readOccurrences(base.occurrences),
+		identification: point
+			? {
+					id: contributionRecordId(point.id, "identification ID"),
+					citations: (point.citations as unknown[]).map((value) =>
+						textField(value, "identification citation", 500),
+					),
+				}
+			: null,
+	};
+}
+
+export function placeProfileHasEffect(
+	before: PlaceProfileBase | null,
+	after: PlaceProfileChange,
+) {
+	return (
+		!before ||
+		before.occurrences.length < after.occurrences.length ||
+		Boolean(
+			after.identification &&
+				placeIdentificationCitations(after.identification).some(
+					(citation) => !before.identification?.citations.includes(citation),
+				),
+		)
+	);
 }
 
 function readIdentification(
@@ -147,18 +216,7 @@ export function validatePlaceProfile(
 	}
 	if (!entry && !targetId)
 		throw new Error("Choose an existing place or propose a new entry");
-	if (
-		!Array.isArray(raw.occurrences) ||
-		raw.occurrences.length > MAX_PLACE_OCCURRENCES
-	)
-		throw new Error(
-			`A place proposal supports at most ${MAX_PLACE_OCCURRENCES} exact word occurrences`,
-		);
-	const occurrences = raw.occurrences.map(readOccurrence);
-	if (new Set(occurrences.map(placeOccurrenceKey)).size !== occurrences.length)
-		throw new Error(
-			"Each word occurrence can only appear once per place proposal",
-		);
+	const occurrences = readOccurrences(raw.occurrences);
 	const identification = readIdentification(raw.identification);
 	if (!allowEmpty && !occurrences.length && !identification)
 		throw new Error(

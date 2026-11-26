@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import {
+	type PlaceProfileBase,
 	type PlaceProfileChange,
 	type PlaceProfileInput,
+	placeIdentificationCitations,
 	placeOccurrenceKey,
+	placeProfileHasEffect,
 } from "~/lib/tanahpedia/contribution-place-profile";
-import {
-	type ChangeState,
-	type ReviewedChange,
-	sameState,
+import type {
+	ChangeState,
+	ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
 import { validateScriptureOccurrences } from "./contribution-scripture-occurrences.server";
@@ -23,12 +25,57 @@ async function readPlace(conn: PoolConnection, id: string) {
 	return place;
 }
 
+async function readEntryAddresses(conn: PoolConnection, entityId: string) {
+	const entries = await txQuery<{ address: string }>(
+		conn,
+		`SELECT e.unique_name AS address FROM tanahpedia_entry_entity ee
+		JOIN tanahpedia_entry e ON e.id=ee.entry_id
+		WHERE ee.entity_id=? AND e.unique_name<>'' ORDER BY e.unique_name,e.id FOR SHARE`,
+		[entityId],
+	);
+	if (!entries.length)
+		throw new Error(
+			"Word links require an existing Tanahpedia entry destination for the place",
+		);
+	return entries.map(({ address }) => address);
+}
+
+async function readIdentificationBase(
+	conn: PoolConnection,
+	placeId: string,
+	point: PlaceProfileChange["identification"],
+): Promise<PlaceProfileBase["identification"]> {
+	if (!point) return null;
+	const existing = await txQueryOne<{ id: string }>(
+		conn,
+		`SELECT id FROM tanahpedia_place_identification
+		WHERE place_id=? AND modern_name=? AND latitude=? AND longitude=?
+		ORDER BY id LIMIT 1 FOR UPDATE`,
+		[placeId, point.modernName, point.latitude, point.longitude],
+	);
+	if (!existing) return null;
+	const rows = await txQuery<{ citation: string }>(
+		conn,
+		`SELECT s.source_text AS citation FROM tanahpedia_source_group g
+		JOIN tanahpedia_non_tanah_source s ON s.source_group_id=g.id
+		WHERE g.target_table='tanahpedia_place_identification' AND g.target_id=? FOR UPDATE`,
+		[existing.id],
+	);
+	const storedCitations = new Set(rows.map(({ citation }) => citation));
+	return {
+		id: existing.id,
+		citations: placeIdentificationCitations(point).filter((citation) =>
+			storedCitations.has(citation),
+		),
+	};
+}
+
 /** Snapshot exactly the canonical facts touched by this additive proposal. */
 export async function readPlaceProfileBase(
 	conn: PoolConnection,
 	targetId: string,
 	desired: PlaceProfileChange,
-): Promise<ChangeState | null> {
+): Promise<PlaceProfileBase | null> {
 	if (desired.entry) {
 		const created = await txQueryOne<{ id: string }>(
 			conn,
@@ -40,6 +87,9 @@ export async function readPlaceProfileBase(
 		return null;
 	}
 	const place = await readPlace(conn, targetId);
+	const entryAddresses = desired.occurrences.length
+		? await readEntryAddresses(conn, place.entityId)
+		: [];
 	const stored = await txQuery<{
 		perekId: number;
 		pasukNumber: number;
@@ -51,21 +101,17 @@ export async function readPlaceProfileBase(
 		[place.entityId],
 	);
 	const existing = new Set(stored.map(placeOccurrenceKey));
-	const point = desired.identification;
-	const alreadyIdentified =
-		point &&
-		(await txQueryOne<{ id: string }>(
-			conn,
-			"SELECT id FROM tanahpedia_place_identification WHERE place_id=? AND modern_name=? AND latitude=? AND longitude=? LIMIT 1 FOR UPDATE",
-			[targetId, point.modernName, point.latitude, point.longitude],
-		));
 	return {
-		entry: null,
+		entryAddresses,
 		occurrences: desired.occurrences.filter((occurrence) =>
 			existing.has(placeOccurrenceKey(occurrence)),
 		),
-		identification: alreadyIdentified ? point : null,
-	} as unknown as ChangeState;
+		identification: await readIdentificationBase(
+			conn,
+			targetId,
+			desired.identification,
+		),
+	};
 }
 
 export async function preparePlaceProfile(
@@ -77,21 +123,27 @@ export async function preparePlaceProfile(
 	const before = await readPlaceProfileBase(conn, targetId, input.after);
 	const words = await validateScriptureOccurrences(input.after.occurrences);
 	const after = input.after as unknown as ChangeState;
-	if (!refresh && sameState(before, after))
+	if (!refresh && !placeProfileHasEffect(before, input.after))
 		throw new Error("All proposed place facts are already present");
 	const labels: Record<string, string> = Object.fromEntries(
 		words.map((word) => [placeOccurrenceKey(word), word.citation]),
 	);
 	labels.place =
 		input.after.entry?.displayName ?? (await readPlace(conn, targetId)).name;
-	return { kind: "place_profile", targetId, before, after, labels };
+	return {
+		kind: "place_profile",
+		targetId,
+		before: before as unknown as ChangeState | null,
+		after,
+		labels,
+	};
 }
 
 export async function applyPlaceProfile(
 	conn: PoolConnection,
 	placeId: string,
 	desired: PlaceProfileChange,
-	before: PlaceProfileChange | null,
+	before: PlaceProfileBase | null,
 ): Promise<void> {
 	await validateScriptureOccurrences(desired.occurrences);
 	const place = await readPlace(conn, placeId);
@@ -111,26 +163,42 @@ export async function applyPlaceProfile(
 			[place.entityId, JSON.stringify(additions)],
 		);
 	const point = desired.identification;
-	if (!point || before?.identification) return;
-	const identificationId = randomUUID();
-	await txExecute(
-		conn,
-		"INSERT INTO tanahpedia_place_identification (id,place_id,modern_name,latitude,longitude) VALUES (?,?,?,?,?)",
-		[
-			identificationId,
-			placeId,
-			point.modernName,
-			point.latitude,
-			point.longitude,
-		],
+	if (!point) return;
+	const existingPoint = before?.identification;
+	const citations = placeIdentificationCitations(point).filter(
+		(citation) => !existingPoint?.citations.includes(citation),
 	);
-	const groupId = randomUUID();
-	await txExecute(
-		conn,
-		"INSERT INTO tanahpedia_source_group (id,target_table,target_id) VALUES (?,'tanahpedia_place_identification',?)",
-		[groupId, identificationId],
-	);
-	for (const citation of new Set([point.citation, point.coordinateCitation]))
+	if (!citations.length) return;
+	const identificationId = existingPoint?.id ?? randomUUID();
+	if (!existingPoint)
+		await txExecute(
+			conn,
+			"INSERT INTO tanahpedia_place_identification (id,place_id,modern_name,latitude,longitude) VALUES (?,?,?,?,?)",
+			[
+				identificationId,
+				placeId,
+				point.modernName,
+				point.latitude,
+				point.longitude,
+			],
+		);
+	const existingGroup = existingPoint
+		? await txQueryOne<{ id: string }>(
+				conn,
+				`SELECT id FROM tanahpedia_source_group
+				WHERE target_table='tanahpedia_place_identification' AND target_id=?
+				ORDER BY id LIMIT 1 FOR UPDATE`,
+				[identificationId],
+			)
+		: null;
+	const groupId = existingGroup?.id ?? randomUUID();
+	if (!existingGroup)
+		await txExecute(
+			conn,
+			"INSERT INTO tanahpedia_source_group (id,target_table,target_id) VALUES (?,'tanahpedia_place_identification',?)",
+			[groupId, identificationId],
+		);
+	for (const citation of citations)
 		await txExecute(
 			conn,
 			"INSERT INTO tanahpedia_non_tanah_source (id,source_group_id,source_text) VALUES (?,?,?)",

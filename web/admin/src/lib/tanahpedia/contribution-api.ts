@@ -6,7 +6,7 @@ import {
 	contributionIdentifierKey,
 	contributionRecordId,
 } from "./contribution-identifiers";
-import { validatePlaceProfile } from "./contribution-place-profile";
+import { validatePlaceProfileBase } from "./contribution-place-profile";
 import { isContributionSourceFact } from "./contribution-specials";
 import {
 	type Contribution,
@@ -84,11 +84,8 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 				if (change.before !== null)
 					throw new Error("A new place entry must have a null base");
 			} else {
-				const base = validatePlaceProfile(
-					{ targetId, after: change.before },
-					true,
-				);
-				if (base.after.entry || !sameState(base.after, change.before))
+				const base = validatePlaceProfileBase(change.before);
+				if (!sameState(base, change.before))
 					throw new Error("Noncanonical place profile base");
 			}
 		} else if (change.before !== null) {

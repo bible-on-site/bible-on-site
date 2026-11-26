@@ -10,6 +10,9 @@ const FIELDS: Record<string, readonly string[]> = {
 	record: ["kind", "id"],
 	related: ["cursor", "limit", "id", "section"],
 	article_text: ["id", "cursor", "limit", "citationCursor", "citationLimit"],
+	scripture_occurrences: ["spellings", "book", "cursor", "limit"],
+	scripture_chapter: ["perekId", "cursor", "limit"],
+	place_profile_words: ["cursor", "limit"],
 };
 const ARTICLE_REFERENCES = new Set([
 	"article",
@@ -56,6 +59,35 @@ export function validateContributionAgentToolArguments(
 			articleId(args.id);
 			page(args.cursor ?? 0, args.limit ?? 4000, 16000);
 			page(args.citationCursor ?? 0, args.citationLimit ?? 25, 50);
+		} else if (name === "scripture_occurrences") {
+			const { spellings, book, cursor = 0, limit = 20 } = args;
+			if (
+				!Array.isArray(spellings) ||
+				spellings.length < 1 ||
+				spellings.length > 12 ||
+				spellings.some(
+					(spelling) =>
+						typeof spelling !== "string" ||
+						spelling.length > 160 ||
+						!spelling.trim(),
+				) ||
+				(book !== undefined &&
+					(typeof book !== "string" || book.length > 255 || !book.trim()))
+			)
+				throw new Error("Invalid scripture occurrence search");
+			page(cursor, limit, 100);
+		} else if (name === "scripture_chapter") {
+			const { perekId, cursor = 0, limit = 10 } = args;
+			if (
+				typeof perekId !== "number" ||
+				!Number.isSafeInteger(perekId) ||
+				perekId < 1
+			)
+				throw new Error("Invalid scripture chapter");
+			page(cursor, limit, 25);
+		} else if (name === "place_profile_words") {
+			const { cursor = 0, limit = 25 } = args;
+			page(cursor, limit, 50);
 		} else if (name === "related") {
 			page(args.cursor ?? 0, args.limit ?? 25, 50);
 			const section = args.section ?? "items";
