@@ -1193,6 +1193,60 @@ test("typed argument errors enter real tool history without receipts or schema c
 	assert.equal(fixture.releases.length, 1);
 });
 
+test("a native worker retries an unknown Sefer with the canonical name and retains only the correct receipt", async () => {
+	const name = "scripture_occurrences",
+		apiVersion = 7,
+		invalid = { spellings: ["מצרים"], book: "שמואל ג" },
+		corrected = { ...invalid, book: "שמואל" },
+		error = readRejection(),
+		receipt = { name, arguments: corrected, hash: "b".repeat(64) },
+		description = "Use שמואל for both volumes or שמואל א for one volume.",
+		data = { items: [{ citation: "שמואל א ד ח", text: "מִצְרַיִם" }] };
+	const fixture = agentFixture({
+		bundle: agentBundle({
+			apiVersion,
+			tools: [
+				{
+					name,
+					description: "Find word spans by canonical Sefer or volume",
+					inputSchema: {
+						type: "object",
+						properties: { book: { type: "string", description } },
+					},
+				},
+			],
+		}),
+		job: { apiVersion },
+		replies: [
+			nativeReply("", [readCall(name, invalid, "invalid-sefer")]),
+			nativeReply("", [readCall(name, corrected, "canonical-sefer")]),
+			nativeReply(),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [error, { receipt, data, schema: actionSchema() }],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.reads.map((read) => [read.arguments, read.receipts]),
+		[
+			[invalid, []],
+			[corrected, []],
+		],
+	);
+	const retry = fixture.models[1].body;
+	assert.equal(
+		retry.tools[0].function.parameters.properties.book.description,
+		description,
+	);
+	assert.deepEqual(JSON.parse(retry.messages.at(-1).content), error);
+	assert.deepEqual(
+		JSON.parse(fixture.models[2].body.messages.at(-1).content),
+		data,
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [receipt]);
+	assert.deepEqual(fixture.failed, []);
+});
+
 test("verified preloaded context can complete after a redundant rejected read without forced clarification", async () => {
 	const schema = actionSchema(),
 		fixture = agentFixture({

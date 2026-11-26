@@ -171,7 +171,7 @@ export function createScriptureOccurrenceIndex(chapters: readonly Chapter[]) {
 	} {
 		const forms = parseSpellings(spellings);
 		if (book !== undefined && !books.has(book))
-			throw new ContributionAgentToolInputError("invalid_scripture_book");
+			throw new ContributionAgentToolInputError("invalid_arguments");
 		assertPage(cursor, limit, 100);
 		const matches = new Map<
 			string,

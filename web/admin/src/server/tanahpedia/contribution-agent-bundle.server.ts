@@ -158,7 +158,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "scripture_occurrences",
 				description:
-					"Find candidate word spans in canonical Tanakh. Omit book for all books. Use a Hebrew book name, for example שמואל for both volumes or שמואל א for a single volume. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
+					"Find candidate word spans in canonical Tanakh. Omit book for the whole Tanakh. To filter, use the exact Hebrew Sefer or volume name from a Perek lookup. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
 				inputSchema: object(
 					{
 						spellings: {
@@ -167,7 +167,11 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 							maxItems: 12,
 							items: { type: "string" },
 						},
-						book: { type: "string" },
+						book: {
+							type: "string",
+							description:
+								"Exact Hebrew Sefer name from Perek coordinates.seferName, or the exact volume name in the scripture_chapter book field. Use שמואל for both volumes or שמואל א or שמואל ב for one volume. Omit this field for the whole Tanakh.",
+						},
 						cursor: { type: "integer", minimum: 0 },
 						limit: { type: "integer", minimum: 1, maximum: 100 },
 					},
@@ -177,7 +181,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "scripture_chapter",
 				description:
-					"Read canonical pointed verses in a chapter, for discovering places and checking narrative context. Find chapter IDs with search kind perek. Return totals and a next cursor; do not claim to have read omitted pages.",
+					"Read canonical pointed verses in a Perek to discover places and check narrative context. Find IDs with search kind perek. Returns the exact Sefer or volume name in book, plus total and nextCursor. Only count returned verses as read.",
 				inputSchema: object(
 					{
 						perekId: { type: "integer", minimum: 1 },

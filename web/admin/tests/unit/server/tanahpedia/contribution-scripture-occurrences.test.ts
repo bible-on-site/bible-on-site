@@ -112,7 +112,7 @@ describe("canonical scripture occurrence candidates", () => {
 		expect(() => index.search({ spellings: ["-"] })).toThrow(/1-8/);
 		expect(() =>
 			index.search({ spellings: ["מצרים"], book: "לא קיים" }),
-		).toThrow(/book/);
+		).toThrow(/arguments are invalid/);
 		expect(() => index.search({ spellings: ["מצרים"], limit: 0 })).toThrow(
 			/page/,
 		);

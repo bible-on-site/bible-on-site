@@ -1082,7 +1082,7 @@ describe("assignment-driven leased contribution work", () => {
 		},
 	);
 
-	it("gives current-call book-name guidance and preserves replay and corpus failures", async () => {
+	it("returns compatible current-call feedback for an unknown Sefer and preserves replay and corpus failures", async () => {
 		const context = await vi.importActual<
 			typeof import("~/server/tanahpedia/contribution-agent-context.server")
 		>("~/server/tanahpedia/contribution-agent-context.server");
@@ -1095,8 +1095,8 @@ describe("assignment-driven leased contribution work", () => {
 		).toEqual({
 			error: {
 				type: "invalid_tool_arguments",
-				code: "invalid_scripture_book",
-				message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_scripture_book,
+				code: "invalid_arguments",
+				message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_arguments,
 			},
 		});
 		await expect(
