@@ -208,6 +208,13 @@ export const CONTRIBUTION_RECORDS = {
 		{ personId: person() },
 		{ immutable: ["personId"] },
 	),
+	commentator_role: spec(
+		"תפקידים ומלוכה",
+		"תפקיד מפרש תנ\"ך",
+		"tanahpedia_person_role_commentator",
+		{ personId: person() },
+		{ immutable: ["personId"] },
+	),
 	king_reign: spec("תפקידים ומלוכה", "תקופת מלוכה", "tanahpedia_king_reign", {
 		kingRoleId: ref("king_role_id", "מלך", "king_role"),
 		nationId: nation(),

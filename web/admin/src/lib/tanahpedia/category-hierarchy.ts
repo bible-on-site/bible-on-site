@@ -12,7 +12,7 @@ const ANIMAL_PURITIES: CategoryKey[] = ["TAHOR", "TAMEH"];
 
 /** Website URL for subcategory (opens public site). */
 export function websiteSubcategoryPath(key: CategoryKey): string {
-	if (key === "PROPHET" || key === "KING") {
+	if (key === "PROPHET" || key === "KING" || key === "TANAH_COMMENTATOR") {
 		return `/tanahpedia/person?role=${key.toLowerCase()}`;
 	}
 	if (ANIMAL_KINDS.includes(key)) {

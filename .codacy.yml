@@ -121,6 +121,13 @@ exclude_paths:
   - "data/mysql/tanahpedia_structure.sql"
   - "data/mysql/tanahpedia_alter_mention_decoration.sql"
   - "data/mysql/tanahpedia_alter_normalized_name.sql"
+  # Same MySQL-only idiom as the sibling Tanahpedia migrations/seeds: guarded
+  # prepared DDL, session @-variables, utf8mb4 Hebrew literals and INSERT
+  # IGNORE are validated by validate_lambda_parser.py against the real deploy
+  # parser; the T-SQL dialect analyzer reports them as syntax/schema errors.
+  - "data/mysql/tanahpedia_images_upgrade.sql"
+  - "data/mysql/tanahpedia_person_role_commentator_upgrade.sql"
+  - "data/mysql/tanahpedia_commentator_data.sql"
   - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"

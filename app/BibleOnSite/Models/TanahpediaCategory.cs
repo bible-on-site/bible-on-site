@@ -50,6 +50,7 @@ public static class TanahpediaTaxonomy
             [
                 new TanahpediaCategory { Key = "PROPHET", Label = "נביאים", EntityType = "PERSON", Sub = "PROPHET" },
                 new TanahpediaCategory { Key = "KING", Label = "מלכים", EntityType = "PERSON", Sub = "KING" },
+                new TanahpediaCategory { Key = "TANAH_COMMENTATOR", Label = "מפרשי התנ\"ך", EntityType = "PERSON", Sub = "TANAH_COMMENTATOR" },
             ]
         },
         new TanahpediaCategory { Key = "PLACE", Label = "מקומות", EntityType = "PLACE" },

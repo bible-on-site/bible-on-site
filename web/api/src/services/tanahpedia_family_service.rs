@@ -48,6 +48,7 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_activity_place WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_commentator WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_war_side_participant_person WHERE person_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_saying_speaker_person WHERE person_id = ?) +
@@ -57,7 +58,7 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
 ) AS dependency_count"#;
-const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 19;
+const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 20;
 
 /// Same guard without the new place tables, retried when the pre-migration
 /// database rejects them (see `is_missing_person_places_schema`). The
@@ -84,15 +85,18 @@ const PERSON_DEPENDENCY_SQL_PRE_PLACES: &str = r#"SELECT (
 ) AS dependency_count"#;
 const PERSON_DEPENDENCY_PRE_PLACES_BIND_COUNT: usize = 17;
 
-/// The two place tables introduced by the person-places migration, probed one
-/// at a time when the combined guard hits a pre-migration database.
-const PERSON_NEW_PLACE_DEPENDENCY_SQLS: &[&str] = &[
+/// The tables newer than the combined fallback — the two place tables from
+/// the person-places migration and the commentator role table — probed one at
+/// a time when the combined guard hits a pre-migration database.
+const PERSON_LATE_TABLE_DEPENDENCY_SQLS: &[&str] = &[
     "SELECT EXISTS(SELECT 1 FROM tanahpedia_person_death_place WHERE person_id = ?) AS dependency_count",
     "SELECT EXISTS(SELECT 1 FROM tanahpedia_person_activity_place WHERE person_id = ?) AS dependency_count",
+    "SELECT EXISTS(SELECT 1 FROM tanahpedia_person_role_commentator WHERE person_id = ?) AS dependency_count",
 ];
 
 const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_entity_image WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_place WHERE entity_id = ?) +
@@ -110,7 +114,7 @@ const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_saying WHERE entity_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_prophecy WHERE entity_id = ?)
 ) AS dependency_count"#;
-const ENTITY_DEPENDENCY_BIND_COUNT: usize = 17;
+const ENTITY_DEPENDENCY_BIND_COUNT: usize = 18;
 
 fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
     std::iter::once(entity_id.to_string().into())
@@ -601,7 +605,7 @@ pub async fn delete_orphan_person_node(
                 .ok_or_else(|| {
                     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>)
                 })?;
-            for sql in PERSON_NEW_PLACE_DEPENDENCY_SQLS {
+            for sql in PERSON_LATE_TABLE_DEPENDENCY_SQLS {
                 match PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
                     DatabaseBackend::MySql,
                     *sql,
@@ -1552,7 +1556,7 @@ mod tests {
             }
         }
 
-        assert_eq!(reference_tables.len(), 18);
+        assert_eq!(reference_tables.len(), 19);
         assert!(reference_tables.remove("tanahpedia_person_sex"));
         for table in reference_tables {
             assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");
@@ -1595,11 +1599,12 @@ mod tests {
         }
         assert!(!PERSON_DEPENDENCY_SQL_PRE_PLACES.contains("tanahpedia_person_death_place"));
         assert!(!PERSON_DEPENDENCY_SQL_PRE_PLACES.contains("tanahpedia_person_activity_place"));
+        assert!(!PERSON_DEPENDENCY_SQL_PRE_PLACES.contains("tanahpedia_person_role_commentator"));
         assert_eq!(
             person_dependency_values_pre_places("entity-1", "person-1").len(),
             PERSON_DEPENDENCY_SQL_PRE_PLACES.matches('?').count()
         );
-        for sql in PERSON_NEW_PLACE_DEPENDENCY_SQLS {
+        for sql in PERSON_LATE_TABLE_DEPENDENCY_SQLS {
             assert_eq!(sql.matches('?').count(), 1);
         }
     }
@@ -2120,6 +2125,10 @@ mod tests {
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
                         .to_string(),
                 )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
                 .into_connection(),
         );
 
@@ -2175,6 +2184,10 @@ mod tests {
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
                         .to_string(),
                 )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
                 .append_exec_results([exec_result.clone(), exec_result])
                 .into_connection(),
         );
@@ -2217,12 +2230,17 @@ mod tests {
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![dependency_count_row(0)],
                 ])
-                // death_place exists and holds a row; activity_place is absent.
+                // death_place exists and holds a row; activity_place and the
+                // commentator role table are absent.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![dependency_count_row(1)],
                 ])
                 .append_query_errors([sea_orm::DbErr::Custom(
                     "Query Error: Table 'tanah.tanahpedia_person_activity_place' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
                         .to_string(),
                 )])
                 .into_connection(),
@@ -2240,6 +2258,68 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    /// The deploy order applies the person-places migration before the
+    /// commentator upgrade, so production can hold both place tables while
+    /// `tanahpedia_person_role_commentator` is still absent. A stored place
+    /// row must still block the delete in that state — the missing commentator
+    /// probe is the only one skipped.
+    #[tokio::test]
+    async fn delete_orphan_person_node_places_present_commentator_absent() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                // In the deployment-order state under test, the combined guard
+                // fails on the not-yet-created commentator table — both place
+                // tables themselves already exist.
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                // Both place tables deployed: death_place holds a row for this
+                // person, activity_place is empty; the commentator table is
+                // not yet migrated and contributes nothing.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
+                        .to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        let executed_sql = format!("{:?}", transaction_log);
+        assert!(!executed_sql.contains("DELETE FROM"));
     }
 
     /// A genuine database failure on the combined dependency guard is not a

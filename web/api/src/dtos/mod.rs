@@ -12,3 +12,4 @@ pub mod tanahpedia_entity;
 pub mod tanahpedia_entries;
 pub mod tanahpedia_entry_revision;
 pub mod tanahpedia_family;
+pub mod tanahpedia_images;

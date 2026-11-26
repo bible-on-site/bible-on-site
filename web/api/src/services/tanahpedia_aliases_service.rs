@@ -39,7 +39,7 @@ const PEDIA_NAME_MAX_LEN: usize = 255;
 
 /// Category keys with the Hebrew route slug (`category-slug.ts` CATEGORY_SLUGS)
 /// and the admin label (CATEGORY_LABELS) — both resolve to a category route.
-const PEDIA_CATEGORIES: [(&str, &str, &str); 22] = [
+const PEDIA_CATEGORIES: [(&str, &str, &str); 23] = [
     ("PERSON", "אישים", "אישים"),
     ("PLACE", "מקומות", "מקומות"),
     ("EVENT", "אירועים", "אירועים"),
@@ -56,6 +56,7 @@ const PEDIA_CATEGORIES: [(&str, &str, &str); 22] = [
     ("NATION", "עמים", "עמים"),
     ("PROPHET", "נביאים", "נביאים"),
     ("KING", "מלכים", "מלכים"),
+    ("TANAH_COMMENTATOR", "מפרשי-התנך", "מפרשי תנ\"ך"),
     ("BEHEMA", "בהמות", "בהמות"),
     ("CHAYA", "חיות", "חיות"),
     ("OF", "עופות", "עופות"),

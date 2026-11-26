@@ -171,4 +171,26 @@ public class ViewModelDefaultsTests
         entry.Entities.Should().BeEmpty();
         entry.SynonymTargets.Should().BeEmpty();
     }
+
+    [Fact]
+    public void EntryViewModel_HasImages_TracksTheImagesCollection()
+    {
+        var entry = new TanahpediaEntryViewModel();
+        entry.HasImages.Should().BeFalse();
+
+        entry.Images.Add(new TanahpediaImageLink());
+        entry.HasImages.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EntryViewModel_ToggleImageAttributionCommand_FlipsTheExpansionFlag()
+    {
+        var entry = new TanahpediaEntryViewModel();
+        var link = new TanahpediaImageLink();
+
+        entry.ToggleImageAttributionCommand.Execute(link);
+        link.IsAttributionExpanded.Should().BeTrue();
+        entry.ToggleImageAttributionCommand.Execute(link);
+        link.IsAttributionExpanded.Should().BeFalse();
+    }
 }

@@ -373,11 +373,14 @@ async function upsertPersonSingleton(
 	}
 }
 
-/** Enables/disables a non-exclusive person role (prophet, king). */
+/** Enables/disables a non-exclusive person role (prophet, king, commentator). */
 async function setPersonRole(
 	conn: PoolConnection,
 	params: {
-		table: "tanahpedia_person_role_prophet" | "tanahpedia_person_role_king";
+		table:
+			| "tanahpedia_person_role_prophet"
+			| "tanahpedia_person_role_king"
+			| "tanahpedia_person_role_commentator";
 		personId: string;
 		enabled: boolean;
 	},
@@ -552,6 +555,13 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 					enabled: true,
 				});
 			}
+			if (data.isCommentator) {
+				await setPersonRole(conn, {
+					table: "tanahpedia_person_role_commentator",
+					personId,
+					enabled: true,
+				});
+			}
 
 			let linkId: string | null = null;
 			if (data.linkToEntryId?.trim()) {
@@ -589,7 +599,8 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			data.deathPlaceText === undefined &&
 			data.activityPlaces === undefined &&
 			data.isProphet === undefined &&
-			data.isKing === undefined
+			data.isKing === undefined &&
+			data.isCommentator === undefined
 		) {
 			throw new Error("At least one field must be provided to update");
 		}
@@ -668,7 +679,8 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 				data.deathPlaceText !== undefined ||
 				data.activityPlaces !== undefined ||
 				data.isProphet !== undefined ||
-				data.isKing !== undefined
+				data.isKing !== undefined ||
+				data.isCommentator !== undefined
 			) {
 				const person = await txQueryOne<{ id: string }>(
 					conn,
@@ -780,6 +792,13 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 						table: "tanahpedia_person_role_king",
 						personId: person.id,
 						enabled: data.isKing,
+					});
+				}
+				if (data.isCommentator !== undefined) {
+					await setPersonRole(conn, {
+						table: "tanahpedia_person_role_commentator",
+						personId: person.id,
+						enabled: data.isCommentator,
 					});
 				}
 			}

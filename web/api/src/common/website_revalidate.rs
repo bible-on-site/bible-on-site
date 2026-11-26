@@ -12,6 +12,10 @@ pub const WEBSITE_URL_ENV: &str = "WEBSITE_URL";
 pub const REVALIDATE_SECRET_ENV: &str = "REVALIDATE_SECRET";
 
 const TIMEOUT: Duration = Duration::from_secs(5);
+/// Receiver-side contract limit shared with the admin dispatcher
+/// (`web/shared/revalidate/index.ts`): each `{changes}` body carries at most
+/// 64 entity changes, so wide owner fan-out must be split before posting.
+const MAX_CHANGES_PER_REQUEST: usize = 64;
 
 /// Outcome of a post-commit website invalidation — mirrors the admin server's
 /// `RevalidateOutcome`. `Skipped` is the documented no-op (endpoint not
@@ -71,7 +75,7 @@ pub struct PerekRange {
 /// a subset of the admin `EntityChange` contract, serialized identically
 /// (`kind` tags + camelCase fields), so the website's dependency resolver
 /// handles API-originated writes exactly like admin ones.
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[serde(tag = "kind")]
 enum EntityChange<'a> {
     #[serde(rename = "pedia-entries")]
@@ -79,6 +83,12 @@ enum EntityChange<'a> {
         #[serde(rename = "uniqueNames")]
         unique_names: &'a [String],
     },
+    /// One Tanahpedia entry whose rendered page/dependencies changed.
+    #[serde(rename = "pedia-entry", rename_all = "camelCase")]
+    PediaEntry { unique_name: &'a str },
+    /// One Tanahpedia entity whose linked entry pages changed.
+    #[serde(rename = "pedia-entity", rename_all = "camelCase")]
+    PediaEntity { entity_id: &'a str },
     /// An article create/update/move/delete — `perek_ids` is old ∪ new.
     #[serde(rename = "article", rename_all = "camelCase")]
     Article {
@@ -179,6 +189,28 @@ impl WebsiteRevalidator {
         .await
     }
 
+    /// Expires the entry pages directly affected by a Tanahpedia asset write:
+    /// `entry_unique_names` are entry-scoped owners, while `entity_ids` are
+    /// entity-scoped owners whose linked entry pages the website resolves.
+    /// The caller must not invoke this with both sets empty — the endpoint
+    /// correctly rejects a no-op change body.
+    pub async fn invalidate_pedia_entry_and_entities(
+        &self,
+        entry_unique_names: &[String],
+        entity_ids: &[String],
+    ) -> Revalidation {
+        let changes: Vec<_> = entry_unique_names
+            .iter()
+            .map(|name| EntityChange::PediaEntry {
+                unique_name: name.as_str(),
+            })
+            .chain(entity_ids.iter().map(|id| EntityChange::PediaEntity {
+                entity_id: id.as_str(),
+            }))
+            .collect();
+        self.post_changes(changes).await
+    }
+
     /// Expires every scoped page/tag a dedication's old ∪ new assignments
     /// render on — perek ranges, sefer/helek/parasha/article/entry scopes and
     /// the masora feature (#2731, #3102).
@@ -238,8 +270,8 @@ impl WebsiteRevalidator {
             .await
     }
 
-    /// Posts one `{changes}` body to the website's `/api/revalidate`. The
-    /// `Skipped`/`Failed`/`Applied` outcomes mirror the admin server's
+    /// Posts bounded `{changes}` bodies to the website's `/api/revalidate`.
+    /// The `Skipped`/`Failed`/`Applied` outcomes mirror the admin server's
     /// semantics — `Failed` callers surface the string in their result so the
     /// client knows the committed write is not yet visible publicly.
     async fn post_changes(&self, changes: Vec<EntityChange<'_>>) -> Revalidation {
@@ -250,7 +282,6 @@ impl WebsiteRevalidator {
             return Revalidation::Skipped;
         };
 
-        let body = ChangesBody { changes };
         let url = format!("{}/api/revalidate", base.trim_end_matches('/'));
         let client = match reqwest::Client::builder().timeout(TIMEOUT).build() {
             Ok(client) => client,
@@ -260,23 +291,41 @@ impl WebsiteRevalidator {
             }
         };
 
-        match client
-            .post(url)
-            .header("x-revalidate-secret", secret)
-            .json(&body)
-            .send()
-            .await
-        {
-            Ok(response) if response.status().is_success() => Revalidation::Applied,
-            Ok(response) => {
-                tracing::error!(status = %response.status(), "website revalidation failed");
-                Revalidation::Failed
-            }
-            Err(err) => {
-                tracing::error!(%err, "website revalidation request failed");
-                Revalidation::Failed
+        // The receiver rejects bodies over MAX_CHANGES_PER_REQUEST. Keep the
+        // empty-input failure mode intact, otherwise fan out into valid batches;
+        // attempt every batch, but preserve the first non-applied outcome.
+        let batches = if changes.is_empty() {
+            vec![&changes[..]]
+        } else {
+            changes.chunks(MAX_CHANGES_PER_REQUEST).collect()
+        };
+        let mut outcome = Revalidation::Applied;
+        for batch in batches {
+            let body = ChangesBody {
+                changes: batch.to_vec(),
+            };
+            let batch_outcome = match client
+                .post(url.as_str())
+                .header("x-revalidate-secret", secret)
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(response) if response.status().is_success() => Revalidation::Applied,
+                Ok(response) => {
+                    tracing::error!(status = %response.status(), "website revalidation failed");
+                    Revalidation::Failed
+                }
+                Err(err) => {
+                    tracing::error!(%err, "website revalidation request failed");
+                    Revalidation::Failed
+                }
+            };
+            if batch_outcome != Revalidation::Applied {
+                outcome = batch_outcome;
             }
         }
+        outcome
     }
 }
 
@@ -329,37 +378,50 @@ mod tests {
         );
     }
 
-    /// Serves one HTTP response so the request can be inspected: captures the
-    /// request head + body, replies with `status`.
-    fn serve_once(status: &str) -> (String, std::sync::mpsc::Receiver<String>) {
+    /// Serves the status sequence so the requests can be inspected: captures
+    /// each request head + body, then replies with that batch's status.
+    fn serve_requests(statuses: &[&str]) -> (String, std::sync::mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let status = status.to_string();
+        let statuses = statuses
+            .iter()
+            .map(|status| status.to_string())
+            .collect::<Vec<_>>();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap();
-            let mut reader = BufReader::new(stream);
-            let mut request = String::new();
-            let mut content_length = 0usize;
-            loop {
-                let mut line = String::new();
-                reader.read_line(&mut line).unwrap();
-                if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
-                    content_length = value.trim().parse().unwrap();
+            for status in statuses {
+                let (stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut request = String::new();
+                let mut content_length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
+                        content_length = value.trim().parse().unwrap();
+                    }
+                    if line == "\r\n" {
+                        break;
+                    }
+                    request.push_str(&line);
                 }
-                if line == "\r\n" {
-                    break;
-                }
-                request.push_str(&line);
+                let mut body = vec![0u8; content_length];
+                std::io::Read::read_exact(&mut reader, &mut body).unwrap();
+                request.push_str(&String::from_utf8_lossy(&body));
+                let response = format!(
+                    "HTTP/1.1 {}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                    status
+                );
+                reader.get_mut().write_all(response.as_bytes()).unwrap();
+                tx.send(request).unwrap();
             }
-            let mut body = vec![0u8; content_length];
-            std::io::Read::read_exact(&mut reader, &mut body).unwrap();
-            request.push_str(&String::from_utf8_lossy(&body));
-            let response = format!("HTTP/1.1 {}\r\ncontent-length: 0\r\n\r\n", status);
-            reader.get_mut().write_all(response.as_bytes()).unwrap();
-            tx.send(request).unwrap();
         });
         (format!("http://127.0.0.1:{}", port), rx)
+    }
+
+    /// Serves one HTTP response so the request can be inspected.
+    fn serve_once(status: &str) -> (String, std::sync::mpsc::Receiver<String>) {
+        serve_requests(&[status])
     }
 
     #[tokio::test]
@@ -378,6 +440,91 @@ mod tests {
         assert!(request.contains(
             r#"{"changes":[{"kind":"pedia-entries","uniqueNames":["משה","משה-רבנו"]}]}"#
         ));
+    }
+
+    #[tokio::test]
+    async fn posts_pedia_entry_and_entity_changes() {
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+
+        let outcome = revalidator
+            .invalidate_pedia_entry_and_entities(&["משה".to_string()], &["entity-1".to_string()])
+            .await;
+
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(
+            request.contains(r#"{"kind":"pedia-entry","uniqueName":"משה"}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"pedia-entity","entityId":"entity-1"}"#),
+            "{request}"
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_image_owner_invalidation_still_fails_closed() {
+        let (base, _rx) = serve_once("400 Bad Request");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+
+        let outcome = revalidator
+            .invalidate_pedia_entry_and_entities(&[], &[])
+            .await;
+
+        assert_eq!(outcome, Revalidation::Failed);
+    }
+
+    #[tokio::test]
+    async fn chunks_wide_image_owner_invalidation_to_the_receiver_limit() {
+        let (base, rx) = serve_requests(&["200 OK", "200 OK"]);
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+        let entity_ids = (0..65)
+            .map(|index| format!("entity-{index}"))
+            .collect::<Vec<_>>();
+
+        let outcome = revalidator
+            .invalidate_pedia_entry_and_entities(&[], &entity_ids)
+            .await;
+
+        assert_eq!(outcome, Revalidation::Applied);
+        let first = rx.recv().unwrap();
+        let second = rx.recv().unwrap();
+        assert_eq!(first.matches(r#""kind":"pedia-entity""#).count(), 64);
+        assert!(first.contains(r#""entityId":"entity-0""#), "{first}");
+        assert!(first.contains(r#""entityId":"entity-63""#), "{first}");
+        assert!(!first.contains(r#""entityId":"entity-64""#), "{first}");
+        assert_eq!(second.matches(r#""kind":"pedia-entity""#).count(), 1);
+        assert!(second.contains(r#""entityId":"entity-64""#), "{second}");
+    }
+
+    #[tokio::test]
+    async fn wide_image_owner_invalidation_attempts_every_batch_and_preserves_failure() {
+        let (base, rx) = serve_requests(&["500 Internal Server Error", "200 OK"]);
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+        let entity_ids = (0..65)
+            .map(|index| format!("entity-{index}"))
+            .collect::<Vec<_>>();
+
+        let outcome = revalidator
+            .invalidate_pedia_entry_and_entities(&[], &entity_ids)
+            .await;
+
+        assert_eq!(outcome, Revalidation::Failed);
+        assert_eq!(
+            rx.recv()
+                .unwrap()
+                .matches(r#""kind":"pedia-entity""#)
+                .count(),
+            64
+        );
+        assert_eq!(
+            rx.recv()
+                .unwrap()
+                .matches(r#""kind":"pedia-entity""#)
+                .count(),
+            1
+        );
     }
 
     #[tokio::test]

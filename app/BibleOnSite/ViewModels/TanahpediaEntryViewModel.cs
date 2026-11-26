@@ -124,6 +124,11 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<TanahpediaLinkedEntity> _entities = new();
 
+    /// <summary>The entry's gallery (issue #3769) — entry-scope links first,
+    /// then entity-scope links; the same merge the website renders.</summary>
+    [ObservableProperty]
+    private ObservableCollection<TanahpediaImageLink> _images = new();
+
     [ObservableProperty]
     private ObservableCollection<TanahpediaOccurrenceItem> _occurrences = new();
 
@@ -161,6 +166,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasContent => !string.IsNullOrEmpty(Content);
+    public bool HasImages => Images.Count > 0;
 
     /// <summary>The entry body renders as a single HtmlView — one counted
     /// child owns every stored block (issue #2607).</summary>
@@ -203,6 +209,21 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     /// <summary>Entry body is shown - loaded and not a disambiguation/not-found state.</summary>
     public bool ShowEntry => IsLoaded && !IsDisambiguation && !IsNotFound;
+
+    /// <summary>Expand/collapse one figure's attribution details.</summary>
+    [RelayCommand]
+    private static void ToggleImageAttribution(TanahpediaImageLink link)
+    {
+        link.IsAttributionExpanded = !link.IsAttributionExpanded;
+    }
+
+    /// <summary>Open a source/license provenance link through the same
+    /// internal/external routing as article HTML links.</summary>
+    [RelayCommand]
+    private async Task OpenImageLinkAsync(string? url)
+    {
+        await AppLinkHelper.FollowHtmlLinkAsync(url, Launcher.Default, _navigator);
+    }
 
     /// <summary>
     /// Loads the entry by name, then resolves synonyms when no canonical entry
@@ -350,6 +371,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ReadingProgress = 0;
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>();
+        Images = new ObservableCollection<TanahpediaImageLink>();
         FamilyTree = null;
         PlaceMarkers = [];
         Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
@@ -357,6 +379,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         DedicationLines = [];
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(HasOccurrences));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
@@ -375,6 +398,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ReadingProgress = 0;
         OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
+        // Entry-scope links first, then entity-scope — the gallery merge the
+        // website renders (#3769).
+        var seenImageIds = new HashSet<string>(StringComparer.Ordinal);
+        Images = new ObservableCollection<TanahpediaImageLink>(
+            detail.Images.Concat(detail.EntityImages)
+                .Where(link => seenImageIds.Add(link.Image.ImageId)));
         IsLoaded = true;
     }
 
@@ -393,6 +422,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(HasOccurrences));
         OnPropertyChanged(nameof(ShowNoContentNotice));
     }
@@ -411,6 +441,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ApplyEntryBody(detail);
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(ShowNoContentNotice));
 
         await Task.WhenAll(

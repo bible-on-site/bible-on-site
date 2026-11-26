@@ -93,8 +93,8 @@ impl TanahpediaEntriesQuery {
     }
 
     /// Published-entry counts per category key — base entity types plus the
-    /// `PROPHET`/`KING` roles and animal kind/purity subcategories — for the
-    /// landing category grid.
+    /// `PROPHET`/`KING`/`TANAH_COMMENTATOR` roles and animal kind/purity
+    /// subcategories — for the landing category grid.
     async fn tanahpedia_category_counts(
         &self,
         ctx: &Context<'_>,
@@ -107,7 +107,7 @@ impl TanahpediaEntriesQuery {
     /// All entities of a category with the entries that describe them —
     /// powers the 0/1/many-entry listing pages. `entityType` is a base entity
     /// type (`PERSON`, `PLACE`, ...); `sub` optionally narrows it
-    /// (`PROPHET`/`KING` under `PERSON`, `BEHEMA`/`CHAYA`/`OF`/`SHERETZ` or
+    /// (`PROPHET`/`KING`/`TANAH_COMMENTATOR` under `PERSON`, `BEHEMA`/`CHAYA`/`OF`/`SHERETZ` or
     /// `TAHOR`/`TAMEH` under `ANIMAL`).
     async fn tanahpedia_entities(
         &self,

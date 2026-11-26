@@ -287,6 +287,28 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertEqual(sum("INSERT IGNORE INTO tanah_daily_bulletin_whatsapp_settings" in statement for statement in statements), 1)
         self.assertIn("DEFAULT ''test''", processed)
 
+    def test_commentator_seed_uses_the_issue_3770_people_and_aliases(self):
+        source = (ROOT / "data/mysql/tanahpedia_commentator_data.sql").read_text(encoding="utf-8")
+        people = [
+            "הרב חיים יוסף דוד אזולאי",
+            "הרב מאיר שמחה הכהן מדבינסק",
+            "הרב יעקב צבי מקלנבורג",
+            "הרב ברוך הלוי אפשטיין",
+            "הרב אשר וסרטיל",
+            "הרב משה איסרליש",
+            "הרב נפתלי צבי יהודה ברלין",
+            "הרב אליהו בן שלמה זלמן",
+            "הרב מאיר ליבוש בן יחיאל מיכל וייזר",
+            "הרב יוסף רוזין",
+        ]
+        for name in people:
+            with self.subTest(person=name):
+                self.assertIn(name, source)
+        self.assertEqual(source.count("INSERT INTO tanahpedia_person_role_commentator"), 10)
+        self.assertEqual(source.count("INSERT INTO tanahpedia_entry_synonym"), 28)
+        for alias in ("החיד\"א", "רמ\"א", "נצי\"ב", "הגר\"א", "מלבי\"ם", "הרוגצ''ובר"):
+            self.assertIn(alias, source)
+
 
 class CommentScannerTests(unittest.TestCase):
     """Every MySQL comment form must be scanned for Lambda-hostile content."""

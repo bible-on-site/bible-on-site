@@ -42,6 +42,8 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getEntityTypeEntrySummaries: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
 	getEntryOccurrences: jest.fn().mockResolvedValue([]),
+	getEntryImages: jest.fn().mockResolvedValue([]),
+	getEntityImagesForEntry: jest.fn().mockResolvedValue([]),
 	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
 	getPersonPlaceFacts: jest.fn().mockResolvedValue(null),
 	getPlaceMapMarkersForEntry: jest.fn().mockResolvedValue([]),

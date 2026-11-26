@@ -148,6 +148,132 @@ public class TanahpediaModelsTests
         item.Links[1].Prefix.Should().Be(" / ");
     }
 
+    [Fact]
+    public void ImageLink_CaptionText_JoinsCaptionAndCredit()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                Caption = "שמשון הגיבור",
+                CreditLine = "Wikimedia Commons",
+            },
+        };
+
+        link.CaptionText.Should().Be("שמשון הגיבור · Wikimedia Commons");
+    }
+
+    [Fact]
+    public void ImageLink_CaptionText_FallsBackToCreditThenNull()
+    {
+        // No caption → the concise credit alone (creditLine, else creator,
+        // else source name); nothing at all → null hides the line.
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { CreditLine = "קרדיט" },
+        }.CaptionText.Should().Be("קרדיט");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Creator = "אמן" },
+        }.CaptionText.Should().Be("אמן");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { SourceName = "מקור" },
+        }.CaptionText.Should().Be("מקור");
+        new TanahpediaImageLink().CaptionText.Should().BeNull();
+    }
+
+    [Fact]
+    public void ImageLink_AttributionText_ListedProvenanceAndPublicDomain()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                Creator = "אמן",
+                SourceName = "Wikimedia Commons",
+                LicenseName = "CC BY-SA 4.0",
+                Modifications = "חיתוך",
+            },
+        };
+
+        link.AttributionText.Should().Be(
+            "יוצר/צלם: אמן · מקור: Wikimedia Commons · רישיון: CC BY-SA 4.0 · שינויים: חיתוך");
+
+        // Public domain replaces the license line — the public-domain /
+        // license distinction the issue requires.
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { IsPublicDomain = true },
+        }.AttributionText.Should().Be("רישיון: נחלת הכלל");
+        new TanahpediaImageLink().AttributionText.Should().BeNull();
+    }
+
+    [Fact]
+    public void ImageLink_AttributionText_LicenseUrlOnly_KeepsLinkDiscoverable()
+    {
+        var link = new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage
+            {
+                LicenseUrl = "https://creativecommons.org/licenses/by-sa/4.0/",
+            },
+        };
+
+        // The URL itself is the actionable evidence, but the expandable row
+        // and the disclosure visibility need a non-empty Hebrew caption.
+        link.Image.HasLicenseLink.Should().BeTrue();
+        link.Image.LicenseDisplay.Should().Be("קישור לרישיון");
+        link.AttributionText.Should().Be("רישיון: קישור לרישיון");
+    }
+
+    [Fact]
+    public void Image_RightsAndSourceFlags_CoverEachCombination()
+    {
+        new TanahpediaImage { IsPublicDomain = true, LicenseUrl = "https://x" }
+            .LicenseDisplay.Should().Be("נחלת הכלל");
+        new TanahpediaImage().LicenseDisplay.Should().BeNull();
+
+        var withUrl = new TanahpediaImage { SourceUrl = "https://x" };
+        withUrl.HasSourceLink.Should().BeTrue();
+        withUrl.HasPlainSource.Should().BeFalse();
+
+        var namedOnly = new TanahpediaImage { SourceName = "מקור" };
+        namedOnly.HasSourceLink.Should().BeFalse();
+        namedOnly.HasPlainSource.Should().BeTrue();
+
+        // A license URL under a public-domain flag is not a linkable license.
+        new TanahpediaImage { IsPublicDomain = true, LicenseUrl = "https://x" }
+            .HasLicenseLink.Should().BeFalse();
+        new TanahpediaImage { LicenseName = "CC" }
+            .HasPlainLicense.Should().BeTrue();
+        new TanahpediaImage { IsPublicDomain = true }
+            .HasPlainLicense.Should().BeTrue();
+        new TanahpediaImage().HasPlainLicense.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ImageLink_AttributionText_FallsBackToSourceUrl()
+    {
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { SourceUrl = "https://x" },
+        }.AttributionText.Should().Be("מקור: https://x");
+    }
+
+    [Fact]
+    public void ImageLink_CaptionText_TreatsEmptyStringsAsAbsent()
+    {
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Caption = "", CreditLine = "קרדיט" },
+        }.CaptionText.Should().Be("קרדיט");
+        new TanahpediaImageLink
+        {
+            Image = new TanahpediaImage { Caption = "כיתוב", CreditLine = "" },
+        }.CaptionText.Should().Be("כיתוב");
+    }
+
     private static TanahpediaEntryStub Stub(string uniqueName, string title) => new()
     {
         Id = uniqueName,

@@ -61,6 +61,7 @@ export interface CreateFamilyPersonInput {
 	activityPlaces?: FamilyPersonPlace[] | null;
 	isProphet?: boolean;
 	isKing?: boolean;
+	isCommentator?: boolean;
 }
 
 export interface UpdateFamilyPersonInput {
@@ -89,6 +90,7 @@ export interface UpdateFamilyPersonInput {
 	removedActivityPlaces?: FamilyPersonPlace[];
 	isProphet?: boolean;
 	isKing?: boolean;
+	isCommentator?: boolean;
 }
 
 export interface DeleteFamilyPersonInput {

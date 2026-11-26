@@ -24,7 +24,7 @@ export type EntityType =
 	| "PROPHECY"
 	| "NATION";
 
-export type PersonRole = "PROPHET" | "KING";
+export type PersonRole = "PROPHET" | "KING" | "TANAH_COMMENTATOR";
 export type AnimalKind = "BEHEMA" | "CHAYA" | "OF" | "SHERETZ";
 export type AnimalPurity = "TAHOR" | "TAMEH";
 export type CategoryKey = EntityType | PersonRole | AnimalKind | AnimalPurity;
@@ -50,6 +50,7 @@ export const CATEGORY_LABELS: Record<CategoryKey, string> = {
 	...ENTITY_TYPE_LABELS,
 	PROPHET: "נביאים",
 	KING: "מלכים",
+	TANAH_COMMENTATOR: 'מפרשי התנ"ך',
 	BEHEMA: "בהמות",
 	CHAYA: "חיות",
 	OF: "עופות",
@@ -67,7 +68,7 @@ export interface CategoryHierarchyItem {
 
 /** Top-level tanahpedia categories with optional sub-links (matches landing page). */
 export const CATEGORY_HIERARCHY: CategoryHierarchyItem[] = [
-	{ type: "PERSON", children: ["PROPHET", "KING"] },
+	{ type: "PERSON", children: ["PROPHET", "KING", "TANAH_COMMENTATOR"] },
 	{ type: "PLACE" },
 	{ type: "EVENT", children: ["WAR"] },
 	{ type: "SAYING", children: ["PROPHECY"] },

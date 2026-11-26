@@ -30,6 +30,7 @@ const PEDIA_CATEGORY_SLUGS: Record<CategoryKey, string> = {
 	NATION: "עמים",
 	PROPHET: "נביאים",
 	KING: "מלכים",
+	TANAH_COMMENTATOR: "מפרשי-התנך",
 	BEHEMA: "בהמות",
 	CHAYA: "חיות",
 	OF: "עופות",

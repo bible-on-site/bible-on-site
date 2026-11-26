@@ -24,7 +24,9 @@ import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
 	getAllEntrySummaries,
+	getEntityImagesForEntry,
 	getEntryByUniqueName,
+	getEntryImages,
 	getEntryOccurrences,
 	getPersonFamilySummary,
 	getPersonPlaceFacts,
@@ -36,6 +38,7 @@ import {
 } from "@/lib/tanahpedia/synonym-resolution";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
+import { EntryImageGallery } from "../components/EntryImageGallery";
 import { EntryOccurrencesTable } from "../components/EntryOccurrencesTable";
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
 import { PersonPlaceFactsSection } from "../components/PersonPlaceFacts";
@@ -115,6 +118,8 @@ export async function EntryView({ slug }: { slug: string }) {
 		placeMapMarkers,
 		occurrences,
 		entryDedications,
+		entryImages,
+		entityImages,
 	] = await Promise.all([
 		primaryEntityType
 			? getCachedEntityTypeEntrySummaries(primaryEntityType as EntityType)
@@ -130,6 +135,10 @@ export async function EntryView({ slug }: { slug: string }) {
 		// Entry-scoped dedications (#2731): targeted by the canonical
 		// entry id, never inferred from prose mentions.
 		getEntryDedications(entry.id),
+		// Image gallery (#3769): entry-scope links plus the linked
+		// entities' public images — both degrade to empty pre-deploy.
+		getEntryImages(entry.id),
+		getEntityImagesForEntry(entry.id),
 	]);
 	const siblingNav = siblingEntries.map((e) => ({
 		uniqueName: e.uniqueName,
@@ -152,6 +161,8 @@ export async function EntryView({ slug }: { slug: string }) {
 		sameAsByEntityId,
 		personFamily,
 		placeMarkers: placeMapMarkers,
+		entryImages,
+		entityImages,
 		category: primaryEntity
 			? {
 					label: ENTITY_TYPE_LABELS[primaryEntity.entityType],
@@ -201,6 +212,11 @@ export async function EntryView({ slug }: { slug: string }) {
 					))}
 				</div>
 			)}
+
+			<EntryImageGallery
+				entryImages={entryImages}
+				entityImages={entityImages}
+			/>
 
 			{placeMapMarkers.length > 0 ? (
 				<section

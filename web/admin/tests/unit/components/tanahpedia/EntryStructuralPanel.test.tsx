@@ -71,13 +71,13 @@ import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPan
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 
-function renderPanel() {
+function renderPanel(undoDurationMs = 30) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	return render(
 		<QueryClientProvider client={client}>
-			<UndoToastProvider durationMs={30}>
+			<UndoToastProvider durationMs={undoDurationMs}>
 				<EntryStructuralPanel entryId="entry-1" />
 			</UndoToastProvider>
 		</QueryClientProvider>,
@@ -744,7 +744,9 @@ describe("EntryStructuralPanel", () => {
 		});
 
 		it("keeps the link when the pending unlink is undone", async () => {
-			renderPanel();
+			// Keep the undo window comfortably open while a loaded parallel worker
+			// reaches the toast — the 30ms commit window is for expiration tests.
+			renderPanel(1000);
 			const id = await screen.findByText("person-entity");
 			const card = id.closest("div.rounded-lg");
 			if (!card) throw new Error("Expected person card");

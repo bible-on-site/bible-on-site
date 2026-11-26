@@ -29,6 +29,7 @@ export const CATEGORY_SLUGS: Record<CategoryKey, string> = {
 	NATION: "עמים",
 	PROPHET: "נביאים",
 	KING: "מלכים",
+	TANAH_COMMENTATOR: "מפרשי-התנך",
 	BEHEMA: "בהמות",
 	CHAYA: "חיות",
 	OF: "עופות",
@@ -43,6 +44,7 @@ export const SUB_CATEGORY_PARENTS: Record<
 > = {
 	PROPHET: { parent: "PERSON", param: "role" },
 	KING: { parent: "PERSON", param: "role" },
+	TANAH_COMMENTATOR: { parent: "PERSON", param: "role" },
 	BEHEMA: { parent: "ANIMAL", param: "kind" },
 	CHAYA: { parent: "ANIMAL", param: "kind" },
 	OF: { parent: "ANIMAL", param: "kind" },

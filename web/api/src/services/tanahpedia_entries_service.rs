@@ -29,6 +29,20 @@ fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
 }
 
+/// TRUE when the error means an additive Tanahpedia table is absent — the
+/// data deploy lands independently of the API rollout, so a schema that
+/// predates e.g. `tanahpedia_person_role_commentator` degrades to an empty
+/// listing instead of a 500. Same idiom as
+/// `articles_service::is_missing_hebrew_date_schema`.
+pub(crate) fn is_missing_mysql_schema(err: &sea_orm::DbErr) -> bool {
+    let message = err.to_string();
+    message.contains("1146")
+        || message.contains("1054")
+        || message.contains("doesn't exist")
+        || message.contains("Unknown table")
+        || message.contains("Unknown column")
+}
+
 fn to_entry(model: entry::Model) -> TanahpediaEntry {
     TanahpediaEntry {
         id: model.id,
@@ -248,7 +262,23 @@ pub(crate) const ENTITY_TYPES: &[&str] = &[
     "PROPHECY",
     "NATION",
 ];
-pub(crate) const PERSON_ROLE_CATEGORIES: &[&str] = &["PROPHET", "KING"];
+pub(crate) const PERSON_ROLE_CATEGORIES: &[&str] = &["PROPHET", "KING", "TANAH_COMMENTATOR"];
+
+/// Person role category key → its backing `tanahpedia_person_role_*` table.
+/// Only called with keys from PERSON_ROLE_CATEGORIES.
+pub(crate) fn person_role_table(role: &str) -> &'static str {
+    match role {
+        "PROPHET" => "tanahpedia_person_role_prophet",
+        "KING" => "tanahpedia_person_role_king",
+        _ => {
+            debug_assert_eq!(
+                role, "TANAH_COMMENTATOR",
+                "role keys are validated by the caller"
+            );
+            "tanahpedia_person_role_commentator"
+        }
+    }
+}
 pub(crate) const ANIMAL_KIND_CATEGORIES: &[&str] = &["BEHEMA", "CHAYA", "OF", "SHERETZ"];
 pub(crate) const ANIMAL_PURITY_CATEGORIES: &[&str] = &["TAHOR", "TAMEH"];
 
@@ -286,7 +316,7 @@ pub async fn get_category_counts(
 
     // The four aggregates are independent; run them concurrently so the
     // request waits for the slowest scan instead of the sum of all four.
-    let (entity_rows, role_rows, animal_rows, place_rows) = tokio::try_join!(
+    let (entity_rows, role_rows, animal_rows, place_rows) = tokio::join!(
         CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
             r#"SELECT e.entity_type AS category, COUNT(DISTINCT ee.entry_id) AS cnt
@@ -306,6 +336,11 @@ pub async fn get_category_counts(
                SELECT 'KING' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
                FROM tanahpedia_person_role_king pk
                JOIN tanahpedia_person p ON p.id = pk.person_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+               UNION ALL
+               SELECT 'TANAH_COMMENTATOR' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_person_role_commentator pc
+               JOIN tanahpedia_person p ON p.id = pc.person_id
                JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id"#,
             [],
         ))
@@ -334,8 +369,18 @@ pub async fn get_category_counts(
             [],
         ))
         .all(db.get_connection()),
-    )
-    .map_err(db_error)?;
+    );
+
+    let entity_rows = entity_rows.map_err(db_error)?;
+    // A role table added by a later data deploy reads as zero rows until
+    // the schema lands — the other aggregates stay fatal.
+    let role_rows = match role_rows {
+        Ok(rows) => rows,
+        Err(err) if is_missing_mysql_schema(&err) => Vec::new(),
+        Err(err) => return Err(db_error(err)),
+    };
+    let animal_rows = animal_rows.map_err(db_error)?;
+    let place_rows = place_rows.map_err(db_error)?;
 
     for row in entity_rows.into_iter().chain(role_rows).chain(animal_rows) {
         counts.insert(row.category, row.cnt);
@@ -424,18 +469,14 @@ async fn entities_with_entries(
     Ok(group_entities(rows, entity_type))
 }
 
-/// Person entities carrying the `PROPHET`/`KING` role table row.
+/// Person entities carrying a person-role table row (`PROPHET`, `KING`,
+/// `TANAH_COMMENTATOR`).
 async fn entities_with_entries_by_role(
     db: &Database,
     role: &str,
 ) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
     // The caller validates `sub` is a person role before dispatching here.
-    let role_table = if role == "PROPHET" {
-        "tanahpedia_person_role_prophet"
-    } else {
-        debug_assert_eq!(role, "KING", "role filter is validated by the caller");
-        "tanahpedia_person_role_king"
-    };
+    let role_table = person_role_table(role);
     let sql = format!(
         r#"SELECT e.id AS entity_id, e.name AS entity_name,
                ent.id AS entry_id, ent.unique_name AS entry_unique_name, ent.title AS entry_title
@@ -446,14 +487,20 @@ async fn entities_with_entries_by_role(
         LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
         ORDER BY e.name"#
     );
-    let rows = EntityWithEntriesRow::find_by_statement(Statement::from_sql_and_values(
+    let rows = match EntityWithEntriesRow::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         &sql,
         [],
     ))
     .all(db.get_connection())
     .await
-    .map_err(db_error)?;
+    {
+        Ok(rows) => rows,
+        // A role table added by a later data deploy reads as an empty
+        // listing until the schema lands.
+        Err(err) if is_missing_mysql_schema(&err) => return Ok(Vec::new()),
+        Err(err) => return Err(db_error(err)),
+    };
     Ok(group_entities(rows, "PERSON"))
 }
 
@@ -498,8 +545,8 @@ async fn entities_with_entries_by_animal_classification(
 
 /// Entities with linked entries for a category listing: either a base entity
 /// type (`entity_type`, `sub = None`) or a subcategory (`PROPHET`, `KING`,
-/// animal kinds and purities — `entity_type` then carries the parent type,
-/// same as the website's resolution).
+/// `TANAH_COMMENTATOR`, animal kinds and purities — `entity_type` then
+/// carries the parent type, same as the website's resolution).
 pub async fn get_entities_with_entries(
     db: &Database,
     entity_type: &str,
@@ -507,8 +554,8 @@ pub async fn get_entities_with_entries(
 ) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
     tracing::info_span!("tanahpedia_entries_service::get_entities_with_entries", %entity_type, ?sub);
     match sub {
-        Some("PROPHET") | Some("KING") if entity_type == "PERSON" => {
-            entities_with_entries_by_role(db, sub.unwrap_or_default()).await
+        Some(key) if entity_type == "PERSON" && PERSON_ROLE_CATEGORIES.contains(&key) => {
+            entities_with_entries_by_role(db, key).await
         }
         Some(key) if entity_type == "ANIMAL" && is_animal_kind_category(key) => {
             entities_with_entries_by_animal_classification(db, "kind", key).await
@@ -962,7 +1009,13 @@ mod tests {
         assert_eq!(get("KING"), Some(3));
         assert_eq!(get("PLACE"), Some(0));
         assert_eq!(get("TAMEH"), Some(0));
-        assert_eq!(counts.len(), ENTITY_TYPES.len() + 2 + 4 + 2);
+        assert_eq!(
+            counts.len(),
+            ENTITY_TYPES.len()
+                + PERSON_ROLE_CATEGORIES.len()
+                + ANIMAL_KIND_CATEGORIES.len()
+                + ANIMAL_PURITY_CATEGORIES.len()
+        );
     }
 
     #[tokio::test]
@@ -1308,5 +1361,86 @@ mod tests {
 
         assert_eq!(homepage.layout_type, "MAP");
         assert_eq!(homepage.content.as_deref(), Some("<p>מפת המקומות</p>"));
+    }
+
+    /// Every person-role key maps to its own role table — including the
+    /// commentator table added with #3769.
+    #[test]
+    fn person_role_table_covers_every_role_key() {
+        assert_eq!(
+            person_role_table("PROPHET"),
+            "tanahpedia_person_role_prophet"
+        );
+        assert_eq!(person_role_table("KING"), "tanahpedia_person_role_king");
+        assert_eq!(
+            person_role_table("TANAH_COMMENTATOR"),
+            "tanahpedia_person_role_commentator"
+        );
+    }
+
+    /// Pending-deploy schema gaps read as empty in every dialect phrasing
+    /// MySQL uses for a missing table/column.
+    #[test]
+    fn missing_schema_detection_covers_mysql_error_phrasings() {
+        for message in [
+            "Table 'tanah.x' doesn't exist",
+            "Unknown table 'tanah.x'",
+            "Unknown column 'x' in 'field list'",
+            "Error 1146",
+            "Error 1054",
+        ] {
+            assert!(
+                is_missing_mysql_schema(&DbErr::Custom(message.to_string())),
+                "{message}"
+            );
+        }
+        assert!(!is_missing_mysql_schema(&DbErr::Custom(
+            "Connection lost".to_string()
+        )));
+    }
+
+    /// A real failure on the role aggregate is fatal — only its
+    /// pending-deploy schema gap reads as zero rows.
+    #[tokio::test]
+    async fn get_category_counts_fails_on_a_non_schema_role_error() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+
+        let result = get_category_counts(&db).await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    /// The commentator-role listing degrades to empty while its table is
+    /// pending deploy, and stays fatal on a real failure.
+    #[tokio::test]
+    async fn role_listing_degrades_on_missing_schema_and_fails_otherwise() {
+        let missing = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([DbErr::Custom(
+                    "Table 'tanah.tanahpedia_person_role_commentator' doesn't exist".to_string(),
+                )])
+                .into_connection(),
+        );
+        let entities = get_entities_with_entries(&missing, "PERSON", Some("TANAH_COMMENTATOR"))
+            .await
+            .unwrap();
+        assert!(entities.is_empty());
+
+        let failing = mock_db_with_error("Connection lost");
+        let result = get_entities_with_entries(&failing, "PERSON", Some("TANAH_COMMENTATOR")).await;
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
     }
 }
