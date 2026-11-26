@@ -435,7 +435,65 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     // The drawer's ScrollView carries no AutomationId; it is the scrollable one
     // (the outer shell container is a non-scrollable ScrollView).
     public override By FlyoutScroller => By.XPath("//android.widget.ScrollView[@scrollable='true']");
-    public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
+    public override void GoBack(AppiumDriver driver)
+    {
+        // pressBack reports success even when the app drops the key: it can
+        // land while a navigation push or pop is still animating and MAUI
+        // never starts the pop. The idle-quiet lookups used to hide this —
+        // every wait ended only after the transitions settled, so the key
+        // always pressed into a quiet page. With the idle wait disabled the
+        // waits accept a pushed page mid-animation, and a press dropped in
+        // that window leaves the stack one page deep (the flyout/preferences
+        // tests then sit on the preferences root until their wait expires).
+        // Confirm the tree turned and settled, reissuing the key once — the
+        // same one-retry idiom the iOS back gesture uses for dropped
+        // navigation input.
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var before = driver.PageSource;
+            driver.Navigate().Back();
+            if (PageTurned(driver, before))
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a back press became a navigation: the tree changed and then
+    /// went quiet again. The pop animation rewrites the tree for a few
+    /// hundred milliseconds, and a press landing inside it is dropped the
+    /// same way, so the press is confirmed only once consecutive snapshots
+    /// agree. A tree that changed without settling still proves the press
+    /// landed; one that never changed does not.
+    /// </summary>
+    private static bool PageTurned(AppiumDriver driver, string before)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        var changed = false;
+        var last = before;
+        while (DateTime.UtcNow < deadline)
+        {
+            var current = driver.PageSource;
+            if (string.Equals(current, last, StringComparison.Ordinal))
+            {
+                if (changed)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                changed = true;
+                last = current;
+            }
+            // Each sample is a full tree dump on the device; the poll cadence
+            // keeps the dump loop from saturating the accessibility server.
+            Thread.Sleep(100);
+        }
+        return changed;
+    }
+
     public override void ScrollPageDown(AppiumDriver driver) => ScrollPage(driver, "down");
     public override void ScrollPageUp(AppiumDriver driver) => ScrollPage(driver, "up");
 
