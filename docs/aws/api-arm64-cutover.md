@@ -181,9 +181,12 @@ requiring a fresh healthy public baseline. For an ongoing deployment, verify
 the recorded source revision's definition and immutable image, then request
 ECS rollback to that revision. Require the exact rollback record to report
 `ROLLBACK_SUCCESSFUL`, with one running task on the restored revision and none
-on the failed revision. For a completed deployment, protect the exact
-replacement while restoring the saved old native-child pin, and apply the
-same discovery/public visibility window before retiring it. Verify actual
+on the failed revision. If ECS has already settled on the baseline, verify
+the sole healthy primary task uses the captured revision and immutable image,
+then run the discovery and public checks on that task. If the failed release
+has completed instead, protect its exact task while restoring the saved
+native-child pin, and apply the same discovery and public visibility window
+before retiring it. Verify actual
 digest, readiness, completed singleton, discovery and public contracts. Keep
 every failed sample in the original journal even when recovery succeeds.
 Circuit-breaker rollback also needs a completed target; inspect its real

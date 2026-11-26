@@ -90,6 +90,19 @@ class LambdaParserSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Node.js is required"):
                 VALIDATOR.prepare_reference_file(source)
 
+    @unittest.skipIf(sys.platform == "win32", "Unix tool-manager symlinks")
+    def test_canonical_preparer_preserves_the_node_shim_name(self):
+        source = ROOT / "data" / "mysql" / "tanah_static_structure.sql"
+        with tempfile.TemporaryDirectory() as directory:
+            shim = Path(directory) / "node"
+            shim.symlink_to(sys.executable)
+            with (
+                patch.object(VALIDATOR, "which", return_value=str(shim)),
+                patch.object(VALIDATOR.subprocess, "check_output", return_value="SELECT 1;") as run,
+            ):
+                self.assertEqual(VALIDATOR.prepare_reference_file(source), "SELECT 1;")
+            self.assertEqual(run.call_args.args[0][0], str(shim.absolute()))
+
     def execute_sql(self, connection, sql, streaming):
         if streaming:
             LAMBDA.execute_sql_streaming(ChunkedBody(sql), connection)

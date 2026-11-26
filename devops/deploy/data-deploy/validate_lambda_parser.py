@@ -164,9 +164,11 @@ def prepare_reference_file(filepath):
     node = which("node")
     if not node:
         raise RuntimeError("Node.js is required to prepare canonical reference SQL")
-    executable = Path(node).resolve(strict=True)
+    # Keep the command name for tool managers that dispatch through symlinks.
+    executable = Path(node).absolute()
     helper = Path(__file__).resolve().with_name("canonical-reference.mts")
     # Pass only the fixed helper and its allowlisted source without a shell.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
     return subprocess.check_output(  # nosec B603
         [str(executable), str(helper), source.name, str(source)],
         encoding="utf-8",
