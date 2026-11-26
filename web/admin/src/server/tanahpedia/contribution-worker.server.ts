@@ -513,6 +513,7 @@ export async function completeContributionAgentWork(
 				schema: contributionOutputSchema(
 					context.catalogue,
 					context.item.evidence.length,
+					context.item.scope,
 				),
 				system: context.agent.bundle.system,
 				user: "",

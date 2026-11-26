@@ -418,7 +418,10 @@ describe("complete contribution agent context", () => {
 	});
 	it.each(
 		CONTRIBUTION_ISSUE_SCOPE_KINDS.filter(
-			(kind) => kind !== "entry" && kind !== "article_links",
+			(kind) =>
+				kind !== "entry" &&
+				kind !== "article_links" &&
+				kind !== "place_profile",
 		),
 	)(
 		"preloads the exact %s scope target without name inference",

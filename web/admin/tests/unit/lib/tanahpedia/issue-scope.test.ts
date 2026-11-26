@@ -12,8 +12,8 @@ describe("optional issue implementation scope", () => {
 	it("retains free-text issues and supports the complete operation catalogue", () => {
 		expect(validateIssueScope(undefined)).toBeUndefined();
 		expect(validateIssueScope(null)).toBeUndefined();
-		expect(CONTRIBUTION_ISSUE_SCOPE_KINDS).toHaveLength(49);
-		expect(new Set(CONTRIBUTION_ISSUE_SCOPE_KINDS).size).toBe(49);
+		expect(CONTRIBUTION_ISSUE_SCOPE_KINDS).toHaveLength(50);
+		expect(new Set(CONTRIBUTION_ISSUE_SCOPE_KINDS).size).toBe(50);
 	});
 	it.each(CONTRIBUTION_ISSUE_SCOPE_KINDS)(
 		"accepts kind-only %s and confines its implementation",
@@ -37,7 +37,7 @@ describe("optional issue implementation scope", () => {
 					{ kind },
 				),
 			).toThrow("outside the issue scope");
-			if (kind !== "entry") {
+			if (kind !== "entry" && kind !== "place_profile") {
 				const scope = validateIssueScope({ kind, targetId });
 				expect(scope).toEqual({ kind, targetId });
 				expect(() => assertIssueScopeChanges([change], scope)).not.toThrow();
@@ -68,6 +68,7 @@ describe("optional issue implementation scope", () => {
 		{ kind: "__proto__" },
 		{ kind: "unknown" },
 		{ kind: "entry", targetId: id },
+		{ kind: "place_profile", targetId: id },
 		{ kind: "metadata", targetId: "name" },
 		{ kind: "metadata", targetId: null },
 		{ kind: "metadata", targetId: id, extra: true },

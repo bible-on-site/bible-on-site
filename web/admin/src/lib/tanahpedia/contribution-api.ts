@@ -6,6 +6,7 @@ import {
 	contributionIdentifierKey,
 	contributionRecordId,
 } from "./contribution-identifiers";
+import { validatePlaceProfile } from "./contribution-place-profile";
 import { isContributionSourceFact } from "./contribution-specials";
 import {
 	type Contribution,
@@ -17,7 +18,7 @@ import {
 
 // Bump for a change to the typed operation contract, alongside an adapter from
 // the preceding version. Package/release versions do not change this contract.
-export const CONTRIBUTION_API_VERSION = 6;
+export const CONTRIBUTION_API_VERSION = 7;
 
 export interface ContributionApiMigration {
 	id: string;
@@ -55,6 +56,13 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 		value.length !== 1
 	)
 		throw new Error("An article-link PR contains one article aggregate");
+	if (
+		value.length !== 1 &&
+		value.some(
+			(raw) => raw && typeof raw === "object" && raw.kind === "place_profile",
+		)
+	)
+		throw new Error("A place profile PR contains one place");
 	const targets = new Set<string>();
 	return value.map((raw) => {
 		const change = record(raw, "operation");
@@ -71,6 +79,18 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			const base = validateArticleLinkState(change.before);
 			if (!sameState(base, change.before))
 				throw new Error("Article-link base contains noncanonical fields");
+		} else if (input.kind === "place_profile") {
+			if (input.after.entry) {
+				if (change.before !== null)
+					throw new Error("A new place entry must have a null base");
+			} else {
+				const base = validatePlaceProfile(
+					{ targetId, after: change.before },
+					true,
+				);
+				if (base.after.entry || !sameState(base.after, change.before))
+					throw new Error("Noncanonical place profile base");
+			}
 		} else if (change.before !== null) {
 			if (input.kind === "entry")
 				throw new Error("A new-entry operation must have a null base");

@@ -116,6 +116,7 @@ it("fills the v6 place-text alternative into legacy birthplace states", async ()
 	);
 	expect(result.steps).toEqual([
 		{ from: 5, to: 6, id: "person-place-text-alternatives" },
+		{ from: 6, to: 7, id: "place-word-occurrence-profiles" },
 	]);
 	expect(result.payload).toEqual([
 		{

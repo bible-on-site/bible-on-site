@@ -2418,6 +2418,123 @@ async function createPr(changes: unknown[], actor = bot, issueId?: string) {
 		actor,
 	);
 }
+
+describe("word-level place profiles on MySQL", () => {
+	it("requires review and applies an empty entry, exact links and sourced coordinates atomically", async () => {
+		const { searchScriptureOccurrences } = await import(
+			"~/server/tanahpedia/contribution-scripture-occurrences.server"
+		);
+		const words = (
+			await searchScriptureOccurrences({
+				spellings: ["מסה", "מריבה"],
+				book: "שמות",
+			})
+		).items.filter((word) => word.perekId === 67 && word.pasukNumber === 7);
+		expect(words).toHaveLength(2);
+		const occurrences = words.map(
+			({ perekId, pasukNumber, segmentStart, segmentEnd, text }) => ({
+				perekId,
+				pasukNumber,
+				segmentStart,
+				segmentEnd,
+				text,
+			}),
+		);
+		await conn.execute(
+			"INSERT IGNORE INTO tanah_perek(id,perek,pasuk_count) VALUES(67,17,16)",
+		);
+		const uniqueName = `test-place-${randomUUID()}`;
+		const after = {
+			entry: { title: "מקום לבדיקה", uniqueName, displayName: "מקום לבדיקה" },
+			occurrences,
+			identification: {
+				modernName: "אתר בדיקה",
+				latitude: 31.125,
+				longitude: 35.75,
+				basis: "commentary",
+				citation: "מקור בדיקה",
+				coordinateCitation: "מפת בדיקה",
+			},
+		};
+		const draft = await service.createContribution(
+			{
+				kind: "pr",
+				title: "מקום עם שני אזכורים באותו פסוק",
+				description: "בדיקה על בסיס נתוני דמה",
+				evidence: [
+					...evidence,
+					{
+						citation: "מפת בדיקה",
+						quote: "נקודה לבדיקה בלבד",
+						url: null,
+						note: "",
+					},
+				],
+				changes: [{ kind: "place_profile", after }],
+			},
+			bot,
+		);
+		expect(draft.changes[0].before).toBeNull();
+		await expect(
+			service.mergeContribution(
+				{ id: draft.id, version: draft.version },
+				owner,
+			),
+		).rejects.toThrow(/Approval from doradsoft/);
+		const [before] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_entry WHERE unique_name=?",
+			[uniqueName],
+		);
+		expect(before).toEqual([]);
+
+		const approved = await service.updateContribution(
+			{ id: draft.id, version: draft.version, action: "approve" },
+			owner,
+		);
+		const merged = await service.mergeContribution(
+			{ id: approved.id, version: approved.version },
+			owner,
+		);
+		expect(merged.state).toBe("merged");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			`SELECT e.content, p.id AS placeId, s.segment_start AS start, s.segment_end AS end
+			FROM tanahpedia_entry e
+			JOIN tanahpedia_entry_entity ee ON ee.entry_id=e.id
+			JOIN tanahpedia_place p ON p.entity_id=ee.entity_id
+			JOIN tanahpedia_entity_tanah_source s ON s.entity_id=p.entity_id
+			WHERE e.unique_name=? AND s.perek_id=67 AND s.pasuk_number=7 ORDER BY s.segment_start`,
+			[uniqueName],
+		);
+		expect(
+			rows.map(({ content, start, end }) => ({ content, start, end })),
+		).toEqual([
+			{ content: "<p></p>", start: 3, end: 3 },
+			{ content: "<p></p>", start: 4, end: 4 },
+		]);
+		const [sources] = await conn.execute<RowDataPacket[]>(
+			`SELECT CAST(i.latitude AS DOUBLE) AS latitude, CAST(i.longitude AS DOUBLE) AS longitude, s.source_text AS citation
+			FROM tanahpedia_place_identification i
+			JOIN tanahpedia_source_group g ON g.target_table='tanahpedia_place_identification' AND g.target_id=i.id
+			JOIN tanahpedia_non_tanah_source s ON s.source_group_id=g.id WHERE i.place_id=?`,
+			[rows[0].placeId],
+		);
+		expect(sources).toEqual(
+			expect.arrayContaining([
+				{ latitude: 31.125, longitude: 35.75, citation: "מקור בדיקה" },
+				{ latitude: 31.125, longitude: 35.75, citation: "מפת בדיקה" },
+			]),
+		);
+		await expect(
+			createPr([
+				{
+					kind: "place_profile",
+					targetId: rows[0].placeId,
+					after: { entry: null, occurrences, identification: null },
+				},
+			]),
+		).rejects.toThrow(/already present/);
+	});
+});
 function metadata(name: string) {
 	return {
 		kind: "metadata",

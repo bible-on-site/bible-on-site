@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
+import type { PlaceProfileChange } from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -19,6 +20,11 @@ import {
 	readArticleLinkState,
 } from "./contribution-article-links.server";
 import { resolveEntryCreations } from "./contribution-entry-resolution.server";
+import {
+	applyPlaceProfile,
+	preparePlaceProfile,
+	readPlaceProfileBase,
+} from "./contribution-place-profile.server";
 import {
 	applyContributionRecord,
 	assertNoContributionDependents,
@@ -99,6 +105,11 @@ export async function readChangeState(
 ): Promise<State | null> {
 	if (kind === "article_links")
 		return (await readArticleLinkState(conn, targetId)) as unknown as State;
+	if (kind === "place_profile") {
+		const input = validateChange({ kind, targetId, after: context });
+		if (input.kind !== kind) throw new Error("Invalid place profile");
+		return readPlaceProfileBase(conn, targetId, input.after);
+	}
 	if (isContributionRecordKind(kind))
 		return readContributionRecord(conn, kind, targetId);
 	if (kind === "alias_mapping")
@@ -214,6 +225,19 @@ export async function prepareChanges(
 		? await resolveEntryCreations(conn, inputs)
 		: inputs;
 	for (const input of resolved) {
+		if (input.kind === "place_profile") {
+			if (input.after.entry) {
+				assertEntryFieldsValid({
+					title: input.after.entry.title,
+					unique_name: input.after.entry.uniqueName,
+				});
+				await assertNewEntryAddressFree(conn, input.after.entry.uniqueName);
+			}
+			changes.push(
+				await preparePlaceProfile(conn, input, options.refresh === true),
+			);
+			continue;
+		}
 		if (input.kind === "article_links") {
 			changes.push(await prepareArticleLinkChange(conn, input, options));
 			continue;
@@ -299,6 +323,28 @@ export async function applyChange(
 		targetId: change.targetId,
 		after: change.after,
 	});
+	if (input.kind === "place_profile") {
+		let placeId = change.targetId;
+		if (input.after.entry) {
+			const created = await createEntryShell(
+				conn,
+				change.targetId,
+				{
+					...input.after.entry,
+					entityType: "PLACE",
+				},
+				source,
+			);
+			placeId = created.subtypeId;
+		}
+		await applyPlaceProfile(
+			conn,
+			placeId,
+			input.after,
+			change.before as unknown as PlaceProfileChange | null,
+		);
+		return;
+	}
 	if (isContributionRecordKind(input.kind)) {
 		await applyContributionRecord(conn, change, source);
 		return;
@@ -411,11 +457,20 @@ export async function applyChange(
 		return;
 	}
 	if (input.kind !== "entry") throw new Error("Unsupported operation");
+	await createEntryShell(conn, id, input.after, source);
+}
+
+async function createEntryShell(
+	conn: PoolConnection,
+	id: string,
+	a: Extract<ChangeInput, { kind: "entry" }>["after"],
+	source: string,
+) {
 	assertEntryFieldsValid({
-		title: input.after.title,
-		unique_name: input.after.uniqueName,
+		title: a.title,
+		unique_name: a.uniqueName,
 	});
-	await assertNewEntryAddressFree(conn, input.after.uniqueName);
+	await assertNewEntryAddressFree(conn, a.uniqueName);
 	const entityId = randomUUID(),
 		subtypeId = randomUUID();
 	const subtypeTables: Partial<Record<string, string>> = {
@@ -471,7 +526,7 @@ export async function applyChange(
 			parentKey: "saying_id",
 		},
 	};
-	const derived = derivedTypes[input.after.entityType];
+	const derived = derivedTypes[a.entityType];
 	if (derived) {
 		const parentId = randomUUID();
 		await txExecute(
@@ -487,11 +542,11 @@ export async function applyChange(
 	} else {
 		await txExecute(
 			conn,
-			`INSERT INTO ${subtypeTables[input.after.entityType]} (id, entity_id) VALUES (?, ?)`,
+			`INSERT INTO ${subtypeTables[a.entityType]} (id, entity_id) VALUES (?, ?)`,
 			[subtypeId, entityId],
 		);
 	}
-	if (input.after.entityType === "PERSON") {
+	if (a.entityType === "PERSON") {
 		const nameType = await lookup(conn, "tanahpedia_lookup_name_type", "MAIN");
 		await txExecute(
 			conn,
@@ -505,6 +560,7 @@ export async function applyChange(
 		[randomUUID(), id, entityId],
 	);
 	await recomputeEntryMetrics(conn, id, "<p></p>");
+	return { subtypeId };
 }
 
 export async function contributionCatalogue(conn: PoolConnection) {

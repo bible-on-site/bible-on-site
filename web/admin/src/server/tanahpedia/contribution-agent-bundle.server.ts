@@ -14,7 +14,7 @@ import {
 } from "./family-api-spec";
 
 /** Bump when instructions or tool semantics change, independently of API data migrations. */
-export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v14";
+export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v15";
 const object = (properties: Record<string, unknown>, required: string[]) => ({
 	type: "object",
 	additionalProperties: false,
@@ -62,6 +62,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			`parent_child: after:{parentId,childId,relationshipType:${FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.join("|")},parentRole:${FAMILY_PARENT_ROLES.join("|")},sourceCitation?,altGroupId?,birthOrder?}`,
 			`union: after:{person1Id,person2Id,unionType:${FAMILY_UNION_TYPES.join("|")},unionOrder?,startDate?,endDate?,endReason:${FAMILY_UNION_END_REASONS.join("|")}|null,sourceCitation?,personSourceCitation?,altGroupId?}`,
 			"place: after:{placeId,modernName?,latitude:number|null,longitude:number|null,altGroupId?}; targetId identifies an existing place-identification row, not the place",
+			"place_profile: one place per PR. In after, provide entry:{title,uniqueName,displayName} and omit targetId for a new place. For an existing place use its place ID and set entry:null. Use scripture_occurrences across all books. For after.occurrences, copy exact {perekId,pasukNumber,segmentStart,segmentEnd,text} from the tool or select inclusive ordinal ranges with {spellings,selected:[{from,to}]}. Review the context for every selected match, keep separate spans for repeated mentions, and describe uncertain and excluded matches in the PR. Include identification:{modernName,latitude,longitude,basis:consensus|commentary,citation,coordinateCitation} only when the reviewed evidence supports both the identity and the location. For an ancient commentary's identification use basis:commentary and cite the commentary and reliable modern coordinates separately. Otherwise set identification:null.",
 			"metadata: existing entity targetId required; after:{displayName}",
 			`entry: after:{title,uniqueName,entityType:${ADMIN_CREATABLE_ENTITY_TYPES.join("|")},displayName}; creates empty body only`,
 			"alias_mapping: after:{name,targets:[{entryId,label}]}; complete destination set; existing targetId identifies the alias",
@@ -152,6 +153,50 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 						citationLimit: { type: "integer", minimum: 1, maximum: 50 },
 					},
 					["id"],
+				),
+			},
+			{
+				name: "scripture_occurrences",
+				description:
+					"Find candidate word spans in canonical Tanakh. Omit book for all books. Returns exact pointed text, zero-based inclusive segment indices, verse context, zero-based candidate ordinals, total and nextCursor. Review context before accepting a candidate.",
+				inputSchema: object(
+					{
+						spellings: {
+							type: "array",
+							minItems: 1,
+							maxItems: 12,
+							items: { type: "string" },
+						},
+						book: { type: "string" },
+						cursor: { type: "integer", minimum: 0 },
+						limit: { type: "integer", minimum: 1, maximum: 100 },
+					},
+					["spellings"],
+				),
+			},
+			{
+				name: "scripture_chapter",
+				description:
+					"Read canonical pointed verses in a chapter, for discovering places and checking narrative context. Find chapter IDs with search kind perek. Return totals and a next cursor; do not claim to have read omitted pages.",
+				inputSchema: object(
+					{
+						perekId: { type: "integer", minimum: 1 },
+						cursor: { type: "integer", minimum: 0 },
+						limit: { type: "integer", minimum: 1, maximum: 25 },
+					},
+					["perekId"],
+				),
+			},
+			{
+				name: "place_profile_words",
+				description:
+					"Read the current place PR's exact proposed word spans in pages. The initial summary includes the total. When revising only text or evidence, omit the unchanged change sequence; a replacement sequence must include every word span you intend to retain.",
+				inputSchema: object(
+					{
+						cursor: { type: "integer", minimum: 0 },
+						limit: { type: "integer", minimum: 1, maximum: 50 },
+					},
+					[],
 				),
 			},
 		],

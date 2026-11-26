@@ -1,9 +1,105 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ContributionDiff } from "~/components/tanahpedia/ContributionDiff";
 import type { ReviewedChange } from "~/lib/tanahpedia/contributions";
 
 describe("typed contribution diff", () => {
+	it("distinguishes existing links from exact new word spans and keeps evidence sources separate", () => {
+		const kept = {
+			perekId: 64,
+			pasukNumber: 2,
+			segmentStart: 7,
+			segmentEnd: 8,
+			text: "פִּ֣י הַחִירֹ֔ת",
+		};
+		const newSpan = {
+			...kept,
+			segmentStart: 14,
+			segmentEnd: 15,
+			text: "בַּ֣עַל צְפֹ֔ן",
+		};
+		render(
+			<ContributionDiff
+				changes={[
+					{
+						kind: "place_profile",
+						targetId: "place",
+						before: { occurrences: [kept], entry: null, identification: null },
+						after: {
+							entry: null,
+							occurrences: [kept, newSpan],
+							identification: {
+								basis: "commentary",
+								modernName: "אתר לבדיקה",
+								latitude: 30.1,
+								longitude: 32.2,
+								citation: "מקור זיהוי",
+								coordinateCitation: "מקור מדידה",
+							},
+						},
+						labels: { "64:2:14:15": "שמות יד ב", place: "אתר במצרים" },
+					},
+				]}
+			/>,
+		);
+		const occurrences = within(
+			screen.getByRole("region", { name: "קישורי מילים במקרא" }),
+		);
+		expect(occurrences.getByText("1 להוספה · 1 כבר קיימים")).toBeVisible();
+		expect(
+			occurrences.getByRole("row", { name: "שמות יד ב בַּ֣עַל צְפֹ֔ן 14-15" }),
+		).toBeVisible();
+		expect(occurrences.queryByText(kept.text)).not.toBeInTheDocument();
+		const identification = within(
+			screen.getByRole("region", { name: "זיהוי וקואורדינטות" }),
+		);
+		expect(identification.getByText("זיהוי לפי פירוש")).toBeVisible();
+		expect(identification.getByText("מקור זיהוי")).toBeVisible();
+		expect(identification.getByText("מקור מדידה")).toBeVisible();
+		expect(identification.getByText("30.1, 32.2")).toBeVisible();
+	});
+
+	it("paginates a large place list and labels a newly proposed entry", () => {
+		const occurrences = Array.from({ length: 41 }, (_, i) => ({
+			perekId: 64,
+			pasukNumber: 2,
+			segmentStart: i,
+			segmentEnd: i,
+			text: `מופע ${i + 1}`,
+		}));
+		render(
+			<ContributionDiff
+				changes={[
+					{
+						kind: "place_profile",
+						targetId: "place",
+						before: null,
+						labels: {},
+						after: {
+							entry: {
+								title: "מקום חדש",
+								uniqueName: "מקום",
+								displayName: "שם מוצע",
+							},
+							occurrences,
+							identification: null,
+						},
+					},
+				]}
+			/>,
+		);
+		expect(screen.getByRole("region", { name: "ערך חדש" })).toHaveTextContent(
+			"מקום חדש",
+		);
+		expect(screen.getByText("מופע 40")).toBeVisible();
+		expect(screen.queryByText("מופע 41")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "הקודם" })).toBeDisabled();
+		fireEvent.click(screen.getByRole("button", { name: "הבא" }));
+		expect(screen.getByText("מופע 41")).toBeVisible();
+		expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
+		fireEvent.click(screen.getByRole("button", { name: "הקודם" }));
+		expect(screen.getByText("מופע 40")).toBeVisible();
+	});
 	it("renders unresolved names, unlabeled alias targets, booleans and partial legacy dates", () => {
 		render(
 			<ContributionDiff

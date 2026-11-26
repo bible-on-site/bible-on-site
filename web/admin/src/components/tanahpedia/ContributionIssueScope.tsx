@@ -58,7 +58,12 @@ export function ContributionIssueScopeFields({
 						))}
 					</select>
 				</div>
-				{value && value.kind !== "entry" && (
+				{value?.kind === "place_profile" && (
+					<p className="contribution-muted">
+						לכל מקום ייפתח PR נפרד עם המופעים המדויקים שלו במקרא.
+					</p>
+				)}
+				{value && value.kind !== "entry" && value.kind !== "place_profile" && (
 					<div className="contribution-source-fields">
 						<label htmlFor={`${id}-target`}>
 							{value.kind === "article_links"

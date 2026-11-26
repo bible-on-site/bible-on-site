@@ -16,6 +16,7 @@ import {
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { toHebrewLetters } from "~/utils/hebrew";
 import { ContributionArticleLinkDiff } from "./ContributionArticleLinks";
+import { ContributionPlaceProfileDiff } from "./ContributionPlaceProfile";
 import {
 	HEBREW_MONTHS,
 	RECORD_OPTION_LABELS,
@@ -316,6 +317,8 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 					)}
 					{change.kind === "article_links" ? (
 						<ContributionArticleLinkDiff change={change} />
+					) : change.kind === "place_profile" ? (
+						<ContributionPlaceProfileDiff change={change} />
 					) : (
 						<div className="contribution-diff-table-wrap">
 							<table>

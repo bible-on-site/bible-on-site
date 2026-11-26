@@ -12,7 +12,13 @@ export async function resolveEntryCreations(
 	conn: PoolConnection,
 	inputs: ChangeInput[],
 ): Promise<ChangeInput[]> {
-	if (!inputs.some((c) => c.kind === "entry")) return inputs;
+	if (
+		!inputs.some(
+			(c) =>
+				c.kind === "entry" || (c.kind === "place_profile" && c.after.entry),
+		)
+	)
+		return inputs;
 	const removals = new Set(
 		inputs
 			.filter(
@@ -22,6 +28,33 @@ export async function resolveEntryCreations(
 	);
 	const output: ChangeInput[] = [];
 	for (const input of inputs) {
+		if (input.kind === "place_profile" && input.after.entry) {
+			const resolved = await resolveEntryCreations(conn, [
+				{
+					kind: "entry",
+					targetId: input.targetId,
+					after: { ...input.after.entry, entityType: "PLACE" },
+				},
+			]);
+			const entity = resolved.find((change) => change.kind === "metadata");
+			if (!entity) {
+				output.push(input);
+				continue;
+			}
+			const places = await txQuery<{ id: string }>(
+				conn,
+				"SELECT id FROM tanahpedia_place WHERE entity_id=? FOR SHARE",
+				[entity.targetId],
+			);
+			if (places.length !== 1)
+				throw new Error("The existing entry must identify one place.");
+			output.push({
+				kind: "place_profile",
+				targetId: places[0].id,
+				after: { ...input.after, entry: null },
+			});
+			continue;
+		}
 		if (input.kind !== "entry") {
 			output.push(input);
 			continue;

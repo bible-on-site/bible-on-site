@@ -14,6 +14,10 @@ import {
 	validateChanges,
 } from "~/lib/tanahpedia/contributions";
 import {
+	assertAgentPlaceEvidence,
+	materializeAgentPlaceChanges,
+} from "./contribution-agent-place-profiles.server";
+import {
 	assertGeneratedReferences,
 	contributionOutputSchema,
 	type ModelCatalogue,
@@ -376,15 +380,22 @@ export function parseContributionAgentResult(
 		throw new Error("Only implemented issues may create PRs");
 	if (outcome !== "revised" && output.draft !== undefined)
 		throw new Error("Only revised PRs may contain a replacement draft");
-	if (outcome === "implemented" && item.scope) {
-		if (!Array.isArray(output.pullRequests))
-			throw new Error("Agent PRs are required");
-		for (const proposal of output.pullRequests)
-			assertIssueScopeChanges(
-				validateChanges(record(proposal).changes),
-				item.scope,
-			);
-	}
+	const pullRequests =
+		outcome === "implemented" && Array.isArray(output.pullRequests)
+			? output.pullRequests.map((proposal) => {
+					const raw = record(proposal);
+					const changes = materializeAgentPlaceChanges(
+						raw.changes,
+						item,
+						catalogue,
+					);
+					if (item.scope)
+						assertIssueScopeChanges(validateChanges(changes), item.scope);
+					return changes === raw.changes ? proposal : { ...raw, changes };
+				})
+			: output.pullRequests;
+	if (outcome === "implemented" && item.scope && !Array.isArray(pullRequests))
+		throw new Error("Agent PRs are required");
 	let draft:
 		| {
 				title?: string;
@@ -439,7 +450,9 @@ export function parseContributionAgentResult(
 				Array.isArray(raw.changes) &&
 				raw.changes.length === 0
 					? []
-					: validateChanges(raw.changes);
+					: validateChanges(
+							materializeAgentPlaceChanges(raw.changes, item, catalogue),
+						);
 			assertGeneratedReferences(draft.changes, catalogue, item.changes);
 			const citations = new Set(item.evidence.map((source) => source.citation));
 			for (const change of draft.changes)
@@ -457,6 +470,10 @@ export function parseContributionAgentResult(
 						);
 				}
 		}
+		assertAgentPlaceEvidence(
+			draft.changes ?? item.changes,
+			draft.evidence ?? item.evidence,
+		);
 	}
 	assertContributionAgentVerbatimResult(item, { draft, responses });
 	assertContributionAgentPreservationResult(item, { draft });
@@ -469,6 +486,6 @@ export function parseContributionAgentResult(
 		summary,
 		responses,
 		draft,
-		pullRequests: output.pullRequests,
+		pullRequests,
 	};
 }

@@ -671,14 +671,15 @@ describe("detectChanges", () => {
 		);
 	});
 
-	test("the pinned corpus releases the bulletin through the version stem (#3709)", () => {
+	test("the pinned corpus releases the bulletin and admin through the version stem", () => {
 		for (const corpus of [
 			"web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
 			// A bumped dump keeps selecting the bulletin even though the exact
 			// release-notes pin still names the previous file.
 			"web/bible-on-site/src/data/db/sefaria-dump-5785-tishrei-1.tanah_view.json",
 		]) {
-			assert.deepEqual(changed([corpus], "website", "bulletin"), [
+			assert.deepEqual(changed([corpus], "website", "bulletin", "admin"), [
+				{ module_changed: true, ci_changed: false },
 				{ module_changed: true, ci_changed: false },
 				{ module_changed: true, ci_changed: false },
 			]);

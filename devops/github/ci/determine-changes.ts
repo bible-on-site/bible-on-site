@@ -213,7 +213,10 @@ export const MODULES = {
 			...ADMIN_API_SHARED_CONTRACTS,
 			// Admin stages the shared webfonts and favicon at build time (#3708).
 			"web/shared/branding",
+			"web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json",
 		],
+		extraModulePattern:
+			/^web\/bible-on-site\/src\/data\/db\/sefaria-dump-.+\.tanah_view\.json$/,
 		ciPaths: [
 			...UBUNTU_MIRROR_CI_PATHS,
 			"devops/github/release/recovery-request.mjs",
