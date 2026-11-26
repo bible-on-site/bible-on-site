@@ -27,6 +27,14 @@ avoids: Play discovery for that locale comes from transliterated queries, so
 the listing text is an accepted ASO exception (#2124) — do not "correct" it to
 the internal Tanah/Perek/Pasuk terms.
 
+The leading unquoted `תנך` spelling in the Hebrew short description is also an
+accepted ASO exception (#2124): Play search produces different result sets for
+the quoted and unquoted spellings, and the plain spelling is a required
+discovery target. Do not normalize that leading search variant back to `תנ"ך`;
+the canonical punctuated form remains in the title and the rest of the copy.
+The exception stays in the Play-only short description because the full Hebrew
+description is shared with Apple metadata.
+
 To sync the listing without shipping a build, run the `Store Listing` workflow
 (`.github/workflows/store-listing.yml`, `workflow_dispatch` — always publishes
 the current `master` copy, whichever branch is picked in the dispatch dialog),
