@@ -69,7 +69,11 @@ public sealed class ConfigurationTests
             Assert.False(options.ContainsKey("appium:skipLogCapture"));
             Assert.False(options.ContainsKey("appium:shouldTerminateApp"));
             Assert.False(options.ContainsKey("appium:commandTimeouts"));
-            Assert.False(options.ContainsKey("appium:settings"));
+            // UiAutomator2 pays a ~500ms accessibility quiet window before
+            // every lookup by default; the suite's explicit polling replaces
+            // that implicit synchronization, so the idle wait is disabled.
+            var settings = Assert.IsType<Dictionary<string, object>>(options["appium:settings"]);
+            Assert.Equal(0, settings["waitForIdleTimeout"]);
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
     }

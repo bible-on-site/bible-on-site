@@ -278,6 +278,21 @@ public abstract class MobilePlatformAdapter
             // restarts whose adb activateApp calls drop extras.
             options.AddAdditionalAppiumOption("optionalIntentArguments",
                 $"--ez BIBLE_E2E true --es BIBLE_E2E_COVERAGE_TOKEN {AppCoverage.Token}");
+            // UiAutomator2 resets its accessibility cache before every element
+            // lookup, and that reset opens with UiDevice.waitForIdle: a ~500ms
+            // accessibility quiet window (10s cap) paid per lookup whether the
+            // UI ever settles or not. The master run that hit the 15-minute
+            // pilot deadline spent 517s in 789 findElements calls (515ms
+            // average on hits, 952ms on misses — elements are absent precisely
+            // while the UI churns, so misses idle longer) plus the same wait
+            // after every click. The page objects already poll explicit element
+            // state instead of relying on implicit synchronization — the same
+            // argument as the iOS settings below — so the idle gate is dead
+            // time and the quiet window never gates a lookup again.
+            options.AddAdditionalAppiumOption("settings", new Dictionary<string, object>
+            {
+                ["waitForIdleTimeout"] = 0
+            });
         }
         else
         {
@@ -420,7 +435,103 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     // The drawer's ScrollView carries no AutomationId; it is the scrollable one
     // (the outer shell container is a non-scrollable ScrollView).
     public override By FlyoutScroller => By.XPath("//android.widget.ScrollView[@scrollable='true']");
-    public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
+    public override void GoBack(AppiumDriver driver)
+    {
+        // The shell consumes every Back that lands inside the Navigating to
+        // Navigated settle window (NavigationSettleWatch) — re-entering the
+        // pipeline there can pop the page beneath the transitioning one, so
+        // a press in that window is dropped by design and pressBack still
+        // reports success. The idle-quiet lookups used to hide this because
+        // every wait ended only after transitions settled; with the idle
+        // wait disabled the waits accept a pushed page mid-animation, the
+        // press is consumed, and the flyout/preferences tests sit one page
+        // deep until their wait expires. Press only into a quiet tree — a
+        // change observed afterwards is then the press's own pop, not the
+        // tail of the push it raced — confirm the turn, and reissue once,
+        // the same one-retry idiom the iOS back gesture uses for dropped
+        // navigation input.
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var before = SettledTree(driver);
+            driver.Navigate().Back();
+            if (PageTurned(driver, before))
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The tree once it has stayed unchanged for <see cref="BackQuietWindow"/>,
+    /// bounded by the shell's own 2s consume bound (NavigationSettleWatch):
+    /// past it no transition owns Back, so a perpetually churning page gets
+    /// its press without waiting longer than the guard could. A quiet
+    /// tree is the only state a Back press can be attributed to: pressing
+    /// into an animating transition leaves no way to tell its pop from the
+    /// transition's own rewrite. Two equal samples are not enough — a push
+    /// can hold one frame between animation steps while its settle window
+    /// still owns Back until Navigated.
+    /// </summary>
+    private static string SettledTree(AppiumDriver driver)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var last = driver.PageSource;
+        var quietSince = DateTime.UtcNow;
+        while (DateTime.UtcNow < deadline && DateTime.UtcNow - quietSince < BackQuietWindow)
+        {
+            // Each sample is a full tree dump on the device; the poll cadence
+            // keeps the dump loop from saturating the accessibility server.
+            Thread.Sleep(100);
+            var current = driver.PageSource;
+            if (!string.Equals(current, last, StringComparison.Ordinal))
+            {
+                last = current;
+                quietSince = DateTime.UtcNow;
+            }
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// The quiet span androidx's waitForIdle requires before it calls the
+    /// device idle — paid here once per Back instead of once per lookup.
+    /// </summary>
+    private static readonly TimeSpan BackQuietWindow = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Whether a back press became a navigation: the tree changed and then
+    /// went quiet again. The pop animation rewrites the tree for a few
+    /// hundred milliseconds, and a press landing inside it is consumed the
+    /// same way, so the press is confirmed only once consecutive snapshots
+    /// agree. A tree that changed without settling still proves the press
+    /// landed — nothing else mutates a tree that was quiet at press time —
+    /// one that never changed does not.
+    /// </summary>
+    private static bool PageTurned(AppiumDriver driver, string before)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        var changed = false;
+        var last = before;
+        while (DateTime.UtcNow < deadline)
+        {
+            var current = driver.PageSource;
+            if (string.Equals(current, last, StringComparison.Ordinal))
+            {
+                if (changed)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                changed = true;
+                last = current;
+            }
+            Thread.Sleep(100);
+        }
+        return changed;
+    }
+
     public override void ScrollPageDown(AppiumDriver driver) => ScrollPage(driver, "down");
     public override void ScrollPageUp(AppiumDriver driver) => ScrollPage(driver, "up");
 
