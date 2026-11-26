@@ -973,6 +973,50 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_RetriesInitialization_AfterTransientFault()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var indexPath = Path.Join(storage.Root, "search.sqlite");
+        // A transient corrupt index file faults the constructor-launched init.
+        await File.WriteAllTextAsync(indexPath, "not a sqlite database", TestContext.Current.CancellationToken);
+        await using var index = new SearchIndexService(perakim, null, indexPath);
+        var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
+        var books = new HashSet<int> { 1 };
+
+        await Assert.ThrowsAsync<SQLite.SQLiteException>(() => index.SearchAsync("בראשית",
+            filters, books, 10, TestContext.Current.CancellationToken));
+
+        // The transient condition cleared: the next call retries the faulted
+        // init instead of rethrowing it until an app restart. The faulted query
+        // leaves the file's pooled handle open, so close it before the delete
+        // (Windows cannot unlink an open file).
+        await storage.CloseDatabaseFileAsync("search.sqlite");
+        File.Delete(indexPath);
+        (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SearchAsync_RetriesInitialization_AfterCancellation()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+
+        // A canceled init is transient too: swap it in once the ctor-launched
+        // one finished, then expect the next search to run a fresh init.
+        var initField = typeof(SearchIndexService)
+            .GetField("_initialization", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        await (Task)initField.GetValue(index)!;
+        initField.SetValue(index, Task.FromCanceled(new CancellationToken(canceled: true)));
+
+        (await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task SearchAsync_AfterDispose_Throws()
     {
         await using var storage = new TestStorage();
