@@ -2279,8 +2279,11 @@ mod tests {
                 .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
                     person_sex_model("sex-1", "person-1"),
                 ]])
+                // In the deployment-order state under test, the combined guard
+                // fails on the not-yet-created commentator table — both place
+                // tables themselves already exist.
                 .append_query_errors([sea_orm::DbErr::Custom(
-                    "Query Error: Table 'tanah.tanahpedia_person_death_place' doesn't exist"
+                    "Query Error: Table 'tanah.tanahpedia_person_role_commentator' doesn't exist"
                         .to_string(),
                 )])
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([

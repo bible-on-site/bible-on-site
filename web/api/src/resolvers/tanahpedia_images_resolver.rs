@@ -101,6 +101,15 @@ impl TanahpediaImagesQuery {
     }
 }
 
+/// Tests inject an unconfigured revalidator into the GraphQL context so their
+/// `SKIPPED` outcome never depends on the process environment; production
+/// schemas omit it and keep reading `WEBSITE_URL`/`REVALIDATE_SECRET`.
+fn website_revalidator(ctx: &Context<'_>) -> WebsiteRevalidator {
+    ctx.data_opt::<WebsiteRevalidator>()
+        .cloned()
+        .unwrap_or_else(WebsiteRevalidator::from_env)
+}
+
 #[derive(Default)]
 pub struct TanahpediaImagesMutation;
 
@@ -120,7 +129,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::put_image_asset(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             input,
         )
         .await
@@ -140,7 +149,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::delete_image_asset(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             &id,
         )
         .await
@@ -160,7 +169,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::put_entity_image_link(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             input,
         )
         .await
@@ -179,7 +188,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::put_entry_image_link(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             input,
         )
         .await
@@ -197,7 +206,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::remove_entity_image_link(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             &id,
         )
         .await
@@ -215,7 +224,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::remove_entry_image_link(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             &id,
         )
         .await
@@ -234,7 +243,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::clear_entity_primary_image(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             &entity_id,
         )
         .await
@@ -253,7 +262,7 @@ impl TanahpediaImagesMutation {
             .map_err(|e| e.extend())?;
         tanahpedia_images_service::clear_entry_primary_image(
             ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
+            &website_revalidator(ctx),
             &entry_id,
         )
         .await
@@ -264,7 +273,7 @@ impl TanahpediaImagesMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entities::tanahpedia::{entity, entry, entry_image, entity_image, image};
+    use entities::tanahpedia::{entity, entity_image, entry, entry_image, image};
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
     use std::collections::BTreeMap;
 
@@ -336,9 +345,7 @@ mod tests {
         .collect()
     }
 
-    fn link_rows(
-        rows: Vec<BTreeMap<String, Value>>,
-    ) -> sea_orm::MockDatabase {
+    fn link_rows(rows: Vec<BTreeMap<String, Value>>) -> sea_orm::MockDatabase {
         MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 rows,
@@ -375,7 +382,13 @@ mod tests {
 
     /// A schema wired like production: the shared secret is configured and
     /// the request presents it (`Some("k")` both sides).
-    fn schema(db: MockDatabase) -> async_graphql::Schema<TanahpediaImagesQuery, TanahpediaImagesMutation, async_graphql::EmptySubscription> {
+    fn schema(
+        db: MockDatabase,
+    ) -> async_graphql::Schema<
+        TanahpediaImagesQuery,
+        TanahpediaImagesMutation,
+        async_graphql::EmptySubscription,
+    > {
         async_graphql::Schema::build(
             TanahpediaImagesQuery,
             TanahpediaImagesMutation,
@@ -386,6 +399,9 @@ mod tests {
             Some("k".to_string()),
             Some("k".to_string()),
         ))
+        // Deliberately unconfigured: revalidation outcomes in these tests are
+        // deterministic even when the developer/CI shell exports WEBSITE_URL.
+        .data(WebsiteRevalidator::new(None, None))
         .finish()
     }
 
@@ -431,8 +447,7 @@ mod tests {
             .await;
         assert!(res.errors.is_empty(), "{:?}", res.errors);
         assert_eq!(
-            res.data.into_json().unwrap()["tanahpediaEntityImageLinks"][0]["image"]
-                ["permissionEvidence"],
+            res.data.into_json().unwrap()["tanahpediaEntityImageLinks"][0]["image"]["permissionEvidence"],
             "evidence"
         );
 
@@ -456,29 +471,46 @@ mod tests {
     /// Editor surfaces fail closed without the revision-scope bearer.
     #[tokio::test]
     async fn editor_surfaces_reject_an_unauthorized_request() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let schema = async_graphql::Schema::build(
             TanahpediaImagesQuery,
             TanahpediaImagesMutation,
             async_graphql::EmptySubscription,
         )
-        .data(Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        ))
+        .data(db.clone())
         .data(ApiAuth::with_revision_api_key(
             Some("wrong".to_string()),
             Some("k".to_string()),
         ))
+        .data(WebsiteRevalidator::new(None, None))
         .finish();
 
-        let res = schema
-            .execute("{ tanahpediaEntryImageLinks(entryId: \"e1\") { id } }")
-            .await;
-        assert!(!res.errors.is_empty());
-
-        let res = schema
-            .execute("mutation { removeTanahpediaEntityImageLink(id: \"l1\") { affected } }")
-            .await;
-        assert!(!res.errors.is_empty());
+        for operation in [
+            "{ tanahpediaEntryImageLinks(entryId: \"e1\") { id } }",
+            "mutation { removeTanahpediaEntityImageLink(id: \"l1\") { affected } }",
+        ] {
+            let res = schema.execute(operation).await;
+            assert_eq!(res.errors.len(), 1, "{:?}", res.errors);
+            assert_eq!(res.errors[0].message, "Invalid or missing API key");
+            let extensions = res.errors[0].extensions.as_ref().unwrap();
+            assert_eq!(
+                extensions.get("code"),
+                Some(&async_graphql::Value::from("UNAUTHORIZED"))
+            );
+            assert_eq!(
+                extensions.get("statusCode"),
+                Some(&async_graphql::Value::from(401))
+            );
+        }
+        // Authorization ran before either editor surface touched the database:
+        // an empty mock cannot satisfy this test by erroring first.
+        assert!(
+            db.get_connection()
+                .clone()
+                .into_transaction_log()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -605,7 +637,9 @@ mod tests {
                 ]])
                 .append_exec_results([exec_result(1)]),
         )
-        .execute("mutation { removeTanahpediaEntityImageLink(id: \"l1\") { affected revalidation } }")
+        .execute(
+            "mutation { removeTanahpediaEntityImageLink(id: \"l1\") { affected revalidation } }",
+        )
         .await;
         assert!(res.errors.is_empty(), "{:?}", res.errors);
         assert_eq!(
@@ -629,7 +663,9 @@ mod tests {
                 )]])
                 .append_exec_results([exec_result(1)]),
         )
-        .execute("mutation { removeTanahpediaEntryImageLink(id: \"l2\") { affected revalidation } }")
+        .execute(
+            "mutation { removeTanahpediaEntryImageLink(id: \"l2\") { affected revalidation } }",
+        )
         .await;
         assert!(res.errors.is_empty(), "{:?}", res.errors);
         let result = res.data.into_json().unwrap()["removeTanahpediaEntryImageLink"].clone();

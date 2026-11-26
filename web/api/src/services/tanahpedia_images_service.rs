@@ -1821,7 +1821,10 @@ mod tests {
         assert_eq!(full[0].owner_kind, "ENTRY");
         assert!(full[0].image.license_name.is_none());
         assert!(full[0].image.license_url.is_none());
-        assert_eq!(full[0].image.permission_evidence.as_deref(), Some("evidence"));
+        assert_eq!(
+            full[0].image.permission_evidence.as_deref(),
+            Some("evidence")
+        );
     }
 
     /// A public-domain asset record reads back without the license pair.
@@ -2019,6 +2022,8 @@ mod tests {
     /// An explicit `sortOrder` on attach wins over the MAX+1 default.
     #[tokio::test]
     async fn put_entry_image_link_honors_an_explicit_sort_order() {
+        let mut saved_row = link_row("generated", "e1", "img1", false);
+        saved_row.insert("sort_order".to_string(), 7_i16.into());
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
@@ -2029,7 +2034,7 @@ mod tests {
                 )]])
                 .append_exec_results([exec_result(1)])
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![link_row("generated", "e1", "img1", false)],
+                    vec![saved_row],
                 ])
                 .into_connection(),
         );
@@ -2050,6 +2055,25 @@ mod tests {
 
         assert_eq!(link.id, "generated");
         assert_eq!(link.owner_kind, "ENTRY");
+        assert_eq!(link.sort_order, 7);
+
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        let insert_statement = transaction_log
+            .iter()
+            .flat_map(|transaction| transaction.statements())
+            .find(|statement| {
+                statement
+                    .sql
+                    .starts_with("INSERT INTO tanahpedia_entry_image")
+            })
+            .expect("the attach write should be recorded");
+        let insert_values = &insert_statement
+            .values
+            .as_ref()
+            .expect("the attach write should carry bind values")
+            .0;
+        assert_eq!(insert_values.len(), 5);
+        assert_eq!(insert_values[3], Value::from(7_i16));
     }
 
     /// The post-commit link re-read must always find the row just written.
@@ -2125,9 +2149,10 @@ mod tests {
                 .append_exec_results([exec_result(1)])
                 .into_connection(),
         );
-        let result = remove_entry_image_link(&entry_gone, &WebsiteRevalidator::new(None, None), "l2")
-            .await
-            .unwrap();
+        let result =
+            remove_entry_image_link(&entry_gone, &WebsiteRevalidator::new(None, None), "l2")
+                .await
+                .unwrap();
         assert!(result.affected);
         assert_eq!(result.revalidation, None);
 
