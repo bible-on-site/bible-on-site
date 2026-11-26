@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
-import { JsonLd } from "@/app/components/JsonLd";
-import { ReadingProgress } from "@/app/components/ReadingProgress";
-import { ReadingTime } from "@/app/components/ReadingTime";
 import {
 	DedicationLines,
 	dedicationLines,
 } from "@/app/components/dedications/DedicationLines";
+import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
 import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
@@ -19,9 +19,7 @@ import { pageMetadata } from "@/lib/seo/opengraph";
 import { sameAsFor } from "@/lib/seo/same-as";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
-import {
-	getCachedEntityTypeEntrySummaries,
-} from "@/lib/tanahpedia/loaders";
+import { getCachedEntityTypeEntrySummaries } from "@/lib/tanahpedia/loaders";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
@@ -29,6 +27,7 @@ import {
 	getEntryByUniqueName,
 	getEntryOccurrences,
 	getPersonFamilySummary,
+	getPersonPlaceFacts,
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
 import {
@@ -39,6 +38,7 @@ import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
 import { EntryOccurrencesTable } from "../components/EntryOccurrencesTable";
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
+import { PersonPlaceFactsSection } from "../components/PersonPlaceFacts";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
 import styles from "../page.module.css";
@@ -108,23 +108,29 @@ export async function EntryView({ slug }: { slug: string }) {
 	// issue them in one batch instead of serial round-trips.
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
 	const primaryEntity = entry.entities[0] ?? null;
-	const [siblingEntries, personFamily, placeMapMarkers, occurrences, entryDedications] =
-		await Promise.all([
-			primaryEntityType
-				? getCachedEntityTypeEntrySummaries(primaryEntityType as EntityType)
-				: getAllEntrySummaries(500, 0),
-			personEntity
-				? getPersonFamilySummary(
-						personEntity.entityId,
-						personEntity.entityName,
-					)
-				: Promise.resolve(null),
-			getPlaceMapMarkersForEntry(entry.id),
-			getEntryOccurrences(entry.id),
-			// Entry-scoped dedications (#2731): targeted by the canonical
-			// entry id, never inferred from prose mentions.
-			getEntryDedications(entry.id),
-		]);
+	const [
+		siblingEntries,
+		personFamily,
+		personPlaces,
+		placeMapMarkers,
+		occurrences,
+		entryDedications,
+	] = await Promise.all([
+		primaryEntityType
+			? getCachedEntityTypeEntrySummaries(primaryEntityType as EntityType)
+			: getAllEntrySummaries(500, 0),
+		personEntity
+			? getPersonFamilySummary(personEntity.entityId, personEntity.entityName)
+			: Promise.resolve(null),
+		personEntity
+			? getPersonPlaceFacts(personEntity.entityId)
+			: Promise.resolve(null),
+		getPlaceMapMarkersForEntry(entry.id),
+		getEntryOccurrences(entry.id),
+		// Entry-scoped dedications (#2731): targeted by the canonical
+		// entry id, never inferred from prose mentions.
+		getEntryDedications(entry.id),
+	]);
 	const siblingNav = siblingEntries.map((e) => ({
 		uniqueName: e.uniqueName,
 		title: e.title,
@@ -207,6 +213,8 @@ export async function EntryView({ slug }: { slug: string }) {
 					<TanahpediaPlacesMap markers={placeMapMarkers} />
 				</section>
 			) : null}
+
+			{personPlaces ? <PersonPlaceFactsSection facts={personPlaces} /> : null}
 
 			{personFamily ? <PersonFamilyTree summary={personFamily} /> : null}
 

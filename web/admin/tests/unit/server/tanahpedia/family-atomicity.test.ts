@@ -42,6 +42,7 @@ vi.mock("@tanstack/react-start", () => ({
 		}),
 		handler: (fn: unknown) => fn,
 	}),
+	createServerOnlyFn: (fn: unknown) => fn,
 }));
 vi.mock("~/server/website-revalidate", () => ({
 	revalidateWebsite: driver.invalidate,
@@ -78,6 +79,8 @@ function initialTables(): Tables {
 		tanahpedia_person_death_date: [],
 		tanahpedia_person_death_cause: [],
 		tanahpedia_person_birth_place: [],
+		tanahpedia_person_death_place: [],
+		tanahpedia_person_activity_place: [],
 		tanahpedia_person_role_prophet: [],
 		tanahpedia_person_role_king: [],
 		tanahpedia_entry_entity: [
@@ -112,6 +115,8 @@ function predicate(where: string | undefined, params: unknown[]) {
 	let index = 0;
 	const alternatives = where.split(" OR ").map((alternative) =>
 		alternative.split(" AND ").map((part) => {
+			if (part.endsWith(" IS NULL"))
+				return { key: part.slice(0, -" IS NULL".length), value: null };
 			const [key, token] = splitOnce(part, " = ");
 			if (token !== "?" && !(token.startsWith("'") && token.endsWith("'"))) {
 				throw new Error(`Unsupported test predicate: ${part}`);
@@ -124,7 +129,7 @@ function predicate(where: string | undefined, params: unknown[]) {
 	);
 	return (row: Row) =>
 		alternatives.some((terms) =>
-			terms.every(({ key, value }) => row[key] === value),
+			terms.every(({ key, value }) => (row[key] ?? null) === value),
 		);
 }
 
@@ -133,9 +138,12 @@ async function connectionExecute(rawSql: string, params: unknown[]) {
 	const tables = driver.pending;
 	if (!tables) throw new Error("SQL escaped its transaction");
 	const normalizedSql = rawSql.replace(/\s+/g, " ").trim();
-	const sql = normalizedSql.endsWith(" LIMIT 1")
-		? normalizedSql.slice(0, -" LIMIT 1".length)
+	const unlocked = normalizedSql.endsWith(" FOR UPDATE")
+		? normalizedSql.slice(0, -" FOR UPDATE".length)
 		: normalizedSql;
+	const sql = unlocked.endsWith(" LIMIT 1")
+		? unlocked.slice(0, -" LIMIT 1".length)
+		: unlocked;
 	if (sql.startsWith("SELECT ")) {
 		const [, source] = splitOnce(sql, " FROM ");
 		const whereIndex = source.indexOf(" WHERE ");

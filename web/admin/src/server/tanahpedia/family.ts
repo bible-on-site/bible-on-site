@@ -7,9 +7,11 @@ import {
 	queryOne,
 	transaction,
 	txExecute,
+	txQuery,
 	txQueryOne,
 } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
+import { assertNoContributionDependents } from "./contribution-records.server";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
@@ -24,6 +26,7 @@ import {
 	FAMILY_PARENT_ROLES,
 	FAMILY_UNION_END_REASONS,
 	FAMILY_UNION_TYPES,
+	type FamilyPersonPlace,
 	type UpdateFamilyPersonInput,
 	type UpdateParentChildLinkInput,
 	type UpdatePersonNameInput,
@@ -83,9 +86,252 @@ async function getGodId(conn: PoolConnection): Promise<string> {
 	return row.id;
 }
 
+/** Normalized person place fact: exactly one side is set. `id` is the
+ * existing row id when the editor kept a row, so activity places reconcile
+ * without re-creating (and orphaning citations). `original*` carries the
+ * values the editor loaded for that row — the CAS token detecting a
+ * contribution merge that edited the row in place. */
+interface PersonPlaceValue {
+	id?: string | null;
+	placeId: string | null;
+	placeText: string | null;
+	originalPlaceId?: string | null;
+	originalPlaceText?: string | null;
+}
+
+/**
+ * Validates the linked-or-text pair of a person place fact. Returns `null`
+ * when both sides are empty (the fact is deleted), throws when both sides
+ * are provided (the fact has exactly one form).
+ */
+function personPlaceValue(
+	placeId: string | null | undefined,
+	placeText: string | null | undefined,
+	field: string,
+): PersonPlaceValue | null {
+	const id = placeId?.trim() ? placeId.trim() : null;
+	const text = placeText?.trim() ? placeText.trim() : null;
+	if (id && text)
+		throw new Error(
+			`${field}: provide either a linked place or free text, not both`,
+		);
+	if (!id && !text) return null;
+	return { placeId: id, placeText: text };
+}
+
+/**
+ * Upserts or deletes a person's canonical (alt_group_id IS NULL)
+ * single-row-per-person place fact (birth_place, death_place), each holding
+ * either a linked place entity or a free-text alternative. Alternative-opinion
+ * rows belong to other opinion groups and are never touched here.
+ *
+ * `original` is the canonical row the editor loaded (null = none loaded) and
+ * acts as a compare-and-swap token: the FOR UPDATE read sees rows committed
+ * after the editor's snapshot, so a row that no longer matches `original` —
+ * including a field that was empty and no longer is — means a contribution
+ * review intervened and the save must fail instead of overwriting it.
+ */
+async function upsertPersonPlace(
+	conn: PoolConnection,
+	params: {
+		table: "tanahpedia_person_birth_place" | "tanahpedia_person_death_place";
+		personId: string;
+		value: PersonPlaceValue | null;
+		original?: FamilyPersonPlace | null;
+	},
+): Promise<void> {
+	const { table, personId, value, original } = params;
+	// FOR UPDATE + the canonical predicate on the write keep a concurrent
+	// contribution merge from moving the row into an opinion group between the
+	// read and the update (same race replacePersonActivityPlaces guards).
+	const existing = await txQueryOne<{
+		id: string;
+		place_id: string | null;
+		place_text: string | null;
+	}>(
+		conn,
+		`SELECT id, place_id, place_text FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL LIMIT 1 FOR UPDATE`,
+		[personId],
+	);
+	if (original !== undefined) {
+		const changed =
+			original === null
+				? existing !== null
+				: existing === null ||
+					existing.id !== original.id ||
+					existing.place_id !== (original.placeId ?? null) ||
+					existing.place_text !== (original.placeText ?? null);
+		if (changed) {
+			throw new Error(
+				"the canonical place fact changed since the editor loaded it (a contribution review may have intervened); reload and retry",
+			);
+		}
+	}
+	if (value === null) {
+		if (existing) {
+			// The editor cleared the one canonical fact it loaded. A second
+			// canonical row (a contribution merge can add one) must not be
+			// left behind to surface as "the" fact on reload, and deleting it
+			// would discard a row the editor never saw — fail instead.
+			const other = await txQueryOne<{ id: string }>(
+				conn,
+				`SELECT id FROM ${table} WHERE person_id = ? AND alt_group_id IS NULL AND id <> ? LIMIT 1 FOR UPDATE`,
+				[personId, existing.id],
+			);
+			if (other)
+				throw new Error(
+					"another canonical place fact exists for this person (a contribution review may have added it); reconcile the extra fact before clearing",
+				);
+			await txExecute(
+				conn,
+				`DELETE FROM ${table} WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+				[existing.id, personId],
+			);
+		}
+		return;
+	}
+	if (existing) {
+		await txExecute(
+			conn,
+			`UPDATE ${table} SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[value.placeId, value.placeText, existing.id, personId],
+		);
+	} else {
+		await txExecute(
+			conn,
+			`INSERT INTO ${table} (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
+			[randomUUID(), personId, value.placeId, value.placeText],
+		);
+	}
+}
+
+/**
+ * Reconciles the person's canonical (alt_group_id IS NULL) activity places
+ * against the editor's list. Existing rows keep their ids so source-group
+ * citations stay attached; rows the editor removed are deleted only after the
+ * same dependent/source guard the contribution apply path enforces.
+ * Alternative-opinion rows belong to other opinion groups and are never
+ * touched here.
+ *
+ * The canonical rows are locked FOR UPDATE so a contribution merge cannot move
+ * a row into an opinion group between the read and the writes; the writes also
+ * keep the person + canonical predicates so a stale row id can never touch a
+ * reviewed row. A payload id missing from the locked set means the row stopped
+ * being canonical — fail loudly rather than overwrite the reviewed change.
+ *
+ * `removed` is the editor's explicit removal list — each entry carries the
+ * values it loaded for that row, so a contribution merge editing a removed
+ * row in place is detected instead of silently discarded. The locking read
+ * sees rows committed after the editor's snapshot, so a locked row that is
+ * neither kept nor explicitly removed was added by a
+ * concurrent review — reject the save instead of deleting an unseen row.
+ */
+async function replacePersonActivityPlaces(
+	conn: PoolConnection,
+	params: {
+		personId: string;
+		places: PersonPlaceValue[];
+		removed?: {
+			id: string;
+			originalPlaceId?: string | null;
+			originalPlaceText?: string | null;
+		}[];
+	},
+): Promise<void> {
+	const { personId, places, removed } = params;
+	const removals = removed
+		? new Map(removed.map((entry) => [entry.id, entry]))
+		: null;
+	const existing = await txQuery<{
+		id: string;
+		place_id: string | null;
+		place_text: string | null;
+	}>(
+		conn,
+		`SELECT id, place_id, place_text FROM tanahpedia_person_activity_place
+		 WHERE person_id = ? AND alt_group_id IS NULL FOR UPDATE`,
+		[personId],
+	);
+	const kept = new Set<string>();
+	for (const place of places) {
+		const retained = place.id
+			? existing.find((row) => row.id === place.id)
+			: undefined;
+		if (place.id && !retained) {
+			throw new Error(
+				`activityPlaces: row ${place.id} is no longer a canonical activity place (a contribution review may have moved it); reload and retry`,
+			);
+		}
+		if (!retained) {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_person_activity_place (id, person_id, place_id, place_text, alt_group_id) VALUES (?, ?, ?, ?, NULL)`,
+				[randomUUID(), personId, place.placeId, place.placeText],
+			);
+			continue;
+		}
+		kept.add(retained.id);
+		// CAS: the locked row must still hold what the editor loaded — a
+		// contribution merge editing the row in place keeps its id, so the id
+		// match alone is not enough to overwrite it with stale values.
+		if (
+			(place.originalPlaceId !== undefined ||
+				place.originalPlaceText !== undefined) &&
+			(retained.place_id !== (place.originalPlaceId ?? null) ||
+				retained.place_text !== (place.originalPlaceText ?? null))
+		) {
+			throw new Error(
+				`activityPlaces: row ${retained.id} changed since the editor loaded it (a contribution review may have edited it); reload and retry`,
+			);
+		}
+		if (
+			retained.place_id === place.placeId &&
+			retained.place_text === place.placeText
+		)
+			continue;
+		await txExecute(
+			conn,
+			`UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[place.placeId, place.placeText, retained.id, personId],
+		);
+	}
+	for (const row of existing) {
+		if (kept.has(row.id)) continue;
+		const removal = removals?.get(row.id);
+		if (removals && !removal) {
+			throw new Error(
+				`activityPlaces: the canonical list changed since the editor loaded it (a contribution review may have added row ${row.id}); reload and retry`,
+			);
+		}
+		// CAS: the editor removed the row it loaded — a contribution merge
+		// that edited it in place since then is not silently discarded.
+		if (
+			removal &&
+			(removal.originalPlaceId !== undefined ||
+				removal.originalPlaceText !== undefined) &&
+			(row.place_id !== (removal.originalPlaceId ?? null) ||
+				row.place_text !== (removal.originalPlaceText ?? null))
+		) {
+			throw new Error(
+				`activityPlaces: row ${row.id} changed since the editor loaded it (a contribution review may have edited it); reload and retry`,
+			);
+		}
+		await assertNoContributionDependents(
+			conn,
+			"tanahpedia_person_activity_place",
+			row.id,
+		);
+		await txExecute(
+			conn,
+			`DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL`,
+			[row.id, personId],
+		);
+	}
+}
+
 /**
  * Upserts or deletes a person's single-row-per-person biographical fact
- * (birth_date, death_date, death_cause, birth_place). Passing `null`
+ * (birth_date, death_date, death_cause). Passing `null`
  * deletes the existing row (if any); passing a value inserts or updates it.
  */
 async function upsertPersonSingleton(
@@ -94,9 +340,8 @@ async function upsertPersonSingleton(
 		table:
 			| "tanahpedia_person_birth_date"
 			| "tanahpedia_person_death_date"
-			| "tanahpedia_person_death_cause"
-			| "tanahpedia_person_birth_place";
-		valueColumn: "birth_date" | "death_date" | "death_cause" | "place_id";
+			| "tanahpedia_person_death_cause";
+		valueColumn: "birth_date" | "death_date" | "death_cause";
 		personId: string;
 		value: string | number | null;
 	},
@@ -252,12 +497,45 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 					value: requiredNonEmpty(data.deathCause, "deathCause"),
 				});
 			}
-			if (data.birthPlaceId != null) {
-				await upsertPersonSingleton(conn, {
+			const birthPlace = personPlaceValue(
+				data.birthPlaceId,
+				data.birthPlaceText,
+				"birthPlace",
+			);
+			if (birthPlace) {
+				await upsertPersonPlace(conn, {
 					table: "tanahpedia_person_birth_place",
-					valueColumn: "place_id",
 					personId,
-					value: requiredNonEmpty(data.birthPlaceId, "birthPlaceId"),
+					value: birthPlace,
+				});
+			}
+			const deathPlace = personPlaceValue(
+				data.deathPlaceId,
+				data.deathPlaceText,
+				"deathPlace",
+			);
+			if (deathPlace) {
+				await upsertPersonPlace(conn, {
+					table: "tanahpedia_person_death_place",
+					personId,
+					value: deathPlace,
+				});
+			}
+			if (data.activityPlaces?.length) {
+				await replacePersonActivityPlaces(conn, {
+					personId,
+					places: data.activityPlaces.map((place, index) => {
+						const value = personPlaceValue(
+							place.placeId,
+							place.placeText,
+							`activityPlaces[${index}]`,
+						);
+						if (!value)
+							throw new Error(
+								`activityPlaces[${index}]: a linked place or free text is required`,
+							);
+						return value;
+					}),
 				});
 			}
 			if (data.isProphet) {
@@ -306,6 +584,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			data.deathDate === undefined &&
 			data.deathCause === undefined &&
 			data.birthPlaceId === undefined &&
+			data.birthPlaceText === undefined &&
+			data.deathPlaceId === undefined &&
+			data.deathPlaceText === undefined &&
+			data.activityPlaces === undefined &&
 			data.isProphet === undefined &&
 			data.isKing === undefined
 		) {
@@ -381,6 +663,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 				data.deathDate !== undefined ||
 				data.deathCause !== undefined ||
 				data.birthPlaceId !== undefined ||
+				data.birthPlaceText !== undefined ||
+				data.deathPlaceId !== undefined ||
+				data.deathPlaceText !== undefined ||
+				data.activityPlaces !== undefined ||
 				data.isProphet !== undefined ||
 				data.isKing !== undefined
 			) {
@@ -419,15 +705,67 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 								: null,
 					});
 				}
-				if (data.birthPlaceId !== undefined) {
-					await upsertPersonSingleton(conn, {
+				if (
+					data.birthPlaceId !== undefined ||
+					data.birthPlaceText !== undefined
+				) {
+					await upsertPersonPlace(conn, {
 						table: "tanahpedia_person_birth_place",
-						valueColumn: "place_id",
 						personId: person.id,
-						value:
-							data.birthPlaceId !== null
-								? requiredNonEmpty(data.birthPlaceId, "birthPlaceId")
-								: null,
+						value: personPlaceValue(
+							data.birthPlaceId,
+							data.birthPlaceText,
+							"birthPlace",
+						),
+						original: data.birthPlaceOriginal,
+					});
+				}
+				if (
+					data.deathPlaceId !== undefined ||
+					data.deathPlaceText !== undefined
+				) {
+					await upsertPersonPlace(conn, {
+						table: "tanahpedia_person_death_place",
+						personId: person.id,
+						value: personPlaceValue(
+							data.deathPlaceId,
+							data.deathPlaceText,
+							"deathPlace",
+						),
+						original: data.deathPlaceOriginal,
+					});
+				}
+				if (data.activityPlaces !== undefined) {
+					await replacePersonActivityPlaces(conn, {
+						personId: person.id,
+						places: (data.activityPlaces ?? []).map((place, index) => {
+							const value = personPlaceValue(
+								place.placeId,
+								place.placeText,
+								`activityPlaces[${index}]`,
+							);
+							if (!value)
+								throw new Error(
+									`activityPlaces[${index}]: a linked place or free text is required`,
+								);
+							return {
+								...value,
+								id: place.id ?? null,
+								originalPlaceId: place.originalPlaceId,
+								originalPlaceText: place.originalPlaceText,
+							};
+						}),
+						removed: data.removedActivityPlaces?.flatMap((place) =>
+							place.id
+								? [
+										{
+											id: place.id,
+											originalPlaceId: place.originalPlaceId,
+											originalPlaceText: place.originalPlaceText,
+										},
+									]
+								: [],
+						),
 					});
 				}
 				if (data.isProphet !== undefined) {

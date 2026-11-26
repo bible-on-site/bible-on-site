@@ -407,13 +407,40 @@ DROP TABLE IF EXISTS `tanahpedia_person_birth_place`;
 CREATE TABLE `tanahpedia_person_birth_place` (
     `id` char(36) NOT NULL,
     `person_id` char(36) NOT NULL,
-    `place_id` char(36) NOT NULL,
+    `place_id` char(36) DEFAULT NULL COMMENT 'Linked place; exactly one of place_id/place_text is set',
+    `place_text` varchar(255) DEFAULT NULL COMMENT 'Free-text place when no place entity exists',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_person_birth_place_person` (`person_id`),
     KEY `idx_person_birth_place_place` (`place_id`),
     CONSTRAINT `fk_person_birth_place_person` FOREIGN KEY (`person_id`) REFERENCES `tanahpedia_person` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_person_birth_place_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `tanahpedia_person_death_place`;
+CREATE TABLE `tanahpedia_person_death_place` (
+    `id` char(36) NOT NULL,
+    `person_id` char(36) NOT NULL,
+    `place_id` char(36) DEFAULT NULL COMMENT 'Linked place; exactly one of place_id/place_text is set',
+    `place_text` varchar(255) DEFAULT NULL COMMENT 'Free-text place when no place entity exists',
+    `alt_group_id` char(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_person_death_place_person` (`person_id`),
+    KEY `idx_person_death_place_place` (`place_id`),
+    CONSTRAINT `fk_person_death_place_person` FOREIGN KEY (`person_id`) REFERENCES `tanahpedia_person` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_person_death_place_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `tanahpedia_person_activity_place`;
+CREATE TABLE `tanahpedia_person_activity_place` (
+    `id` char(36) NOT NULL,
+    `person_id` char(36) NOT NULL,
+    `place_id` char(36) DEFAULT NULL COMMENT 'Linked place; exactly one of place_id/place_text is set',
+    `place_text` varchar(255) DEFAULT NULL COMMENT 'Free-text place when no place entity exists',
+    `alt_group_id` char(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_person_activity_place_person` (`person_id`),
+    KEY `idx_person_activity_place_place` (`place_id`),
+    CONSTRAINT `fk_person_activity_place_person` FOREIGN KEY (`person_id`) REFERENCES `tanahpedia_person` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_person_activity_place_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
 -- PERSON ROLES (non-exclusive: a person can hold multiple roles)

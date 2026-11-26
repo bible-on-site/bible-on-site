@@ -43,6 +43,7 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getEntryByUniqueName: jest.fn(),
 	getEntryOccurrences: jest.fn().mockResolvedValue([]),
 	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
+	getPersonPlaceFacts: jest.fn().mockResolvedValue(null),
 	getPlaceMapMarkersForEntry: jest.fn().mockResolvedValue([]),
 	ENTITY_TYPE_LABELS: {
 		PERSON: "אישים",
@@ -61,11 +62,12 @@ import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
 import {
 	getAllEntrySummaries,
 	getAllEntryUniqueNames,
-	getEntriesBySynonym,
 	getEntityTypeEntrySummaries,
+	getEntriesBySynonym,
 	getEntryByUniqueName,
 	getEntryOccurrences,
 	getPersonFamilySummary,
+	getPersonPlaceFacts,
 	getPlaceMapMarkersForEntry,
 } from "../../../src/lib/tanahpedia/service";
 
@@ -77,8 +79,9 @@ const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 const mockGetEntryOccurrences = getEntryOccurrences as jest.MockedFunction<
 	typeof getEntryOccurrences
 >;
-const mockGetAllEntrySummaries =
-	getAllEntrySummaries as jest.MockedFunction<typeof getAllEntrySummaries>;
+const mockGetAllEntrySummaries = getAllEntrySummaries as jest.MockedFunction<
+	typeof getAllEntrySummaries
+>;
 const mockGetEntityTypeEntrySummaries =
 	getEntityTypeEntrySummaries as jest.MockedFunction<
 		typeof getEntityTypeEntrySummaries
@@ -88,6 +91,9 @@ const mockGetEntriesBySynonym = getEntriesBySynonym as jest.MockedFunction<
 >;
 const mockGetPersonFamilySummary =
 	getPersonFamilySummary as jest.MockedFunction<typeof getPersonFamilySummary>;
+const mockGetPersonPlaceFacts = getPersonPlaceFacts as jest.MockedFunction<
+	typeof getPersonPlaceFacts
+>;
 const mockGetPlaceMapMarkersForEntry =
 	getPlaceMapMarkersForEntry as jest.MockedFunction<
 		typeof getPlaceMapMarkersForEntry
@@ -578,6 +584,48 @@ describe("pedia/[uniqueName] page", () => {
 			expect(mockGetPlaceMapMarkersForEntry).toHaveBeenCalledWith(
 				"entry-map-family",
 			);
+		});
+
+		it("renders the person places section with linked and free-text facts", async () => {
+			mockGetEntityTypeEntrySummaries.mockResolvedValue([]);
+			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
+			mockGetPersonPlaceFacts.mockResolvedValue({
+				birth: { label: "דבינסק", entryUniqueName: null },
+				activity: [
+					{ label: "ירושלים", entryUniqueName: "jerusalem" },
+					{ label: "שושן הבירה", entryUniqueName: null },
+				],
+				death: { label: "טבריה", entryUniqueName: "tiberias" },
+			});
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-person-places",
+				uniqueName: "person-places",
+				title: "Person Places",
+				content: null,
+				createdAt: "",
+				updatedAt: "",
+				entities: [
+					{
+						id: "ee-person",
+						entryId: "entry-person-places",
+						entityId: "person-entity",
+						entityType: "PERSON",
+						entityName: "דמות",
+					},
+				],
+			});
+
+			render((await EntryView({ slug: "person-places" })) as ReactElement);
+
+			expect(
+				screen.getByRole("heading", { level: 2, name: "מקומות" }),
+			).toBeInTheDocument();
+			expect(screen.getByText("מקום לידה")).toBeInTheDocument();
+			expect(screen.getByText("דבינסק")).toBeInTheDocument();
+			expect(screen.getByText("מקומות פעילות")).toBeInTheDocument();
+			expect(screen.getByText("שושן הבירה")).toBeInTheDocument();
+			expect(screen.getByText("מקום פטירה")).toBeInTheDocument();
+			expect(mockGetPersonPlaceFacts).toHaveBeenCalledWith("person-entity");
 		});
 	});
 });

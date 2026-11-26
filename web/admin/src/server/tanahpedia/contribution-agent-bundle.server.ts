@@ -14,7 +14,7 @@ import {
 } from "./family-api-spec";
 
 /** Bump when instructions or tool semantics change, independently of API data migrations. */
-export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v13";
+export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v14";
 const object = (properties: Record<string, unknown>, required: string[]) => ({
 	type: "object",
 	additionalProperties: false,
@@ -53,6 +53,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			"When a human explicitly requests quoted text verbatim in a supported editable field, copy that text exactly byte-for-byte, preserving its spelling, punctuation, whitespace and Unicode characters. Do not translate, paraphrase, correct or normalize it. Preserve all unrequested fields. A decoder field const derived from an explicit human copy request is the exact required value; never claim the comment addressed without that value. If it cannot fit the supported field limits, report needs_input.",
 			"Repeated identical trusted reads do not add evidence. When research repeats unchanged information or the reserved final-answer phase begins, finish from the verified context already supplied instead of requesting more read tools. If evidence or identity is still missing, return clarification naming what is missing rather than inventing facts.",
 			"Supported special operations: parent_child, union, place, metadata, entry (empty body metadata only), alias_mapping (complete destination set), source_reference (existing evidence only). Additional operations and fields follow in operationGuide.",
+			"Person place facts (person_birth_place, person_death_place, person_activity_place) accept either an existing placeId reference or a nonblank placeText alternative, never both: prefer a verified existing place entity from the catalogue, and when no suitable place entity exists propose the source text verbatim in placeText without inventing a new entity. Several person_activity_place rows may exist for one person.",
 			'Issue result: {"outcome":"implemented","summary":"...","responses":[{"commentId":"...","status":"addressed|needs_input","body":"..."}],"pullRequests":[{"title":"...","description":"...","evidenceIndexes":[0],"changes":[{"kind":"...","targetId":"existing ID only","after":{}}]}]}. Split independent changes into 1-5 proposals.',
 			'PR result: {"outcome":"revised","summary":"...","responses":[...],"draft":{"title":"optional replacement","description":"optional replacement","evidenceIndexes":[0],"changes":[...]}}. Omitted draft fields preserve current values. The changes array replaces the entire proposal sequence, so retain unrequested operations.',
 			'For clarification or unchanged, return {"outcome":"clarification|unchanged","summary":"...","responses":[...]} without draft or pullRequests. A PR cannot use implemented. An already-empty migrated PR may omit changes or preserve changes:[]; new proposals and nonempty PRs require 1-40 operations.',

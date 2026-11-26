@@ -17,6 +17,7 @@ vi.mock("@tanstack/react-start", () => ({
 		}),
 		handler: (fn: unknown) => fn,
 	}),
+	createServerOnlyFn: (fn: unknown) => fn,
 }));
 
 vi.mock("~/server/db", () => ({
@@ -27,6 +28,7 @@ vi.mock("~/server/db", () => ({
 		fn({} as PoolConnection),
 	txExecute: (_conn: PoolConnection, ...args: unknown[]) =>
 		executeMock(...args),
+	txQuery: (_conn: PoolConnection, ...args: unknown[]) => queryMock(...args),
 	txQueryOne: (_conn: PoolConnection, ...args: unknown[]) =>
 		queryOneMock(...args),
 }));
@@ -173,14 +175,76 @@ describe("tanahpedia family api", () => {
 		).rejects.toThrow("deathCause is required");
 	});
 
-	it("rejects a whitespace-only birthPlaceId on create", async () => {
+	it("rejects a linked birth place together with free text on create", async () => {
 		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
 
 		await expect(
 			createFamilyPersonNode({
-				data: { displayName: "Moses", birthPlaceId: "   " },
+				data: {
+					displayName: "Moses",
+					birthPlaceId: "place-1",
+					birthPlaceText: "דבינסק",
+				},
 			}),
-		).rejects.toThrow("birthPlaceId is required");
+		).rejects.toThrow("provide either a linked place or free text");
+	});
+
+	it("rejects an empty activity place entry on create", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
+
+		await expect(
+			createFamilyPersonNode({
+				data: {
+					displayName: "Moses",
+					activityPlaces: [{ placeId: null, placeText: "  " }],
+				},
+			}),
+		).rejects.toThrow(
+			"activityPlaces[0]: a linked place or free text is required",
+		);
+	});
+
+	it("creates free-text and linked place facts and activity places", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "name-type-main" })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null);
+		executeMock.mockResolvedValue(undefined);
+
+		await createFamilyPersonNode({
+			data: {
+				displayName: "Mordechai",
+				birthPlaceText: " דבינסק ",
+				deathPlaceId: "place-9",
+				activityPlaces: [{ placeId: "place-1" }, { placeText: "שושן" }],
+			},
+		});
+
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("INSERT INTO tanahpedia_person_birth_place"),
+			expect.arrayContaining([null, "דבינסק"]),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("INSERT INTO tanahpedia_person_death_place"),
+			expect.arrayContaining(["place-9", null]),
+		);
+		// A fresh person has no existing activity rows, so nothing is deleted
+		// and every listed place inserts under a new id.
+		expect(
+			executeMock.mock.calls.some(([sql]) =>
+				String(sql).startsWith("DELETE FROM tanahpedia_person_activity_place"),
+			),
+		).toBe(false);
+		const activityInserts = executeMock.mock.calls.filter(([sql]) =>
+			String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
+		);
+		expect(activityInserts).toHaveLength(2);
+		expect(activityInserts[0]?.[1]).toEqual(
+			expect.arrayContaining(["place-1", null]),
+		);
+		expect(activityInserts[1]?.[1]).toEqual(
+			expect.arrayContaining([null, "שושן"]),
+		);
 	});
 
 	it("creates parent-child link with lookup ids", async () => {
@@ -493,14 +557,607 @@ describe("tanahpedia family api", () => {
 			).rejects.toThrow("deathCause is required");
 		});
 
-		it("rejects a whitespace-only birthPlaceId on update", async () => {
+		it("rejects a linked birth place together with free text on update", async () => {
 			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
 
 			await expect(
 				updateFamilyPersonNode({
-					data: { entityId: "entity-1", birthPlaceId: "   " },
+					data: {
+						entityId: "entity-1",
+						birthPlaceId: "place-1",
+						birthPlaceText: "דבינסק",
+					},
 				}),
-			).rejects.toThrow("birthPlaceId is required");
+			).rejects.toThrow("provide either a linked place or free text");
+		});
+
+		it("clears the birth place when only whitespace is sent", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: "place-9",
+					place_text: null,
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", birthPlaceId: "   " },
+			});
+
+			// Only the checked canonical row is cleared — hidden alternate-opinion
+			// rows belong to other opinion groups and must survive the save.
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_birth_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["b1", "person-1"],
+			);
+		});
+
+		it("replaces activity places and clears the death place", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "d1",
+					place_id: "place-3",
+					place_text: null,
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					deathPlaceId: null,
+					activityPlaces: [{ placeId: "place-1" }, { placeText: "שושן" }],
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_death_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["d1", "person-1"],
+			);
+			// With no existing canonical rows there is nothing to delete — the
+			// sent places all insert as new rows.
+			const activityInserts = executeMock.mock.calls.filter(([sql]) =>
+				String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
+			);
+			expect(activityInserts).toHaveLength(2);
+		});
+
+		it("rejects an empty activity place entry", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [{ placeId: null, placeText: "  " }],
+					},
+				}),
+			).rejects.toThrow(
+				"activityPlaces[0]: a linked place or free text is required",
+			);
+		});
+
+		it("clears all activity places when null is sent", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValue(null);
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a2", place_id: null, place_text: "חרן" },
+							]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", activityPlaces: null },
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a1", "person-1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a2", "person-1"],
+			);
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).startsWith(
+						"INSERT INTO tanahpedia_person_activity_place",
+					),
+				),
+			).toBe(false);
+		});
+
+		it("reconciles activity places in place, keeping row ids stable", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValue(null);
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a2", place_id: "place-5", place_text: null },
+								{ id: "a3", place_id: "place-7", place_text: null },
+							]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [
+						{ id: "a1", placeId: "place-1" },
+						{ id: "a2", placeText: "חרן" },
+						{ placeId: "place-9" },
+					],
+				},
+			});
+
+			// The canonical rows were locked FOR UPDATE before reconciling so a
+			// contribution merge cannot move one between the read and the writes.
+			expect(queryMock).toHaveBeenCalledWith(
+				expect.stringContaining("FOR UPDATE"),
+				["person-1"],
+			);
+			// a2 changed in place — its id stays so citations remain attached.
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				[null, "חרן", "a2", "person-1"],
+			);
+			// a3 was removed after the dependent/source guard ran.
+			expect(queryOneMock).toHaveBeenCalledWith(
+				"SELECT id FROM tanahpedia_source_group WHERE target_table=? AND target_id=? LIMIT 1 FOR SHARE NOWAIT",
+				["tanahpedia_person_activity_place", "a3"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a3", "person-1"],
+			);
+			// a1 was unchanged — no UPDATE ran against it.
+			expect(
+				executeMock.mock.calls.some(
+					([sql, params]) =>
+						String(sql).startsWith("UPDATE tanahpedia_person_activity_place") &&
+						(params as unknown[])[2] === "a1",
+				),
+			).toBe(false);
+			// The new entry (no id) inserted exactly once.
+			const inserts = executeMock.mock.calls.filter(([sql]) =>
+				String(sql).startsWith("INSERT INTO tanahpedia_person_activity_place"),
+			);
+			expect(inserts).toHaveLength(1);
+			expect(inserts[0]?.[1]).toEqual([
+				expect.any(String),
+				"person-1",
+				"place-9",
+				null,
+			]);
+		});
+
+		it("rejects an activity place id that stopped being canonical", async () => {
+			// The editor kept row "a9" but a contribution review already moved it
+			// out of the canonical opinion group, so the locked read no longer
+			// returns it — fail loudly instead of overwriting the reviewed row.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-1", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [{ id: "a9", placeId: "place-9" }],
+					},
+				}),
+			).rejects.toThrow("no longer a canonical activity place");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects when the locked activity list gained a row the editor never saw", async () => {
+			// The editor loaded one activity row; a contribution merge committed
+			// another canonical row before the FOR UPDATE read. The unseen row
+			// is neither kept nor in removedActivityPlaces — reject rather than
+			// delete a row the editor never saw.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a9", place_id: "place-9", place_text: null },
+							]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [{ id: "a1", placeId: "place-1" }],
+						removedActivityPlaces: [],
+					},
+				}),
+			).rejects.toThrow("canonical list changed since the editor loaded it");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects when a kept activity row's content changed since the editor loaded it", async () => {
+			// A contribution merge edited the canonical row in place — the id
+			// still matches, but the locked content no longer equals the
+			// original the editor loaded, so the stale write must be rejected.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-9", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [
+							{
+								id: "a1",
+								placeId: "place-1",
+								originalPlaceId: "place-1",
+								originalPlaceText: null,
+							},
+						],
+						removedActivityPlaces: [],
+					},
+				}),
+			).rejects.toThrow(
+				"activityPlaces: row a1 changed since the editor loaded it",
+			);
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("updates a kept activity row whose locked content matches its original", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-1", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [
+						{
+							id: "a1",
+							placeText: "שושן",
+							originalPlaceId: "place-1",
+							originalPlaceText: null,
+						},
+					],
+					removedActivityPlaces: [],
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				[null, "שושן", "a1", "person-1"],
+			);
+		});
+
+		it("accepts a kept activity row compared by free text alone", async () => {
+			// The editor loaded a free-text row (no linked place), so only
+			// originalPlaceText is set — the CAS compares the text side.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: null, place_text: "שושן" }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [
+						{ id: "a1", placeId: "place-2", originalPlaceText: "שושן" },
+					],
+					removedActivityPlaces: [],
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_activity_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "a1", "person-1"],
+			);
+		});
+
+		it("deletes only the explicitly removed activity place rows", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValue(null);
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [
+								{ id: "a1", place_id: "place-1", place_text: null },
+								{ id: "a2", place_id: "place-2", place_text: null },
+							]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					activityPlaces: [{ id: "a1", placeId: "place-1" }],
+					removedActivityPlaces: [
+						{
+							id: "a2",
+							originalPlaceId: "place-2",
+							originalPlaceText: null,
+						},
+						// Id-less drafts never reached the database — dropped.
+						{ originalPlaceText: "unsaved" },
+					],
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_activity_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["a2", "person-1"],
+			);
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).startsWith(
+						"INSERT INTO tanahpedia_person_activity_place",
+					),
+				),
+			).toBe(false);
+		});
+
+		it("rejects removing an activity row whose locked content changed", async () => {
+			// A contribution merge edited the row the editor asked to remove —
+			// deleting it would silently discard the merged content.
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a2", place_id: null, place_text: "דבינסק" }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						activityPlaces: [],
+						removedActivityPlaces: [{ id: "a2", originalPlaceText: "שושן" }],
+					},
+				}),
+			).rejects.toThrow(
+				"activityPlaces: row a2 changed since the editor loaded it",
+			);
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects a birth place write when the canonical row appeared since the editor loaded it", async () => {
+			// The editor loaded an empty birth place (original = null); a merge
+			// committed a canonical row before the locked read — the write must
+			// fail instead of overwriting the merged fact.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: "place-9",
+					place_text: null,
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						birthPlaceId: "place-2",
+						birthPlaceOriginal: null,
+					},
+				}),
+			).rejects.toThrow(
+				"canonical place fact changed since the editor loaded it",
+			);
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects a birth place write when the canonical row content changed", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: null,
+					place_text: "שושן",
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						birthPlaceId: "place-2",
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-9",
+							placeText: null,
+						},
+					},
+				}),
+			).rejects.toThrow(
+				"canonical place fact changed since the editor loaded it",
+			);
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("updates the birth place when the locked row matches the loaded original", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: "place-9",
+					place_text: null,
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthPlaceId: "place-2",
+					birthPlaceOriginal: {
+						id: "b1",
+						placeId: "place-9",
+						placeText: null,
+					},
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "b1", "person-1"],
+			);
+		});
+
+		it("updates the birth place when the loaded original held free text", async () => {
+			// A free-text row has placeId null — the CAS still matches the locked
+			// row field-for-field before overwriting it.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: null,
+					place_text: "שושן",
+				});
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthPlaceId: "place-2",
+					birthPlaceOriginal: {
+						id: "b1",
+						placeId: null,
+						placeText: "שושן",
+					},
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "b1", "person-1"],
+			);
+		});
+
+		it("ignores a birth place clear when no canonical row exists", async () => {
+			// Nothing was loaded and nothing exists — the clear is a no-op and
+			// must not emit a delete against a row it never checked.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce(null);
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthPlaceId: null,
+					birthPlaceOriginal: null,
+				},
+			});
+
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).includes("tanahpedia_person_birth_place"),
+				),
+			).toBe(false);
+		});
+
+		it("rejects a birth place clear when another canonical row exists", async () => {
+			// A contribution merge can leave a second canonical row the editor
+			// never saw — clearing the loaded one must fail rather than delete
+			// it and let the unseen row surface as "the" fact on reload.
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: "place-1",
+					place_text: null,
+				})
+				.mockResolvedValueOnce({ id: "b2" });
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: {
+						entityId: "entity-1",
+						birthPlaceId: null,
+						birthPlaceOriginal: {
+							id: "b1",
+							placeId: "place-1",
+							placeText: null,
+						},
+					},
+				}),
+			).rejects.toThrow("another canonical place fact exists");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("refuses to remove a cited activity place", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({ id: "sg-1" });
+			queryMock.mockImplementation((sql) =>
+				Promise.resolve(
+					String(sql).includes("FROM tanahpedia_person_activity_place")
+						? [{ id: "a1", place_id: "place-1", place_text: null }]
+						: [],
+				),
+			);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: { entityId: "entity-1", activityPlaces: [] },
+				}),
+			).rejects.toThrow("still has source references");
+			expect(
+				executeMock.mock.calls.some(([sql]) =>
+					String(sql).startsWith(
+						"DELETE FROM tanahpedia_person_activity_place",
+					),
+				),
+			).toBe(false);
 		});
 
 		it("inserts birth date, death date, death cause, birth place, and roles", async () => {
@@ -611,13 +1268,19 @@ describe("tanahpedia family api", () => {
 				["battle", "cause-1"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"UPDATE tanahpedia_person_birth_place SET place_id = ? WHERE id = ?",
-				["place-2", "place-link-1"],
+				"UPDATE tanahpedia_person_birth_place SET place_id = ?, place_text = ? WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["place-2", null, "place-link-1", "person-1"],
 			);
 		});
 
 		it("clears death date and birth place singleton rows", async () => {
-			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({
+					id: "b1",
+					place_id: null,
+					place_text: "דבינסק",
+				});
 			executeMock.mockResolvedValue(undefined);
 
 			await updateFamilyPersonNode({
@@ -633,8 +1296,8 @@ describe("tanahpedia family api", () => {
 				["person-1"],
 			);
 			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ?",
-				["person-1"],
+				"DELETE FROM tanahpedia_person_birth_place WHERE id = ? AND person_id = ? AND alt_group_id IS NULL",
+				["b1", "person-1"],
 			);
 		});
 

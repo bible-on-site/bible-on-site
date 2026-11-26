@@ -297,10 +297,30 @@ Table tanahpedia_person_death_cause {
   alt_group_id char(36)
 }
 
+// Person place facts: exactly one of place_id (linked entity) / place_text
+// (free text, no entity) is set per row.
 Table tanahpedia_person_birth_place {
   id char(36) [pk]
   person_id char(36) [ref: > tanahpedia_person.id]
   place_id char(36) [ref: > tanahpedia_place.id]
+  place_text varchar(255) [note: 'free-text place when no place entity exists']
+  alt_group_id char(36)
+}
+
+Table tanahpedia_person_death_place {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  place_text varchar(255) [note: 'free-text place when no place entity exists']
+  alt_group_id char(36)
+}
+
+// Several activity places are allowed per person (unlike birth/death place).
+Table tanahpedia_person_activity_place {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  place_text varchar(255) [note: 'free-text place when no place entity exists']
   alt_group_id char(36)
 }
 

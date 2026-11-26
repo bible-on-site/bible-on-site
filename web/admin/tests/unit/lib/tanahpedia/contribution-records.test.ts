@@ -283,6 +283,37 @@ describe("category contribution contract", () => {
 			),
 		).toBe(false);
 	});
+	it.each([
+		"person_birth_place",
+		"person_death_place",
+		"person_activity_place",
+	] as const)(
+		"requires exactly one of linked place or free text for %s",
+		(kind) => {
+			const base = { kind, after: { personId: ID, altGroupId: null } };
+			expect(
+				validateChange({
+					...base,
+					after: { ...base.after, placeId: ID, placeText: null },
+				}),
+			).toMatchObject({ after: { placeId: ID, placeText: null } });
+			expect(
+				validateChange({
+					...base,
+					after: { ...base.after, placeId: null, placeText: " דבינסק " },
+				}),
+			).toMatchObject({ after: { placeId: null, placeText: "דבינסק" } });
+			for (const after of [
+				{ placeId: null, placeText: null },
+				{ placeId: ID, placeText: "דבינסק" },
+				{ placeId: null, placeText: "   " },
+				{ placeId: null, placeText: "" },
+			])
+				expect(() =>
+					validateChange({ ...base, after: { ...base.after, ...after } }),
+				).toThrow();
+		},
+	);
 	it("rejects circular origins and half-specified verse segments", () => {
 		expect(() =>
 			validateChange({
