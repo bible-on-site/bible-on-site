@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { canonicalJson } from "~/lib/canonical-json";
 import {
 	type Contribution,
 	validateChanges,
@@ -114,7 +115,7 @@ it("appends read ordinal ranges to the same place PR without copying saved spans
 		includeExisting: true,
 	});
 	const result = parseContributionAgentResult(
-		JSON.stringify({
+		canonicalJson({
 			outcome: "revised",
 			summary: "הוספת אזכורים",
 			responses: [],
