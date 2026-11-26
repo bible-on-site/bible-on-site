@@ -8,6 +8,7 @@ import {
 	getArticlesByAuthorId,
 	getAuthorByName,
 } from "../../../../lib/authors";
+import { authorPortraitCacheKey } from "../../../../lib/authors/portrait-snapshot";
 import {
 	authorArticlesTag,
 	authorTag,
@@ -54,7 +55,7 @@ async function resolveAuthor(
  * `author:{param}` entries that name it, not every author's page.
  */
 const getCachedAuthor = cachedPerKey(
-	"author-by-param",
+	authorPortraitCacheKey("author-by-param"),
 	(param: string) => param,
 	(key) => [COLLECTION_TAGS.authors, authorTag(key)],
 	(param: string) => resolveAuthor(param),
@@ -100,7 +101,6 @@ export async function generateMetadata({
 			// dimensions are not tracked, so they are omitted, not guessed.
 			url: author.imageUrl,
 			alt: author.name,
-			type: "image/jpeg",
 		},
 	});
 }

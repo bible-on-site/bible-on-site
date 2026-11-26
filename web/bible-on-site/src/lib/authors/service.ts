@@ -63,17 +63,8 @@ export function getAuthorImageUrl(authorId: number): string {
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
 	checkS3Availability();
 
-	const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
-	if (
-		process.env.NODE_ENV === "production" &&
-		!process.env.S3_ENDPOINT &&
-		bucket === "bible-on-site-assets"
-	) {
-		const portraitKey = getAuthorPortraitKey(authorId);
-		if (portraitKey) return assetsUrl(portraitKey);
-	}
-
-	return assetsUrl(`authors/high-res/${authorId}.jpg`);
+	const portraitKey = getAuthorPortraitKey(authorId);
+	return assetsUrl(portraitKey ?? `authors/high-res/${authorId}.jpg`);
 }
 
 /**

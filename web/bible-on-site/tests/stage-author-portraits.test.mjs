@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 
-import { stageAuthorPortraits } from "./stage-author-portraits.mjs";
+import { stageAuthorPortraits } from "../scripts/stage-author-portraits.mjs";
 
 const origin = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com";
 const manifestUrl = `${origin}/authors/caricatures/manifest.json`;
@@ -75,8 +75,9 @@ test("stages a cache-busted legacy JPEG after a later admin upload", async (t) =
 	assert.deepEqual(await read(), { 39: `${legacyKey}?v=${currentEtag}` });
 });
 
-test("keeps the PNG if the legacy JPEG metadata is unavailable", async (t) => {
+test("warns and keeps the PNG if the legacy JPEG metadata is unavailable", async (t) => {
 	const { stage, read } = await fixture(t);
+	const warn = t.mock.method(console, "warn", () => {});
 	const unavailable = [
 		notFound,
 		() => new Response(null, { headers: { ETag: "bad-etag" } }),
@@ -91,10 +92,21 @@ test("keeps the PNG if the legacy JPEG metadata is unavailable", async (t) => {
 		);
 		assert.deepEqual(await read(), { 39: portraitKey });
 	}
+	assert.deepEqual(
+		warn.mock.calls.map(({ arguments: [message, error] }) => [
+			message,
+			error.message,
+		]),
+		["HTTP 404", "Missing or invalid JPEG ETag", "Timed out"].map((reason) => [
+			"Could not verify authors/high-res/39.jpg. Keeping the released PNG.",
+			reason,
+		]),
+	);
 });
 
 test("rejects malformed manifest entries before any JPEG probe", async (t) => {
 	const { stage, read } = await fixture(t);
+	const warn = t.mock.method(console, "warn", () => {});
 	for (const portraits of [
 		{ 39: portrait("authors/caricatures/../high-res/39.png") },
 		{ 39: portrait("authors/caricatures/v20261126/high-res/41.png") },
@@ -118,6 +130,12 @@ test("rejects malformed manifest entries before any JPEG probe", async (t) => {
 		};
 		await stage(fetcher);
 		assert.deepEqual(await read(), {});
+		const [message, error] = warn.mock.calls.at(-1).arguments;
+		assert.equal(
+			message,
+			"Could not stage author portraits. Using legacy JPEGs.",
+		);
+		assert.match(error.message, /Invalid author portrait manifest entry/);
 		await assert.rejects(
 			stage(fetcher, { requireManifest: true }),
 			/Invalid author portrait manifest entry/,
@@ -127,8 +145,11 @@ test("rejects malformed manifest entries before any JPEG probe", async (t) => {
 
 test("an unavailable manifest clears the snapshot or fails a required release", async (t) => {
 	const { stage, read } = await fixture(t);
+	const warn = t.mock.method(console, "warn", () => {});
 	await stage(async (url) =>
-		url === manifestUrl ? Response.json(manifest()) : notFound(),
+		url === manifestUrl
+			? Response.json(manifest())
+			: new Response(null, { headers: { ETag: legacyEtag } }),
 	);
 	await assert.rejects(
 		stage(async () => notFound(), { requireManifest: true }),
@@ -138,6 +159,13 @@ test("an unavailable manifest clears the snapshot or fails a required release", 
 
 	await stage(async () => notFound());
 	assert.deepEqual(await read(), {});
+	assert.equal(warn.mock.callCount(), 1);
+	const [message, error] = warn.mock.calls[0].arguments;
+	assert.equal(
+		message,
+		"Could not stage author portraits. Using legacy JPEGs.",
+	);
+	assert.match(error.message, /HTTP 404/);
 	await assert.rejects(
 		stage(async () => Response.json({ version: 2 }), {
 			requireManifest: true,
@@ -146,7 +174,7 @@ test("an unavailable manifest clears the snapshot or fails a required release", 
 	);
 });
 
-test("skips production requests with a local endpoint or a different bucket", async (t) => {
+test("skips production requests for fixture assets or a fixture database", async (t) => {
 	const { stage, read } = await fixture(t);
 	const fetcher = t.mock.fn(() => {
 		throw new Error("Unexpected network request");
@@ -154,12 +182,14 @@ test("skips production requests with a local endpoint or a different bucket", as
 	for (const env of [
 		{ S3_ENDPOINT: "http://localhost:4566" },
 		{ S3_BUCKET: "bible-on-site-assets-test" },
+		{ DB_URL: "mysql://localhost/tanah_test" },
+		{ DB_URL: "mysql://localhost/tanah_test_012345abcdef?ssl-mode=DISABLED" },
 	]) {
 		await stage(fetcher, { env });
 		assert.deepEqual(await read(), {});
 		await assert.rejects(
 			stage(fetcher, { env, requireManifest: true }),
-			/requires the production S3 bucket/,
+			/requires a production build/,
 		);
 	}
 	assert.equal(fetcher.mock.callCount(), 0);
@@ -181,7 +211,7 @@ test("bounds parallel JPEG probes without dropping entries", async (t) => {
 		peak = Math.max(active, peak);
 		await setImmediate();
 		active -= 1;
-		return notFound();
+		return new Response(null, { headers: { ETag: legacyEtag } });
 	});
 	assert.equal(Object.keys(snapshot).length, 20);
 	assert.equal(peak, 8);

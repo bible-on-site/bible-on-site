@@ -102,6 +102,10 @@ describe("authors service", () => {
 			expect(getAuthorImageUrl(25)).toBe(
 				"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/25.jpg",
 			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Could not read the author portrait snapshot. Using legacy JPEGs.",
+				expect.any(Error),
+			);
 		});
 
 		it.each(["invalid JSON", "[]", "null", '"portrait"'])(
@@ -113,6 +117,9 @@ describe("authors service", () => {
 				expect(getAuthorImageUrl(62)).toBe(
 					"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/62.jpg",
 				);
+				const warnings = jest.mocked(console.warn).mock.calls;
+				expect(warnings).toHaveLength(1);
+				expect(warnings[0][0]).toMatch(/portrait snapshot.*legacy JPEGs/);
 			},
 		);
 
@@ -137,6 +144,10 @@ describe("authors service", () => {
 			}
 			expect(getAuthorImageUrl(81)).toBe(
 				"https://assets.example/authors/caricatures/v2/high-res/81.png",
+			);
+			expect(console.warn).toHaveBeenCalledTimes(1);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Ignoring invalid author portrait snapshot entries. Using legacy JPEGs for affected authors.",
 			);
 		});
 

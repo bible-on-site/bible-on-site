@@ -61,16 +61,23 @@ async function resolvePortrait({ id, key, legacyEtag }, fetcher) {
 			redirect: "error",
 			signal: AbortSignal.timeout(requestTimeoutMs),
 		});
-		const currentEtag = response.ok
-			? normalizeEtag(response.headers.get("etag"))
-			: null;
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}`);
+		}
+		const currentEtag = normalizeEtag(response.headers.get("etag"));
+		if (!currentEtag) {
+			throw new Error("Missing or invalid JPEG ETag");
+		}
 		// A later admin upload still uses the historical JPEG key. Give it
 		// a new optimizer URL when its bytes differ from the release baseline.
-		if (currentEtag && currentEtag !== legacyEtag) {
+		if (currentEtag !== legacyEtag) {
 			return [id, `${legacyKey}?v=${currentEtag}`];
 		}
-	} catch {
-		// Keep the published PNG when the old image cannot be inspected.
+	} catch (error) {
+		console.warn(
+			`Could not verify ${legacyKey}. Keeping the released PNG.`,
+			error,
+		);
 	}
 	return [id, key];
 }
@@ -88,6 +95,14 @@ async function writeSnapshot(cwd, snapshot) {
 	}
 }
 
+function usesFixtureDatabase(databaseUrl) {
+	// CI uses tanah_test. The Playwright launcher adds a 12-digit checkout hash.
+	return (
+		URL.canParse(databaseUrl) &&
+		/^\/tanah_test(?:_[a-f0-9]{12})?$/.test(new URL(databaseUrl).pathname)
+	);
+}
+
 /** Stage one build-time snapshot for prerendered and standalone website pages. */
 export async function stageAuthorPortraits({
 	cwd = process.cwd(),
@@ -96,17 +111,23 @@ export async function stageAuthorPortraits({
 	requireManifest = false,
 } = {}) {
 	let portraits = [];
-	const useProductionBucket =
-		!env.S3_ENDPOINT && (!env.S3_BUCKET || env.S3_BUCKET === productionBucket);
-	if (useProductionBucket) {
+	const useProductionPortraits =
+		!env.S3_ENDPOINT &&
+		(!env.S3_BUCKET || env.S3_BUCKET === productionBucket) &&
+		!usesFixtureDatabase(env.DB_URL);
+	if (useProductionPortraits) {
 		try {
 			portraits = await readManifest(fetcher);
 		} catch (error) {
 			if (requireManifest) throw error;
+			console.warn(
+				"Could not stage author portraits. Using legacy JPEGs.",
+				error,
+			);
 		}
 	} else if (requireManifest) {
 		throw new Error(
-			"Author portrait release requires the production S3 bucket",
+			"Author portrait release requires a production build without fixture assets or database",
 		);
 	}
 

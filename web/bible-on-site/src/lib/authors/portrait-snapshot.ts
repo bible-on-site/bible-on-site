@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { assetsUrl } from "../assets-url";
 
 const caricatureKey =
 	/^authors\/caricatures\/[A-Za-z0-9][A-Za-z0-9_-]*\/high-res\/([1-9]\d*)\.png$/;
@@ -16,9 +18,11 @@ function readPortraitSnapshot(): ReadonlyMap<number, string> {
 			),
 		);
 		if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+			console.warn("Invalid author portrait snapshot. Using legacy JPEGs.");
 			return portraits;
 		}
-		for (const [id, key] of Object.entries(snapshot)) {
+		const entries = Object.entries(snapshot);
+		for (const [id, key] of entries) {
 			if (typeof key !== "string") continue;
 			const keyId =
 				caricatureKey.exec(key)?.[1] ?? revisedJpegKey.exec(key)?.[1];
@@ -27,19 +31,59 @@ function readPortraitSnapshot(): ReadonlyMap<number, string> {
 				portraits.set(authorId, key);
 			}
 		}
-	} catch {
-		// A missing or unreadable build artifact falls back to the existing JPEGs.
+		if (entries.length !== portraits.size) {
+			console.warn(
+				"Ignoring invalid author portrait snapshot entries. Using legacy JPEGs for affected authors.",
+			);
+		}
+	} catch (error) {
+		console.warn(
+			"Could not read the author portrait snapshot. Using legacy JPEGs.",
+			error,
+		);
 	}
 	return portraits;
 }
 
+interface PortraitSnapshot {
+	keys: ReadonlyMap<number, string>;
+	digest: string;
+}
+
 const snapshotKey = Symbol.for("bible-on-site.author-portrait-snapshot");
 const store = globalThis as typeof globalThis & {
-	[snapshotKey]?: ReadonlyMap<number, string>;
+	[snapshotKey]?: PortraitSnapshot;
 };
 
 // Separate Next route bundles in the same process share this immutable build snapshot.
+function getPortraitSnapshot(): PortraitSnapshot | undefined {
+	if (
+		process.env.NODE_ENV !== "production" ||
+		process.env.S3_ENDPOINT ||
+		(process.env.S3_BUCKET || "bible-on-site-assets") !== "bible-on-site-assets"
+	) {
+		return undefined;
+	}
+
+	if (!store[snapshotKey]) {
+		const keys = readPortraitSnapshot();
+		const sortedEntries = [...keys].sort(([a], [b]) => a - b);
+		const digest = createHash("sha256")
+			.update(JSON.stringify(sortedEntries))
+			.digest("hex");
+		store[snapshotKey] = { keys, digest };
+	}
+
+	return store[snapshotKey];
+}
+
 export function getAuthorPortraitKey(authorId: number): string | undefined {
-	store[snapshotKey] ??= readPortraitSnapshot();
-	return store[snapshotKey].get(authorId);
+	return getPortraitSnapshot()?.keys.get(authorId);
+}
+
+/** Next's data cache can outlive a build. Scope cached DTOs with portrait URLs
+ * to the selected snapshot and asset base, leaving their revalidation tags intact. */
+export function authorPortraitCacheKey(baseKey: string): string {
+	const digest = getPortraitSnapshot()?.digest ?? "legacy";
+	return `${baseKey}:author-portraits:${digest}:${assetsUrl("")}`;
 }
