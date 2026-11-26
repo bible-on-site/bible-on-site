@@ -1001,7 +1001,7 @@ describe("assignment-driven leased contribution work", () => {
 			{ spellings: ["מצרים"], book: "שמות", limit: 100 },
 		],
 		["scripture_chapter", { perekId: 51, cursor: 2, limit: 25 }],
-		["place_profile_words", { cursor: 1, limit: 50 }],
+		["place_profile_words", { id, cursor: 1, limit: 50 }],
 	])(
 		"dispatches declared %s reads and emits an exact replay receipt",
 		async (name, args) => {

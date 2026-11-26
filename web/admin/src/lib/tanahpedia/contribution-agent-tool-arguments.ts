@@ -12,7 +12,7 @@ const FIELDS: Record<string, readonly string[]> = {
 	article_text: ["id", "cursor", "limit", "citationCursor", "citationLimit"],
 	scripture_occurrences: ["spellings", "book", "cursor", "limit"],
 	scripture_chapter: ["perekId", "cursor", "limit"],
-	place_profile_words: ["cursor", "limit"],
+	place_profile_words: ["id", "cursor", "limit"],
 };
 const ARTICLE_REFERENCES = new Set([
 	"article",
@@ -86,7 +86,8 @@ export function validateContributionAgentToolArguments(
 				throw new Error("Invalid scripture chapter");
 			page(cursor, limit, 25);
 		} else if (name === "place_profile_words") {
-			const { cursor = 0, limit = 25 } = args;
+			const { id, cursor = 0, limit = 25 } = args;
+			if (id !== undefined) contributionRecordId(id, "id");
 			page(cursor, limit, 50);
 		} else if (name === "related") {
 			page(args.cursor ?? 0, args.limit ?? 25, 50);

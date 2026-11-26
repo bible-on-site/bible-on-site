@@ -22,7 +22,7 @@ describe("finite current-call read argument rejection", () => {
 			{ spellings: ["ים סוף", "ים־סוף"], book: "שמות", limit: 100 },
 		],
 		["scripture_chapter", { perekId: 51, cursor: 2, limit: 25 }],
-		["place_profile_words", { cursor: 3, limit: 50 }],
+		["place_profile_words", { id, cursor: 3, limit: 50 }],
 		["record", { kind: "target:article_links", id: 19 }],
 		["record", { kind: "article", id: "19" }],
 		["record", { kind: "entity", id }],
@@ -89,6 +89,7 @@ describe("finite current-call read argument rejection", () => {
 		["scripture_chapter", { perekId: 51, limit: 26 }],
 		["place_profile_words", { limit: 51 }],
 		["place_profile_words", { cursor: null }],
+		["place_profile_words", { id: "not a proposal identifier" }],
 	])("rejects invalid %s input using fixed bounded feedback", (name, args) => {
 		expect(() =>
 			validateContributionAgentToolArguments(name as string, args),

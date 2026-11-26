@@ -190,9 +190,10 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			{
 				name: "place_profile_words",
 				description:
-					"Read the current place PR's exact proposed word spans in pages. The initial summary includes the total. When revising only text or evidence, omit the unchanged change sequence. To append a newly read occurrence selection in this same PR, use includeExisting:true instead of copying saved spans; a replacement sequence must include every word span you intend to retain.",
+					"Read a place PR's exact proposed word spans in pages. Use the proposal id from its read locator for a PR linked to the current issue. Omit id to read the assigned PR itself. When revising only text or evidence, omit the unchanged change sequence. To append a newly read occurrence selection in this same PR, use includeExisting:true instead of copying saved spans; a replacement sequence must include every word span you intend to retain.",
 				inputSchema: object(
 					{
+						id: { type: "string" },
 						cursor: { type: "integer", minimum: 0 },
 						limit: { type: "integer", minimum: 1, maximum: 50 },
 					},

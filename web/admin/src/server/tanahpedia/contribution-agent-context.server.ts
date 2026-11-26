@@ -327,7 +327,7 @@ function argumentsFor(name: string, raw: unknown): Record<string, unknown> {
 		article_text: ["id", "cursor", "limit", "citationCursor", "citationLimit"],
 		scripture_occurrences: ["spellings", "book", "cursor", "limit"],
 		scripture_chapter: ["perekId", "cursor", "limit"],
-		place_profile_words: ["cursor", "limit"],
+		place_profile_words: ["id", "cursor", "limit"],
 	};
 	if (!Object.hasOwn(fields, name))
 		throw new Error("Unsupported contribution agent tool");
@@ -696,6 +696,22 @@ async function linkedIssue(
 			: null;
 }
 
+async function readRelatedProposal(
+	conn: PoolConnection,
+	current: Contribution,
+	id: string,
+): Promise<Contribution> {
+	const owner = current.kind === "issue" ? current.id : current.issueId;
+	if (!owner) throw new Error("Proposal is not linked to this issue");
+	const proposal = await readContribution(conn, id);
+	if (
+		proposal.kind !== "pr" ||
+		proposal.issueId?.toLowerCase() !== owner.toLowerCase()
+	)
+		throw new Error("Proposal is not linked to this issue");
+	return proposal;
+}
+
 function orderedEvents(item: Contribution) {
 	return [...item.events].sort(
 		(a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id),
@@ -791,14 +807,23 @@ export async function readContributionAgentTool(
 		};
 	}
 	if (name === "place_profile_words") {
-		const change = current.changes.find(
+		const id =
+			args.id === undefined ? current.id : contributionRecordId(args.id, "id");
+		const proposal =
+			id.toLowerCase() === current.id.toLowerCase()
+				? current
+				: await readRelatedProposal(conn, current, id);
+		const change = proposal.changes.find(
 			(candidate) => candidate.kind === "place_profile",
 		);
-		if (current.kind !== "pr" || !Array.isArray(change?.after?.occurrences))
+		if (proposal.kind !== "pr" || !Array.isArray(change?.after?.occurrences))
 			throw new Error("This proposal has no place profile");
 		const { cursor, limit } = pageArguments(args);
 		return {
-			data: page(change.after.occurrences, cursor, limit),
+			data: {
+				proposalId: proposal.id,
+				...page(change.after.occurrences, cursor, limit),
+			},
 			catalogue: reader.catalogue,
 		};
 	}
@@ -868,14 +893,7 @@ export async function readContributionAgentTool(
 			};
 		}
 		const id = contributionRecordId(args.id, "id");
-		const owner = current.kind === "issue" ? current.id : current.issueId;
-		if (!owner) throw new Error("Proposal is not linked to this issue");
-		const proposal = await readContribution(conn, id);
-		if (
-			proposal.kind !== "pr" ||
-			proposal.issueId?.toLowerCase() !== owner.toLowerCase()
-		)
-			throw new Error("Proposal is not linked to this issue");
+		const proposal = await readRelatedProposal(conn, current, id);
 		return {
 			data:
 				section === "discussion"
@@ -1157,7 +1175,7 @@ function summary(item: Contribution) {
 				occurrenceCount: occurrences.length,
 				occurrenceReadLocator: {
 					tool: "place_profile_words",
-					arguments: { cursor: 0, limit: 25 },
+					arguments: { id: item.id, cursor: 0, limit: 25 },
 				},
 			};
 		}),

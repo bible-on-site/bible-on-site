@@ -1208,6 +1208,119 @@ describe("complete contribution agent context", () => {
 		).rejects.toThrow("not linked");
 	});
 
+	it("follows the occurrence locator from an issue to its specific related place PR", async () => {
+		const [proposal] = relatedFixture(1);
+		const first = {
+			perekId: 51,
+			pasukNumber: 1,
+			segmentStart: 5,
+			segmentEnd: 5,
+			text: "מִצְרָיְמָה",
+		};
+		const other = { ...first, pasukNumber: 7 };
+		proposal.changes = [
+			{
+				kind: "place_profile",
+				targetId: entityId,
+				before: null,
+				after: {
+					entry: null,
+					identification: null,
+					occurrences: [first, other],
+				},
+				labels: {},
+			},
+		];
+		const related = await readContributionAgentTool(conn, item, "related", {});
+		const readLocator = {
+			tool: "place_profile_words",
+			arguments: { id: proposal.id, cursor: 0, limit: 25 },
+		};
+		expect(related.data).toMatchObject({
+			items: [
+				{
+					id: proposal.id,
+					changes: [{ occurrenceCount: 2, occurrenceReadLocator: readLocator }],
+				},
+			],
+		});
+		const { data } = await readContributionAgentTool(
+			conn,
+			item,
+			readLocator.tool,
+			{
+				...readLocator.arguments,
+				limit: 1,
+			},
+		);
+		expect(data).toEqual({
+			proposalId: proposal.id,
+			items: [first],
+			total: 2,
+			nextCursor: 1,
+		});
+	});
+
+	it("reads word spans from a sibling PR on the same issue and denies another issue's PR", async () => {
+		const [assigned, sibling] = relatedFixture(2);
+		const own = {
+			perekId: 51,
+			pasukNumber: 1,
+			segmentStart: 5,
+			segmentEnd: 5,
+			text: "מִצְרָיְמָה",
+		};
+		const other = { ...own, perekId: 64, pasukNumber: 2, text: "פִּי הַחִירֹת" };
+		for (const [proposal, word] of [
+			[assigned, own],
+			[sibling, other],
+		] as const)
+			proposal.changes = [
+				{
+					kind: "place_profile",
+					targetId: entityId,
+					before: null,
+					after: { entry: null, identification: null, occurrences: [word] },
+					labels: {},
+				},
+			];
+		expect(
+			(
+				await readContributionAgentTool(conn, assigned, "place_profile_words", {
+					id: sibling.id,
+				})
+			).data,
+		).toEqual({
+			proposalId: sibling.id,
+			items: [other],
+			total: 1,
+			nextCursor: null,
+		});
+		sibling.issueId = issueId;
+		await expect(
+			readContributionAgentTool(conn, assigned, "place_profile_words", {
+				id: sibling.id,
+			}),
+		).rejects.toThrow("not linked");
+		assigned.issueId = null;
+		for (const args of [{}, { id: assigned.id }])
+			expect(
+				(
+					await readContributionAgentTool(
+						conn,
+						assigned,
+						"place_profile_words",
+						args,
+					)
+				).data,
+			).toEqual({
+				proposalId: assigned.id,
+				items: [own],
+				total: 1,
+				nextCursor: null,
+			});
+	});
+
 	it("searches SQL beyond the old 4000-record catalogue and binds escaped text", async () => {
 		const row = { id: entityId, name: "Far beyond the UI cap" };
 		references.set(`entity:${entityId}`, row);
