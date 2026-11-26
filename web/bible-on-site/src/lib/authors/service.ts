@@ -5,6 +5,7 @@ import {
 	metricOrFallback,
 	type ReadingMetric,
 } from "../reading-metrics";
+import { getAuthorPortraitKey } from "./portrait-snapshot";
 import type { AuthorArticle, AuthorDetails } from "./types";
 import { normalizeAuthorName } from "./url-utils";
 
@@ -20,15 +21,6 @@ interface ArticleRow {
 	name: string;
 	abstract: string | null;
 }
-
-// Inventory of the immutable PNGs staged in the shared production asset bucket.
-const portraitRelease = "authors/caricatures/v20261126/high-res";
-const releasedPortraitIds = new Set([
-	1, 4, 5, 6, 7, 9, 10, 11, 12, 19, 20, 21, 22, 23, 24, 26, 27, 28, 31, 33, 34,
-	35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
-	55, 56, 57, 58, 59, 60, 61, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
-	75, 77, 78, 79, 80, 81,
-]);
 
 // Track if we've already warned about S3 unavailability (avoid spam)
 let s3WarningShown = false;
@@ -64,8 +56,8 @@ async function checkS3Availability(): Promise<void> {
 }
 
 /**
- * Resolve the website's versioned portraits and the legacy JPEG fallback.
- * The release lives in the public production bucket; local fixtures still use JPEGs.
+ * Resolve the build's selected portrait for production assets, with the
+ * legacy JPEG as the fallback for missing entries and other asset buckets.
  */
 export function getAuthorImageUrl(authorId: number): string {
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
@@ -75,10 +67,10 @@ export function getAuthorImageUrl(authorId: number): string {
 	if (
 		process.env.NODE_ENV === "production" &&
 		!process.env.S3_ENDPOINT &&
-		bucket === "bible-on-site-assets" &&
-		releasedPortraitIds.has(authorId)
+		bucket === "bible-on-site-assets"
 	) {
-		return assetsUrl(`${portraitRelease}/${authorId}.png`);
+		const portraitKey = getAuthorPortraitKey(authorId);
+		if (portraitKey) return assetsUrl(portraitKey);
 	}
 
 	return assetsUrl(`authors/high-res/${authorId}.jpg`);
