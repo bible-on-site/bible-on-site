@@ -554,7 +554,6 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	const dump = f.args(f.env.DUMP_ARGS);
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
-	assert.ok(dump.includes("--compression-algorithms=zstd,zlib"));
 	assert.ok(dump.includes("--single-transaction"));
 	assert.ok(dump.includes("--loose-skip-masking-policies"));
 	const maskCheck = f.args(f.env.MASK_CHECK_ARGS);

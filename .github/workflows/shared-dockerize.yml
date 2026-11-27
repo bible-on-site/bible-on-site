@@ -249,7 +249,7 @@ jobs:
           DB_HOST=$(node devops/github/ci/rds-build-access.mjs host)
           echo "Testing connectivity to $DB_HOST:3306..."
           # Test TCP connection
-          timeout 30 bash -c 'until nc -z "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
+          timeout 30 bash -c 'until nc -z -w 1 "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
 
