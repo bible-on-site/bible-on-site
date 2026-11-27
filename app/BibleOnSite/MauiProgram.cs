@@ -246,7 +246,7 @@ public static class MauiProgram
             PreferencesService.Instance,
 #if ANDROID || IOS
             new FirestorePreferencesStore(),
-            new FirebaseUserIdentity()
+            FirebaseUserIdentity.Instance
 #else
             // Windows/MacCatalyst and every build without Firebase stay
             // local-only: the anonymous fallback the issue requires.

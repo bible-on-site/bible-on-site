@@ -92,7 +92,7 @@ public class HttpPushDeviceRegistryTests
             CancellationToken.None);
 
         result.LegacyUnresolved.Should().BeTrue(
-            "an older server cannot prove the unbound legacy row is gone");
+            "an older server cannot confirm migration, so cleanup evidence is retained conservatively");
     }
 
     [Fact]

@@ -231,7 +231,7 @@ public class PushNotificationServiceTests
         await service.SetEnabledAsync(true, CancellationToken.None);
 
         (await store.GetAsync("push.user_id", CancellationToken.None)).Should().Be("legacy-user",
-            "an unbound legacy row that survived migration must stay removable");
+            "the privacy-preserving unresolved outcome cannot prove removal, so the one bounded cleanup key is retained");
 
         await service.SetEnabledAsync(false, CancellationToken.None);
 
@@ -503,12 +503,55 @@ public class PushNotificationServiceTests
         await service.SetEnabledAsync(true, CancellationToken.None);
 
         platform.RaiseTokenRefreshed("fcm-token-2");
-        await service.LastTokenResync!;
+        await service.LastRegistrationResync!;
 
         registry.Registrations.Should().HaveCount(2);
         registry.Registrations[1].Registration.Token.Should().Be("fcm-token-2");
         registry.Registrations[1].Registration.UserId.Should().Be("auth-uid-1");
         service.CurrentToken.Should().Be("fcm-token-2");
+    }
+
+    [Fact]
+    public async Task UserChanged_MaintainsVerifiedIdentityAndReregistersOnlyOnRotation()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        prefs.Load();
+        var store = new InMemoryPushStateStore();
+        var registry = new FakeRegistry();
+        var identity = new FakeIdentity();
+        using var service = PushNotificationService.CreateForTesting(
+            platform, prefs, store, registry, () => "9.9.9", identity);
+
+        identity.EmitUserChanged();
+        service.LastRegistrationResync.Should().BeNull(
+            "before an identity is cached there is no registered ownership to rotate");
+
+        await service.SetEnabledAsync(true, CancellationToken.None);
+        registry.Registrations.Should().ContainSingle();
+        registry.Registrations[0].Registration.UserId.Should().Be("auth-uid-1");
+
+        identity.EmitUserChanged();
+        service.LastRegistrationResync.Should().BeNull(
+            "re-notifying the same cached identity is not a rotation");
+
+        identity.UserId = "auth-uid-2";
+        identity.EmitUserChanged();
+        var rotationResync = service.LastRegistrationResync;
+        rotationResync.Should().NotBeNull();
+        await rotationResync!;
+
+        registry.Registrations.Should().HaveCount(2);
+        registry.Registrations[1].Registration.UserId.Should().Be("auth-uid-2");
+        service.NotificationUserId.Should().Be("auth-uid-2");
+
+        identity.UserId = null;
+        identity.EmitUserChanged();
+
+        service.NotificationUserId.Should().BeNull();
+        service.LastRegistrationResync.Should().BeSameAs(rotationResync,
+            "losing the identity leaves no verified owner to register");
+        registry.Registrations.Should().HaveCount(2);
     }
 
     [Fact]
@@ -760,7 +803,7 @@ public class PushNotificationServiceTests
         registry.FailNext = true;
 
         platform.RaiseTokenRefreshed("fcm-token-2");
-        await service.LastTokenResync!;
+        await service.LastRegistrationResync!;
 
         prefs.DailyPerekPushEnabled.Should().BeTrue();
     }
@@ -933,13 +976,13 @@ public class PushNotificationServiceTests
         store.FailGetKey = "push.registration_fingerprint";
 
         platform.RaiseTokenRefreshed("rotated-token");
-        await service.LastTokenResync!;
+        await service.LastRegistrationResync!;
 
         prefs.DailyPerekPushEnabled.Should().BeTrue();
         registry.Registrations.Should().ContainSingle();
         store.FailGetKey = null;
         platform.RaiseTokenRefreshed("rotated-token");
-        await service.LastTokenResync!;
+        await service.LastRegistrationResync!;
         registry.Registrations.Should().HaveCount(2);
         registry.Registrations[1].Registration.Token.Should().Be("rotated-token");
     }

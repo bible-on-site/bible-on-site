@@ -13,6 +13,7 @@ jest.mock("@/lib/api-client", () => ({
 }));
 
 import { createSign, generateKeyPairSync } from "node:crypto";
+import stableJsonStringify from "fast-json-stable-stringify";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 	modulusLength: 2048,
@@ -32,18 +33,6 @@ const validDevice = {
 	platform: "android" as const,
 	topics: ["daily_perek"],
 	appVersion: "5.1.8",
-};
-const stableJsonStringify = (value: unknown): string => {
-	if (Array.isArray(value)) {
-		return `[${value.map(stableJsonStringify).join(",")}]`;
-	}
-	if (value !== null && typeof value === "object") {
-		return `{${Object.entries(value)
-			.sort(([left], [right]) => left.localeCompare(right))
-			.map(([key, entry]) => `${JSON.stringify(key)}:${stableJsonStringify(entry)}`)
-			.join(",")}}`;
-	}
-	return JSON.stringify(value) ?? "null";
 };
 
 const mockFetch = jest.fn();
@@ -597,7 +586,7 @@ describe("app-push service", () => {
 		});
 
 		it.each([
-			["missing", null, true],
+			["missing", null],
 			[
 				"already auth-bound",
 				{
@@ -606,7 +595,6 @@ describe("app-push service", () => {
 					installation_id: validDevice.installationId,
 					token: validDevice.token,
 				},
-				true,
 			],
 			[
 				"not possession-matched",
@@ -616,16 +604,15 @@ describe("app-push service", () => {
 					installation_id: "other-installation",
 					token: "other-token",
 				},
-				true,
 			],
 		])(
-			"does not migrate a legacy row that is %s",
-			async (_label, legacyRow, legacyUnresolved) => {
+			"reports the same unresolved outcome without migrating a legacy row that is %s",
+			async (_label, legacyRow) => {
 				queueRegistrationLookup(legacyRow as object | null);
 
 				await expect(
 					service.saveDevice(legacyDevice, validDevice.userId),
-				).resolves.toEqual({ legacyMigrated: false, legacyUnresolved });
+				).resolves.toEqual({ legacyMigrated: false, legacyUnresolved: true });
 				expect(mockTxExecute).toHaveBeenCalledTimes(1);
 			},
 		);

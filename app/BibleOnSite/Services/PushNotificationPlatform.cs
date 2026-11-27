@@ -132,8 +132,10 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
         var root = document.RootElement;
         var legacyMigrated = root.TryGetProperty("legacyMigrated", out var migrated) &&
             migrated.ValueKind == JsonValueKind.True;
-        // A server older than the outcome field cannot tell migration apart
-        // from an unmatched row; keep the compatibility key unless removal is explicit.
+        // A server older than the outcome field cannot confirm migration; keep
+        // the one bounded compatibility key unless removal is explicit. Current
+        // servers also report every non-migrated outcome identically so the
+        // response is not a legacy-row existence oracle.
         var legacyUnresolved = root.TryGetProperty("legacyUnresolved", out var unresolved)
             ? unresolved.ValueKind == JsonValueKind.True
             : !legacyMigrated;

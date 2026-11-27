@@ -43,7 +43,7 @@ public sealed record PushDeviceRegistration(
 
 /// <summary>Server-reported legacy-row outcome of a registration upsert.</summary>
 /// <param name="LegacyMigrated">The unbound legacy row was removed.</param>
-/// <param name="LegacyUnresolved">An unbound legacy row remains and must stay removable through the compatibility key.</param>
+/// <param name="LegacyUnresolved">A supplied legacy key was not confirmed migrated. The privacy-preserving response does not reveal whether that key names an existing row, so the client retains its one bounded cleanup key.</param>
 public sealed record PushDeviceRegistrationResult(bool LegacyMigrated, bool LegacyUnresolved);
 
 /// <summary>
@@ -167,7 +167,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     private readonly Func<string> _appVersion;
     private readonly object _initLock = new();
     private Task? _initializeTask;
-    private Task? _tokenResync;
+    private Task? _registrationResync;
     private bool _appliedThisLaunch;
     private string? _installationId;
     private string? _token;
@@ -189,6 +189,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _platform.NotificationTapped += OnPlatformNotificationTapped;
         _platform.TokenRefreshed += OnPlatformTokenRefreshed;
+        _identity.UserChanged += OnUserChanged;
     }
 
     public static PushNotificationService CreateForTesting(
@@ -209,9 +210,9 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     /// <summary>The verified Firebase Auth installation identity used for the registration row.</summary>
     public string? NotificationUserId => _userId;
 
-    /// <summary>The in-flight resync a token refresh kicked off — test seam so
-    /// callers can await the settled registration instead of polling.</summary>
-    internal Task? LastTokenResync => _tokenResync;
+    /// <summary>The in-flight resync a registration-triggering event kicked off —
+    /// test seam so callers can await the settled registration instead of polling.</summary>
+    internal Task? LastRegistrationResync => _registrationResync;
 
     /// <summary>
     /// Opt-in: verifies or requests notification authorization, subscribes the
@@ -563,11 +564,27 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         {
             return;
         }
-        _tokenResync = ResyncAfterTokenRefreshAsync();
+        _registrationResync = ResyncRegistrationAsync();
+    }
+
+    private void OnUserChanged(object? sender, EventArgs e)
+    {
+        // Initial sign-in is already resolved by the in-flight EnsureSignedInAsync
+        // path; this event matters when an established cached identity rotates or is lost.
+        if (_userId is null || _identity.UserId == _userId)
+        {
+            return;
+        }
+        _userId = _identity.UserId;
+        if (_userId is null || !_preferences.DailyPerekPushEnabled)
+        {
+            return;
+        }
+        _registrationResync = ResyncRegistrationAsync();
     }
 #pragma warning restore S1172
 
-    private async Task ResyncAfterTokenRefreshAsync()
+    private async Task ResyncRegistrationAsync()
     {
         try
         {
@@ -577,7 +594,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         catch (Exception ex) //NOSONAR — a resync failure is retried on the next registration trigger.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"[Push] token-refresh resync failed: {ex.Message}");
+            Console.Error.WriteLine($"[Push] registration resync failed: {ex.Message}");
         }
     }
 
@@ -593,6 +610,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     {
         _platform.NotificationTapped -= OnPlatformNotificationTapped;
         _platform.TokenRefreshed -= OnPlatformTokenRefreshed;
+        _identity.UserChanged -= OnUserChanged;
     }
 
     private static PushNotificationService CreateDefault()
@@ -633,7 +651,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     private static IUserIdentity CreateUserIdentity()
     {
 #if ANDROID || IOS
-        return new FirebaseUserIdentity();
+        return FirebaseUserIdentity.Instance;
 #else
         return AnonymousUserIdentity.Instance;
 #endif

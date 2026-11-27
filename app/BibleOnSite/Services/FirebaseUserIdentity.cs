@@ -18,6 +18,11 @@ namespace BibleOnSite.Services;
 /// </summary>
 public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
 {
+    /// <summary>Shared wrapper for the process-wide Firebase Auth session.</summary>
+    public static FirebaseUserIdentity Instance { get; } = new();
+
+    private FirebaseUserIdentity() { }
+
     private readonly object _authGate = new();
     private readonly object _signInGate = new();
     private Task? _signInTask;
@@ -104,9 +109,10 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
             }
             signIn = _signInTask;
         }
-        // The native sign-in is shared so startup preference sync and push
-        // registration cannot race duplicate anonymous sessions. Cancellation
-        // is per caller; cancelling one waiter must not cancel the other.
+        // Preference sync and push registration share this wrapper, and the
+        // in-flight native sign-in is shared too, so startup cannot race duplicate
+        // anonymous sessions. Cancellation is per caller; cancelling one waiter
+        // must not cancel the other.
         await signIn.WaitAsync(cancellationToken);
     }
 

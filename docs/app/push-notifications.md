@@ -63,18 +63,22 @@ anonymous-authentication session:
 
 An anonymous auth uid is installation-local: reinstalling or wiping app data
 normally creates a new uid. The durable pre-auth `push.user_id` compatibility
-key is therefore not re-seeded or trusted as a credential. On the first
-verified registration after upgrade the client sends it once as
-`legacyUserId`; the server replaces that legacy row only when the unbound row
+key is therefore not re-seeded or trusted as a credential. While the key is
+retained after upgrade the client includes it as `legacyUserId`; the server
+replaces that legacy row only when the unbound row
 is still unbound and carries the same non-empty installation id or the same
 FCM token as the verified request. This recovers the common upgrade path
 without letting a caller migrate a row merely because it knows the legacy id.
-After the server confirms migration, absence, or auth-binding of the legacy
-row the client clears the compatibility key; when an unbound row remains
-because its possession evidence did not match, the key is retained so a later
-opt-out can still remove that row through the legacy lane. A lost legacy row
-is safe because FCM topic membership, not the registry row, is the actual
-delivery subscription.
+After the server confirms migration the client clears the compatibility key.
+Every other outcome for a supplied key is deliberately reported the same way:
+the response does not distinguish a missing row, an already auth-bound row, or
+an unbound row whose possession evidence did not match, because that
+distinction would leak whether a caller-supplied legacy id names a
+registration. The client therefore retains the key; if an unbound row does
+exist, a later opt-out can still remove it through the legacy lane. Retention
+is harmless and bounded — at most one legacy key is stored per device,
+bearerless cleanup cannot touch auth-bound rows, and FCM topic membership, not
+the registry row, is the actual delivery subscription.
 
 ## Backend contract
 
@@ -136,9 +140,12 @@ Semantics the backend implements (`src/lib/app-push/service.ts`):
   row instead of increasing the final count.
 
 A successful POST response carries `legacyMigrated` and `legacyUnresolved`.
-The client clears its compatibility key unless `legacyUnresolved` reports that
-an unbound legacy row still exists; a missing outcome field on an older server
-is treated conservatively as unresolved.
+For a supplied `legacyUserId`, `legacyUnresolved` is false only after a
+possession-matched migration. It is true for every other outcome — missing,
+already auth-bound, or unmatched unbound — so the response cannot be used as a
+legacy-registration existence oracle. The client clears its compatibility key
+only after confirmed migration; a missing outcome field on an older server is
+treated conservatively as unresolved.
 
 Registration is deduplicated client-side by a stored
 `(user|installation|token|topics|legacy-key)` fingerprint — a routine launch

@@ -368,7 +368,11 @@ export class DeviceOwnershipError extends Error {}
 export interface SaveDeviceResult {
 	/** The unbound legacy row was removed after its verified replacement was stored. */
 	legacyMigrated: boolean;
-	/** An unbound legacy row remains stored because its possession evidence did not match. */
+	/**
+	 * A supplied legacy key was not confirmed migrated. Deliberately does not
+	 * distinguish missing, auth-bound, or possession-mismatched rows: exposing
+	 * that distinction would make the response a legacy-registration existence oracle.
+	 */
 	legacyUnresolved: boolean;
 }
 
@@ -388,8 +392,9 @@ function assertDeviceOwner(device: PushDevice, authUserId: string): void {
  * identity of this installation. `installationId`/`token` are rotation
  * metadata, never credentials. A pre-auth row may be replaced only through
  * the explicit legacy-migration evidence documented in
- * docs/app/push-notifications.md. The result tells the client whether its
- * compatibility key still names an unbound legacy row it must keep for opt-out.
+ * docs/app/push-notifications.md. The result tells the client whether it must
+ * retain its compatibility key for a possible later legacy-lane opt-out without
+ * revealing whether that key names an existing row.
  */
 export async function saveDevice(
 	device: PushDevice,
