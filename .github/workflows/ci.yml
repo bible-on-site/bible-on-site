@@ -1562,7 +1562,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.bun-unit-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}

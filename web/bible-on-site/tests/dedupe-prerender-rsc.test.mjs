@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { dedupePrerenderRsc } from "./dedupe-prerender-rsc.mjs";
+import { dedupePrerenderRsc } from "../scripts/dedupe-prerender-rsc.mjs";
 
 test("dedupePrerenderRsc links byte-identical full segment payloads", () => {
 	const fixture = mkdtempSync(path.join(tmpdir(), "dedupe-rsc-"));
