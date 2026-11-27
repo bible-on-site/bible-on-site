@@ -814,11 +814,15 @@ export async function readContributionAgentTool(
 			id.toLowerCase() === current.id.toLowerCase()
 				? current
 				: await readRelatedProposal(conn, current, id);
-		const change = proposal.changes.find(
-			(candidate) => candidate.kind === "place_profile",
-		);
-		if (proposal.kind !== "pr" || !change)
+		const change =
+			proposal.kind === "pr"
+				? proposal.changes.find(
+						(candidate) => candidate.kind === "place_profile",
+					)
+				: undefined;
+		if (!change) {
 			throw new ContributionAgentToolInputError("invalid_arguments");
+		}
 		if (!Array.isArray(change.after?.occurrences))
 			throw new Error("The place profile has no readable occurrences");
 		const { cursor, limit } = pageArguments(args);
