@@ -545,6 +545,38 @@ describe("viewport-positioned aliyah detail", () => {
 		}
 	});
 
+	it("keeps the detail open for internal press and overflow scrolling", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.mouseEnter(marker);
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		);
+		fireEvent.pointerDown(detail);
+		fireEvent.scroll(detail);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBe(
+			detail,
+		);
+		fireEvent.pointerDown(document.body);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+	});
+
+	it("scrolls an overflowing detail with arrow keys while the marker keeps focus", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.keyDown(marker, { key: "ArrowDown" });
+		act(() => marker.focus());
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		) as HTMLElement;
+		fireEvent.keyDown(marker, { key: "ArrowLeft" });
+		expect(detail.scrollTop).toBe(0);
+		fireEvent.keyDown(marker, { key: "ArrowDown" });
+		expect(detail.scrollTop).toBe(48);
+		fireEvent.keyDown(marker, { key: "ArrowUp" });
+		expect(detail.scrollTop).toBe(0);
+	});
+
 	it("portals into the fullscreen host and closes when fullscreen changes", () => {
 		const { container } = renderBody({ boundaryMarkers: markers });
 		const marker = measuredMarker(container, rect(2, 100, 28, 24));

@@ -94,27 +94,36 @@ export function AliyahMarkerButton({
 
 	useEffect(() => {
 		if (!open) return;
+		const detailContains = (target: EventTarget | null) =>
+			target instanceof Node &&
+			(buttonRef.current?.contains(target) ||
+				tooltipRef.current?.contains(target));
 		const closeIfOutside = (event: Event) => {
+			if (!detailContains(event.target)) closeDetail();
+		};
+		const closeIfScrollOutside = (event: Event) => {
 			if (
-				event.target instanceof Node &&
-				buttonRef.current?.contains(event.target)
+				!(
+					event.target instanceof Node &&
+					tooltipRef.current?.contains(event.target)
+				)
 			) {
-				return;
+				closeDetail();
 			}
-			closeDetail();
 		};
 		const closeOnEscape = (event: KeyboardEvent) => {
 			if (event.key === "Escape") closeDetail();
 		};
 		// Book leaves and plain articles scroll in different containers; leaving
-		// the detail up after either moves would detach it from its marker.
-		document.addEventListener("scroll", closeDetail, true);
+		// the detail up after either moves would detach it from its marker. The
+		// detail's own overflow scroll is internal and stays open.
+		document.addEventListener("scroll", closeIfScrollOutside, true);
 		window.addEventListener("resize", closeDetail);
 		document.addEventListener("fullscreenchange", closeDetail);
 		document.addEventListener("pointerdown", closeIfOutside, true);
 		document.addEventListener("keydown", closeOnEscape);
 		return () => {
-			document.removeEventListener("scroll", closeDetail, true);
+			document.removeEventListener("scroll", closeIfScrollOutside, true);
 			window.removeEventListener("resize", closeDetail);
 			document.removeEventListener("fullscreenchange", closeDetail);
 			document.removeEventListener("pointerdown", closeIfOutside, true);
@@ -142,6 +151,17 @@ export function AliyahMarkerButton({
 				onBlur={() => {
 					setFocused(false);
 					setTapped(false);
+				}}
+				onKeyDown={(event) => {
+					if (!open || (event.key !== "ArrowDown" && event.key !== "ArrowUp"))
+						return;
+					const tooltip = tooltipRef.current;
+					/* istanbul ignore next -- the portal and button mount in the same commit */
+					if (!tooltip) return;
+					// Focus stays on the owning marker, so arrow keys must scroll the
+					// overflowing detail explicitly instead of scrolling the page.
+					event.preventDefault();
+					tooltip.scrollTop += event.key === "ArrowDown" ? 48 : -48;
 				}}
 				onClick={() => {
 					// Some touch browsers do not focus a button on tap. Pin the detail

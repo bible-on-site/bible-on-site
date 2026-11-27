@@ -143,6 +143,10 @@
 	z-index: 10020;
 	max-height: calc(100vh - 16px);
 	overflow-y: auto;
+	/* High zoom can cap merged details below their content height; the portal
+	   itself must remain scrollable instead of becoming unreachable text. */
+	pointer-events: auto;
+	overscroll-behavior: contain;
 }
 
 /* Chapter break inside an aliyah-annotated reading — demoted to the

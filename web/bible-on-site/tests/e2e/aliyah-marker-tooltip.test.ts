@@ -6,15 +6,21 @@ const VAYISHLACH = `/${encodeURIComponent("פרשה")}/${encodeURIComponent("ו�
 async function expectPortalInsideViewport(page: Page) {
 	const detail = page.locator("[data-aliyah-detail-portal]");
 	await expect(detail).toBeVisible();
-	const box = await detail.boundingBox();
-	const viewport = page.viewportSize();
-	expect(box).not.toBeNull();
-	expect(viewport).not.toBeNull();
-	if (!box || !viewport) return;
-	expect(box.x).toBeGreaterThanOrEqual(0);
-	expect(box.y).toBeGreaterThanOrEqual(0);
-	expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-	expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+	const measurement = await detail.evaluate((el) => {
+		const rect = el.getBoundingClientRect();
+		return {
+			x: rect.x,
+			y: rect.y,
+			right: rect.right,
+			bottom: rect.bottom,
+			viewportWidth: window.innerWidth,
+			viewportHeight: window.innerHeight,
+		};
+	});
+	expect(measurement.x).toBeGreaterThanOrEqual(0);
+	expect(measurement.y).toBeGreaterThanOrEqual(0);
+	expect(measurement.right).toBeLessThanOrEqual(measurement.viewportWidth);
+	expect(measurement.bottom).toBeLessThanOrEqual(measurement.viewportHeight);
 }
 
 test.describe("aliyah marker viewport-safe detail (#3840)", () => {
