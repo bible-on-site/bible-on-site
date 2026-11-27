@@ -178,10 +178,11 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         }
         var bar = Page.WaitFor("PerekSearchInput", element => element.Enabled);
         Platform.Tap(Driver!, bar);
-        var input = bar.TagName.Contains("TextView", StringComparison.Ordinal)
-            || bar.TagName.Contains("EditText", StringComparison.Ordinal)
-            || bar.TagName.Contains("SearchField", StringComparison.Ordinal)
-            || bar.TagName.Contains("TextField", StringComparison.Ordinal)
+        var barType = Platform.ElementType(bar) ?? "";
+        var input = barType.Contains("TextView", StringComparison.Ordinal)
+            || barType.Contains("EditText", StringComparison.Ordinal)
+            || barType.Contains("SearchField", StringComparison.Ordinal)
+            || barType.Contains("TextField", StringComparison.Ordinal)
             ? bar
             : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();

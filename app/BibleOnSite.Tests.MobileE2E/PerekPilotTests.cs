@@ -198,7 +198,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
                     {
                         return false;
                     }
-                    barTag = element.TagName;
+                    barTag = Platform.ElementType(element);
                     return true;
                 }, remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
                 Platform.Tap(Driver!, bar);
