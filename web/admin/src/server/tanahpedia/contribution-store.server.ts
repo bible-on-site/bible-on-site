@@ -156,20 +156,29 @@ export async function listContributions(
 	await ensureContributionSchema();
 	const input = validateContributionList(raw),
 		where: string[] = [],
+		bodyFilters: string[] = [],
 		values: (string | number)[] = [];
 	if (input.kind) {
 		where.push("kind = ?");
 		values.push(input.kind);
 	}
 	if (input.assignee) {
-		where.push("JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')) = ?");
+		bodyFilters.push("JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')) = ?");
 		values.push(input.assignee);
 	}
 	if (input.q) {
-		where.push(
+		bodyFilters.push(
 			"LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', title, number, JSON_UNQUOTE(JSON_EXTRACT(data, '$.description')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.author.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.id')), REPLACE(JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')), '_', ' '), CASE JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')) WHEN 'unassigned' THEN 'ללא שיוך' WHEN 'human' THEN 'עורך אנושי' ELSE '' END))) > 0",
 		);
 		values.push(input.q);
+	}
+	if (bodyFilters.length) {
+		// JSON predicates would otherwise make MySQL carry the body into the sort.
+		where.push(
+			`(SELECT ${bodyFilters.join(" AND ")}
+			 FROM tanahpedia_contribution AS body
+			 WHERE body.number = candidate.number LIMIT 1)`,
+		);
 	}
 	if (input.relatedTo) {
 		where.push(
@@ -179,7 +188,7 @@ export async function listContributions(
 	}
 	const base = where.length ? where.join(" AND ") : "1 = 1";
 	const [totals] = await query<{ open: number; closed: number; all: number }>(
-		`SELECT COALESCE(SUM(state = 'open'),0) AS open, COALESCE(SUM(state <> 'open'),0) AS closed, COUNT(*) AS \`all\` FROM tanahpedia_contribution WHERE ${base}`,
+		`SELECT COALESCE(SUM(state = 'open'),0) AS open, COALESCE(SUM(state <> 'open'),0) AS closed, COUNT(*) AS \`all\` FROM tanahpedia_contribution AS candidate WHERE ${base}`,
 		[...values],
 	);
 	const [global] = await query<{ issues: number; prs: number }>(
@@ -191,10 +200,19 @@ export async function listContributions(
 		where.push("number < ?");
 		values.push(input.before);
 	}
+	// The bounded derived table sorts narrow keys before reading contribution JSON.
 	const rows = await query<ContributionRow>(
-		`SELECT id, number, kind, state, title, version, data FROM tanahpedia_contribution WHERE ${where.length ? where.join(" AND ") : "1 = 1"} ORDER BY number DESC LIMIT 101`,
+		`SELECT c.id, c.number, c.kind, c.state, c.title, c.version, c.data
+		 FROM (
+			 SELECT number FROM tanahpedia_contribution AS candidate
+			 WHERE ${where.length ? where.join(" AND ") : "1 = 1"}
+			 ORDER BY number DESC LIMIT 101
+		 ) AS page
+		 JOIN tanahpedia_contribution AS c ON c.number = page.number`,
 		values,
 	);
+	// The outer join has no ORDER BY, so restore the bounded page order here.
+	rows.sort((a, b) => Number(b.number) - Number(a.number));
 	const items = rows.slice(0, 100).map(decode);
 	return {
 		items,

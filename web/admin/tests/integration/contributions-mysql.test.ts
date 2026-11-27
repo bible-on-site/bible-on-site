@@ -3024,6 +3024,68 @@ describe("durable issue assignment", () => {
 		} while (before);
 		expect(seen.size).toBe(501);
 	});
+	it("lists related PRs with large histories across the exact page boundary", async () => {
+		const issue = await service.createContribution(
+			{ kind: "issue", title: "Large related history", description: "Fixture" },
+			alice,
+		);
+		const linkedIds = Array.from({ length: 105 }, () => randomUUID());
+		const comment = "x".repeat(10_000);
+		const history = Array.from({ length: 41 }, () => ({
+			id: randomUUID(),
+			kind: "comment" as const,
+			actor: alice,
+			at: issue.updatedAt,
+			body: comment,
+		}));
+		const rows = linkedIds.map((id, index) => {
+			const item = {
+				...issue,
+				id,
+				kind: "pr",
+				issueId: issue.id,
+				title: `Linked history ${index}`,
+				assignee: { kind: "local_llm" },
+				events: index === 0 || index === 104 ? history : [],
+			};
+			return [
+				id,
+				item.kind,
+				item.state,
+				item.title,
+				issue.id,
+				1,
+				JSON.stringify(item),
+			];
+		});
+		await conn.query(
+			"INSERT INTO tanahpedia_contribution (id,kind,state,title,issue_id,version,data) VALUES ?",
+			[rows],
+		);
+		const latest = linkedIds.at(-1);
+		const related = await store.listContributions({ relatedTo: latest });
+		expect(related.items.map(({ id }) => id)).toEqual([latest, issue.id]);
+		expect(related.items[0].events).toEqual(history);
+		const filters = {
+			kind: "pr",
+			state: "open",
+			relatedTo: issue.id,
+			assignee: "local_llm",
+			q: "linked history",
+		} as const;
+		const descending = [...linkedIds].reverse();
+		const first = await store.listContributions(filters);
+		expect(first.items.map(({ id }) => id)).toEqual(descending.slice(0, 100));
+		expect(first.nextCursor).toBe(first.items.at(-1)?.number);
+		const second = await store.listContributions({
+			...filters,
+			before: first.nextCursor ?? undefined,
+		});
+		expect(second.items.map(({ id }) => id)).toEqual(descending.slice(100));
+		expect(second.items.at(-1)?.events).toEqual(history);
+		expect(second.nextCursor).toBeNull();
+		expect(second.counts).toMatchObject({ open: 105, closed: 0, all: 105 });
+	});
 	it("synchronizes person readers on rename and rejects independently changed MAIN names", async () => {
 		const nameId = randomUUID();
 		await conn.execute(
