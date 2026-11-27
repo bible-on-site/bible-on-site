@@ -171,9 +171,7 @@ describe("Chapter article list", () => {
 		getPerek.mockResolvedValue({ perek: null, sefer_name: "" });
 		getArticlesByPerek.mockResolvedValue([]);
 		renderPage();
-		expect(
-			await screen.findByRole("heading", { name: "פרק 2" }),
-		).toBeVisible();
+		expect(await screen.findByRole("heading", { name: "פרק 2" })).toBeVisible();
 		expect(screen.getByText("אין מאמרים בפרק זה עדיין")).toBeVisible();
 		expect(screen.queryByText(/^ספר /)).not.toBeInTheDocument();
 		for (const name of [/מאמר חדש לפרק זה$/, /הוסף מאמר חדש$/]) {
@@ -189,9 +187,7 @@ describe("Chapter article list", () => {
 	it("does not query the server for a malformed chapter URL", () => {
 		routeParams.perekId = "invalid";
 		renderPage();
-		expect(
-			screen.getByRole("heading", { name: "פרק invalid" }),
-		).toBeVisible();
+		expect(screen.getByRole("heading", { name: "פרק invalid" })).toBeVisible();
 		expect(screen.getByText("מאמרים בפרק זה (0 מאמרים)")).toBeVisible();
 		expect(getPerek).not.toHaveBeenCalled();
 		expect(getArticlesByPerek).not.toHaveBeenCalled();
@@ -239,15 +235,20 @@ describe("Chapter article list", () => {
 
 	it("keeps the article when its deletion is undone from the toast", async () => {
 		renderPage();
-		fireEvent.click(await screen.findByRole("button", { name: /מחיקה$/ }));
+		const deleteButton = await screen.findByRole("button", { name: /מחיקה$/ });
+		vi.useFakeTimers();
+		try {
+			fireEvent.click(deleteButton);
+			const toast = screen.getByRole("status");
+			expect(toast).toHaveTextContent('המאמר "מאמר בדיקה" יימחק');
+			fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
 
-		const toast = await screen.findByRole("status");
-		expect(toast).toHaveTextContent('המאמר "מאמר בדיקה" יימחק');
-		fireEvent.click(within(toast).getByRole("button", { name: "ביטול" }));
-
-		await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
-		expect(deleteArticle).not.toHaveBeenCalled();
-		expect(screen.getByRole("link", { name: "מאמר בדיקה" })).toBeVisible();
+			await act(() => vi.advanceTimersByTimeAsync(60));
+			expect(deleteArticle).not.toHaveBeenCalled();
+			expect(screen.getByRole("link", { name: "מאמר בדיקה" })).toBeVisible();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("disables deletion while pending and refreshes the chapter list after success", async () => {
