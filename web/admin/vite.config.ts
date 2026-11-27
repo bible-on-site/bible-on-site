@@ -174,7 +174,18 @@ export default defineConfig({
 				? { router: { codeSplittingOptions: { defaultBehavior: [] } } }
 				: undefined,
 		),
-		nitro({ rollupConfig: { onwarn: handleRollupWarning } }),
+		nitro({
+			// Nitro serves existing files before this fallback for missing build assets.
+			routes: {
+				"/assets/**": fileURLToPath(
+					new URL(
+						"./src/server/missing-build-asset.server.ts",
+						import.meta.url,
+					),
+				),
+			},
+			rollupConfig: { onwarn: handleRollupWarning },
+		}),
 		viteReact(),
 		// Instrument app modules for e2e coverage — both the client bundle and
 		// Nitro SSR modules set globalThis.__coverage__ in their realm.
