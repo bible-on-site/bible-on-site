@@ -503,6 +503,80 @@ describe("viewport-positioned aliyah detail", () => {
 		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
 	});
 
+	it("reactivates the detail after Escape while the marker remains focused", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		act(() => marker.focus());
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		expect(document.activeElement).toBe(marker);
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+	});
+
+	it("uses visual-viewport bounds after pinch zoom", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(50, 440, 28, 24));
+		const original = Object.getOwnPropertyDescriptor(window, "visualViewport");
+		Object.defineProperty(window, "visualViewport", {
+			configurable: true,
+			value: {
+				width: 300,
+				height: 350,
+				offsetLeft: 40,
+				offsetTop: 150,
+			} as VisualViewport,
+		});
+		try {
+			fireEvent.mouseEnter(marker);
+			const detail = must(
+				document.body.querySelector("[data-aliyah-detail-portal]"),
+			) as HTMLElement;
+			expect(detail.style.left).toBe("48px");
+			expect(detail.style.top).toBe("375px");
+		} finally {
+			if (original) {
+				Object.defineProperty(window, "visualViewport", original);
+			} else {
+				Reflect.deleteProperty(window, "visualViewport");
+			}
+		}
+	});
+
+	it("portals into the fullscreen host and closes when fullscreen changes", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		const fullscreenHost = document.createElement("div");
+		fullscreenHost.appendChild(container);
+		document.body.appendChild(fullscreenHost);
+		const original = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
+		Object.defineProperty(document, "fullscreenElement", {
+			configurable: true,
+			get: () => fullscreenHost,
+		});
+		try {
+			fireEvent.mouseEnter(marker);
+			const detail = must(
+				fullscreenHost.querySelector("[data-aliyah-detail-portal]"),
+			);
+			expect(detail.parentElement).toBe(fullscreenHost);
+			expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBe(
+				detail,
+			);
+			fireEvent(document, new Event("fullscreenchange"));
+			expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		} finally {
+			if (original) {
+				Object.defineProperty(document, "fullscreenElement", original);
+			} else {
+				Reflect.deleteProperty(document, "fullscreenElement");
+			}
+			fullscreenHost.remove();
+		}
+	});
+
 	it("keeps markers without rich detail inline-only", () => {
 		const { container } = renderBody({
 			boundaryMarkers: new Map<string, UnitBoundaryMarker[]>([

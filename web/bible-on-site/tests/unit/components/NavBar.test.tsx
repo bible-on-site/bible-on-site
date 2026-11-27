@@ -35,7 +35,11 @@ jest.mock("next/link", () => ({
 		href: string;
 		prefetch?: boolean | "auto" | null;
 	} & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-		<a href={href} {...rest}>
+		<a
+			href={href}
+			data-link-prefetch={_prefetch === null ? "auto" : String(_prefetch)}
+			{...rest}
+		>
 			{children}
 		</a>
 	),
@@ -344,6 +348,14 @@ describe("NavBar", () => {
 			fireEvent.click(getTrigger());
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
 			expect(getMenu()).not.toHaveAttribute("inert");
+		});
+
+		it("enables viewport prefetching only while the drawer is open", () => {
+			render(<NavBar version="1.2.3" />);
+			const firstLink = getMenu().querySelector("a[href='/929']");
+			expect(firstLink).toHaveAttribute("data-link-prefetch", "false");
+			fireEvent.click(getTrigger());
+			expect(firstLink).toHaveAttribute("data-link-prefetch", "auto");
 		});
 
 		it("does not treat an aliased rewrite hydration as navigation away", () => {

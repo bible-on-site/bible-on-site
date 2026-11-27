@@ -62,14 +62,34 @@ export function AliyahMarkerButton({
 		const tooltip = tooltipRef.current;
 		/* istanbul ignore next -- the portal and button mount in the same commit */
 		if (!button || !tooltip) return;
-		setPosition(
-			computePreviewPosition(
-				button.getBoundingClientRect(),
-				{ width: tooltip.offsetWidth, height: tooltip.offsetHeight },
-				{ width: window.innerWidth, height: window.innerHeight },
-				{ gap: 5, margin: 8 },
-			),
+		const gap = 5;
+		const margin = 8;
+		const visualViewport = window.visualViewport;
+		const viewport = visualViewport
+			? { width: visualViewport.width, height: visualViewport.height }
+			: { width: window.innerWidth, height: window.innerHeight };
+		// Pinch zoom exposes only part of the layout viewport. Measure against
+		// those visual bounds before asking the shared helper for placement.
+		tooltip.style.maxWidth = `min(70vw, 22em, ${Math.max(0, viewport.width - margin * 2)}px)`;
+		tooltip.style.maxHeight = `min(calc(100vh - 16px), ${Math.max(0, viewport.height - margin * 2)}px)`;
+		const offsetX = visualViewport?.offsetLeft ?? 0;
+		const offsetY = visualViewport?.offsetTop ?? 0;
+		const anchor = button.getBoundingClientRect();
+		const positioned = computePreviewPosition(
+			{
+				top: anchor.top - offsetY,
+				bottom: anchor.bottom - offsetY,
+				left: anchor.left - offsetX,
+				width: anchor.width,
+			},
+			{ width: tooltip.offsetWidth, height: tooltip.offsetHeight },
+			viewport,
+			{ gap, margin },
 		);
+		setPosition({
+			x: positioned.x + offsetX,
+			y: positioned.y + offsetY,
+		});
 	}, [open, detail]);
 
 	useEffect(() => {
@@ -90,11 +110,13 @@ export function AliyahMarkerButton({
 		// the detail up after either moves would detach it from its marker.
 		document.addEventListener("scroll", closeDetail, true);
 		window.addEventListener("resize", closeDetail);
+		document.addEventListener("fullscreenchange", closeDetail);
 		document.addEventListener("pointerdown", closeIfOutside, true);
 		document.addEventListener("keydown", closeOnEscape);
 		return () => {
 			document.removeEventListener("scroll", closeDetail, true);
 			window.removeEventListener("resize", closeDetail);
+			document.removeEventListener("fullscreenchange", closeDetail);
 			document.removeEventListener("pointerdown", closeIfOutside, true);
 			document.removeEventListener("keydown", closeOnEscape);
 		};
@@ -121,12 +143,11 @@ export function AliyahMarkerButton({
 					setFocused(false);
 					setTapped(false);
 				}}
-				onClick={(event) => {
+				onClick={() => {
 					// Some touch browsers do not focus a button on tap. Pin the detail
-					// there too; outside tap, Escape, scroll or resize dismisses it.
-					if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget) {
-						setTapped(true);
-					}
+					// there too, and let Enter/Space reactivate it after Escape while
+					// the button itself still has focus.
+					setTapped(true);
 				}}
 			>
 				{tag && (
@@ -158,7 +179,11 @@ export function AliyahMarkerButton({
 					>
 						{detail}
 					</span>,
-					document.body,
+					document.fullscreenElement &&
+						buttonRef.current &&
+						document.fullscreenElement.contains(buttonRef.current)
+						? document.fullscreenElement
+						: document.body,
 				)}
 		</>
 	);

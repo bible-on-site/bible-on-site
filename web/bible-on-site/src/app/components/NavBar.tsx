@@ -268,6 +268,7 @@ export const NavBar = ({ version }: { version: string }) => {
 									<li key={item.href} className={styles.menuItem}>
 										<Link
 											href={item.href}
+											prefetch={open ? null : false}
 											aria-current={
 												item.href === current ? "page" : undefined
 											}

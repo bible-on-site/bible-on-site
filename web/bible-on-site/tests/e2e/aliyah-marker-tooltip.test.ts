@@ -99,5 +99,25 @@ test.describe("aliyah marker viewport-safe detail (#3840)", () => {
 			.locator("[data-aliyah-detail-portal]")
 			.evaluate((el) => el.parentElement === document.body);
 		expect(parentIsBody).toBe(true);
+
+		// Native fullscreen puts the book wrapper in the browser top layer. The
+		// enhanced detail must move inside that host rather than stay hidden in
+		// the ordinary document layer.
+		await page.keyboard.press("Escape");
+		await expect(page.locator("[data-aliyah-detail-portal]")).toHaveCount(0);
+		await page.mouse.move(10, 10);
+		await page.getByRole("button", { name: "כניסה למסך מלא" }).click();
+		await expect
+			.poll(() => page.evaluate(() => document.fullscreenElement != null))
+			.toBe(true);
+		await marker.hover();
+		await expectPortalInsideViewport(page);
+		const portalInsideFullscreenHost = await page
+			.locator("[data-aliyah-detail-portal]")
+			.evaluate((el) => {
+				const host = document.fullscreenElement;
+				return host instanceof HTMLElement && el.parentElement === host;
+			});
+		expect(portalInsideFullscreenHost).toBe(true);
 	});
 });
