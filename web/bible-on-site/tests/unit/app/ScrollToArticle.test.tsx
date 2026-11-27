@@ -49,6 +49,22 @@ describe("ScrollToSlug", () => {
 		expect(history.scrollRestoration).toBe("manual");
 	});
 
+	it("hands normal restoration back to history entries created later", () => {
+		stubTarget();
+		render(<ScrollToSlug />);
+		expect(history.scrollRestoration).toBe("manual");
+
+		// New entries inherit the current entry's restoration mode, so the
+		// component resets it to "auto" before letting pushState create one —
+		// otherwise Back on the pushed page (e.g. the author list) could never
+		// restore its saved scroll position.
+		history.pushState({}, "", "/");
+		expect(history.scrollRestoration).toBe("auto");
+		history.scrollRestoration = "manual";
+		history.replaceState({}, "", "/");
+		expect(history.scrollRestoration).toBe("auto");
+	});
+
 	it("does nothing when the target element is missing", () => {
 		document.body.innerHTML = "";
 		render(<ScrollToSlug targetId="missing" />);
