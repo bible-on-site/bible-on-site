@@ -123,6 +123,7 @@ public class PushNotificationServiceTests
 
         public async Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
         {
+            _ = registration;
             Operations.Add("register-start");
             RegisterStarted.TrySetResult();
             var result = await ReleaseRegister.Task.WaitAsync(ct);
@@ -132,6 +133,7 @@ public class PushNotificationServiceTests
 
         public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
         {
+            _ = userId;
             Operations.Add("delete");
             return Task.CompletedTask;
         }
