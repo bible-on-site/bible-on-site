@@ -2,6 +2,7 @@ import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CataloguePerek } from "~/lib/article-linking/catalogue";
 import { CONTRIBUTION_AGENT_READ_KINDS } from "~/lib/tanahpedia/contribution-agent-read-kinds";
+import { ContributionAgentToolInputError } from "~/lib/tanahpedia/contribution-agent-tool-errors";
 import type { ArticleLinkState } from "~/lib/tanahpedia/contribution-article-links";
 import type {
 	ChangeInput,
@@ -1284,12 +1285,30 @@ describe("complete contribution agent context", () => {
 		).rejects.toThrow("not linked");
 	});
 
-	it("refuses word reads for an issue or an ordinary related PR", async () => {
+	it("returns recoverable input errors for an issue or an ordinary related PR", async () => {
 		const [ordinary] = relatedFixture(1);
-		for (const args of [{}, { id: ordinary.id }])
+		for (const args of [{}, { id: item.id }, { id: ordinary.id }])
 			await expect(
 				readContributionAgentTool(conn, item, "place_profile_words", args),
-			).rejects.toThrow("This proposal has no place profile");
+			).rejects.toBeInstanceOf(ContributionAgentToolInputError);
+	});
+
+	it("keeps a corrupt word list in a related place PR fatal", async () => {
+		const [proposal] = relatedFixture(1);
+		proposal.changes = [
+			{
+				kind: "place_profile",
+				targetId: entityId,
+				before: null,
+				after: null,
+				labels: {},
+			},
+		];
+		await expect(
+			readContributionAgentTool(conn, item, "place_profile_words", {
+				id: proposal.id,
+			}),
+		).rejects.toThrow("The place profile has no readable occurrences");
 	});
 
 	it("follows the occurrence locator from an issue to its specific related place PR", async () => {

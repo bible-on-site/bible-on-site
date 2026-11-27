@@ -1166,6 +1166,75 @@ describe("assignment-driven leased contribution work", () => {
 		expect(current().generation?.status).toBe("running");
 	});
 
+	it("can retry a word-list read with a linked PR ID on the same issue lease", async () => {
+		current().kind = "issue";
+		current().scope = { kind: "place_profile" };
+		current().changes = [];
+		job().task = "issue_implementation";
+		const word = {
+			perekId: 51,
+			pasukNumber: 1,
+			segmentStart: 5,
+			segmentEnd: 5,
+			text: "מִצְרָ֑יְמָה",
+		};
+		const linked: Contribution = {
+			...structuredClone(current()),
+			id: commentId,
+			kind: "pr",
+			issueId: id,
+			changes: [
+				{
+					kind: "place_profile",
+					targetId: id,
+					before: null,
+					after: { entry: null, identification: null, occurrences: [word] },
+					labels: {},
+				},
+			],
+		};
+		mocks.read.mockImplementation(async (_conn, requestedId) =>
+			structuredClone(requestedId === linked.id ? linked : current()),
+		);
+		const context = await vi.importActual<
+			typeof import("~/server/tanahpedia/contribution-agent-context.server")
+		>("~/server/tanahpedia/contribution-agent-context.server");
+		mocks.tool.mockImplementation(context.readContributionAgentTool);
+		const input = await claim();
+		const before = structuredClone(current());
+		const name = "place_profile_words";
+		expect(
+			await readContributionWorkerContext({ ...input, name, arguments: {} }),
+		).toEqual({
+			error: {
+				type: "invalid_tool_arguments",
+				code: "invalid_arguments",
+				message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_arguments,
+			},
+		});
+		const args = { id: linked.id };
+		expect(
+			await readContributionWorkerContext({ ...input, name, arguments: args }),
+		).toMatchObject({
+			data: {
+				proposalId: linked.id,
+				items: [word],
+				total: 1,
+				nextCursor: null,
+			},
+			receipt: { name, arguments: args, hash: expect.any(String) },
+		});
+		await expect(
+			readContributionWorkerContext({
+				...input,
+				name,
+				arguments: args,
+				receipts: [{ name, arguments: {}, hash: "a".repeat(64) }],
+			}),
+		).rejects.toBeInstanceOf(ContributionAgentToolInputError);
+		expect(current()).toEqual(before);
+	});
+
 	it("does not turn lease, stale context or prior-receipt rejection into recoverable input feedback", async () => {
 		const input = await claim(),
 			request = {

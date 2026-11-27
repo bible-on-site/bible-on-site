@@ -8,6 +8,7 @@ import {
 import { canonicalJson } from "~/lib/canonical-json";
 import { isContributionAgentReadKind } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
+import { ContributionAgentToolInputError } from "~/lib/tanahpedia/contribution-agent-tool-errors";
 import {
 	type ArticleLiteralGrounding,
 	expandLiteralCitationCoordinates,
@@ -816,8 +817,10 @@ export async function readContributionAgentTool(
 		const change = proposal.changes.find(
 			(candidate) => candidate.kind === "place_profile",
 		);
-		if (proposal.kind !== "pr" || !Array.isArray(change?.after?.occurrences))
-			throw new Error("This proposal has no place profile");
+		if (proposal.kind !== "pr" || !change)
+			throw new ContributionAgentToolInputError("invalid_arguments");
+		if (!Array.isArray(change.after?.occurrences))
+			throw new Error("The place profile has no readable occurrences");
 		const { cursor, limit } = pageArguments(args);
 		return {
 			data: {
