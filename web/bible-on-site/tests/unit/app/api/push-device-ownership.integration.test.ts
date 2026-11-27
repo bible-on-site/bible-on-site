@@ -197,6 +197,31 @@ describe("/api/push/device installation ownership integration", () => {
 		expect(rows.has("auth-a")).toBe(false);
 	});
 
+	it("reports an unmatched unbound legacy row as still unresolved", async () => {
+		rows.set("legacy-user", {
+			user_id: "legacy-user",
+			auth_user_id: null,
+			installation_id: "other-installation",
+			token: "other-token",
+			platform: "android",
+			topics: '["daily_perek"]',
+			app_version: "5.1.8",
+		});
+
+		const response = await POST(
+			request("POST", device("auth-a", "fid-a", "token-a", "legacy-user"), "auth-a"),
+		);
+
+		expect(response.status).toBe(201);
+		expect(await response.json()).toEqual({
+			registered: true,
+			legacyMigrated: false,
+			legacyUnresolved: true,
+		});
+		expect(rows.has("legacy-user")).toBe(true);
+		expect(rows.has("auth-a")).toBe(true);
+	});
+
 	it("migrates a matching legacy registration and keeps unauthenticated opt-out legacy-only", async () => {
 		const legacyToken = `legacy-token:${"x".repeat(120)}`;
 		rows.set("legacy-user", {
@@ -217,6 +242,7 @@ describe("/api/push/device installation ownership integration", () => {
 		expect(await migrated.json()).toEqual({
 			registered: true,
 			legacyMigrated: true,
+			legacyUnresolved: false,
 		});
 		expect(rows.has("legacy-user")).toBe(false);
 		expect(rows.get("auth-a")?.auth_user_id).toBe("auth-a");

@@ -41,6 +41,11 @@ public sealed record PushDeviceRegistration(
     string AppVersion,
     string? LegacyUserId = null);
 
+/// <summary>Server-reported legacy-row outcome of a registration upsert.</summary>
+/// <param name="LegacyMigrated">The unbound legacy row was removed.</param>
+/// <param name="LegacyUnresolved">An unbound legacy row remains and must stay removable through the compatibility key.</param>
+public sealed record PushDeviceRegistrationResult(bool LegacyMigrated, bool LegacyUnresolved);
+
 /// <summary>
 /// Platform boundary for push delivery. Firebase/APNs implementations live
 /// under <c>Platforms/</c>; unit tests substitute a fake.
@@ -97,7 +102,7 @@ public interface IPushStateStore
 /// </summary>
 public interface IPushDeviceRegistry
 {
-    Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct);
+    Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct);
     Task UnregisterAsync(string userId, string? authToken, CancellationToken ct);
 }
 
@@ -474,7 +479,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         }
         try
         {
-            await _registry.RegisterAsync(new PushDeviceRegistration(
+            var result = await _registry.RegisterAsync(new PushDeviceRegistration(
                 _userId,
                 _installationId ?? string.Empty,
                 _token,
@@ -483,7 +488,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
                 _appVersion(),
                 legacyUserId == _userId ? null : legacyUserId), authToken, ct);
             await _stateStore.SetAsync(RegistrationFingerprintKey, fingerprint, ct);
-            if (legacyUserId is not null)
+            if (legacyUserId is not null && !result.LegacyUnresolved)
             {
                 await _stateStore.RemoveAsync(UserIdKey, ct);
             }
@@ -693,7 +698,8 @@ public sealed class NullPushDeviceRegistry : IPushDeviceRegistry
 {
     public static readonly NullPushDeviceRegistry Instance = new();
 #pragma warning disable S1172 // Null object satisfies the interface contract; arguments unused.
-    public Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct) => Task.CompletedTask;
+    public Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct) =>
+        Task.FromResult(new PushDeviceRegistrationResult(false, false));
     public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct) => Task.CompletedTask;
 #pragma warning restore S1172
 }

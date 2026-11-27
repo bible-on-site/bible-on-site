@@ -33,6 +33,19 @@ const validDevice = {
 	topics: ["daily_perek"],
 	appVersion: "5.1.8",
 };
+const stableJsonStringify = (value: unknown): string => {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableJsonStringify).join(",")}]`;
+	}
+	if (value !== null && typeof value === "object") {
+		return `{${Object.entries(value)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, entry]) => `${JSON.stringify(key)}:${stableJsonStringify(entry)}`)
+			.join(",")}}`;
+	}
+	return JSON.stringify(value) ?? "null";
+};
+
 const mockFetch = jest.fn();
 const jsonResponse = (body: unknown, status = 200) =>
 	new Response(JSON.stringify(body), { status });
@@ -122,7 +135,7 @@ describe("app-push service", () => {
 			});
 		const token = (claims: Record<string, unknown>, kid = "test-kid") => {
 			const encode = (value: object) =>
-				Buffer.from(JSON.stringify(value)).toString("base64url");
+				Buffer.from(stableJsonStringify(value)).toString("base64url");
 			const unsigned = `${encode({ alg: "RS256", kid })}.${encode(claims)}`;
 			return `${unsigned}.${createSign("RSA-SHA256").update(unsigned).sign(privateKey, "base64url")}`;
 		};
@@ -191,6 +204,58 @@ describe("app-push service", () => {
 			).rejects.toBeInstanceOf(service.FirebaseIdentityUnavailableError);
 		});
 
+		it("distinguishes a certificate fetch rejection from a forged credential", async () => {
+			mockFetch.mockRejectedValue(new TypeError("network down"));
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims)),
+			).rejects.toBeInstanceOf(service.FirebaseIdentityUnavailableError);
+		});
+
+		it("distinguishes unparsable certificate JSON from a forged credential", async () => {
+			mockFetch.mockResolvedValue(new Response("not json", { status: 200 }));
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims)),
+			).rejects.toBeInstanceOf(service.FirebaseIdentityUnavailableError);
+		});
+
+		it("refreshes once for a rotated key and bounds unknown-kid refreshes", async () => {
+			let certificates: Record<string, string> = { "old-kid": publicKey };
+			mockFetch.mockImplementation(async () =>
+				jsonResponse(certificates),
+			);
+
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims, "unknown-kid")),
+			).resolves.toBeNull();
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+
+			certificates = { "test-kid": publicKey };
+			await expect(service.verifyFirebaseIdToken(token(validClaims))).resolves.toEqual({
+				userId: validDevice.userId,
+			});
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims, "another-unknown")),
+			).resolves.toBeNull();
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not keep refreshing when a fresh cache still lacks unknown kids", async () => {
+			mockFetch.mockImplementation(async () =>
+				jsonResponse({ "old-kid": publicKey }),
+			);
+
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims, "unknown-one")),
+			).resolves.toBeNull();
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims, "unknown-two")),
+			).resolves.toBeNull();
+			await expect(
+				service.verifyFirebaseIdToken(token(validClaims, "unknown-three")),
+			).resolves.toBeNull();
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
 		it("rejects a token signed for an unparsable certificate", async () => {
 			mockFetch.mockImplementation(async () =>
 				jsonResponse({ "test-kid": "not a pem" }),
@@ -202,7 +267,7 @@ describe("app-push service", () => {
 
 		it("rejects malformed token structure before fetching certificates", async () => {
 			const encode = (value: object) =>
-				Buffer.from(JSON.stringify(value)).toString("base64url");
+				Buffer.from(stableJsonStringify(value)).toString("base64url");
 			const validHeader = encode({ alg: "RS256", kid: "test-kid" });
 			const validPayload = encode(validClaims);
 			const signature = token(validClaims).split(".")[2];
@@ -402,6 +467,46 @@ describe("app-push service", () => {
 			expect(mockTxExecute).not.toHaveBeenCalled();
 		});
 
+		it("allows a matching legacy migration at capacity because the row count does not increase", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([])
+				.mockResolvedValueOnce([
+					{
+						user_id: "legacy-user",
+						auth_user_id: null,
+						installation_id: validDevice.installationId,
+						token: "older-fcm-token",
+					},
+				]);
+
+			await expect(
+				service.saveDevice(legacyDevice, validDevice.userId),
+			).resolves.toEqual({ legacyMigrated: true, legacyUnresolved: false });
+			expect(mockTxQuery).toHaveBeenCalledTimes(2);
+			expect(mockTxExecute).toHaveBeenCalledTimes(2);
+		});
+
+		it("rejects a non-matching legacy upgrade at capacity", async () => {
+			mockTxQuery
+				.mockReset()
+				.mockResolvedValueOnce([])
+				.mockResolvedValueOnce([
+					{
+						user_id: "legacy-user",
+						auth_user_id: null,
+						installation_id: "other-installation",
+						token: "other-token",
+					},
+				])
+				.mockResolvedValueOnce([{ total: 25_000 }]);
+
+			await expect(
+				service.saveDevice(legacyDevice, validDevice.userId),
+			).rejects.toBeInstanceOf(service.DeviceStoreFullError);
+			expect(mockTxExecute).not.toHaveBeenCalled();
+		});
+
 		it("rejects an update when the stored row belongs to another verified installation", async () => {
 			mockTxQuery
 				.mockReset()
@@ -443,8 +548,8 @@ describe("app-push service", () => {
 			mockTxQuery
 				.mockReset()
 				.mockResolvedValueOnce([])
-				.mockResolvedValueOnce([{ total: 0 }])
-				.mockResolvedValueOnce(legacyRow ? [legacyRow] : []);
+				.mockResolvedValueOnce(legacyRow ? [legacyRow] : [])
+				.mockResolvedValueOnce([{ total: 0 }]);
 		};
 
 		it("migrates a legacy row carrying the same installation id", async () => {
@@ -457,7 +562,7 @@ describe("app-push service", () => {
 
 			await expect(
 				service.saveDevice(legacyDevice, validDevice.userId),
-			).resolves.toBe(true);
+			).resolves.toEqual({ legacyMigrated: true, legacyUnresolved: false });
 
 			expect(mockTxExecute).toHaveBeenCalledTimes(2);
 			expect(mockTxExecute.mock.calls[1][1]).toContain(
@@ -476,12 +581,12 @@ describe("app-push service", () => {
 
 			await expect(
 				service.saveDevice(legacyDevice, validDevice.userId),
-			).resolves.toBe(true);
+			).resolves.toEqual({ legacyMigrated: true, legacyUnresolved: false });
 			expect(mockTxExecute).toHaveBeenCalledTimes(2);
 		});
 
 		it.each([
-			["missing", null],
+			["missing", null, false],
 			[
 				"already auth-bound",
 				{
@@ -490,6 +595,7 @@ describe("app-push service", () => {
 					installation_id: validDevice.installationId,
 					token: validDevice.token,
 				},
+				false,
 			],
 			[
 				"not possession-matched",
@@ -499,15 +605,16 @@ describe("app-push service", () => {
 					installation_id: "other-installation",
 					token: "other-token",
 				},
+				true,
 			],
 		])(
 			"does not migrate a legacy row that is %s",
-			async (_label, legacyRow) => {
-				queueRegistrationLookup(legacyRow);
+			async (_label, legacyRow, legacyUnresolved) => {
+				queueRegistrationLookup(legacyRow as object | null);
 
 				await expect(
 					service.saveDevice(legacyDevice, validDevice.userId),
-				).resolves.toBe(false);
+				).resolves.toEqual({ legacyMigrated: false, legacyUnresolved });
 				expect(mockTxExecute).toHaveBeenCalledTimes(1);
 			},
 		);

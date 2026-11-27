@@ -148,6 +148,11 @@ let cachedFirebaseCertificates: {
 	certificates: Record<string, string>;
 	expiresAt: number;
 } | null = null;
+let lastUnknownKidRefreshAt = 0;
+// A fresh cache normally already contains every kid Google signs with. Permit
+// one forced refresh per minute for the rotation edge case without letting
+// bearerless requests turn random kids into unbounded outbound fetches.
+const UNKNOWN_KID_REFRESH_INTERVAL_MS = 60_000;
 
 /** The Google certificate endpoint needed for verification is unavailable. */
 export class FirebaseIdentityUnavailableError extends Error {}
@@ -158,13 +163,27 @@ function cacheSeconds(cacheControl: string | null): number {
 }
 
 async function fetchFirebaseCertificates(): Promise<Record<string, string>> {
-	const response = await fetch(FIREBASE_CERTIFICATES_URL);
+	let response: Response;
+	try {
+		response = await fetch(FIREBASE_CERTIFICATES_URL);
+	} catch {
+		throw new FirebaseIdentityUnavailableError(
+			"Firebase certificate endpoint is unreachable",
+		);
+	}
 	if (!response.ok) {
 		throw new FirebaseIdentityUnavailableError(
 			`Firebase certificate endpoint returned ${response.status}`,
 		);
 	}
-	const body = (await response.json()) as Record<string, unknown>;
+	let body: Record<string, unknown>;
+	try {
+		body = (await response.json()) as Record<string, unknown>;
+	} catch {
+		throw new FirebaseIdentityUnavailableError(
+			"Firebase certificate endpoint returned a malformed body",
+		);
+	}
 	if (
 		typeof body !== "object" ||
 		body === null ||
@@ -183,14 +202,18 @@ async function fetchFirebaseCertificates(): Promise<Record<string, string>> {
 }
 
 async function firebaseCertificate(kid: string): Promise<string | null> {
-	let certificates =
-		cachedFirebaseCertificates &&
-		cachedFirebaseCertificates.expiresAt > Date.now()
-			? cachedFirebaseCertificates.certificates
-			: await fetchFirebaseCertificates();
-	// Key rotation can publish a kid before the cached max-age expires.
-	if (!certificates[kid]) certificates = await fetchFirebaseCertificates();
-	return certificates[kid] ?? null;
+	const cache = cachedFirebaseCertificates;
+	if (!cache || cache.expiresAt <= Date.now()) {
+		return (await fetchFirebaseCertificates())[kid] ?? null;
+	}
+	const cached = cache.certificates[kid];
+	if (cached) return cached;
+	const now = Date.now();
+	if (now - lastUnknownKidRefreshAt < UNKNOWN_KID_REFRESH_INTERVAL_MS) {
+		return null;
+	}
+	lastUnknownKidRefreshAt = now;
+	return (await fetchFirebaseCertificates())[kid] ?? null;
 }
 
 function decodeJwtPart<T>(part: string): T | null {
@@ -341,6 +364,14 @@ export class DeviceStoreFullError extends Error {}
 /** The verified Firebase identity does not own the stored registration row. */
 export class DeviceOwnershipError extends Error {}
 
+/** Legacy migration outcome for a verified registration upsert. */
+export interface SaveDeviceResult {
+	/** The unbound legacy row was removed after its verified replacement was stored. */
+	legacyMigrated: boolean;
+	/** An unbound legacy row remains stored because its possession evidence did not match. */
+	legacyUnresolved: boolean;
+}
+
 interface StoredDeviceOwnership {
 	user_id: string;
 	auth_user_id: string | null;
@@ -357,13 +388,13 @@ function assertDeviceOwner(device: PushDevice, authUserId: string): void {
  * identity of this installation. `installationId`/`token` are rotation
  * metadata, never credentials. A pre-auth row may be replaced only through
  * the explicit legacy-migration evidence documented in
- * docs/app/push-notifications.md. Returns true when such a legacy row was
- * removed after the verified replacement was stored.
+ * docs/app/push-notifications.md. The result tells the client whether its
+ * compatibility key still names an unbound legacy row it must keep for opt-out.
  */
 export async function saveDevice(
 	device: PushDevice,
 	authUserId: string,
-): Promise<boolean> {
+): Promise<SaveDeviceResult> {
 	assertDeviceOwner(device, authUserId);
 	const topics = JSON.stringify(device.topics);
 	const params = [
@@ -393,17 +424,34 @@ export async function saveDevice(
 			[device.userId],
 		);
 		const existing = claimed[0];
-		if (existing) {
-			// A null binding is the pre-auth migration state. It may be claimed
-			// only when the row key itself is the verified uid; a row owned by a
-			// different verified installation is immutable to this caller.
-			if (
-				existing.auth_user_id !== null &&
-				existing.auth_user_id !== authUserId
-			) {
-				throw new DeviceOwnershipError();
-			}
-		} else {
+		// A null binding is the pre-auth migration state. It may be claimed
+		// only when the row key itself is the verified uid; a row owned by a
+		// different verified installation is immutable to this caller.
+		if (
+			existing &&
+			existing.auth_user_id !== null &&
+			existing.auth_user_id !== authUserId
+		) {
+			throw new DeviceOwnershipError();
+		}
+		const legacyRows = device.legacyUserId
+			? await txQuery<StoredDeviceOwnership>(
+					conn,
+					"SELECT user_id, auth_user_id, installation_id, token FROM tanah_push_device WHERE user_id = ? FOR UPDATE",
+					[device.legacyUserId],
+				)
+			: [];
+		const legacy = legacyRows[0];
+		const migratesLegacy = Boolean(
+			legacy &&
+				legacy.auth_user_id === null &&
+				((legacy.installation_id !== "" &&
+					legacy.installation_id === device.installationId) ||
+					legacy.token === device.token),
+		);
+		// Migration replaces one row with another, so it remains available at
+		// capacity; only an operation whose final row count increases is capped.
+		if (!existing && !migratesLegacy) {
 			const rows = await txQuery<{ total: number }>(
 				conn,
 				"SELECT COUNT(*) AS total FROM tanah_push_device",
@@ -413,30 +461,21 @@ export async function saveDevice(
 			}
 		}
 		await txExecute(conn, upsert, params);
-		if (!device.legacyUserId) return false;
-		const legacyRows = await txQuery<StoredDeviceOwnership>(
-			conn,
-			"SELECT user_id, auth_user_id, installation_id, token FROM tanah_push_device WHERE user_id = ? FOR UPDATE",
-			[device.legacyUserId],
-		);
-		const legacy = legacyRows[0];
-		if (
-			!legacy ||
-			legacy.auth_user_id !== null ||
-			!(
-				(legacy.installation_id !== "" &&
-					legacy.installation_id === device.installationId) ||
-				legacy.token === device.token
-			)
-		) {
-			return false;
+		if (!device.legacyUserId) {
+			return { legacyMigrated: false, legacyUnresolved: false };
+		}
+		if (!migratesLegacy) {
+			return {
+				legacyMigrated: false,
+				legacyUnresolved: legacy?.auth_user_id === null,
+			};
 		}
 		await txExecute(
 			conn,
 			"DELETE FROM tanah_push_device WHERE user_id = ? AND auth_user_id IS NULL",
 			[device.legacyUserId],
 		);
-		return true;
+		return { legacyMigrated: true, legacyUnresolved: false };
 	});
 }
 

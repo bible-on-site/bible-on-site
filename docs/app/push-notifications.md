@@ -69,9 +69,12 @@ verified registration after upgrade the client sends it once as
 is still unbound and carries the same non-empty installation id or the same
 FCM token as the verified request. This recovers the common upgrade path
 without letting a caller migrate a row merely because it knows the legacy id.
-After a successful migration the client clears the compatibility key. A lost
-legacy row is safe because FCM topic membership, not the registry row, is the
-actual delivery subscription.
+After the server confirms migration, absence, or auth-binding of the legacy
+row the client clears the compatibility key; when an unbound row remains
+because its possession evidence did not match, the key is retained so a later
+opt-out can still remove that row through the legacy lane. A lost legacy row
+is safe because FCM topic membership, not the registry row, is the actual
+delivery subscription.
 
 ## Backend contract
 
@@ -128,7 +131,14 @@ Semantics the backend implements (`src/lib/app-push/service.ts`):
 - Anonymous writes stay bounded (#3500): `POST` attempts are rate-limited
   per router-supplied client address (429, a budget shared with
   `/api/push/subscription`), and `tanah_push_device` caps new identities at
-  25,000 rows — an existing `userId` always upserts past the cap.
+  25,000 rows — an existing `userId` always upserts past the cap, and a
+  possession-matched legacy migration remains allowed because it replaces a
+  row instead of increasing the final count.
+
+A successful POST response carries `legacyMigrated` and `legacyUnresolved`.
+The client clears its compatibility key unless `legacyUnresolved` reports that
+an unbound legacy row still exists; a missing outcome field on an older server
+is treated conservatively as unresolved.
 
 Registration is deduplicated client-side by a stored
 `(user|installation|token|topics|legacy-key)` fingerprint — a routine launch
@@ -206,8 +216,10 @@ system-tray rendering):
 `DISABLE_PUSH` builds (Debug/e2e — `DisablePush` defaults to
 `DisableAnalytics`) compile the service down to a no-op and skip iOS Firebase
 init, because `DISABLE_ANALYTICS` builds never call `CrossFirebase.Initialize`
-which the Messaging SDK depends on. A Debug build can opt in with
-`-p:DisablePush=false`.
+which the Messaging SDK depends on. A Debug build can exercise platform topic
+delivery with `-p:DisablePush=false`; while analytics remain disabled it has
+no Firebase Auth identity, so verified registration is exercised on the signed
+push-enabled acceptance build instead.
 
 ## Operator checklist (before first real delivery)
 

@@ -60,7 +60,7 @@ describe("/api/push/device", () => {
 		mockConfigured.mockReturnValue(true);
 		mockAllowed.mockReturnValue(true);
 		mockVerify.mockResolvedValue({ userId: device.userId });
-		mockSave.mockResolvedValue(false);
+		mockSave.mockResolvedValue({ legacyMigrated: false, legacyUnresolved: false });
 		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
 	afterEach(() => {
@@ -123,6 +123,7 @@ describe("/api/push/device", () => {
 			expect(await response.json()).toEqual({
 				registered: true,
 				legacyMigrated: false,
+				legacyUnresolved: false,
 			});
 			expect(mockSave).toHaveBeenCalledWith(device, device.userId);
 		});

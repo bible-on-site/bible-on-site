@@ -91,19 +91,21 @@ public class PushNotificationServiceTests
         public List<(PushDeviceRegistration Registration, string AuthToken)> Registrations { get; } = [];
         public List<(string UserId, string? AuthToken)> Unregistrations { get; } = [];
         public bool FailNext { get; set; }
+        public bool LegacyUnresolved { get; set; }
 
-#pragma warning disable S1172 // Fake satisfies the registry contract; ct is interface-required but unused.
-        public Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
+        public Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             if (FailNext)
             {
                 throw new HttpRequestException("not deployed");
             }
             Registrations.Add((registration, authToken));
-            return Task.CompletedTask;
+            return Task.FromResult(new PushDeviceRegistrationResult(false, LegacyUnresolved));
         }
         public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             if (FailNext)
             {
                 throw new HttpRequestException("not deployed");
@@ -111,7 +113,6 @@ public class PushNotificationServiceTests
             Unregistrations.Add((userId, authToken));
             return Task.CompletedTask;
         }
-#pragma warning restore S1172
     }
 
     private sealed class FakeIdentity : IUserIdentity
@@ -122,12 +123,13 @@ public class PushNotificationServiceTests
         public bool FailToken { get; set; }
         public int EnsureCalls { get; private set; }
 
-#pragma warning disable CS0067 // Fake satisfies the identity contract; no test needs the event.
         public event EventHandler? UserChanged;
-#pragma warning restore CS0067
+
+        public void EmitUserChanged() => UserChanged?.Invoke(this, EventArgs.Empty);
 
         public Task EnsureSignedInAsync(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             EnsureCalls++;
             if (FailSignIn)
             {
@@ -136,10 +138,13 @@ public class PushNotificationServiceTests
             return Task.CompletedTask;
         }
 
-        public Task<string?> GetIdTokenAsync(CancellationToken cancellationToken) =>
-            FailToken
+        public Task<string?> GetIdTokenAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return FailToken
                 ? Task.FromException<string?>(new InvalidOperationException("token failed"))
                 : Task.FromResult(IdToken);
+        }
     }
 
     private sealed class FaultingStateStore : IPushStateStore
@@ -214,6 +219,25 @@ public class PushNotificationServiceTests
         row.LegacyUserId.Should().Be("legacy-user");
         (await store.GetAsync("push.user_id", CancellationToken.None)).Should().BeNull(
             "a successful migration clears the compatibility key");
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_WhenLegacyRowUnresolved_KeepsKeyAndUsesItOnOptOut()
+    {
+        var (service, _, _, store, registry) = CreateService();
+        registry.LegacyUnresolved = true;
+        await store.SetAsync("push.user_id", "legacy-user", CancellationToken.None);
+
+        await service.SetEnabledAsync(true, CancellationToken.None);
+
+        (await store.GetAsync("push.user_id", CancellationToken.None)).Should().Be("legacy-user",
+            "an unbound legacy row that survived migration must stay removable");
+
+        await service.SetEnabledAsync(false, CancellationToken.None);
+
+        registry.Unregistrations.Should().Equal(
+            ("legacy-user", null),
+            ("auth-uid-1", "firebase-id-token"));
     }
 
     [Fact]

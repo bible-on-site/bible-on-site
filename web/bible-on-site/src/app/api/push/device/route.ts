@@ -107,9 +107,13 @@ export async function POST(request: Request) {
 	if (failure) return failure;
 	if (identity.userId !== device.userId) return forbidden();
 	try {
-		const legacyMigrated = await saveDevice(device, identity.userId);
+		const result = await saveDevice(device, identity.userId);
 		return NextResponse.json(
-			{ registered: true, legacyMigrated },
+			{
+				registered: true,
+				legacyMigrated: result.legacyMigrated,
+				legacyUnresolved: result.legacyUnresolved,
+			},
 			{ status: 201 },
 		);
 	} catch (error) {

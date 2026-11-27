@@ -11,7 +11,9 @@ namespace BibleOnSite.Tests.Services;
 
 public class HttpPushDeviceRegistryTests
 {
-    private sealed class CaptureHandler(HttpStatusCode status) : HttpMessageHandler
+    private sealed class CaptureHandler(
+        HttpStatusCode status,
+        string responseBody = "{\"registered\":true,\"legacyMigrated\":false,\"legacyUnresolved\":false}") : HttpMessageHandler
     {
         public HttpRequestMessage? LastRequest;
         public string? LastBody;
@@ -23,7 +25,7 @@ public class HttpPushDeviceRegistryTests
             LastBody = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(ct);
-            return new HttpResponseMessage(status);
+            return new HttpResponseMessage(status) { Content = new StringContent(responseBody) };
         }
     }
 
@@ -39,8 +41,9 @@ public class HttpPushDeviceRegistryTests
         var registration = new PushDeviceRegistration(
             "user-1", "fid-1", "token-1", "android", ["daily_perek"], "5.1.8");
 
-        await registry.RegisterAsync(registration, "firebase-id-token", CancellationToken.None);
+        var result = await registry.RegisterAsync(registration, "firebase-id-token", CancellationToken.None);
 
+        result.Should().Be(new PushDeviceRegistrationResult(false, false));
         handler.LastRequest.Should().NotBeNull();
         handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
         handler.LastRequest.RequestUri!.ToString().Should().Be("https://site.example/api/push/device");
@@ -55,6 +58,41 @@ public class HttpPushDeviceRegistryTests
         root.GetProperty("platform").GetString().Should().Be("android");
         root.GetProperty("topics").EnumerateArray().Select(e => e.GetString()).Should().Equal("daily_perek");
         root.GetProperty("appVersion").GetString().Should().Be("5.1.8");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ReadsUnresolvedLegacyOutcome()
+    {
+        var handler = new CaptureHandler(
+            HttpStatusCode.Created,
+            "{\"registered\":true,\"legacyMigrated\":false,\"legacyUnresolved\":true}");
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
+
+        var result = await registry.RegisterAsync(
+            new PushDeviceRegistration("u", "i", "t", "android", [], "1", "legacy"),
+            "auth",
+            CancellationToken.None);
+
+        result.Should().Be(new PushDeviceRegistrationResult(false, true));
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithoutOutcomeField_KeepsLegacyKeyConservatively()
+    {
+        var handler = new CaptureHandler(
+            HttpStatusCode.Created,
+            "{\"registered\":true,\"legacyMigrated\":false}");
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
+
+        var result = await registry.RegisterAsync(
+            new PushDeviceRegistration("u", "i", "t", "android", [], "1", "legacy"),
+            "auth",
+            CancellationToken.None);
+
+        result.LegacyUnresolved.Should().BeTrue(
+            "an older server cannot prove the unbound legacy row is gone");
     }
 
     [Fact]

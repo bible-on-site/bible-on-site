@@ -19,6 +19,8 @@ namespace BibleOnSite.Services;
 public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
 {
     private readonly object _authGate = new();
+    private readonly object _signInGate = new();
+    private Task? _signInTask;
     private IFirebaseAuth? _auth;
     private bool _authInitAttempted;
     private IDisposable? _authStateListener;
@@ -93,11 +95,28 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
         {
             return;
         }
+        Task signIn;
+        lock (_signInGate)
+        {
+            if (_signInTask is null or { IsCompleted: true })
+            {
+                _signInTask = SignInAnonymouslyAsync(auth);
+            }
+            signIn = _signInTask;
+        }
+        // The native sign-in is shared so startup preference sync and push
+        // registration cannot race duplicate anonymous sessions. Cancellation
+        // is per caller; cancelling one waiter must not cancel the other.
+        await signIn.WaitAsync(cancellationToken);
+    }
+
+    private static async Task SignInAnonymouslyAsync(IFirebaseAuth auth)
+    {
         try
         {
             // Anonymous sign-in gives the install a real Firebase Auth session
             // (request.auth.uid is set) without collecting any user PII.
-            await auth.SignInAnonymouslyAsync().WaitAsync(cancellationToken);
+            await auth.SignInAnonymouslyAsync();
         }
 #pragma warning disable S2221 // Deliberate failure boundary: sign-in failure leaves the app local-only.
         catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — sign-in failure leaves the app local-only.

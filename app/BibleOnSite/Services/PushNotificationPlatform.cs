@@ -116,7 +116,7 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
         _baseUrl = baseUrl;
     }
 
-    public async Task RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
+    public async Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl()}/api/push/device")
         {
@@ -127,6 +127,17 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
         request.Headers.Authorization = new("Bearer", authToken);
         using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var root = document.RootElement;
+        var legacyMigrated = root.TryGetProperty("legacyMigrated", out var migrated) &&
+            migrated.ValueKind == JsonValueKind.True;
+        // A server older than the outcome field cannot tell migration apart
+        // from an unmatched row; keep the compatibility key unless removal is explicit.
+        var legacyUnresolved = root.TryGetProperty("legacyUnresolved", out var unresolved)
+            ? unresolved.ValueKind == JsonValueKind.True
+            : !legacyMigrated;
+        return new PushDeviceRegistrationResult(legacyMigrated, legacyUnresolved);
     }
 
     public async Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
