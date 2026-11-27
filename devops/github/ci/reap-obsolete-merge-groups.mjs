@@ -274,7 +274,10 @@ export class GitHubApi {
     const retriable = method === "GET" || idempotent;
     for (let attempt = 1; ; attempt++) {
       this.requests++;
-      requireValue(essential || this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
+      // An essential read reserves at most maxCancellations extra requests,
+      // so retries on it can never grow the total past that bound either.
+      requireValue(this.requests <= POLICY.maxRequests
+        + (essential ? POLICY.maxCancellations : 0), "REQUEST_BUDGET_EXHAUSTED");
       const response = await this.fetcher(url, {
         method, redirect: "error", signal: AbortSignal.timeout(POLICY.requestTimeoutMs),
         headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json",

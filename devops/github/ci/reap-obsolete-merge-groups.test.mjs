@@ -273,16 +273,26 @@ test("the cancellation POST is never replayed on a 5xx", async () => {
 
 test("a POST retries a 5xx only when it opts in as idempotent", async () => {
  // The queue snapshot query opts in; a new mutation would not retry by default.
- for (const idempotent of [true, false]) {
-  let calls = 0;
-  const api = new GitHubApi("test-token", async () => {
-   calls++;
-   return calls === 1 ? new Response("upstream", {status: 502})
-    : Response.json({data: {repository: {}}});
-  }, async () => {});
-  try { await api.request("/graphql", {method: "POST", data: {query: "x"}, idempotent}); }
-  catch (error) { assert.equal(error.message, "HTTP_502"); }
-  assert.equal(calls, idempotent ? 2 : 1);
+ const post = options => new GitHubApi("test-token", async () => {
+  post.calls++;
+  return post.calls === 1 ? new Response("upstream", {status: 502})
+   : Response.json({data: {repository: {}}});
+ }, async () => {});
+
+ post.calls = 0;
+ const opted = post({idempotent: true});
+ const result = await opted.request("/graphql", {method: "POST", data: {query: "x"}, idempotent: true});
+ assert.equal(result.data.data.repository !== undefined, true);
+ assert.equal(post.calls, 2);
+
+ // Omitted and explicit false both refuse to replay a mutation.
+ for (const idempotent of [undefined, false]) {
+  post.calls = 0;
+  const mutation = post({});
+  await assert.rejects(
+   mutation.request("/graphql", {method: "POST", data: {query: "x"}, idempotent}),
+   /HTTP_502/);
+  assert.equal(post.calls, 1);
  }
 });
 
@@ -298,6 +308,10 @@ test("the post-cancellation reconcile read outlasts an exhausted budget", async 
  await assert.rejects(api.getRun(1), /REQUEST_BUDGET_EXHAUSTED/);
  const reconciled = await api.getRun(1, {essential: true});
  assert.equal(reconciled.id, 1);
+ assert.equal(calls, POLICY.maxRequests + 1);
+ // The reserve is bounded by the cancellation cap, retries included:
+ // the rejected non-essential read already spent one slot of it.
+ await assert.rejects(api.getRun(1, {essential: true}), /REQUEST_BUDGET_EXHAUSTED/);
  assert.equal(calls, POLICY.maxRequests + 1);
 });
 
