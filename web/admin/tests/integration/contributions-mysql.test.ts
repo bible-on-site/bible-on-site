@@ -3062,29 +3062,40 @@ describe("durable issue assignment", () => {
 			"INSERT INTO tanahpedia_contribution (id,kind,state,title,issue_id,version,data) VALUES ?",
 			[rows],
 		);
-		const latest = linkedIds.at(-1);
-		const related = await store.listContributions({ relatedTo: latest });
-		expect(related.items.map(({ id }) => id)).toEqual([latest, issue.id]);
-		expect(related.items[0].events).toEqual(history);
-		const filters = {
-			kind: "pr",
-			state: "open",
-			relatedTo: issue.id,
-			assignee: "local_llm",
-			q: "linked history",
-		} as const;
-		const descending = [...linkedIds].reverse();
-		const first = await store.listContributions(filters);
-		expect(first.items.map(({ id }) => id)).toEqual(descending.slice(0, 100));
-		expect(first.nextCursor).toBe(first.items.at(-1)?.number);
-		const second = await store.listContributions({
-			...filters,
-			before: first.nextCursor ?? undefined,
-		});
-		expect(second.items.map(({ id }) => id)).toEqual(descending.slice(100));
-		expect(second.items.at(-1)?.events).toEqual(history);
-		expect(second.nextCursor).toBeNull();
-		expect(second.counts).toMatchObject({ open: 105, closed: 0, all: 105 });
+		const connection = await db.pool.getConnection();
+		const execute = vi
+			.spyOn(db.pool, "execute")
+			.mockImplementation(connection.execute.bind(connection));
+		try {
+			// Pin reads to one disposable session so server defaults cannot mask this regression.
+			await connection.query("SET SESSION sort_buffer_size = 32768");
+			const latest = linkedIds.at(-1);
+			const related = await store.listContributions({ relatedTo: latest });
+			expect(related.items.map(({ id }) => id)).toEqual([latest, issue.id]);
+			expect(related.items[0].events).toEqual(history);
+			const filters = {
+				kind: "pr",
+				state: "open",
+				relatedTo: issue.id,
+				assignee: "local_llm",
+				q: "linked history",
+			} as const;
+			const descending = [...linkedIds].reverse();
+			const first = await store.listContributions(filters);
+			expect(first.items.map(({ id }) => id)).toEqual(descending.slice(0, 100));
+			expect(first.nextCursor).toBe(first.items.at(-1)?.number);
+			const second = await store.listContributions({
+				...filters,
+				before: first.nextCursor ?? undefined,
+			});
+			expect(second.items.map(({ id }) => id)).toEqual(descending.slice(100));
+			expect(second.items.at(-1)?.events).toEqual(history);
+			expect(second.nextCursor).toBeNull();
+			expect(second.counts).toMatchObject({ open: 105, closed: 0, all: 105 });
+		} finally {
+			execute.mockRestore();
+			connection.destroy();
+		}
 	});
 	it("synchronizes person readers on rename and rejects independently changed MAIN names", async () => {
 		const nameId = randomUUID();

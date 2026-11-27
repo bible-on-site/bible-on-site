@@ -172,14 +172,9 @@ export async function listContributions(
 		);
 		values.push(input.q);
 	}
-	if (bodyFilters.length) {
-		// JSON predicates would otherwise make MySQL carry the body into the sort.
-		where.push(
-			`(SELECT ${bodyFilters.join(" AND ")}
-			 FROM tanahpedia_contribution AS body
-			 WHERE body.number = candidate.number LIMIT 1)`,
-		);
-	}
+	const bodyFilter = bodyFilters.join(" AND ");
+	const bodyFilterIndex = where.length;
+	if (bodyFilter) where.push(bodyFilter);
 	if (input.relatedTo) {
 		where.push(
 			"(id = ? OR issue_id = ? OR id = (SELECT issue_id FROM tanahpedia_contribution related WHERE related.id = ?))",
@@ -188,12 +183,18 @@ export async function listContributions(
 	}
 	const base = where.length ? where.join(" AND ") : "1 = 1";
 	const [totals] = await query<{ open: number; closed: number; all: number }>(
-		`SELECT COALESCE(SUM(state = 'open'),0) AS open, COALESCE(SUM(state <> 'open'),0) AS closed, COUNT(*) AS \`all\` FROM tanahpedia_contribution AS candidate WHERE ${base}`,
+		`SELECT COALESCE(SUM(state = 'open'),0) AS open, COALESCE(SUM(state <> 'open'),0) AS closed, COUNT(*) AS \`all\` FROM tanahpedia_contribution WHERE ${base}`,
 		[...values],
 	);
 	const [global] = await query<{ issues: number; prs: number }>(
 		"SELECT COALESCE(SUM(kind = 'issue' AND state = 'open'),0) AS issues, COALESCE(SUM(kind = 'pr' AND state = 'open'),0) AS prs FROM tanahpedia_contribution",
 	);
+	if (bodyFilter) {
+		// Keep the JSON reads off the table alias whose values MySQL sorts.
+		where[bodyFilterIndex] = `(SELECT ${bodyFilter}
+			 FROM tanahpedia_contribution AS body
+			 WHERE body.number = candidate.number LIMIT 1)`;
+	}
 	if (input.state && input.state !== "all")
 		where.push(input.state === "open" ? "state = 'open'" : "state <> 'open'");
 	if (input.before) {

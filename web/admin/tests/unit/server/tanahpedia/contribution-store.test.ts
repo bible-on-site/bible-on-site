@@ -168,5 +168,8 @@ describe("durable contribution storage", () => {
 		expect(mocks.query.mock.calls[2][0]).not.toContain("literal_%'");
 		expect(mocks.query.mock.calls[2][1]).toContain("literal_%'");
 		expect(mocks.query.mock.calls[0][0]).not.toContain("number < ?");
+		expect(mocks.query.mock.calls[0][0]).toContain("JSON_EXTRACT(data");
+		expect(mocks.query.mock.calls[0][0]).not.toContain("AS body");
+		expect(mocks.query.mock.calls[2][0]).toContain("AS body");
 	});
 });
