@@ -137,7 +137,7 @@ describe("durable contribution storage", () => {
 			.mockResolvedValueOnce(
 				Array.from({ length: 101 }, (_, index) => ({
 					...row,
-					number: 600 - index,
+					number: String(500 + index),
 				})),
 			);
 		const page = await store.listContributions({
@@ -149,6 +149,9 @@ describe("durable contribution storage", () => {
 			relatedTo: "00000000-0000-4000-8000-000000000001",
 		});
 		expect(page.items).toHaveLength(100);
+		expect(page.items.map(({ number }) => number)).toEqual(
+			Array.from({ length: 100 }, (_, index) => 600 - index),
+		);
 		expect(page.nextCursor).toBe(501);
 		expect(page.counts).toEqual({
 			issues: 600,
@@ -159,8 +162,14 @@ describe("durable contribution storage", () => {
 		});
 		expect(mocks.query.mock.calls[2][0]).toContain("state <> 'open'");
 		expect(mocks.query.mock.calls[2][0]).toContain("number < ?");
+		expect(mocks.query.mock.calls[2][0]).toMatch(
+			/SELECT number FROM tanahpedia_contribution[\s\S]*ORDER BY number DESC LIMIT 101\s*\) AS page\s+JOIN/,
+		);
 		expect(mocks.query.mock.calls[2][0]).not.toContain("literal_%'");
 		expect(mocks.query.mock.calls[2][1]).toContain("literal_%'");
 		expect(mocks.query.mock.calls[0][0]).not.toContain("number < ?");
+		expect(mocks.query.mock.calls[0][0]).toContain("JSON_EXTRACT(data");
+		expect(mocks.query.mock.calls[0][0]).not.toContain("AS body");
+		expect(mocks.query.mock.calls[2][0]).toContain("AS body");
 	});
 });
