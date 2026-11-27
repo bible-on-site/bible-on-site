@@ -231,7 +231,7 @@ export async function reap({ eventName, payload, api, dryRun = true, journal, de
         action.outcome = "request-outcome-unknown";
       }
       // One reconciliation read, never another POST or a polling loop.
-      const after = await api.getRun(listed.id);
+      const after = await api.getRun(listed.id, { essential: true });
       requireValue(sameRun(listed, after), "RECONCILE_IDENTITY");
       action.observedStatus = after.status;
       action.observedConclusion = after.conclusion;
@@ -261,15 +261,20 @@ export class GitHubApi {
     requireValue(typeof token === "string" && token.length > 0, "TOKEN_MISSING");
     this.token = token; this.fetcher = fetcher; this.delay = delay; this.requests = 0;
   }
-  async request(path, { method = "GET", data, missing = false, idempotent = true } = {}) {
+  // `essential` reserves the post-mutation reconcile read: retries could
+  // otherwise spend the last budget slot before the cancel POST lands.
+  // GETs retry a transient 5xx by default; a POST opts in with `idempotent`.
+  async request(path, { method = "GET", data, missing = false, idempotent = false, essential = false } = {}) {
     requireValue(path === "/repos/" + POLICY.repository || path.startsWith("/repos/" + POLICY.repository + "/") || path === "/graphql",
       "API_PATH");
     const url = new URL(path, "https://api.github.com");
     requireValue(url.origin === "https://api.github.com", "API_ORIGIN");
     requireValue(!url.hash && (url.pathname === "/repos/" + POLICY.repository || url.pathname.startsWith("/repos/" + POLICY.repository + "/")
       || url.pathname === "/graphql"), "API_PATH");
+    const retriable = method === "GET" || idempotent;
     for (let attempt = 1; ; attempt++) {
-      requireValue(++this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
+      this.requests++;
+      requireValue(essential || this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
       const response = await this.fetcher(url, {
         method, redirect: "error", signal: AbortSignal.timeout(POLICY.requestTimeoutMs),
         headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json",
@@ -278,7 +283,7 @@ export class GitHubApi {
       });
       // A transient 5xx is retried within the same request budget, never
       // suppressed: after the last attempt the HTTP_<status> error stands.
-      if (idempotent && response.status >= 500 && attempt < POLICY.maxAttempts) {
+      if (retriable && response.status >= 500 && attempt < POLICY.maxAttempts) {
         await response.body?.cancel();
         await this.delay(POLICY.retryDelayMs);
         continue;
@@ -315,7 +320,7 @@ export class GitHubApi {
   }
   async cancel(id) {
     return this.request("/repos/" + POLICY.repository + "/actions/runs/" + id + "/cancel",
-      { method: "POST", idempotent: false });
+      { method: "POST" });
   }
   async getRepository() { return (await this.request("/repos/" + POLICY.repository)).data; }
   async getWorkflow() {
@@ -327,9 +332,10 @@ export class GitHubApi {
       + POLICY.workflowId + "/runs?event=merge_group&status=" + status + "&per_page=100&page=1");
     return { ...r.data, hasNextPage: r.hasNextPage };
   }
-  async getRun(id) {
+  async getRun(id, { essential = false } = {}) {
     requireValue(positive(id), "RUN_ID");
-    return (await this.request("/repos/" + POLICY.repository + "/actions/runs/" + id)).data;
+    return (await this.request("/repos/" + POLICY.repository + "/actions/runs/" + id,
+      { essential })).data;
   }
   async getRef(branch) {
     requireValue(branch === POLICY.base || queueRef(branch), "REF_INPUT");
@@ -347,7 +353,7 @@ export class GitHubApi {
   }
   async getQueue() {
     const query = 'query { repository(owner:"bible-on-site",name:"bible-on-site") { databaseId nameWithOwner defaultBranchRef { target { oid } } mergeQueue(branch:"master") { entries(first:100) { totalCount pageInfo { hasNextPage } nodes { position state headCommit { oid } baseCommit { oid } pullRequest { number headRefOid } } } } } }';
-    const r = await this.request("/graphql", { method: "POST", data: { query } });
+    const r = await this.request("/graphql", { method: "POST", data: { query }, idempotent: true });
     requireValue(!r.data.errors && r.data.data, "GRAPHQL_ERRORS");
     return r.data.data;
   }

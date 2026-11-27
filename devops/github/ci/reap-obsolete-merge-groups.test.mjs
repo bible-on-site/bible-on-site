@@ -271,6 +271,50 @@ test("the cancellation POST is never replayed on a 5xx", async () => {
  assert.equal(calls, 1);
 });
 
+test("a POST retries a 5xx only when it opts in as idempotent", async () => {
+ // The queue snapshot query opts in; a new mutation would not retry by default.
+ for (const idempotent of [true, false]) {
+  let calls = 0;
+  const api = new GitHubApi("test-token", async () => {
+   calls++;
+   return calls === 1 ? new Response("upstream", {status: 502})
+    : Response.json({data: {repository: {}}});
+  }, async () => {});
+  try { await api.request("/graphql", {method: "POST", data: {query: "x"}, idempotent}); }
+  catch (error) { assert.equal(error.message, "HTTP_502"); }
+  assert.equal(calls, idempotent ? 2 : 1);
+ }
+});
+
+test("the post-cancellation reconcile read outlasts an exhausted budget", async () => {
+ // Retries may spend the last slot before the cancel POST; the reconcile read
+ // must still reach GitHub or the cancellation outcome goes unobserved.
+ let calls = 0;
+ const api = new GitHubApi("test-token", async () => {
+  calls++;
+  return Response.json(run());
+ }, async () => {});
+ for (let i = 0; i < POLICY.maxRequests; i++) await api.getRun(1);
+ await assert.rejects(api.getRun(1), /REQUEST_BUDGET_EXHAUSTED/);
+ const reconciled = await api.getRun(1, {essential: true});
+ assert.equal(reconciled.id, 1);
+ assert.equal(calls, POLICY.maxRequests + 1);
+});
+
+test("reap marks its post-cancellation reconcile read essential", async () => {
+ const f = fixture();
+ const reads = [];
+ const original = f.api.getRun;
+ f.api.getRun = async (id, options) => {
+  reads.push(options);
+  return original(id, options);
+ };
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.actions[0].outcome, "cancelled");
+ assert.deepEqual(reads.at(-1), {essential: true});
+ assert.ok(reads.slice(0, -1).every(options => options === undefined));
+});
+
 test("an inconsistent run page is reread once before failing closed", async () => {
  // First listing inconsistent, reread complete: the pass proceeds.
  const f = fixture();
