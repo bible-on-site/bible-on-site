@@ -83,10 +83,8 @@ public sealed class AndroidBackNavigationTests
         public List<string> Served { get; } = new();
         public DateTime? FirstSampleAt { get; private set; }
         public DateTime? PressedAt { get; private set; }
-        private const int PushFrameMilliseconds = 100;
         private readonly Dictionary<string, CommandInfo> _commands = [];
-        private readonly Queue<string> _frames = new();
-        private DateTime? _pushStartedAt;
+        private readonly Queue<string> _frames = new(pushFrames ?? Array.Empty<string>());
         private string _source = "<preferences/>";
         public bool TryAddCommand(string name, CommandInfo? info) =>
             info != null && _commands.TryAdd(name, info);
@@ -105,17 +103,6 @@ public sealed class AndroidBackNavigationTests
                 {
                     _source = _frames.Dequeue();
                 }
-                else if (pushFrames is { Count: > 0 } && AcceptedPresses == 0)
-                {
-                    // The production wait is wall-clock based. Advance the fake
-                    // transition by elapsed time too: an overloaded runner can
-                    // fit the whole quiet window into only a few polls.
-                    _pushStartedAt ??= DateTime.UtcNow;
-                    var frameIndex = Math.Min(
-                        (int)((DateTime.UtcNow - _pushStartedAt.Value).TotalMilliseconds / PushFrameMilliseconds),
-                        pushFrames.Count - 1);
-                    _source = pushFrames[frameIndex];
-                }
                 FirstSampleAt ??= DateTime.UtcNow;
                 Served.Add(_source);
                 value = _source;
@@ -127,7 +114,7 @@ public sealed class AndroidBackNavigationTests
                 PressedAt ??= DateTime.UtcNow;
                 // The settle window owns every press while the tree is still
                 // rewriting itself; such a press never reaches the stack.
-                if (!swallow && !PushInFlight())
+                if (!swallow && _frames.Count == 0)
                 {
                     AcceptedPresses++;
                     _frames.Enqueue("<preferences-pop/>");
@@ -136,10 +123,5 @@ public sealed class AndroidBackNavigationTests
             }
             return Task.FromResult(new Response("back-session", value, WebDriverResult.Success));
         }
-
-        private bool PushInFlight() =>
-            pushFrames is { Count: > 0 }
-            && _pushStartedAt is { } startedAt
-            && DateTime.UtcNow - startedAt < TimeSpan.FromMilliseconds(pushFrames.Count * PushFrameMilliseconds);
     }
 }
