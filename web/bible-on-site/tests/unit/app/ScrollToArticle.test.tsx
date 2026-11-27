@@ -49,19 +49,17 @@ describe("ScrollToSlug", () => {
 		expect(history.scrollRestoration).toBe("manual");
 	});
 
-	it("hands normal restoration back to history entries created later", () => {
+	it("hands normal restoration back when it unmounts", () => {
 		stubTarget();
-		render(<ScrollToSlug />);
+		const { unmount } = render(<ScrollToSlug />);
 		expect(history.scrollRestoration).toBe("manual");
 
-		// New entries inherit the current entry's restoration mode, so the
-		// component resets it to "auto" before letting pushState create one —
-		// otherwise Back on the pushed page (e.g. the author list) could never
-		// restore its saved scroll position.
-		history.pushState({}, "", "/");
-		expect(history.scrollRestoration).toBe("auto");
-		history.scrollRestoration = "manual";
-		history.replaceState({}, "", "/");
+		// A client-side navigation creates the next history entry — inheriting
+		// this entry's mode — before this component unmounts, so the cleanup
+		// restores "auto" exactly on the entry that needs it. Otherwise Back
+		// on a later page (e.g. the author list) could never restore its
+		// saved scroll position.
+		unmount();
 		expect(history.scrollRestoration).toBe("auto");
 	});
 
