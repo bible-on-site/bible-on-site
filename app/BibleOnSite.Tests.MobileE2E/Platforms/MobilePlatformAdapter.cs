@@ -415,6 +415,19 @@ public sealed record LayoutExpectations(double MinimumButtonExtent = 44, double 
 
 public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
+    private readonly TimeProvider _backClock;
+    private readonly Action<TimeSpan> _backDelay;
+
+    public AndroidPlatformAdapter() : this(TimeProvider.System, Thread.Sleep)
+    {
+    }
+
+    internal AndroidPlatformAdapter(TimeProvider backClock, Action<TimeSpan> backDelay)
+    {
+        _backClock = backClock;
+        _backDelay = backDelay;
+    }
+
     public override string AppId => "com.tanah.daily929";
 
     public override void RestartApp(AppiumDriver driver,
@@ -472,21 +485,21 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     /// can hold one frame between animation steps while its settle window
     /// still owns Back until Navigated.
     /// </summary>
-    private static string SettledTree(AppiumDriver driver)
+    private string SettledTree(AppiumDriver driver)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var deadline = _backClock.GetUtcNow().AddSeconds(2);
         var last = driver.PageSource;
-        var quietSince = DateTime.UtcNow;
-        while (DateTime.UtcNow < deadline && DateTime.UtcNow - quietSince < BackQuietWindow)
+        var quietSince = _backClock.GetUtcNow();
+        while (_backClock.GetUtcNow() < deadline && _backClock.GetUtcNow() - quietSince < BackQuietWindow)
         {
             // Each sample is a full tree dump on the device; the poll cadence
             // keeps the dump loop from saturating the accessibility server.
-            Thread.Sleep(100);
+            _backDelay(TimeSpan.FromMilliseconds(100));
             var current = driver.PageSource;
             if (!string.Equals(current, last, StringComparison.Ordinal))
             {
                 last = current;
-                quietSince = DateTime.UtcNow;
+                quietSince = _backClock.GetUtcNow();
             }
         }
         return last;
@@ -507,12 +520,12 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     /// landed — nothing else mutates a tree that was quiet at press time —
     /// one that never changed does not.
     /// </summary>
-    private static bool PageTurned(AppiumDriver driver, string before)
+    private bool PageTurned(AppiumDriver driver, string before)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(3);
+        var deadline = _backClock.GetUtcNow().AddSeconds(3);
         var changed = false;
         var last = before;
-        while (DateTime.UtcNow < deadline)
+        while (_backClock.GetUtcNow() < deadline)
         {
             var current = driver.PageSource;
             if (string.Equals(current, last, StringComparison.Ordinal))
@@ -527,7 +540,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
                 changed = true;
                 last = current;
             }
-            Thread.Sleep(100);
+            _backDelay(TimeSpan.FromMilliseconds(100));
         }
         return changed;
     }
