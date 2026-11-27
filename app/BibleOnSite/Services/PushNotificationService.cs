@@ -569,9 +569,10 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
 
     private void OnUserChanged(object? sender, EventArgs e)
     {
-        // Initial sign-in is already resolved by the in-flight EnsureSignedInAsync
-        // path; this event matters when an established cached identity rotates or is lost.
-        if (_userId is null || _identity.UserId == _userId)
+        // Cache every settled auth transition. Registration is idempotent, so the
+        // possible initial-sign-in duplicate is preferable to missing recovery when
+        // a signed-out identity is replaced while the app is running.
+        if (_identity.UserId == _userId)
         {
             return;
         }

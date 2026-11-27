@@ -518,7 +518,7 @@ public class PushNotificationServiceTests
     }
 
     [Fact]
-    public async Task UserChanged_MaintainsVerifiedIdentityAndReregistersOnlyOnRotation()
+    public async Task UserChanged_MaintainsVerifiedIdentityAndReregistersOnRotationOrReplacement()
     {
         var platform = new FakePlatformClient();
         var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
@@ -531,7 +531,7 @@ public class PushNotificationServiceTests
 
         identity.EmitUserChanged();
         service.LastRegistrationResync.Should().BeNull(
-            "before an identity is cached there is no registered ownership to rotate");
+            "the first sign-in is cached but push is not enabled yet");
 
         await service.SetEnabledAsync(true, CancellationToken.None);
         registry.Registrations.Should().ContainSingle();
@@ -558,6 +558,16 @@ public class PushNotificationServiceTests
         service.LastRegistrationResync.Should().BeSameAs(rotationResync,
             "losing the identity leaves no verified owner to register");
         registry.Registrations.Should().HaveCount(2);
+
+        identity.UserId = "auth-uid-3";
+        identity.EmitUserChanged();
+        var replacementResync = service.LastRegistrationResync;
+        replacementResync.Should().NotBeNull();
+        await replacementResync!;
+
+        registry.Registrations.Should().HaveCount(3);
+        registry.Registrations[2].Registration.UserId.Should().Be("auth-uid-3");
+        service.NotificationUserId.Should().Be("auth-uid-3");
     }
 
     [Fact]
