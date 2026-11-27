@@ -7,7 +7,7 @@
 		"predev": "bun run docker:up && node ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
 		"dev": "dotenv -e .dev.env -- bun run dev:app",
 		"dev:app": "vite --port 3101 --strictPort",
-		"build": "vite build",
+		"build": "vite build && node --test scripts/check-build-asset-cache.mjs",
 		"start": "node .output/server/index.mjs",
 		"lint": "biome lint",
 		"format": "biome format --write",
