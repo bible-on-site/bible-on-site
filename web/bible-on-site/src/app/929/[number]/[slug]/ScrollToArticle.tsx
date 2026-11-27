@@ -22,6 +22,11 @@ export function ScrollToSlug({
 	useEffect(() => {
 		const el = document.getElementById(targetId);
 		if (el) {
+			// The browser re-applies its restored scroll position as late-arriving
+			// content grows the page — potentially after the one-shot scroll below
+			// has already fired — so take over restoration for this entry; these
+			// pages always want the anchored target, not the saved position.
+			history.scrollRestoration = "manual";
 			// Small delay to ensure layout is complete
 			const timer = setTimeout(() => {
 				el.scrollIntoView({ behavior, block: "start" });
