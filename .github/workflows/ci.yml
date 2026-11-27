@@ -1345,22 +1345,18 @@ jobs:
         id: bun-lint
         run: bun run lint
 
+      # Unit coverage is independent of the browser/database track. Run it in
+      # parallel with MySQL setup and the Playwright suite; the explicit wait
+      # after E2E remains the failure gate and keeps the JUnit artifact upload.
       - name: Unit Test
         id: bun-unit-test
+        background: true
         run: bun run coverage:unit
 
       - name: Local flip-book workflow guards
         run: >-
           node --test scripts/copy-local-flip-book.test.mjs
           scripts/copy-local-flip-book-windows.test.mjs
-
-      - name: Store Website Unit JUnit Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
-          path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
-          retention-days: 1
-          overwrite: true
 
       # ============ MySQL Setup for Articles ============
       - name: Install and start MySQL
@@ -1494,6 +1490,21 @@ jobs:
             bun run coverage:e2e
           fi
 
+      # The unit track started before MySQL setup and normally finishes long
+      # before the browser suite. Gate here rather than before E2E so its
+      # serialized coverage writer does not add nine minutes to the critical path.
+      - name: Wait for unit tests
+        wait: bun-unit-test
+
+      - name: Store Website Unit JUnit Report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
+          retention-days: 1
+          overwrite: true
+
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
       # never shrink the trusted baseline.
@@ -1551,7 +1562,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.bun-unit-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}

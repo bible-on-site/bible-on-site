@@ -91,14 +91,11 @@ RUN apk add --no-cache curl~=8
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/bible-on-site/public ./public
-
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 # The shared contract imports (#3710) widen turbopack.root to web/, so the
 # traced app nests under standalone/bible-on-site/.
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone/bible-on-site/ ./
-COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
 
 # Validate the traced runtime, rather than only the build-stage dependencies.

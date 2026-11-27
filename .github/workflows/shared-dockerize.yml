@@ -243,13 +243,13 @@ jobs:
         env:
           PROD_DB_URL: ${{ steps.rds_creds.outputs.db_url }}
         run: |
-          # Wait for security group rule to propagate
-          sleep 10
+          # The connectivity retry below is itself the propagation wait: start
+          # probing immediately instead of paying a fixed quiet period first.
           # Extract host from DB_URL
           DB_HOST=$(node devops/github/ci/rds-build-access.mjs host)
           echo "Testing connectivity to $DB_HOST:3306..."
           # Test TCP connection
-          timeout 30 bash -c 'until nc -z "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
+          timeout 30 bash -c 'until nc -z -w 1 "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
 
@@ -319,6 +319,7 @@ jobs:
           # replay, so SSG uses the same IDs and retained chapters as RDS.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
             --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
+            --compression-algorithms=zstd,zlib \
             --single-transaction --quick --no-tablespaces --loose-skip-masking-policies --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
@@ -501,10 +502,15 @@ jobs:
           fi
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
 
-      - name: Export Docker Image to tarball
+      # Compress directly from the daemon stream instead of writing a multi-hundred-MB
+      # uncompressed tar and reading it back. pigz parallelizes compression when the
+      # runner image provides it; gzip remains the portable fallback.
+      - name: Export and compress Docker Image
+        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
-          docker save ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
-            -o ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
+          set -o pipefail
+          if command -v pigz >/dev/null 2>&1; then COMPRESSOR=(pigz -c); else COMPRESSOR=(gzip -c); fi
+          docker save ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}             | "${COMPRESSOR[@]}" > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
       # --- RDS Cleanup (runs even if build fails) ---
       - name: Remove only this build's RDS access rule
@@ -515,11 +521,6 @@ jobs:
           RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
         run: node devops/github/ci/rds-build-access.mjs cleanup
       # --- End RDS Cleanup ---
-      - name: GZip Docker Image
-        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-        run: |
-          gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
-
       # Website PR candidates are retained for native qualification, not release.
       # Release consumes only the artifacts bound to the master push CI run.
       - name: Store Docker Image
