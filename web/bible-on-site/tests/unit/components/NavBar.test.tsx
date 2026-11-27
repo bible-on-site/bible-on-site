@@ -28,12 +28,18 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
+		prefetch: _prefetch,
 		...rest
 	}: {
 		children: React.ReactNode;
 		href: string;
+		prefetch?: boolean | "auto" | null;
 	} & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-		<a href={href} {...rest}>
+		<a
+			href={href}
+			data-link-prefetch={_prefetch === null ? "auto" : String(_prefetch)}
+			{...rest}
+		>
 			{children}
 		</a>
 	),
@@ -81,8 +87,8 @@ describe("NavBar", () => {
 		const logo = screen.getByRole("img", { name: "עמוד ראשי" });
 		expect(logo).toHaveAttribute("src", "/images/logos/logo192.webp");
 		expect(logo).not.toHaveAttribute("srcset");
-		expect(logo).toHaveAttribute("width", "72");
-		expect(logo).toHaveAttribute("height", "72");
+		expect(logo).toHaveAttribute("width", "36");
+		expect(logo).toHaveAttribute("height", "36");
 		expect(logo).toHaveAttribute("loading", "lazy");
 		expect(logo.closest("a")).toHaveAttribute("href", "/");
 	});
@@ -115,9 +121,8 @@ describe("NavBar", () => {
 			const list = h2.nextElementSibling;
 			const items = Array.from(list?.children ?? []).map((li) => {
 				const anchor = li.querySelector("a");
-				const titleRow = anchor?.querySelector("span");
 				return {
-					label: titleRow?.querySelector("span")?.textContent ?? null,
+					label: anchor?.children[1]?.children[0]?.textContent ?? null,
 					subtitle: anchor?.querySelector("small")?.textContent ?? null,
 					href: anchor?.getAttribute("href"),
 					sub: Array.from(
@@ -241,6 +246,10 @@ describe("NavBar", () => {
 		for (const store of stores) {
 			expect(store).toHaveAttribute("target", "_blank");
 			expect(store.getAttribute("href")).toMatch(/^https:/);
+			expect(store.querySelector("img")).toBeInTheDocument();
+			expect(store.querySelector("[dir='ltr']")).toHaveTextContent(
+				store.textContent ?? "",
+			);
 		}
 	});
 
@@ -339,6 +348,34 @@ describe("NavBar", () => {
 			fireEvent.click(getTrigger());
 			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
 			expect(getMenu()).not.toHaveAttribute("inert");
+		});
+
+		it("enables viewport prefetching only while the drawer is open", () => {
+			render(<NavBar version="1.2.3" />);
+			const firstLink = getMenu().querySelector("a[href='/929']");
+			expect(firstLink).toHaveAttribute("data-link-prefetch", "false");
+			fireEvent.click(getTrigger());
+			expect(firstLink).toHaveAttribute("data-link-prefetch", "auto");
+		});
+
+		it("does not treat an aliased rewrite hydration as navigation away", () => {
+			mockPathname = "/929/rabbis";
+			const { rerender } = render(<NavBar version="1.2.3" />);
+			fireEvent.click(getTrigger());
+			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
+			mockPathname = "/929/authors";
+			rerender(<NavBar version="1.2.3" />);
+			expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
+		});
+
+		it("shows a labeled close button that closes the menu and returns focus", () => {
+			render(<NavBar version="1.2.3" />);
+			fireEvent.click(getTrigger());
+			const close = screen.getByRole("button", { name: "סגור" });
+			expect(close).toBeVisible();
+			fireEvent.click(close);
+			expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+			expect(getTrigger()).toHaveFocus();
 		});
 
 		it("closes on Escape and returns focus to the trigger", () => {

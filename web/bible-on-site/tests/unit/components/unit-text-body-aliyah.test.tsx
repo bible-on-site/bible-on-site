@@ -10,7 +10,7 @@
  * perek labels stay modest alongside them, and the legacy path stays
  * unchanged when no markers are passed.
  */
-import { render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import {
 	type UnitBoundaryMarker,
 	UnitTextBody,
@@ -397,5 +397,227 @@ describe("aliyah boundary markers", () => {
 			container.querySelector('[data-aliyah-key~="Bereshit:shabbat"]')
 				?.textContent,
 		).toContain("שני");
+	});
+});
+
+describe("viewport-positioned aliyah detail", () => {
+	const rect = (left: number, top: number, width: number, height: number) =>
+		({
+			x: left,
+			y: top,
+			left,
+			top,
+			width,
+			height,
+			right: left + width,
+			bottom: top + height,
+			toJSON: () => ({}),
+		}) as DOMRect;
+
+	function measuredMarker(
+		container: HTMLElement,
+		buttonRect: DOMRect,
+		detailSize = { width: 200, height: 60 },
+	) {
+		jest
+			.spyOn(HTMLElement.prototype, "offsetWidth", "get")
+			.mockReturnValue(detailSize.width);
+		jest
+			.spyOn(HTMLElement.prototype, "offsetHeight", "get")
+			.mockReturnValue(detailSize.height);
+		const marker = must(
+			container.querySelector("[data-aliyah-marker]"),
+		) as HTMLElement;
+		jest.spyOn(marker, "getBoundingClientRect").mockReturnValue(buttonRect);
+		return marker;
+	}
+
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
+	it("portals the detail and clamps it inside the left viewport edge", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.mouseEnter(marker);
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		) as HTMLElement;
+		expect(detail.parentElement).toBe(document.body);
+		expect(detail.style.left).toBe("8px");
+		expect(detail.style.top).toBe("129px");
+	});
+
+	it("flips the detail above the marker when there is no room below", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(400, 720, 28, 24));
+		fireEvent.focus(marker);
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		) as HTMLElement;
+		expect(detail.style.top).toBe("655px");
+	});
+
+	it("dismisses a touch-opened detail on outside press or Escape", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.keyDown(document, { key: "Tab" });
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.pointerDown(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.pointerDown(document.body);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+	});
+
+	it("dismisses the detail when any reading container scrolls or the viewport resizes", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.mouseEnter(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.scroll(document);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		fireEvent.mouseEnter(marker);
+		fireEvent(window, new Event("resize"));
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+	});
+
+	it("closes hover/focus details on mouse leave and blur", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.mouseEnter(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.mouseLeave(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		act(() => marker.focus());
+		expect(document.activeElement).toBe(marker);
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.blur(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+	});
+
+	it("reactivates the detail after Escape while the marker remains focused", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		act(() => marker.focus());
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		expect(document.activeElement).toBe(marker);
+		fireEvent.click(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).not.toBeNull();
+	});
+
+	it("uses visual-viewport bounds after pinch zoom", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(50, 440, 28, 24));
+		const original = Object.getOwnPropertyDescriptor(window, "visualViewport");
+		Object.defineProperty(window, "visualViewport", {
+			configurable: true,
+			value: {
+				width: 300,
+				height: 350,
+				offsetLeft: 40,
+				offsetTop: 150,
+			} as VisualViewport,
+		});
+		try {
+			fireEvent.mouseEnter(marker);
+			const detail = must(
+				document.body.querySelector("[data-aliyah-detail-portal]"),
+			) as HTMLElement;
+			expect(detail.style.left).toBe("48px");
+			expect(detail.style.top).toBe("375px");
+		} finally {
+			if (original) {
+				Object.defineProperty(window, "visualViewport", original);
+			} else {
+				Reflect.deleteProperty(window, "visualViewport");
+			}
+		}
+	});
+
+	it("keeps the detail open for internal press and overflow scrolling", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.mouseEnter(marker);
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		);
+		fireEvent.pointerDown(detail);
+		fireEvent.scroll(detail);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBe(
+			detail,
+		);
+		fireEvent.pointerDown(document.body);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+	});
+
+	it("scrolls an overflowing detail with arrow keys while the marker keeps focus", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		fireEvent.keyDown(marker, { key: "ArrowDown" });
+		act(() => marker.focus());
+		const detail = must(
+			document.body.querySelector("[data-aliyah-detail-portal]"),
+		) as HTMLElement;
+		fireEvent.keyDown(marker, { key: "ArrowLeft" });
+		expect(detail.scrollTop).toBe(0);
+		fireEvent.keyDown(marker, { key: "ArrowDown" });
+		expect(detail.scrollTop).toBe(48);
+		fireEvent.keyDown(marker, { key: "ArrowUp" });
+		expect(detail.scrollTop).toBe(0);
+	});
+
+	it("portals into the fullscreen host and closes when fullscreen changes", () => {
+		const { container } = renderBody({ boundaryMarkers: markers });
+		const marker = measuredMarker(container, rect(2, 100, 28, 24));
+		const fullscreenHost = document.createElement("div");
+		fullscreenHost.appendChild(container);
+		document.body.appendChild(fullscreenHost);
+		const original = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
+		Object.defineProperty(document, "fullscreenElement", {
+			configurable: true,
+			get: () => fullscreenHost,
+		});
+		try {
+			fireEvent.mouseEnter(marker);
+			const detail = must(
+				fullscreenHost.querySelector("[data-aliyah-detail-portal]"),
+			);
+			expect(detail.parentElement).toBe(fullscreenHost);
+			expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBe(
+				detail,
+			);
+			fireEvent(document, new Event("fullscreenchange"));
+			expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
+		} finally {
+			if (original) {
+				Object.defineProperty(document, "fullscreenElement", original);
+			} else {
+				Reflect.deleteProperty(document, "fullscreenElement");
+			}
+			fullscreenHost.remove();
+		}
+	});
+
+	it("keeps markers without rich detail inline-only", () => {
+		const { container } = renderBody({
+			boundaryMarkers: new Map<string, UnitBoundaryMarker[]>([
+				["1:5", [{ key: "x:shabbat", label: "שני" }]],
+			]),
+		});
+		const marker = must(container.querySelector("[data-aliyah-marker]"));
+		expect(marker).toHaveAttribute("aria-label", "שני");
+		fireEvent.mouseEnter(marker);
+		expect(document.body.querySelector("[data-aliyah-detail-portal]")).toBeNull();
 	});
 });

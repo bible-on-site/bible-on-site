@@ -159,12 +159,16 @@ const activeMenuHref = (pathname: string): string | null => {
 export const NavBar = ({ version }: { version: string }) => {
 	const [open, setOpen] = useState(false);
 	const pathname = usePathname();
-	const [lastPathname, setLastPathname] = useState(pathname);
+	const menuPathname = normalizePathname(pathname);
+	const [lastPathname, setLastPathname] = useState(menuPathname);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const current = activeMenuHref(pathname);
 
-	if (pathname !== lastPathname) {
-		setLastPathname(pathname);
+	// Compare the same rewritten/canonical menu keys used for aria-current;
+	// otherwise hydration of an aliased route can look like navigation and
+	// immediately close the drawer the user just opened.
+	if (menuPathname !== lastPathname) {
+		setLastPathname(menuPathname);
 		setOpen(false);
 	}
 
@@ -191,13 +195,22 @@ export const NavBar = ({ version }: { version: string }) => {
 			href={sub.href || undefined} // nosemgrep -- repo-owned appPlatforms store links, not user input
 			target="_blank"
 			rel="noopener noreferrer"
+			title={sub.title}
+			className={`${styles.itemLink} ${styles.storeLink}`}
 		>
-			<span>{sub.label}</span>
+			<span className={styles.itemIcon}>
+				<Image src={sub.icon} alt="" unoptimized width={16} height={16} />
+			</span>
+			<span className={styles.itemText}>
+				<span className={styles.storeName} dir="ltr">
+					{sub.label}
+				</span>
+			</span>
 		</a>
 	);
 
 	return (
-		<div className={`${styles.hamburgerMenu} ${open ? styles.open : ""}`}>
+		<div className={open ? styles.open : undefined}>
 			<button
 				ref={triggerRef}
 				type="button"
@@ -228,15 +241,23 @@ export const NavBar = ({ version }: { version: string }) => {
 				}}
 			>
 				<header className={styles.sidebarTopBar}>
-					<Link href="/">
+					<Link href="/" className={styles.drawerHomeLink}>
 						<Image
 							src="/images/logos/logo192.webp"
 							alt="עמוד ראשי"
 							unoptimized
-							width={72}
-							height={72}
+							width={36}
+							height={36}
 						/>
 					</Link>
+					<button
+						type="button"
+						className={styles.drawerCloseButton}
+						onClick={closeAndFocusTrigger}
+					>
+						<span className={styles.drawerCloseIcon} aria-hidden="true" />
+						<span>סגור</span>
+					</button>
 				</header>
 				<ul className={styles.menuList}>
 					{NAV_GROUPS.map((group) => (
@@ -247,14 +268,13 @@ export const NavBar = ({ version }: { version: string }) => {
 									<li key={item.href} className={styles.menuItem}>
 										<Link
 											href={item.href}
+											prefetch={open ? null : false}
 											aria-current={
 												item.href === current ? "page" : undefined
 											}
+											className={styles.itemLink}
 										>
-											{/* Icon and label share the first line so the icon
-											    centers on the label's line box even when a
-											    subtitle adds a second line (#3731). */}
-											<span className={styles.itemRow}>
+											<span className={styles.itemIcon}>
 												<Image
 													src={item.icon}
 													alt=""
@@ -262,30 +282,20 @@ export const NavBar = ({ version }: { version: string }) => {
 													width={16}
 													height={16}
 												/>
-												<span>{item.label}</span>
 											</span>
-											{" "}
-											{item.subtitle && (
-												<small className={styles.itemSubtitle}>
-													{item.subtitle}
-												</small>
-											)}
+											<span className={styles.itemText}>
+												<span className={styles.itemTitle}>{item.label}</span>{" "}
+												{item.subtitle && (
+													<small className={styles.itemSubtitle}>
+														{item.subtitle}
+													</small>
+												)}
+											</span>
 										</Link>
 										{item.sub && (
-											<ul>
+											<ul className={styles.storeList}>
 												{item.sub.map((sub) => (
-													<li
-														key={sub.label}
-														className={styles.menuItem}
-														title={sub.title}
-													>
-														<Image
-															src={sub.icon}
-															alt=""
-															unoptimized
-															width={16}
-															height={16}
-														/>
+													<li key={sub.label} className={styles.storeItem}>
 														{subLink(sub)}
 													</li>
 												))}

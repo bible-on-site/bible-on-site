@@ -42,6 +42,38 @@ test.describe("NavBar hamburger menu", () => {
 		await expect(trigger).toBeFocused();
 	});
 
+	test("exposes the labeled close button and keyboard-focusable store links", async ({
+		page,
+	}) => {
+		await page.goto("/929/authors");
+		const trigger = page.getByRole("button", { name: "תפריט ראשי" });
+		const menu = page.locator("#main-menu");
+		await trigger.click();
+		await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+		await expect(menu.getByRole("button", { name: "סגור" })).toBeVisible();
+		await expect(menu.getByRole("link", { name: "App Store" })).toBeVisible();
+		await expect(menu.getByRole("link", { name: "Google Play" })).toBeVisible();
+		await expect(
+			menu.getByRole("link", { name: "Microsoft Store" }),
+		).toBeVisible();
+
+		await menu.getByRole("button", { name: "סגור" }).focus();
+		await expect(menu.getByRole("button", { name: "סגור" })).toBeFocused();
+		for (let step = 0; step < 12; step += 1) {
+			const activeText = await page.evaluate(
+				() => document.activeElement?.textContent,
+			);
+			if (activeText === "App Store") break;
+			await page.keyboard.press("Tab");
+		}
+		await expect(menu.getByRole("link", { name: "App Store" })).toBeFocused();
+
+		await menu.getByRole("button", { name: "סגור" }).click();
+		await expect(trigger).toHaveAttribute("aria-expanded", "false");
+		await expect(trigger).toBeFocused();
+	});
+
 	test("closes on overlay click and returns focus to the trigger", async ({
 		page,
 	}) => {

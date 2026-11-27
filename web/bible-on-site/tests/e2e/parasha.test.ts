@@ -363,13 +363,15 @@ test.describe("פרשה reading root", () => {
 			"aria-label",
 			/פרשת ויגש · קריאת שבת · עלייה ראשונה/,
 		);
-		const detail = marker.locator('[class*="aliyahMarkerDetail"]');
-		await expect(detail).toBeHidden();
+		const inlineFallback = marker.locator('[class*="aliyahMarkerDetail"]');
+		await expect(inlineFallback).toBeHidden();
+		const detail = page.locator("[data-aliyah-detail-portal]");
 		await marker.focus();
 		await expect(detail).toBeVisible();
 		await expect(detail).toHaveText(/עלייה ראשונה \(בראשית מד יח-ל\)/);
-		// Hover reveals the same bubble.
+		// Hover reveals the same bubble after keyboard dismissal.
 		await marker.evaluate((el) => el.blur());
+		await expect(detail).toBeHidden();
 		await marker.hover();
 		await expect(detail).toBeVisible();
 	});

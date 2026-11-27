@@ -7,7 +7,8 @@ import { expect, test } from "../util/playwright/test-fixture";
 // active-item accent still need the same guarantee.
 
 test.describe("NavBar hamburger menu layout", () => {
-	test("has no horizontal overflow", async ({ page }) => {
+	test("has no horizontal overflow at the narrowest supported width", async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 640 });
 		await page.goto("/accessibility");
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 		const menu = page.locator("#main-menu");
@@ -49,6 +50,11 @@ test.describe("NavBar hamburger menu layout", () => {
 		await expect(
 			page.locator("#main-menu").getByRole("link", { name: "תרומות" }),
 		).toBeInViewport();
+		// Drawer chrome stays outside the one scrolling list, so close remains
+		// available even with the menu scrolled to its last destination.
+		await expect(
+			page.locator("#main-menu").getByRole("button", { name: "סגור" }),
+		).toBeVisible();
 
 		const after = await list.evaluate((el) => ({
 			clientWidth: el.clientWidth,

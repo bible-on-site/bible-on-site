@@ -1,284 +1,413 @@
 .overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background-color: black;
-  opacity: 0;
-  transition: all 0.2s;
-  cursor: pointer;
-  pointer-events: none;
-  z-index: 0;
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	background-color: black;
+	opacity: 0;
+	transition: all 0.2s;
+	cursor: pointer;
+	pointer-events: none;
+	z-index: 0;
 }
 
 .menuBtn {
-  position: absolute;
-  /* 44px hit area; the 2rem bars stay where they were (1.25rem inset). */
-  top: 0.875rem;
-  right: 0.875rem;
-  width: 2.75rem;
-  height: 2.75rem;
-  cursor: pointer;
-  z-index: 10000;
-  background-color: transparent;
-  border: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s linear;
+	position: absolute;
+	/* 44px hit area; the 2rem bars stay where they were (1.25rem inset). */
+	top: 0.875rem;
+	right: 0.875rem;
+	width: 2.75rem;
+	height: 2.75rem;
+	cursor: pointer;
+	z-index: 10000;
+	background-color: transparent;
+	border: 0;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: opacity 0.15s linear;
 }
 
 .open .menuBtn {
-  opacity: 0;
+	opacity: 0;
 }
 
 .open .overlay {
-  opacity: 0.3;
-  z-index: 10000;
-  transition: opacity 0.25s ease-in-out;
-  pointer-events: auto;
+	opacity: 0.3;
+	z-index: 10000;
+	transition: opacity 0.25s ease-in-out;
+	pointer-events: auto;
 }
 
 .menuBox {
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  right: -100%;
-  width: 300px;
-  height: 100%;
-  margin: 0;
-  padding: 8px;
-  background-color: var(--surface-elevated, #fff);
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: right 0.25s ease-in-out;
-  z-index: 10;
+	--drawer-inline: 0.75rem;
+	--nav-icon-column: 1.25rem;
+	--nav-grid-gap: 0.625rem;
+	--nav-link-padding-inline: 0.5rem;
+	--nav-link-border-width: 3px;
+	--nav-text-inset: calc(
+		var(--nav-link-border-width) + var(--nav-link-padding-inline) +
+			var(--nav-icon-column) + var(--nav-grid-gap)
+	);
+	display: flex;
+	flex-direction: column;
+	position: fixed;
+	top: 0;
+	right: -100%;
+	width: 300px;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	background-color: var(--surface-elevated, #fff);
+	box-shadow:
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	transition: right 0.25s ease-in-out;
+	z-index: 10;
 }
 
 .menuList {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  /* The box is fixed to viewport height; items beyond it must scroll. */
-  min-height: 0;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	/* The box is fixed to viewport height; items beyond it must scroll. */
+	min-height: 0;
+	overflow-y: auto;
+	margin: 0;
+	padding: 0.375rem var(--drawer-inline) 0.75rem;
+	list-style: none;
 }
 
 .open .menuBox {
-  right: 0;
-  z-index: 10001;
+	right: 0;
+	z-index: 10001;
 }
 
 @media (hover: hover) {
-  .menuBtn:hover {
-    opacity: 0.7;
-  }
+	.menuBtn:hover {
+		opacity: 0.7;
+	}
 }
 
 .menuBtn:focus-visible {
-  outline: 2px solid white;
-  outline-offset: 0.375rem;
+	outline: 2px solid white;
+	outline-offset: 0.375rem;
 }
 
 .menuIcon,
 .menuIcon::before,
 .menuIcon::after {
-  display: block;
-  position: absolute;
-  width: 2rem;
-  height: 0.25rem;
-  background-color: white;
+	display: block;
+	position: absolute;
+	width: 2rem;
+	height: 0.25rem;
+	background-color: white;
 }
 
 .menuIcon::before {
-  content: "";
-  top: -0.625rem;
+	content: "";
+	top: -0.625rem;
 }
 
 .menuIcon::after {
-  content: "";
-  top: 0.625rem;
+	content: "";
+	top: 0.625rem;
 }
 
 .menuBox::before {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 6px;
-  left: -6px;
-  content: "";
-  background: linear-gradient(to right, #000 -100%, #fff 100%);
+	position: absolute;
+	top: 0;
+	height: 100%;
+	width: 6px;
+	left: -6px;
+	content: "";
+	background: linear-gradient(to right, #000 -100%, #fff 100%);
 }
 
+/* Compact chrome outside the menu's one scroll region: the home brand and
+   the labeled close control remain available at every scroll position. */
 .sidebarTopBar {
-  display: grid;
-  align-content: space-between;
-  justify-items: center;
-  padding: 13px;
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 3.5rem;
+	padding: 0.375rem var(--drawer-inline);
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+	background-color: var(--surface-elevated, #fff);
 }
 
-.menuItem {
-  display: flex;
-  flex-wrap: wrap;
-  /* Keep each icon centered on its label's text line: the img has a fixed
-     1em height, so the default stretch can't size it to the taller label
-     line and it would stay pinned to the row's top edge. */
-  align-items: center;
-  width: 100%;
-  /* Transparent border keeps the active row aligned with its siblings. */
-  border-inline-start: 3px solid transparent;
-  border-radius: var(--radius-sm, 4px);
+.drawerHomeLink {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: var(--radius-md, 8px);
 }
 
-.menuItem > * {
-  display: block;
-  margin: 0.5rem;
+.drawerHomeLink img {
+	width: 2.25rem;
+	height: 2.25rem;
 }
 
-/* Icons scale with their label's font size and keep their aspect ratio */
-.menuItem img {
-  flex-shrink: 0;
-  width: 1em;
-  height: 1em;
-  object-fit: contain;
+.drawerCloseButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.375rem;
+	min-height: 2.75rem;
+	padding: 0 0.75rem;
+	border: 0;
+	border-radius: var(--radius-md, 8px);
+	background: transparent;
+	color: inherit;
+	font-weight: 600;
+	cursor: pointer;
 }
 
-/* At least 44px tall to tap. Not flex: 1: a full-row link would reach into
-   Link's 200px prefetch margin while the menu is parked off-screen. Column
-   layout: the title row keeps icon + label on one line; the optional
-   subtitle sits on its own line inside the same link (#3731). */
-.menuItem > a {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 44px;
-  margin-block: 0;
+.drawerCloseIcon {
+	position: relative;
+	width: 1rem;
+	height: 1rem;
 }
 
-.itemRow {
-  display: flex;
-  align-items: center;
+.drawerCloseIcon::before,
+.drawerCloseIcon::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 1rem;
+	height: 2px;
+	border-radius: var(--radius-pill, 999px);
+	background: currentColor;
+	content: "";
 }
 
-/* Subtitle: visibly secondary to the label, aligned under its text and
-   free to wrap (#3731). */
-.itemSubtitle {
-  display: block;
-  margin-top: 0.125rem;
-  padding-inline-start: 2rem;
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.35;
-  color: var(--muted-text, #6b7280);
+.drawerCloseIcon::before {
+	transform: translate(-50%, -50%) rotate(45deg);
 }
 
-/* Current page: inline-start accent bar plus a muted tint. */
-.menuItem:has(> a[aria-current]) {
-  border-inline-start-color: var(--link-accent);
-  background-color: var(--surface-muted);
-  font-weight: 600;
-}
-
-.menuItem > a:focus-visible {
-  outline: 2px solid var(--link-accent);
-  outline-offset: -2px;
-  border-radius: var(--radius-sm, 4px);
+.drawerCloseIcon::after {
+	transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 @media (hover: hover) {
-  .menuItem:has(> a:hover) {
-    background-color: var(--surface-muted);
-  }
+	.drawerHomeLink:hover,
+	.drawerCloseButton:hover {
+		background-color: var(--surface-muted);
+	}
 }
 
-.menuItem * {
-  margin-right: 0.5rem;
-}
-
-.menuItem ul {
-  display: contents;
-}
-
-.menuItem ul li {
-  margin-right: 2.5rem;
+.drawerHomeLink:focus-visible,
+.drawerCloseButton:focus-visible {
+	outline: 2px solid var(--link-accent);
+	outline-offset: 2px;
 }
 
 .menuGroup {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
 }
 
 .menuGroup + .menuGroup {
-  margin-top: 0.5rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid rgba(136, 139, 239, 0.29);
+	margin-top: 0.375rem;
+	padding-top: 0.375rem;
+	border-top: 1px solid var(--border-subtle, #e2e8f0);
 }
 
+/* Section labels align with the destination text column; titles and
+   subtitles then share that exact inset inside each link. */
 .groupTitle {
-  margin: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--muted-text, #6b7280);
+	margin: 0 0 0.125rem;
+	padding: 0.25rem 0.5rem 0.125rem;
+	padding-inline-start: var(--nav-text-inset);
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--muted-text, #666);
 }
 
 .groupItems {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.menuItem {
+	width: 100%;
+}
+
+.menuItem + .menuItem {
+	margin-top: 0.125rem;
+}
+
+/* One consistent RTL grid for every destination: fixed icon column, then a
+   min-width-zero text column so long Hebrew copy wraps instead of escaping. */
+.itemLink {
+	display: grid;
+	grid-template-columns: var(--nav-icon-column) minmax(0, 1fr);
+	column-gap: var(--nav-grid-gap);
+	align-items: start;
+	align-content: center;
+	width: 100%;
+	min-height: 2.875rem;
+	margin: 0;
+	padding: 0.3125rem var(--nav-link-padding-inline);
+	border-inline-start: var(--nav-link-border-width) solid transparent;
+	border-radius: var(--radius-md, 8px);
+	color: inherit;
+	font-size: 0.9375rem;
+	line-height: 1.35;
+	text-align: start;
+	overflow-wrap: anywhere;
+}
+
+.itemIcon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--nav-icon-column);
+	height: 1.35em;
+	color: var(--pasuk-num-color, #1c2c5d);
+}
+
+.itemIcon img {
+	flex-shrink: 0;
+	width: 1em;
+	height: 1em;
+	object-fit: contain;
+}
+
+.itemText {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.itemTitle {
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+/* Subtitle: visibly secondary to the title and aligned under it in the
+   shared text column, free to wrap without overlap. */
+.itemSubtitle {
+	display: block;
+	margin-top: 0.0625rem;
+	font-size: 0.78rem;
+	font-weight: 400;
+	line-height: 1.35;
+	color: var(--muted-text, #666);
+}
+
+.itemLink[aria-current="page"] {
+	border-inline-start-color: var(--link-accent);
+	background-color: var(--surface-muted);
+}
+
+.itemLink[aria-current="page"] .itemTitle {
+	color: var(--pasuk-num-color, #1c2c5d);
+}
+
+.itemLink:focus-visible {
+	outline: 2px solid var(--link-accent);
+	outline-offset: -2px;
+}
+
+@media (hover: hover) {
+	.itemLink:hover {
+		background-color: var(--surface-muted);
+	}
+
+	.itemLink:hover .itemTitle {
+		color: var(--link-accent-hover);
+	}
+}
+
+/* Storefronts form one compact nested cluster under יישומון. The connector
+   and indentation show ownership while each row keeps the same icon/text grid
+   and an independent target. */
+.storeList {
+	margin: 0.125rem 0 0.25rem;
+	margin-inline-start: calc(
+		var(--nav-text-inset) - var(--nav-link-border-width)
+	);
+	padding: 0;
+	padding-inline-start: 0.375rem;
+	border-inline-start: 1px solid var(--border-subtle, #e2e8f0);
+	list-style: none;
+}
+
+.storeItem + .storeItem {
+	margin-top: 0.0625rem;
+}
+
+.storeLink {
+	--nav-link-border-width: 2px;
+	--nav-link-padding-inline: 0.375rem;
+	min-height: 2.5rem;
+	padding-block: 0.1875rem;
+	font-size: 0.875rem;
+}
+
+.storeName {
+	font-weight: 500;
+	line-height: 1.35;
+	direction: ltr;
+	/* Brand spelling stays LTR while the row itself keeps the drawer's RTL
+	   text inset instead of jumping to the physical far edge. */
+	text-align: right;
+	unicode-bidi: isolate;
 }
 
 /* Version item at bottom */
 .versionItem {
-  margin-top: auto;
-  border-top: 1px solid rgba(136, 139, 239, 0.29);
-  padding: 8px 0 8px 0;
-  text-align: center;
-  color: var(--muted-text, #6b7280);
-  font-size: 0.875rem;
-  direction: ltr;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+	margin-top: auto;
+	border-top: 1px solid var(--border-subtle, #e2e8f0);
+	padding: 8px 0;
+	text-align: center;
+	color: var(--muted-text, #666);
+	font-size: 0.8125rem;
+	direction: ltr;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
 }
 
 .versionItem::before {
-  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
-  display: inline !important;
-  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
-  content: var(--version-content) !important;
+	/* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+	display: inline !important;
+	/* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+	content: var(--version-content) !important;
 }
 
 .versionItem::after {
-  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
-  display: none !important;
-  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
-  content: none !important;
+	/* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+	display: none !important;
+	/* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+	content: none !important;
 }
 
 @media (prefers-color-scheme: dark) {
-  .menuBox::before {
-    background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
-  }
+	.menuBox::before {
+		background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
+	}
 }
 
 .menuBtn:active {
-  scale: var(--press-scale);
+	scale: var(--press-scale);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .overlay,
-  .menuBox {
-    transition: none;
-  }
+	.overlay,
+	.menuBox {
+		transition: none;
+	}
 }

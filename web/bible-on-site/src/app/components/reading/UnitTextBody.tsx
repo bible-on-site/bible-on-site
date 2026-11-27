@@ -13,6 +13,7 @@ import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { toLetters } from "gematry";
+import { AliyahMarkerButton } from "./AliyahMarkerButton";
 import styles from "./reading-unit-text.module.css";
 
 /** The slice of canonical perek data the renderer needs. */
@@ -314,45 +315,19 @@ function UnitPerekSlice({
 										 * ordinals distinguishable and the button's
 										 * focus/hover — and its touch tap — reveals the
 										 * full division detail. */
-										<button
+										<AliyahMarkerButton
 											key={mark.key}
-											type="button"
-											className={styles.aliyahBreakLabel}
-											data-aliyah-marker=""
-											data-aliyah-key={mark.key}
-											data-aliyah-role={mark.role}
-											data-aliyah-category={mark.category}
-											data-aliyah-selected={
+											markerKey={mark.key}
+											label={mark.label}
+											role={mark.role}
+											tag={mark.tag}
+											category={mark.category}
+											selected={
 												emphasisMarkerKey != null &&
 												mark.key.split(" ").includes(emphasisMarkerKey)
-													? ""
-													: undefined
 											}
-											aria-label={
-												mark.detail ??
-												[mark.tag, mark.label].filter(Boolean).join(" ")
-											}
-										>
-											{mark.tag && (
-												<span
-													className={styles.aliyahMarkerTag}
-													aria-hidden="true"
-												>
-													{mark.tag}
-												</span>
-											)}{" "}
-											<span className={styles.aliyahMarkerOrdinal}>
-												{mark.label}
-											</span>
-											{mark.detail && (
-												<span
-													className={styles.aliyahMarkerDetail}
-													aria-hidden="true"
-												>
-													{mark.detail}
-												</span>
-											)}
-										</button>
+											detail={mark.detail}
+										/>
 									))}
 								</span>
 							)}
