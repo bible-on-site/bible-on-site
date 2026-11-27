@@ -115,6 +115,28 @@ public class PushNotificationServiceTests
         }
     }
 
+    private sealed class ControlledRegistry : IPushDeviceRegistry
+    {
+        public TaskCompletionSource RegisterStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<PushDeviceRegistrationResult> ReleaseRegister { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public List<string> Operations { get; } = [];
+
+        public async Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
+        {
+            Operations.Add("register-start");
+            RegisterStarted.TrySetResult();
+            var result = await ReleaseRegister.Task.WaitAsync(ct);
+            Operations.Add("register-finish");
+            return result;
+        }
+
+        public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
+        {
+            Operations.Add("delete");
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class FakeIdentity : IUserIdentity
     {
         public string? UserId { get; set; } = "auth-uid-1";
@@ -515,6 +537,27 @@ public class PushNotificationServiceTests
         registry.Registrations[1].Registration.Token.Should().Be("fcm-token-2");
         registry.Registrations[1].Registration.UserId.Should().Be("auth-uid-1");
         service.CurrentToken.Should().Be("fcm-token-2");
+    }
+
+    [Fact]
+    public async Task Disable_WaitsForPendingRegistrationBeforeDeleting()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        prefs.Load();
+        var store = new InMemoryPushStateStore();
+        var registry = new ControlledRegistry();
+        using var service = PushNotificationService.CreateForTesting(
+            platform, prefs, store, registry, () => "9.9.9", new FakeIdentity());
+
+        var enableTask = service.SetEnabledAsync(true, CancellationToken.None);
+        await registry.RegisterStarted.Task;
+        var disableTask = service.SetEnabledAsync(false, CancellationToken.None);
+        registry.ReleaseRegister.SetResult(new PushDeviceRegistrationResult(false, false));
+
+        (await enableTask).Should().Be(PushEnableResult.Enabled);
+        (await disableTask).Should().Be(PushEnableResult.Disabled);
+        registry.Operations.Should().Equal("register-start", "register-finish", "delete");
     }
 
     [Fact]

@@ -166,6 +166,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     private readonly IUserIdentity _identity;
     private readonly Func<string> _appVersion;
     private readonly object _initLock = new();
+    private readonly SemaphoreSlim _registrationGate = new(1, 1);
     private Task? _initializeTask;
     private Task? _registrationResync;
     private bool _appliedThisLaunch;
@@ -304,7 +305,18 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
             }
             Console.Error.WriteLine($"[Push] topic unsubscribe deferred: {ex.Message}");
         }
-        await _stateStore.RemoveAsync(RegistrationFingerprintKey, ct);
+        // Wait for any pending registration POST and fingerprint write before the
+        // delete; a registration that starts after this point rechecks the now-off
+        // preference inside the same gate.
+        await _registrationGate.WaitAsync(ct);
+        try
+        {
+            await _stateStore.RemoveAsync(RegistrationFingerprintKey, ct);
+        }
+        finally
+        {
+            _registrationGate.Release();
+        }
         // A fresh service instance may not have resolved identities yet. A
         // surviving pre-auth key gets the compatibility delete lane first; the
         // verified uid gets the authenticated delete lane when different.
@@ -465,6 +477,23 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     /// the route's 404 before the FCM credential is deployed) log and move on.
     /// </summary>
     private async Task SyncRegistrationAsync(CancellationToken ct)
+    {
+        await _registrationGate.WaitAsync(ct);
+        try
+        {
+            if (!_preferences.DailyPerekPushEnabled)
+            {
+                return;
+            }
+            await SyncRegistrationCoreAsync(ct);
+        }
+        finally
+        {
+            _registrationGate.Release();
+        }
+    }
+
+    private async Task SyncRegistrationCoreAsync(CancellationToken ct)
     {
         await ResolveIdentityAsync(ct);
         var authToken = await ResolveAuthTokenAsync(ct);
