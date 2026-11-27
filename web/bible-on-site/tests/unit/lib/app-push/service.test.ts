@@ -62,7 +62,7 @@ describe("app-push service", () => {
 		// The OAuth access token is cached at module scope — isolate each
 		// test so token-fetch expectations stay deterministic.
 		jest.resetModules();
-		service = await import("@/lib/app-push");
+		service = jest.requireActual("@/lib/app-push");
 		global.fetch = mockFetch as unknown as typeof fetch;
 		process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify(SERVICE_ACCOUNT);
 		process.env.PUSH_SEND_SECRET = "s3cret";
@@ -544,21 +544,29 @@ describe("app-push service", () => {
 			...validDevice,
 			legacyUserId: "legacy-user",
 		};
-		const queueRegistrationLookup = (legacyRow: object | null) => {
+		const queueRegistrationLookup = (
+			legacyRow: object | null,
+			expectsCapacityCheck = true,
+		) => {
 			mockTxQuery
 				.mockReset()
 				.mockResolvedValueOnce([])
-				.mockResolvedValueOnce(legacyRow ? [legacyRow] : [])
-				.mockResolvedValueOnce([{ total: 0 }]);
+				.mockResolvedValueOnce(legacyRow ? [legacyRow] : []);
+			if (expectsCapacityCheck) {
+				mockTxQuery.mockResolvedValueOnce([{ total: 0 }]);
+			}
 		};
 
 		it("migrates a legacy row carrying the same installation id", async () => {
-			queueRegistrationLookup({
-				user_id: "legacy-user",
-				auth_user_id: null,
-				installation_id: validDevice.installationId,
-				token: "older-fcm-token",
-			});
+			queueRegistrationLookup(
+				{
+					user_id: "legacy-user",
+					auth_user_id: null,
+					installation_id: validDevice.installationId,
+					token: "older-fcm-token",
+				},
+				false,
+			);
 
 			await expect(
 				service.saveDevice(legacyDevice, validDevice.userId),
@@ -572,12 +580,15 @@ describe("app-push service", () => {
 		});
 
 		it("migrates a legacy row carrying the same FCM token when its installation id is blank", async () => {
-			queueRegistrationLookup({
-				user_id: "legacy-user",
-				auth_user_id: null,
-				installation_id: "",
-				token: validDevice.token,
-			});
+			queueRegistrationLookup(
+				{
+					user_id: "legacy-user",
+					auth_user_id: null,
+					installation_id: "",
+					token: validDevice.token,
+				},
+				false,
+			);
 
 			await expect(
 				service.saveDevice(legacyDevice, validDevice.userId),
@@ -586,7 +597,7 @@ describe("app-push service", () => {
 		});
 
 		it.each([
-			["missing", null, false],
+			["missing", null, true],
 			[
 				"already auth-bound",
 				{
@@ -595,7 +606,7 @@ describe("app-push service", () => {
 					installation_id: validDevice.installationId,
 					token: validDevice.token,
 				},
-				false,
+				true,
 			],
 			[
 				"not possession-matched",
@@ -768,7 +779,7 @@ describe("app-push service", () => {
 			async (_label, status, errorBody) => {
 				mockFetch.mockReset();
 				jest.resetModules();
-				service = await import("@/lib/app-push");
+				service = jest.requireActual("@/lib/app-push");
 				mockFetch
 					.mockResolvedValueOnce(oauthResponse())
 					.mockResolvedValueOnce(jsonResponse(errorBody, status));
@@ -791,7 +802,7 @@ describe("app-push service", () => {
 			async (_label, errorBody) => {
 				mockFetch.mockReset();
 				jest.resetModules();
-				service = await import("@/lib/app-push");
+				service = jest.requireActual("@/lib/app-push");
 				mockFetch
 					.mockResolvedValueOnce(oauthResponse())
 					.mockResolvedValueOnce(
@@ -813,7 +824,7 @@ describe("app-push service", () => {
 			"counts a broadcast failure without deleting rows (%s)",
 			async (status) => {
 				jest.resetModules();
-				service = await import("@/lib/app-push");
+				service = jest.requireActual("@/lib/app-push");
 				mockFetch
 					.mockResolvedValueOnce(oauthResponse())
 					.mockResolvedValueOnce(jsonResponse({ error: {} }, status));

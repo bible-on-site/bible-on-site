@@ -467,7 +467,7 @@ export async function saveDevice(
 		if (!migratesLegacy) {
 			return {
 				legacyMigrated: false,
-				legacyUnresolved: legacy?.auth_user_id === null,
+				legacyUnresolved: true,
 			};
 		}
 		await txExecute(
