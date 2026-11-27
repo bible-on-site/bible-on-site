@@ -70,9 +70,9 @@ describe("compiled admin asset caching", () => {
 				options,
 			);
 			assert.equal(existing.status, 200);
-			assert.match(
-				existing.headers.get("Cache-Control") ?? "",
-				/\bimmutable\b/u,
+			assert.equal(
+				existing.headers.get("Cache-Control"),
+				"public, max-age=31536000, immutable",
 			);
 			await existing.body?.cancel();
 		}
