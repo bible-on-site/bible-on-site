@@ -123,9 +123,15 @@ public class PushNotificationServiceTests
         public bool FailToken { get; set; }
         public int EnsureCalls { get; private set; }
 
-        public event EventHandler? UserChanged;
+        private EventHandler? _userChanged;
 
-        public void EmitUserChanged() => UserChanged?.Invoke(this, EventArgs.Empty);
+        public event EventHandler? UserChanged
+        {
+            add => _userChanged += value;
+            remove => _userChanged -= value;
+        }
+
+        public void EmitUserChanged() => _userChanged?.Invoke(this, EventArgs.Empty);
 
         public Task EnsureSignedInAsync(CancellationToken cancellationToken)
         {
