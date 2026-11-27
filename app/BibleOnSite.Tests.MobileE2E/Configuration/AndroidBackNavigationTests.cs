@@ -51,11 +51,13 @@ public sealed class AndroidBackNavigationTests
         // A press inside the push's settle window is consumed, yet the push's
         // own rewrite still turns the tree — the false positive the one-shot
         // verification could not tell from a pop. The push holds a frame for
-        // three samples mid-animation, so equal snapshots alone are not a settled
-        // page; the press must land only after the push goes quiet.
+        // three samples mid-animation and stays in flight past the first full
+        // quiet window, so equal snapshots alone are not a settled page; the
+        // press must land only after the push goes quiet.
         var executor = new BackExecutor(pushFrames: new[]
         {
-            "<push-mid/>", "<push-mid/>", "<push-mid/>", "<push-late/>", "<settings/>"
+            "<push-mid/>", "<push-mid/>", "<push-mid/>", "<push-late/>",
+            "<push-tail/>", "<push-final/>", "<settings/>"
         });
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
         new AndroidPlatformAdapter(executor.Clock, executor.Clock.Advance).GoBack(driver);

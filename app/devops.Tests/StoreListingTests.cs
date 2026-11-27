@@ -24,6 +24,17 @@ public sealed class StoreListingTests
     public void HebrewTitleLeadsWithTheTanakhKeyword() =>
         Assert.StartsWith("תנ\"ך", ReadLocaleFile("he", "title.txt"));
 
+    // #2124: the unquoted spelling is a distinct primary query variant.
+    // keep it explicit in the Play-only short description.
+    [Fact]
+    public void HebrewShortDescriptionCoversTheUnpunctuatedQuerySpelling()
+    {
+        var shortDescription = ReadLocaleFile("he", "short-description.txt");
+        Assert.StartsWith("לימוד תנך ", shortDescription);
+        Assert.Contains("תנ\"ך", shortDescription);
+        Assert.Contains("929", shortDescription);
+    }
+
     // #2124: the en-US listing exists for transliterated discovery queries.
     [Fact]
     public void EnglishListingCoversTheTransliteratedQueries()
