@@ -21,7 +21,11 @@ public sealed class AndroidElementTypeTests
         var element = driver.FindElement(By.Id("com.tanah.daily929:id/PerekSearchInput"));
         Assert.Equal("android.widget.EditText", new AndroidPlatformAdapter().ElementType(element));
         Assert.Equal("className", executor.RequestedAttribute);
-        Assert.Single(executor.Commands, command => command == DriverCommand.GetElementAttribute);
+        // Exactly session + lookup + one attribute read: a TagName/name-endpoint
+        // call (or a swallowed failed one) would show up as a fourth command.
+        Assert.Equal(
+            new[] { DriverCommand.NewSession, DriverCommand.FindElement, DriverCommand.GetElementAttribute },
+            executor.Commands);
     }
 
     private sealed class AttributeExecutor : ICommandExecutor
