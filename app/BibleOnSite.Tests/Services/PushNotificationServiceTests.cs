@@ -120,10 +120,12 @@ public class PushNotificationServiceTests
         public TaskCompletionSource RegisterStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<PushDeviceRegistrationResult> ReleaseRegister { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<string> Operations { get; } = [];
+        public List<(PushDeviceRegistration Registration, string AuthToken)> Registrations { get; } = [];
+        public List<(string UserId, string? AuthToken)> Unregistrations { get; } = [];
 
         public async Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
         {
-            _ = registration;
+            Registrations.Add((registration, authToken));
             Operations.Add("register-start");
             RegisterStarted.TrySetResult();
             var result = await ReleaseRegister.Task.WaitAsync(ct);
@@ -133,7 +135,8 @@ public class PushNotificationServiceTests
 
         public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
         {
-            _ = userId;
+            ct.ThrowIfCancellationRequested();
+            Unregistrations.Add((userId, authToken));
             Operations.Add("delete");
             return Task.CompletedTask;
         }
