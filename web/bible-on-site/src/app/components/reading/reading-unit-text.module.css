@@ -113,6 +113,7 @@
 	/* A merged marker lists each agreeing layer's detail on its own
 	   line. */
 	white-space: pre-line;
+	overflow-wrap: anywhere;
 	text-align: start;
 	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
 	pointer-events: none;
@@ -122,6 +123,26 @@
 .aliyahBreakLabel:focus > .aliyahMarkerDetail,
 .aliyahBreakLabel:focus-visible > .aliyahMarkerDetail {
 	display: block;
+}
+
+/* Hydration replaces the CSS-only inline bubble with the positioned portal
+   below. Keeping the inline copy in the DOM preserves the no-JS fallback
+   without rendering two bubbles in the enhanced path. */
+.aliyahBreakLabel.aliyahBreakLabelEnhanced > .aliyahMarkerDetail {
+	display: none;
+}
+
+/* Fixed portal copy: physical left/top come from the collision-aware
+   positioning helper, so the logical inline-start anchoring that clipped at
+   RTL reading edges must be reset explicitly. */
+.aliyahMarkerDetailPortal {
+	display: block;
+	position: fixed;
+	inset-block-start: auto;
+	inset-inline-start: auto;
+	z-index: 10020;
+	max-height: calc(100vh - 16px);
+	overflow-y: auto;
 }
 
 /* Chapter break inside an aliyah-annotated reading — demoted to the
