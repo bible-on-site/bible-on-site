@@ -256,7 +256,7 @@ test("a persistent 5xx still fails after the bounded attempts", async () => {
    calls++;
    return new Response("down", {status});
   }, async () => {});
-  await assert.rejects(api.getRun(1), new RegExp("HTTP_" + status));
+  await assert.rejects(api.getRun(1), error => error.message === "HTTP_" + status);
   assert.equal(calls, POLICY.maxAttempts);
  }
 });
