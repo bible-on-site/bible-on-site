@@ -22,11 +22,24 @@ export function ScrollToSlug({
 	useEffect(() => {
 		const el = document.getElementById(targetId);
 		if (el) {
+			// The browser re-applies its restored scroll position as late-arriving
+			// content grows the page — potentially after the one-shot scroll below
+			// has already fired — so take over restoration for this entry; these
+			// pages always want the anchored target, not the saved position.
+			history.scrollRestoration = "manual";
 			// Small delay to ensure layout is complete
 			const timer = setTimeout(() => {
 				el.scrollIntoView({ behavior, block: "start" });
 			}, 100);
-			return () => clearTimeout(timer);
+			return () => {
+				clearTimeout(timer);
+				// New history entries inherit this entry's restoration mode, and a
+				// client-side navigation creates the next entry before this
+				// component unmounts — so hand normal restoration back here.
+				// Otherwise Back on a later page (e.g. the author list) would
+				// never restore its saved position.
+				history.scrollRestoration = "auto";
+			};
 		}
 	}, [targetId, behavior]);
 
