@@ -236,6 +236,129 @@ test("unrecognized completed outcomes remain unconfirmed and never retry the POS
  }
 });
 
+test("a transient 5xx is retried within the request budget, never suppressed", async () => {
+ const delays = [];
+ let calls = 0;
+ const api = new GitHubApi("test-token", async () => {
+  calls++;
+  return calls === 1 ? new Response("upstream", {status: 502}) : Response.json(repo());
+ }, async ms => { delays.push(ms); });
+ const result = await api.getRepository();
+ assert.equal(result.id, POLICY.repositoryId);
+ assert.equal(calls, 2);
+ assert.deepEqual(delays, [POLICY.retryDelayMs]);
+});
+
+test("a persistent 5xx still fails after the bounded attempts", async () => {
+ for (const status of [500, 502, 503]) {
+  let calls = 0;
+  const api = new GitHubApi("test-token", async () => {
+   calls++;
+   return new Response("down", {status});
+  }, async () => {});
+  await assert.rejects(api.getRun(1), error => error.message === "HTTP_" + status);
+  assert.equal(calls, POLICY.maxAttempts);
+ }
+});
+
+test("the cancellation POST is never replayed on a 5xx", async () => {
+ let calls = 0;
+ const api = new GitHubApi("test-token", async () => {
+  calls++;
+  return new Response("upstream", {status: 502});
+ }, async () => { throw new Error("delay must not run for a mutation"); });
+ await assert.rejects(api.cancelRun(1), /HTTP_502/);
+ assert.equal(calls, 1);
+});
+
+test("a POST retries a 5xx only when it opts in as idempotent", async () => {
+ // The queue snapshot query opts in; a new mutation would not retry by default.
+ const post = options => new GitHubApi("test-token", async () => {
+  post.calls++;
+  return post.calls === 1 ? new Response("upstream", {status: 502})
+   : Response.json({data: {repository: {}}});
+ }, async () => {});
+
+ post.calls = 0;
+ const opted = post({idempotent: true});
+ const result = await opted.request("/graphql", {method: "POST", data: {query: "x"}, idempotent: true});
+ assert.equal(result.data.data.repository !== undefined, true);
+ assert.equal(post.calls, 2);
+
+ // Omitted and explicit false both refuse to replay a mutation.
+ for (const idempotent of [undefined, false]) {
+  post.calls = 0;
+  const mutation = post({});
+  await assert.rejects(
+   mutation.request("/graphql", {method: "POST", data: {query: "x"}, idempotent}),
+   /HTTP_502/);
+  assert.equal(post.calls, 1);
+ }
+});
+
+test("the post-cancellation reconcile read outlasts an exhausted budget", async () => {
+ // Retries may spend the last slot before the cancel POST; the reconcile read
+ // must still reach GitHub or the cancellation outcome goes unobserved.
+ let calls = 0;
+ const api = new GitHubApi("test-token", async () => {
+  calls++;
+  return Response.json(run());
+ }, async () => {});
+ for (let i = 0; i < POLICY.maxRequests; i++) await api.getRun(1);
+ await assert.rejects(api.getRun(1), /REQUEST_BUDGET_EXHAUSTED/);
+ const reconciled = await api.getRun(1, {essential: true});
+ assert.equal(reconciled.id, 1);
+ assert.equal(calls, POLICY.maxRequests + 1);
+ // The reserve is bounded by the cancellation cap, retries included:
+ // the rejected non-essential read already spent one slot of it.
+ await assert.rejects(api.getRun(1, {essential: true}), /REQUEST_BUDGET_EXHAUSTED/);
+ assert.equal(calls, POLICY.maxRequests + 1);
+});
+
+test("reap marks its post-cancellation reconcile read essential", async () => {
+ const f = fixture();
+ const reads = [];
+ const original = f.api.getRun;
+ f.api.getRun = async (id, options) => {
+  reads.push(options);
+  return original(id, options);
+ };
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.actions[0].outcome, "cancelled");
+ assert.deepEqual(reads.at(-1), {essential: true});
+ assert.ok(reads.slice(0, -1).every(options => options === undefined));
+});
+
+test("an inconsistent run page is reread once before failing closed", async () => {
+ // First listing inconsistent, reread complete: the pass proceeds.
+ const f = fixture();
+ let reads = 0;
+ const listed = f.api.listRuns;
+ f.api.listRuns = async status => {
+  const page = await listed(status);
+  return ++reads === 1 ? {...page, hasNextPage: true} : page;
+ };
+ const delays = [];
+ const result = await call(f, {dryRun: false, delay: async ms => { delays.push(ms); }});
+ assert.equal(result.actions[0].outcome, "cancelled");
+ assert.equal(reads, 3); // queued twice, in_progress once
+ assert.deepEqual(delays, [POLICY.pageRereadDelayMs]);
+ assert.deepEqual(f.state.cancels, [1]);
+
+ // Persistent inconsistency still fails closed after the second read.
+ const g = fixture();
+ let failures = 0;
+ const original = g.api.listRuns;
+ g.api.listRuns = async status => {
+  const page = await original(status);
+  failures++;
+  return {...page, hasNextPage: true};
+ };
+ await assert.rejects(call(g, {dryRun: false, delay: async () => {}}), /INCOMPLETE_RUN_PAGE/);
+ assert.equal(failures, POLICY.maxRunPageReads);
+ assert.deepEqual(g.state.cancels, []);
+});
+
 test("normally completed cancellation races still consume the two-request cap", async () => {
  const f = fixture([run(1), run(2), run(3)]);
  f.api.cancelRun = async id => {
