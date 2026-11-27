@@ -21,6 +21,9 @@ public interface IUserIdentity
     /// </summary>
     Task EnsureSignedInAsync(CancellationToken cancellationToken);
 
+    /// <summary>A current Firebase Auth ID token for backend verification, or null when unavailable.</summary>
+    Task<string?> GetIdTokenAsync(CancellationToken cancellationToken);
+
     /// <summary>Raised when <see cref="UserId"/> changes (sign-in/out).</summary>
     event EventHandler? UserChanged;
 }
@@ -39,6 +42,8 @@ public sealed class AnonymousUserIdentity : IUserIdentity
     public string? UserId => null;
 
     public Task EnsureSignedInAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<string?> GetIdTokenAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
 
 #pragma warning disable CS0067 // Event is part of the IUserIdentity contract; the anonymous identity never signs in.
     public event EventHandler? UserChanged;

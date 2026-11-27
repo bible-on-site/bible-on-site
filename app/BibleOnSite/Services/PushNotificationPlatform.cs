@@ -1,4 +1,5 @@
 #if MAUI
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,7 +20,7 @@ internal partial class PushJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// Durable push-state store honoring the #1097 no-Advertising-ID design: on
-/// iOS the notification user id lives in Keychain (<see cref="ISecureStorage"/>)
+/// iOS the pre-auth compatibility key lives in Keychain (<see cref="ISecureStorage"/>)
 /// and survives reinstall; on Android and other MAUI platforms it lives in
 /// preferences (<see cref="IPreferences"/>), which Auto Backup restores.
 /// </summary>
@@ -115,17 +116,33 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
         _baseUrl = baseUrl;
     }
 
-    public async Task RegisterAsync(PushDeviceRegistration registration, CancellationToken ct)
+    public async Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync(
-            $"{_baseUrl()}/api/push/device",
-            registration,
-            PushJsonContext.Default.PushDeviceRegistration,
-            ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl()}/api/push/device")
+        {
+            Content = JsonContent.Create(
+                registration,
+                PushJsonContext.Default.PushDeviceRegistration),
+        };
+        request.Headers.Authorization = new("Bearer", authToken);
+        using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var root = document.RootElement;
+        var legacyMigrated = root.TryGetProperty("legacyMigrated", out var migrated) &&
+            migrated.ValueKind == JsonValueKind.True;
+        // A server older than the outcome field cannot confirm migration; keep
+        // the one bounded compatibility key unless removal is explicit. Current
+        // servers also report every non-migrated outcome identically so the
+        // response is not a legacy-row existence oracle.
+        var legacyUnresolved = root.TryGetProperty("legacyUnresolved", out var unresolved)
+            ? unresolved.ValueKind == JsonValueKind.True
+            : !legacyMigrated;
+        return new PushDeviceRegistrationResult(legacyMigrated, legacyUnresolved);
     }
 
-    public async Task UnregisterAsync(string userId, CancellationToken ct)
+    public async Task UnregisterAsync(string userId, string? authToken, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{_baseUrl()}/api/push/device")
         {
@@ -133,6 +150,10 @@ public sealed class HttpPushDeviceRegistry : IPushDeviceRegistry
                 new PushDeviceUnregistration(userId),
                 PushJsonContext.Default.PushDeviceUnregistration),
         };
+        if (authToken is not null)
+        {
+            request.Headers.Authorization = new("Bearer", authToken);
+        }
         using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }

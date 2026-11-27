@@ -184,8 +184,9 @@ class LambdaParserSafetyTests(unittest.TestCase):
         VALIDATOR.validate_lambda_safe_comments(path)
         source = path.read_text(encoding="utf-8")
         processed = LAMBDA.preprocess_sql(source)
-        # Two session settings plus one SET/PREPARE/EXECUTE/DEALLOCATE block.
-        self.assertEqual(len(LAMBDA.parse_statements(processed)), 6)
+        # Two session settings plus two SET/PREPARE/EXECUTE/DEALLOCATE blocks
+        # (table bootstrap and guarded verified-identity column).
+        self.assertEqual(len(LAMBDA.parse_statements(processed)), 10)
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
         self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
 

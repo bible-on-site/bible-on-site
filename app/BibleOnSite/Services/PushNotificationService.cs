@@ -28,17 +28,23 @@ public enum PushEnableResult
 
 /// <summary>Device-registration row for the
 /// <c>POST /api/push/device</c> contract (see
-/// docs/app/push-notifications.md). <paramref name="UserId"/> is the durable
-/// notification identity (seeded from the Firebase Installation ID and kept
-/// stable across reinstalls where the platform store allows); a rotating
-/// installation/FCM token re-links to it on every registration.</summary>
+/// docs/app/push-notifications.md). <paramref name="UserId"/> is the verified
+/// Firebase Auth uid that owns the installation; <paramref name="InstallationId"/>
+/// carries the rotating Firebase Installation ID evidence and the FCM token
+/// re-links to the same verified identity on every registration.</summary>
 public sealed record PushDeviceRegistration(
     string UserId,
     string InstallationId,
     string Token,
     string Platform,
     IReadOnlyCollection<string> Topics,
-    string AppVersion);
+    string AppVersion,
+    string? LegacyUserId = null);
+
+/// <summary>Server-reported legacy-row outcome of a registration upsert.</summary>
+/// <param name="LegacyMigrated">The unbound legacy row was removed.</param>
+/// <param name="LegacyUnresolved">A supplied legacy key was not confirmed migrated. The privacy-preserving response does not reveal whether that key names an existing row, so the client retains its one bounded cleanup key.</param>
+public sealed record PushDeviceRegistrationResult(bool LegacyMigrated, bool LegacyUnresolved);
 
 /// <summary>
 /// Platform boundary for push delivery. Firebase/APNs implementations live
@@ -96,8 +102,8 @@ public interface IPushStateStore
 /// </summary>
 public interface IPushDeviceRegistry
 {
-    Task RegisterAsync(PushDeviceRegistration registration, CancellationToken ct);
-    Task UnregisterAsync(string userId, CancellationToken ct);
+    Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct);
+    Task UnregisterAsync(string userId, string? authToken, CancellationToken ct);
 }
 
 /// <summary>
@@ -113,7 +119,7 @@ public interface IPushNotificationService
     /// <summary>The last captured FCM registration token (diagnostics).</summary>
     string? CurrentToken { get; }
 
-    /// <summary>The durable notification user identity (FID-seeded).</summary>
+    /// <summary>The verified Firebase Auth installation identity used for the registration row.</summary>
     string? NotificationUserId { get; }
 
     /// <summary>Applies the user's opt-in/out choice — see the implementation for flow.</summary>
@@ -148,7 +154,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
 
     private static PushNotificationService? _instance;
 
-    /// <summary>Shared instance. For tests, use <see cref="CreateForTesting(IPushPlatformClient, PreferencesService, IPushStateStore, IPushDeviceRegistry, Func{string})"/>.</summary>
+    /// <summary>Shared instance. Tests use <see cref="CreateForTesting"/> with fakes.</summary>
     public static PushNotificationService Instance => _instance ??= CreateDefault();
 
     internal static void ResetForTesting() => _instance = null;
@@ -157,10 +163,12 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     private readonly PreferencesService _preferences;
     private readonly IPushStateStore _stateStore;
     private readonly IPushDeviceRegistry _registry;
+    private readonly IUserIdentity _identity;
     private readonly Func<string> _appVersion;
     private readonly object _initLock = new();
+    private readonly SemaphoreSlim _registrationGate = new(1, 1);
     private Task? _initializeTask;
-    private Task? _tokenResync;
+    private Task? _registrationResync;
     private bool _appliedThisLaunch;
     private string? _installationId;
     private string? _token;
@@ -171,15 +179,18 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         PreferencesService preferences,
         IPushStateStore stateStore,
         IPushDeviceRegistry registry,
-        Func<string> appVersion)
+        Func<string> appVersion,
+        IUserIdentity identity)
     {
         _platform = platform ?? throw new ArgumentNullException(nameof(platform));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _appVersion = appVersion ?? throw new ArgumentNullException(nameof(appVersion));
+        _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _platform.NotificationTapped += OnPlatformNotificationTapped;
         _platform.TokenRefreshed += OnPlatformTokenRefreshed;
+        _identity.UserChanged += OnUserChanged;
     }
 
     public static PushNotificationService CreateForTesting(
@@ -187,8 +198,9 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         PreferencesService preferences,
         IPushStateStore stateStore,
         IPushDeviceRegistry registry,
-        Func<string> appVersion) =>
-        new(platform, preferences, stateStore, registry, appVersion);
+        Func<string> appVersion,
+        IUserIdentity identity) =>
+        new(platform, preferences, stateStore, registry, appVersion, identity);
 
     /// <summary>True when this platform/build can receive push notifications.</summary>
     public bool IsSupported => _platform.IsSupported;
@@ -196,12 +208,12 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     /// <summary>The last captured FCM registration token (diagnostics).</summary>
     public string? CurrentToken => _token;
 
-    /// <summary>The durable notification user identity (FID-seeded).</summary>
+    /// <summary>The verified Firebase Auth installation identity used for the registration row.</summary>
     public string? NotificationUserId => _userId;
 
-    /// <summary>The in-flight resync a token refresh kicked off — test seam so
-    /// callers can await the settled registration instead of polling.</summary>
-    internal Task? LastTokenResync => _tokenResync;
+    /// <summary>The in-flight resync a registration-triggering event kicked off —
+    /// test seam so callers can await the settled registration instead of polling.</summary>
+    internal Task? LastRegistrationResync => _registrationResync;
 
     /// <summary>
     /// Opt-in: verifies or requests notification authorization, subscribes the
@@ -293,24 +305,47 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
             }
             Console.Error.WriteLine($"[Push] topic unsubscribe deferred: {ex.Message}");
         }
-        await _stateStore.RemoveAsync(RegistrationFingerprintKey, ct);
-        // A fresh service instance may not have resolved the identity yet —
-        // the persisted user id still identifies the registered device row.
-        var userId = _userId ?? await TryFetchAsync(() => _stateStore.GetAsync(UserIdKey, ct), "stored user id");
-        if (userId is not null)
+        // Wait for any pending registration POST and fingerprint write before the
+        // delete; a registration that starts after this point rechecks the now-off
+        // preference inside the same gate.
+        await _registrationGate.WaitAsync(ct);
+        try
         {
-            try
-            {
-                await _registry.UnregisterAsync(userId, ct);
-            }
-            #pragma warning disable S2221 // Deliberate failure boundary: unregister is best-effort after local opt-out
-            catch (Exception ex) //NOSONAR — unregister is best-effort after local opt-out.
-            {
-                #pragma warning restore S2221
-                Console.Error.WriteLine($"[Push] device unregister failed: {ex.Message}");
-            }
+            await _stateStore.RemoveAsync(RegistrationFingerprintKey, ct);
+        }
+        finally
+        {
+            _registrationGate.Release();
+        }
+        // A fresh service instance may not have resolved identities yet. A
+        // surviving pre-auth key gets the compatibility delete lane first; the
+        // verified uid gets the authenticated delete lane when different.
+        var legacyUserId = await TryFetchAsync(() => _stateStore.GetAsync(UserIdKey, ct), "stored user id");
+        await ResolveIdentityAsync(ct);
+        var authToken = await ResolveAuthTokenAsync(ct);
+        if (legacyUserId is not null)
+        {
+            await TryUnregisterAsync(legacyUserId, null, ct);
+        }
+        if (_userId is not null && authToken is not null && _userId != legacyUserId)
+        {
+            await TryUnregisterAsync(_userId, authToken, ct);
         }
         return PushEnableResult.Disabled;
+    }
+
+    private async Task TryUnregisterAsync(string userId, string? authToken, CancellationToken ct)
+    {
+        try
+        {
+            await _registry.UnregisterAsync(userId, authToken, ct);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: unregister is best-effort after local opt-out
+        catch (Exception ex) //NOSONAR — unregister is best-effort after local opt-out.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Push] device unregister failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -435,34 +470,58 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     }
 
     /// <summary>
-    /// Resolves and persists the durable notification identity, then POSTs the
+    /// Resolves the verified installation identity, then POSTs the
     /// device-registration row — but only when the
-    /// (user, installation, token, topics) tuple actually changed, so routine
+    /// (user, installation, token, topics, legacy-key) tuple actually changed, so routine
     /// launches stay silent. Registration is best-effort: failures (including
     /// the route's 404 before the FCM credential is deployed) log and move on.
     /// </summary>
     private async Task SyncRegistrationAsync(CancellationToken ct)
     {
+        await _registrationGate.WaitAsync(ct);
+        try
+        {
+            if (!_preferences.DailyPerekPushEnabled)
+            {
+                return;
+            }
+            await SyncRegistrationCoreAsync(ct);
+        }
+        finally
+        {
+            _registrationGate.Release();
+        }
+    }
+
+    private async Task SyncRegistrationCoreAsync(CancellationToken ct)
+    {
         await ResolveIdentityAsync(ct);
-        if (_userId is null || _token is null)
+        var authToken = await ResolveAuthTokenAsync(ct);
+        if (_userId is null || _token is null || authToken is null)
         {
             return;
         }
-        var fingerprint = $"{_userId}|{_installationId}|{_token}|{DailyPerekTopic}";
+        var legacyUserId = await TryFetchAsync(() => _stateStore.GetAsync(UserIdKey, ct), "legacy user id");
+        var fingerprint = $"{_userId}|{_installationId}|{_token}|{DailyPerekTopic}|{legacyUserId}";
         if (await _stateStore.GetAsync(RegistrationFingerprintKey, ct) == fingerprint)
         {
             return;
         }
         try
         {
-            await _registry.RegisterAsync(new PushDeviceRegistration(
+            var result = await _registry.RegisterAsync(new PushDeviceRegistration(
                 _userId,
                 _installationId ?? string.Empty,
                 _token,
                 PlatformName(),
                 [DailyPerekTopic],
-                _appVersion()), ct);
+                _appVersion(),
+                legacyUserId == _userId ? null : legacyUserId), authToken, ct);
             await _stateStore.SetAsync(RegistrationFingerprintKey, fingerprint, ct);
+            if (legacyUserId is not null && !result.LegacyUnresolved)
+            {
+                await _stateStore.RemoveAsync(UserIdKey, ct);
+            }
         }
         #pragma warning disable S2221 // Deliberate failure boundary: registration is best-effort — failure is log-only
         catch (Exception ex) //NOSONAR — registration is best-effort; failure is log-only.
@@ -480,15 +539,32 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         {
             return;
         }
-        var stored = await _stateStore.GetAsync(UserIdKey, ct);
-        if (stored is null)
+        try
         {
-            // FID is the designed user identity (no Advertising ID, per the
-            // #1097 discussion); a GUID covers platforms where FID is absent.
-            stored = _installationId ?? Guid.NewGuid().ToString("N");
-            await _stateStore.SetAsync(UserIdKey, stored, ct);
+            await _identity.EnsureSignedInAsync(ct);
+            _userId = _identity.UserId;
         }
-        _userId = stored;
+        #pragma warning disable S2221 // Deliberate failure boundary: auth failure skips verified registration, never local opt-in
+        catch (Exception ex) //NOSONAR — auth failure skips verified registration, never local opt-in.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Push] auth identity failed: {ex.Message}");
+        }
+    }
+
+    private async Task<string?> ResolveAuthTokenAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await _identity.GetIdTokenAsync(ct);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: token failure skips verified registration only
+        catch (Exception ex) //NOSONAR — token failure skips verified registration only.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Push] auth token failed: {ex.Message}");
+            return null;
+        }
     }
 
     private static async Task<string?> TryFetchAsync(Func<Task<string?>> fetch, string what)
@@ -517,11 +593,28 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         {
             return;
         }
-        _tokenResync = ResyncAfterTokenRefreshAsync();
+        _registrationResync = ResyncRegistrationAsync();
+    }
+
+    private void OnUserChanged(object? sender, EventArgs e)
+    {
+        // Cache every settled auth transition. Registration is idempotent, so the
+        // possible initial-sign-in duplicate is preferable to missing recovery when
+        // a signed-out identity is replaced while the app is running.
+        if (_identity.UserId == _userId)
+        {
+            return;
+        }
+        _userId = _identity.UserId;
+        if (_userId is null || !_preferences.DailyPerekPushEnabled)
+        {
+            return;
+        }
+        _registrationResync = ResyncRegistrationAsync();
     }
 #pragma warning restore S1172
 
-    private async Task ResyncAfterTokenRefreshAsync()
+    private async Task ResyncRegistrationAsync()
     {
         try
         {
@@ -531,7 +624,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         catch (Exception ex) //NOSONAR — a resync failure is retried on the next registration trigger.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"[Push] token-refresh resync failed: {ex.Message}");
+            Console.Error.WriteLine($"[Push] registration resync failed: {ex.Message}");
         }
     }
 
@@ -547,6 +640,7 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     {
         _platform.NotificationTapped -= OnPlatformNotificationTapped;
         _platform.TokenRefreshed -= OnPlatformTokenRefreshed;
+        _identity.UserChanged -= OnUserChanged;
     }
 
     private static PushNotificationService CreateDefault()
@@ -557,10 +651,11 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
             CreateStateStore(),
             CreateRegistry(),
 #if MAUI
-            () => AppInfo.Current.VersionString);
+            () => AppInfo.Current.VersionString,
 #else
-            () => "unknown");
+            () => "unknown",
 #endif
+            CreateUserIdentity());
     }
 
     private static IPushPlatformClient CreatePlatformClient()
@@ -580,6 +675,15 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
         return new MauiPushStateStore();
 #else
         return new InMemoryPushStateStore();
+#endif
+    }
+
+    private static IUserIdentity CreateUserIdentity()
+    {
+#if ANDROID || IOS
+        return FirebaseUserIdentity.Instance;
+#else
+        return AnonymousUserIdentity.Instance;
 #endif
     }
 
@@ -642,8 +746,9 @@ public sealed class NullPushDeviceRegistry : IPushDeviceRegistry
 {
     public static readonly NullPushDeviceRegistry Instance = new();
 #pragma warning disable S1172 // Null object satisfies the interface contract; arguments unused.
-    public Task RegisterAsync(PushDeviceRegistration registration, CancellationToken ct) => Task.CompletedTask;
-    public Task UnregisterAsync(string userId, CancellationToken ct) => Task.CompletedTask;
+    public Task<PushDeviceRegistrationResult> RegisterAsync(PushDeviceRegistration registration, string authToken, CancellationToken ct) =>
+        Task.FromResult(new PushDeviceRegistrationResult(false, false));
+    public Task UnregisterAsync(string userId, string? authToken, CancellationToken ct) => Task.CompletedTask;
 #pragma warning restore S1172
 }
 

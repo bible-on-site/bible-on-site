@@ -990,8 +990,10 @@ public class SearchIndexServiceTests
         // The transient condition cleared: the next call retries the faulted
         // init instead of rethrowing it until an app restart. The faulted query
         // leaves the file's pooled handle open, so close it before the delete
-        // (Windows cannot unlink an open file).
-        await storage.CloseDatabaseFileAsync("search.sqlite");
+        // (Windows cannot unlink an open file). sqlite-net's default writable
+        // pool key includes FullMutex; a read-only close misses this handle.
+        await storage.CloseDatabaseFileAsync("search.sqlite",
+            SQLite.SQLiteOpenFlags.ReadWrite | SQLite.SQLiteOpenFlags.Create | SQLite.SQLiteOpenFlags.FullMutex);
         File.Delete(indexPath);
         (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
             .Should().ContainSingle();

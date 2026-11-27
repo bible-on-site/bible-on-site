@@ -18,7 +18,14 @@ namespace BibleOnSite.Services;
 /// </summary>
 public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
 {
+    /// <summary>Shared wrapper for the process-wide Firebase Auth session.</summary>
+    public static FirebaseUserIdentity Instance { get; } = new();
+
+    private FirebaseUserIdentity() { }
+
     private readonly object _authGate = new();
+    private readonly object _signInGate = new();
+    private Task? _signInTask;
     private IFirebaseAuth? _auth;
     private bool _authInitAttempted;
     private IDisposable? _authStateListener;
@@ -93,17 +100,55 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
         {
             return;
         }
+        Task signIn;
+        lock (_signInGate)
+        {
+            if (_signInTask is null or { IsCompleted: true })
+            {
+                _signInTask = SignInAnonymouslyAsync(auth);
+            }
+            signIn = _signInTask;
+        }
+        // Preference sync and push registration share this wrapper, and the
+        // in-flight native sign-in is shared too, so startup cannot race duplicate
+        // anonymous sessions. Cancellation is per caller; cancelling one waiter
+        // must not cancel the other.
+        await signIn.WaitAsync(cancellationToken);
+    }
+
+    private static async Task SignInAnonymouslyAsync(IFirebaseAuth auth)
+    {
         try
         {
             // Anonymous sign-in gives the install a real Firebase Auth session
             // (request.auth.uid is set) without collecting any user PII.
-            await auth.SignInAnonymouslyAsync().WaitAsync(cancellationToken);
+            await auth.SignInAnonymouslyAsync();
         }
 #pragma warning disable S2221 // Deliberate failure boundary: sign-in failure leaves the app local-only.
         catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — sign-in failure leaves the app local-only.
         {
 #pragma warning restore S2221
             Console.Error.WriteLine($"[PreferencesSync] anonymous sign-in unavailable — staying local ({ex.Message})");
+        }
+    }
+
+    public async Task<string?> GetIdTokenAsync(CancellationToken cancellationToken)
+    {
+        if (Auth?.CurrentUser is not { } user)
+        {
+            return null;
+        }
+        try
+        {
+            var result = await user.GetIdTokenResultAsync(false).WaitAsync(cancellationToken);
+            return result.Token;
+        }
+#pragma warning disable S2221 // Deliberate failure boundary: token failure means no verifiable identity, not an app failure.
+        catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — token failure means no verifiable identity, not an app failure.
+        {
+#pragma warning restore S2221
+            Console.Error.WriteLine($"[PreferencesSync] Firebase ID token unavailable ({ex.Message})");
+            return null;
         }
     }
 
