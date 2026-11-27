@@ -28,7 +28,10 @@ public enum SearchFilter
     /// alias names, and body text) through the GraphQL API — the same
     /// provider the website's /search uses. Requires network access.
     /// </summary>
-    Tanahpedia
+    Tanahpedia,
+
+    /// <summary>Search local app screens and navigation destinations.</summary>
+    Screen
 }
 
 /// <summary>
@@ -46,6 +49,7 @@ public static class SearchFilterExtensions
             SearchFilter.Perek => "פרק",
             SearchFilter.Articles => "תוכן מאמרים",
             SearchFilter.Tanahpedia => "תנכפדיה",
+            SearchFilter.Screen => "מסך",
             _ => filter.ToString()
         };
     }

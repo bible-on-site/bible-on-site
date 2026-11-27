@@ -11,7 +11,7 @@
     <!-- Run the test exe through Microsoft.Testing.Platform (app/global.json sets dotnet test's runner). -->
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <!-- Exercise the same view-model commands as the application build. -->
-    <DefineConstants>$(DefineConstants);MAUI</DefineConstants>
+    <DefineConstants>$(DefineConstants);MAUI;BIBLEONSITE_UNIT_TESTS</DefineConstants>
     <!-- Catch JSON failures that otherwise appear only in trimmed native releases. -->
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>

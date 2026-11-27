@@ -24,6 +24,8 @@ public partial class SearchViewModel : ObservableObject
     private int _searchVersion;
     private IReadOnlyDictionary<int, Perush> _perushim = new Dictionary<int, Perush>();
     private const string SearchPhraseAll = "*";
+    private static readonly SearchFilter[] DefaultKinds = Enum.GetValues<SearchFilter>()
+        .OrderBy(filter => filter == SearchFilter.Screen ? 0 : 1).ToArray();
 
     private readonly HashSet<SearchFilter> _enabledFilters;
     private readonly HashSet<int> _enabledSefarim;
@@ -268,7 +270,7 @@ public partial class SearchViewModel : ObservableObject
 
     /// <summary>The kinds the kinds sheet lists — the scope's list while scoped.</summary>
     public IReadOnlyCollection<SearchFilter> KindOptions =>
-        _allowedKinds ?? (IReadOnlyCollection<SearchFilter>)Enum.GetValues<SearchFilter>();
+        _allowedKinds ?? (IReadOnlyCollection<SearchFilter>)DefaultKinds;
 
     /// <summary>
     /// Narrows the search to a surface's own kind list, parking the caller's
@@ -477,6 +479,11 @@ public partial class SearchViewModel : ObservableObject
         {
             IsLoading = true;
             var results = new List<SearchResult>(GetAuthorResults());
+            if (filters.Contains(SearchFilter.Screen))
+            {
+                results.AddRange(HomeNavigationSearch.Find(phrase).Select(item => new ScreenSearchResult(item, phrase)));
+                PublishResults(results, limit);
+            }
             var availability = new List<string>();
             // Surface why a selected kind was skipped so the user knows its
             // prerequisite is missing rather than its results empty (#2454).
@@ -508,7 +515,7 @@ public partial class SearchViewModel : ObservableObject
                 ? MergeTanahpediaResultsAsync(phrase, limit, version, token)
                 : null;
             // Remote kinds are remote — they must not force the local perek DB load.
-            if (filters.Any(filter => filter != SearchFilter.Author && !filter.RequiresNetwork()))
+            if (filters.Any(filter => filter is SearchFilter.Perek or SearchFilter.Pasuk or SearchFilter.Perush))
             {
                 await _perekDataService.LoadAsync().WaitAsync(token);
             }

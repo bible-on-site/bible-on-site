@@ -23,6 +23,7 @@ public partial class ReaderMenuPanel : Grid, IReaderMenuSurface
 
     /// <summary>הסתר שם השם row tapped — the page flips the view-model flag.</summary>
     public event EventHandler? DivineNameMaskingToggled;
+    public event EventHandler? SearchRequested;
 #pragma warning restore S3264
 
     public static readonly BindableProperty IsArticlesModeProperty =
@@ -43,6 +44,47 @@ public partial class ReaderMenuPanel : Grid, IReaderMenuSurface
     public ReaderMenuPanel()
     {
         InitializeComponent();
+        if (Config.HomeUxPreview.Enabled) { ConfigurePreviewTools(); }
+    }
+
+    private void ConfigurePreviewTools()
+    {
+        BackgroundColor = Color.FromArgb("#40000000");
+        if (Children.OfType<Border>().FirstOrDefault() is not { Content: VerticalStackLayout rows } panel) { return; }
+        panel.HorizontalOptions = LayoutOptions.Fill;
+        panel.VerticalOptions = LayoutOptions.End;
+        panel.Margin = new Thickness(16, 0, 16, ReaderBottomBar.TotalHeight + 14);
+        panel.Padding = 16;
+        panel.StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 26 };
+        rows.Spacing = 4;
+        rows.Insert(0, new Label { Text = "כלי הקריאה", FontSize = 26, FontAttributes = FontAttributes.Bold, Margin = new Thickness(8, 0, 8, 10) });
+        foreach (var target in rows.Children.OfType<TappableView>())
+        {
+            target.MinimumHeightRequest = 60;
+            if (target.Content is Grid row)
+            {
+                row.MinimumHeightRequest = 60;
+                foreach (var label in row.Children.OfType<Grid>().SelectMany(grid => grid.Children.OfType<Label>()))
+                {
+                    label.FontSize = 18;
+                }
+            }
+        }
+        rows.Add(ToolAction("חיפוש", "ReaderGlobalSearch", (_, _) => SearchRequested?.Invoke(this, EventArgs.Empty)));
+        panel.Content = null;
+        panel.Content = new ScrollView { Content = rows, VerticalOptions = LayoutOptions.Start };
+        SizeChanged += (_, _) => panel.MaximumHeightRequest = Math.Max(220, Height - ReaderBottomBar.TotalHeight - 40);
+    }
+
+    private Button ToolAction(string title, string id, EventHandler selected)
+    {
+        var action = new Button
+        {
+            Text = title, AutomationId = id, Style = AppButtonStyles.Secondary, HeightRequest = 56, FontSize = 17,
+            FontAttributes = FontAttributes.Bold
+        };
+        action.Clicked += (_, args) => { Close(); selected(this, args); };
+        return action;
     }
 
     /// <summary>Whether the dropdown is currently shown.</summary>

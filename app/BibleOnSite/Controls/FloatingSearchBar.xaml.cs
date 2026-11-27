@@ -26,6 +26,7 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
         DebugLog.Write("[Startup] FloatingSearchBar InitializeComponent");
         InitializeComponent();
         DebugLog.Write("[Startup] FloatingSearchBar XAML initialized");
+        if (Config.HomeUxPreview.Enabled) { ConfigurePreviewSearch(); }
         BindingContext = _viewModel;
         LimitPicker.Value = _viewModel.ResultsLimit;
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
@@ -145,6 +146,14 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
 
     public Task OpenAsync() => OpenSearchAsync();
 
+    /// <summary>Stops background work on navigation without clearing query or filter history.</summary>
+    public async Task SuspendAsync()
+    {
+        _debounce?.Cancel();
+        _viewModel.CancelSearch();
+        await HideKeyboardAsync();
+    }
+
     public void FocusInput() => Dispatcher.Dispatch(() => SearchInput.Focus());
 
     private async void OnSearchFocused(object? sender, FocusEventArgs e)
@@ -189,6 +198,7 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
 
     public void Close()
     {
+        NavigationPicker.Hide();
         _debounce?.Cancel();
         _viewModel.CancelSearch();
         CloseFilterSheetImmediately();
@@ -626,7 +636,7 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
         }
     }
 
-    private void OnResultSelected(object? sender, SelectionChangedEventArgs e)
+    private async void OnResultSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (e.CurrentSelection.FirstOrDefault() is not SearchResult result)
         {
@@ -637,8 +647,46 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
         _debounce?.Cancel();
         _viewModel.CancelSearch();
         UpdateStatus();
-        _ = HideKeyboardAsync();
+        await HideKeyboardAsync();
+        if (result is ScreenSearchResult { Destination.Route: var route } && route == HomeNavigationSearch.IndexAction)
+        {
+            NavigationPicker.Show(PerekDataService.Instance.GetTodaysPerekId());
+            return;
+        }
         ResultSelected?.Invoke(this, result);
+    }
+
+    private void OnNavigationPerekSelected(int perekId)
+    {
+        if (PerekDataService.Instance.GetPerek(perekId) is { } perek)
+        {
+            ResultSelected?.Invoke(this, new PerekSearchResult(perek, _viewModel.SearchPhrase));
+        }
+    }
+
+    private void ConfigurePreviewSearch()
+    {
+        SearchHeader.HeightRequest = SharedTopBar.BarHeight;
+        SearchHeader.Padding = new Thickness(8);
+        SearchHeader.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
+        foreach (var action in new[] { NavigationButton, ClearButton })
+        {
+            action.Style = AppButtonStyles.Icon;
+            action.VerticalOptions = LayoutOptions.Center;
+        }
+        SearchInput.HeightRequest = 52;
+        SearchInput.FontSize = 19;
+        SearchInputSurface.HeightRequest = 52;
+        SearchInputSurface.VerticalOptions = LayoutOptions.Center;
+        if (SearchHeader.Content is Grid headerRow) { headerRow.ColumnSpacing = 6; }
+        SearchInputSurface.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
+        if (FilterChips.Content is HorizontalStackLayout chips)
+        {
+            foreach (var target in chips.Children.OfType<TappableView>())
+            {
+                target.MinimumHeightRequest = 48;
+            }
+        }
     }
 
     private Task AnimateSearchPageAsync()

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:fonts="clr-namespace:Fonts"
+             xmlns:services="clr-namespace:BibleOnSite.Services"
+             x:Class="BibleOnSite.Pages.HomePage"
+             Title="בית" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
+             BackgroundColor="{AppThemeBinding Light=White, Dark=#111C2C}">
+    <ContentPage.Resources>
+        <Style x:Key="HomeHeading" TargetType="Label">
+            <Setter Property="FontSize" Value="19"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#102648, Dark=White}"/>
+        </Style>
+        <Style x:Key="HomeSecondary" TargetType="Label">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#102648, Dark=White}"/>
+            <Setter Property="Opacity" Value="0.72"/>
+        </Style>
+        <Style x:Key="HomeSmallSurface" TargetType="Border">
+            <Setter Property="StrokeThickness" Value="0"/>
+            <Setter Property="StrokeShape" Value="RoundRectangle 24"/>
+            <Setter Property="Padding" Value="18"/>
+            <Setter Property="MinimumHeightRequest" Value="164"/>
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#102648}"/>
+        </Style>
+        <Style x:Key="HomeTileIcon" TargetType="Label">
+            <Setter Property="FontFamily" Value="FluentIcons"/>
+            <Setter Property="FontSize" Value="29"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#2866E7, Dark=White}"/>
+            <Setter Property="AutomationProperties.IsInAccessibleTree" Value="False"/>
+        </Style>
+    </ContentPage.Resources>
+    <Grid RowDefinitions="Auto,*">
+            <VerticalStackLayout Grid.Row="0" Padding="22,8,22,12" Spacing="10" MaximumWidthRequest="680" HorizontalOptions="Fill">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <HorizontalStackLayout Spacing="9" VerticalOptions="Center">
+                        <Border BackgroundColor="#2866E7" StrokeThickness="0" StrokeShape="RoundRectangle 9" WidthRequest="32" HeightRequest="32" Rotation="-8">
+                            <Label Text="{x:Static fonts:FluentUI.book_open_24_regular}" FontFamily="FluentIcons" FontSize="20" TextColor="White"
+                                   HorizontalOptions="Center" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                        </Border>
+                        <Label Text="על הפרק" FontSize="22" FontAttributes="Bold" CharacterSpacing="-0.5"
+                               TextColor="{AppThemeBinding Light=#102648, Dark=White}" VerticalOptions="Center"/>
+                    </HorizontalStackLayout>
+                    <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="1" Text="העדפות" AutomationId="HomePreferences" Clicked="OnPreferencesClicked"
+                            FontSize="17" FontAttributes="Bold" HeightRequest="56" MinimumWidthRequest="118" Padding="14,0" ContentLayout="Left,8">
+                        <Button.ImageSource>
+                            <FontImageSource Glyph="{x:Static fonts:FluentUI.settings_24_regular}" FontFamily="FluentIcons" Size="22"
+                                             Color="{AppThemeBinding Light=#2866E7, Dark=White}"/>
+                        </Button.ImageSource>
+                    </Button>
+                </Grid>
+                <controls:TappableView AutomationId="HomeGlobalSearch" Activated="OnGlobalSearchTapped" SemanticProperties.Description="חיפוש בתנ&quot;ך ובפריטי הניווט באפליקציה">
+                    <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#1D2D43}" Stroke="{AppThemeBinding Light=#D7E1F2, Dark=#334B6C}"
+                            StrokeShape="RoundRectangle 16" Padding="16,13">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Label Text="{x:Static fonts:FluentUI.search_24_regular}" FontFamily="FluentIcons" FontSize="23"
+                                   TextColor="{AppThemeBinding Light=#2866E7, Dark=White}" AutomationProperties.IsInAccessibleTree="False"/>
+                            <Label Grid.Column="1" Text="חיפוש בתנ&quot;ך ובאפליקציה" FontSize="16" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light=#102648, Dark=White}" MaxLines="1" LineBreakMode="TailTruncation"/>
+                        </Grid>
+                    </Border>
+                </controls:TappableView>
+            </VerticalStackLayout>
+        <ScrollView Grid.Row="1" AutomationId="HomeScrollView" BackgroundColor="{AppThemeBinding Light=#F5F7FB, Dark=#111C2C}">
+            <VerticalStackLayout Padding="22,8,22,30" Spacing="20" MaximumWidthRequest="680" HorizontalOptions="Fill">
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="פרק אחד.&#10;עולם שלם." FontSize="43" FontAttributes="Bold" CharacterSpacing="-0.5" LineHeight="1.02"
+                           TextColor="{AppThemeBinding Light=#102648, Dark=White}"/>
+                    <VerticalStackLayout Grid.Column="1" VerticalOptions="End" Spacing="4" Margin="0,0,0,7">
+                        <BoxView HeightRequest="5" WidthRequest="35" Color="#2866E7" HorizontalOptions="End"/>
+                        <Label x:Name="TodayLabel" Text="היום" FontSize="13" TextColor="{AppThemeBinding Light=#102648, Dark=White}"/>
+                    </VerticalStackLayout>
+                </Grid>
+
+                <controls:TappableView x:Name="DailyPerekCard" AutomationId="HomeDailyPerek" Activated="OnDailyPerekTapped"
+                                       SemanticProperties.Description="פתיחת הפרק היומי" IsEnabled="False">
+                    <Border StrokeShape="RoundRectangle 28" StrokeThickness="0" BackgroundColor="#102648">
+                        <Grid Padding="22">
+                            <Label x:Name="DailyGlyph" FontSize="156" FontFamily="TaameyD" TextColor="White" Opacity="0.13" Rotation="-12"
+                                   HorizontalOptions="End" VerticalOptions="Center" Margin="0,-12,4,0" InputTransparent="True" AutomationProperties.IsInAccessibleTree="False"/>
+                            <VerticalStackLayout Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Text="הפרק היומי" FontSize="14" TextColor="White" FontAttributes="Bold"/>
+                                    <Label Grid.Column="1" Text="פותחים היום" FontSize="12" TextColor="White"/>
+                                </Grid>
+                                <Label x:Name="DailySource" AutomationId="HomeDailySource" Text="טוען את הפרק..." FontSize="32" FontAttributes="Bold" TextColor="White"/>
+                                <Label x:Name="DailyTitle" FontSize="14" TextColor="White" MaxLines="2" LineBreakMode="TailTruncation"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,4,0,0">
+                                    <VerticalStackLayout Spacing="3" VerticalOptions="Center">
+                                        <Label x:Name="VerseCount" AutomationId="HomeVerseCount" Text="פסוקים" FontSize="13" TextColor="White"/>
+                                        <Label x:Name="ArticleCount" AutomationId="HomeArticleCount" Text="מאמרים" FontSize="13" TextColor="White"/>
+                                    </VerticalStackLayout>
+                                    <Border Grid.Column="1" BackgroundColor="#2866E7" StrokeThickness="0" StrokeShape="RoundRectangle 14" Padding="17,13">
+                                        <HorizontalStackLayout Spacing="16">
+                                            <Label Text="לפרק של היום" FontSize="16" FontAttributes="Bold" TextColor="White" VerticalOptions="Center"/>
+                                            <Label Text="←" FontSize="22" TextColor="White" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                                        </HorizontalStackLayout>
+                                    </Border>
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </controls:TappableView>
+                <VerticalStackLayout x:Name="HomeError" IsVisible="False" Spacing="8">
+                    <Label Text="לא ניתן לטעון את הפרק כרגע" Style="{StaticResource HomeSecondary}"/>
+                    <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="ניסיון נוסף" Clicked="OnRetryClicked"/>
+                </VerticalStackLayout>
+
+                <Label Text="לאן הסקרנות לוקחת אותך?" Style="{StaticResource HomeHeading}" FontSize="18"/>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <controls:TappableView AutomationId="HomeIndex" Activated="OnIndexTapped" SemanticProperties.Description="ניווט בתנ&quot;ך לפי ספר ופרק">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="{AppThemeBinding Light=White, Dark=#102648}">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.library_24_regular}" Style="{StaticResource HomeTileIcon}"/>
+                                <Label Grid.Row="1" Text="ניווט בתנ&quot;ך" Style="{StaticResource HomeHeading}" FontSize="21" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="לפי ספר ופרק" Style="{StaticResource HomeSecondary}"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                    <controls:TappableView Grid.Column="1" AutomationId="HomeCalendar" Activated="OnCalendarTapped" SemanticProperties.Description="לוח לימוד יומי">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="#2866E7">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.calendar_date_24_regular}" Style="{StaticResource HomeTileIcon}" TextColor="White"/>
+                                <Label Grid.Row="1" Text="לוח שנה" FontSize="24" FontAttributes="Bold" TextColor="White" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="בקצב של היום שלך" FontSize="13" TextColor="White"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                </Grid>
+
+                <controls:TappableView AutomationId="HomeParasha" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.ParashaList}"
+                                       SemanticProperties.Description="פרשה על הפרק - לכל פרשות התורה">
+                    <Border StrokeShape="RoundRectangle 28" StrokeThickness="0" BackgroundColor="#102648">
+                        <Grid Padding="22" MinimumHeightRequest="222" IsClippedToBounds="True">
+                            <Label Text="{x:Static fonts:FluentUI.book_open_24_regular}" FontFamily="FluentIcons" FontSize="164"
+                                   TextColor="White" Opacity="0.12" Rotation="-14" HorizontalOptions="End" VerticalOptions="Center"
+                                   TranslationX="20" InputTransparent="True" AutomationProperties.IsInAccessibleTree="False"/>
+                            <VerticalStackLayout Spacing="12">
+                                <Label Text="פרשות התורה" FontSize="14" FontAttributes="Bold" TextColor="White"/>
+                                <Label Text="פרשה על הפרק" FontSize="32" FontAttributes="Bold" TextColor="White"/>
+                                <Label Text="סיפורי התורה, לפי פרשות.&#10;עוד שבוע, עוד מבט." FontSize="15" TextColor="White"/>
+                                <Border BackgroundColor="#2866E7" StrokeThickness="0" StrokeShape="RoundRectangle 14" Padding="17,13" HorizontalOptions="Start" Margin="0,5,0,0">
+                                    <HorizontalStackLayout Spacing="18">
+                                        <Label Text="לכל הפרשות" FontSize="16" FontAttributes="Bold" TextColor="White" VerticalOptions="Center"/>
+                                        <Label Text="←" FontSize="22" TextColor="White" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </controls:TappableView>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <controls:TappableView AutomationId="HomeTanahpedia" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.Tanahpedia}"
+                                           SemanticProperties.Description="תנכפדיה - אנשים, מקומות ומושגים">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="#2866E7">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.globe_24_regular}" Style="{StaticResource HomeTileIcon}" TextColor="White"/>
+                                <Label Grid.Row="1" Text="תנכפדיה" Style="{StaticResource HomeHeading}" TextColor="White" FontSize="23" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="אנשים, מקומות ומושגים" Style="{StaticResource HomeSecondary}" TextColor="White"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                    <controls:TappableView Grid.Column="1" AutomationId="HomeMasora" Activated="OnMasoraTapped" SemanticProperties.Description="מסורה על הפרק - חלוקה מסורתית">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="{AppThemeBinding Light=White, Dark=#102648}">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.book_open_24_regular}" Style="{StaticResource HomeTileIcon}"/>
+                                <Label Grid.Row="1" Text="מסורה על הפרק" Style="{StaticResource HomeHeading}" FontSize="21" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="חלוקה מסורתית" Style="{StaticResource HomeSecondary}"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                </Grid>
+
+                <controls:TappableView AutomationId="HomeMoadim" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.Moadim}"
+                                       SemanticProperties.Description="מועדים על הפרק - לחגים ולמועדים">
+                    <Border StrokeShape="RoundRectangle 28" StrokeThickness="0" BackgroundColor="#2866E7">
+                        <Grid Padding="22" MinimumHeightRequest="222" IsClippedToBounds="True">
+                            <Border Stroke="White" StrokeThickness="1" BackgroundColor="Transparent" StrokeShape="Ellipse" Opacity="0.13"
+                                    WidthRequest="210" HeightRequest="210" HorizontalOptions="End" VerticalOptions="Center" TranslationX="70" InputTransparent="True"/>
+                            <Grid WidthRequest="180" HeightRequest="180" Opacity="0.16" Rotation="12"
+                                  HorizontalOptions="End" VerticalOptions="Center" TranslationX="18" InputTransparent="True">
+                                <Label Text="{x:Static fonts:FluentUI.calendar_empty_24_regular}" FontFamily="FluentIcons" FontSize="150"
+                                       TextColor="White" HorizontalOptions="Center" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                                <Label Text="ט&quot;ו" FontSize="42" FontAttributes="Bold" TextColor="White" Margin="0,35,0,0"
+                                       HorizontalOptions="Center" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                            </Grid>
+                            <VerticalStackLayout Spacing="12">
+                                <Label Text="לימוד התנ&quot;ך במעגל השנה" FontSize="14" FontAttributes="Bold" TextColor="White"/>
+                                <Label Text="מועדים על הפרק" FontSize="32" FontAttributes="Bold" TextColor="White"/>
+                                <Label Text="קריאות החגים ומועדים, מקורותיהם בתנ&quot;ך ומאמרים" FontSize="15" TextColor="White"/>
+                                <Border BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 14" Padding="17,13" HorizontalOptions="Start" Margin="0,5,0,0">
+                                    <HorizontalStackLayout Spacing="18">
+                                        <Label Text="לחגים ולמועדים" FontSize="16" FontAttributes="Bold" TextColor="#102648" VerticalOptions="Center"/>
+                                        <Label Text="←" FontSize="22" TextColor="#102648" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </controls:TappableView>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <controls:TappableView AutomationId="HomeAuthors" Activated="OnAuthorsTapped" SemanticProperties.Description="הרבנים הכותבים - איתור מאמר לפי המחבר">
+                        <Border Style="{StaticResource HomeSmallSurface}">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.people_24_regular}" Style="{StaticResource HomeTileIcon}"/>
+                                <Label Grid.Row="1" Text="הרבנים הכותבים" Style="{StaticResource HomeHeading}" FontSize="23" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="איתור מאמר לפי המחבר" Style="{StaticResource HomeSecondary}"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                    <controls:TappableView Grid.Column="1" AutomationId="HomeBulletin" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.DailyBulletin}"
+                                           SemanticProperties.Description="עלון יומי - גליון יומי אצלכם בתיבה">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="#2866E7">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.document_24_regular}" Style="{StaticResource HomeTileIcon}" TextColor="White"/>
+                                <Label Grid.Row="1" Text="עלון יומי" Style="{StaticResource HomeHeading}" TextColor="White" FontSize="23" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="גליון יומי אצלכם בתיבה" Style="{StaticResource HomeSecondary}" TextColor="White"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <controls:TappableView AutomationId="HomeContact" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.Contact}"
+                                           SemanticProperties.Description="יצירת קשר עם צוות המיזם">
+                        <Border Style="{StaticResource HomeSmallSurface}" BackgroundColor="#2866E7">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.mail_24_regular}" Style="{StaticResource HomeTileIcon}" TextColor="White"/>
+                                <Label Grid.Row="1" Text="יצירת קשר" Style="{StaticResource HomeHeading}" TextColor="White" FontSize="22" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="רעיונות, שאלות ומשוב" Style="{StaticResource HomeSecondary}" TextColor="White"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                    <controls:TappableView Grid.Column="1" AutomationId="HomeDonations" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.Donations}"
+                                           SemanticProperties.Description="תרומות - תמיכה במיזם">
+                        <Border Style="{StaticResource HomeSmallSurface}">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.heart_24_regular}" Style="{StaticResource HomeTileIcon}"/>
+                                <Label Grid.Row="1" Text="תרומות" Style="{StaticResource HomeHeading}" FontSize="23" VerticalOptions="End"/>
+                                <Label Grid.Row="2" Text="תמיכה בתוכנית" Style="{StaticResource HomeSecondary}"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                </Grid>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <controls:TappableView AutomationId="HomeTerms" Activated="OnDestinationTapped" CommandParameter="{x:Static services:AppRoutes.Terms}"
+                                           SemanticProperties.Description="תנאי שימוש ופרטיות">
+                        <Border Style="{StaticResource HomeSmallSurface}">
+                            <Grid RowDefinitions="Auto,*" RowSpacing="12">
+                                <Label Text="{x:Static fonts:FluentUI.document_24_regular}" Style="{StaticResource HomeTileIcon}"/>
+                                <Label Grid.Row="1" Text="תנאי שימוש ופרטיות" Style="{StaticResource HomeHeading}" FontSize="21" VerticalOptions="End"/>
+                            </Grid>
+                        </Border>
+                    </controls:TappableView>
+                </Grid>
+            </VerticalStackLayout>
+        </ScrollView>
+        <controls:PerekPickerPopup x:Name="HomeIndexPicker" Grid.RowSpan="2" AutomationId="HomeIndexPicker" PerekSelected="OnIndexPerekSelected" ZIndex="100"/>
+    </Grid>
+</ContentPage>

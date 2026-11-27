@@ -30,16 +30,11 @@
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
-                <Button x:Name="NormalNavigationTitle"
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="NormalNavigationTitle"
                    AutomationId="MoedSource"
                    Text="{Binding Heading}"
                    FontSize="20"
                    Padding="12,0"
-                   HeightRequest="40"
-                   CornerRadius="14"
-                   BorderWidth="0"
-                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
@@ -133,16 +128,10 @@
                     </VerticalStackLayout>
                     <!-- קריינות: plays the whole moed in section order; shown
                          only when the menu checkbox is checked and audio exists -->
-                    <Button x:Name="HeaderPlayButton"
+                    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" x:Name="HeaderPlayButton"
                             AutomationId="HeaderPlayButton"
                             Text="{x:Static fonts:FluentUI.play_24_regular}"
-                            FontFamily="FluentIcons"
                             FontSize="20"
-                            WidthRequest="40"
-                            HeightRequest="40"
-                            Padding="0"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                             HorizontalOptions="Start"
                             VerticalOptions="Center"
                             Margin="8,0"
@@ -180,15 +169,9 @@
                                                FontSize="13"
                                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                                     </VerticalStackLayout>
-                                    <Button AutomationId="MoedSectionPlayButton"
+                                    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" AutomationId="MoedSectionPlayButton"
                                             Text="{x:Static fonts:FluentUI.play_24_regular}"
-                                            FontFamily="FluentIcons"
                                             FontSize="18"
-                                            WidthRequest="36"
-                                            HeightRequest="36"
-                                            Padding="0"
-                                            BackgroundColor="Transparent"
-                                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                             HorizontalOptions="Start"
                                             VerticalOptions="Start"
                                             Margin="0,14,0,0"

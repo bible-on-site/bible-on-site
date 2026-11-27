@@ -47,23 +47,10 @@ public class AppDialogContractTests
 		XNamespace xaml = "http://schemas.microsoft.com/winfx/2009/xaml";
 		var styles = Popup.Root!.Element(Toolkit + "Popup.Resources")!.Elements(Maui + "Style")
 			.ToDictionary(s => (string)s.Attribute(xaml + "Key")!);
-		styles.Keys.Should().Contain(["AppDialogAction", "AppDialogDestructiveAction"]);
-
-		var safeText = StyleSetterValue(styles["AppDialogAction"], "TextColor");
-		safeText.Should().ContainAll(["Primary", "AccentOnDark"],
-			"safe actions render in theme blue in both themes — Primary alone is " +
-			"illegible on dark surfaces, so the lighter brand accent applies (#2601)");
-		var destructiveText = StyleSetterValue(styles["AppDialogDestructiveAction"], "TextColor");
-		destructiveText.Should().ContainAll(["Error", "ErrorDark"],
-			"destructive actions render in red in both themes");
-		StyleSetterValue(styles["AppDialogAction"], "BackgroundColor").Should().Be("Transparent",
-			"actions keep text-only coloring — never colored button backgrounds (#2460)");
-	}
-
-	private static string StyleSetterValue(XElement style, string property) =>
-		(string?)style.Elements(Maui + "Setter")
-			.Single(s => (string?)s.Attribute("Property") == property)
-			.Attribute("Value") ?? string.Empty;
+        ((string?)styles["AppDialogAction"].Attribute("BasedOn")).Should().Contain("AppButtonStyles.Primary");
+        ((string?)styles["AppDialogCancelAction"].Attribute("BasedOn")).Should().Contain("AppButtonStyles.Secondary");
+        ((string?)styles["AppDialogDestructiveAction"].Attribute("BasedOn")).Should().Contain("AppButtonStyles.Destructive");
+    }
 
 	// — RTL-mirrored ordering —————————————————————————————————————————————
 

@@ -18,17 +18,11 @@
                     <Label x:Name="SourceLabel" FontSize="18" FontAttributes="Bold"
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" VerticalOptions="Center"/>
                     <!-- קריינות: plays the whole focused pasuk (#2472) -->
-                    <Button Grid.Column="1"
+                    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" Grid.Column="1"
                             x:Name="PlayButton"
                             AutomationId="FocusedPlayButton"
                             Text="{x:Static fonts:FluentUI.headphones_24_regular}"
-                            FontFamily="FluentIcons"
                             FontSize="20"
-                            WidthRequest="40"
-                            HeightRequest="40"
-                            Padding="0"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                             SemanticProperties.Description="השמעת הפסוק"
                             ToolTipProperties.Text="השמעת הפסוק"
                             IsVisible="False"

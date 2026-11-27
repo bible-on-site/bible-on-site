@@ -85,10 +85,8 @@
                                                    Increment="1"
                                                    Value="{Binding PasukFontPercent}"
                                                    AutomationId="PasukFontPercentEntry"/>
-                            <Button Grid.Column="2"
+                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="2"
                                     Text="איפוס"
-                                    FontSize="13"
-                                    Padding="10,4"
                                     Command="{Binding ResetPasukFontPercentCommand}"
                                     AutomationId="ResetPasukFontPercentButton"/>
                         </Grid>
@@ -122,10 +120,8 @@
                                                    Increment="1"
                                                    Value="{Binding PerushFontPercent}"
                                                    AutomationId="PerushFontPercentEntry"/>
-                            <Button Grid.Column="2"
+                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="2"
                                     Text="איפוס"
-                                    FontSize="13"
-                                    Padding="10,4"
                                     Command="{Binding ResetPerushFontPercentCommand}"
                                     AutomationId="ResetPerushFontPercentButton"/>
                         </Grid>
@@ -159,10 +155,8 @@
                                                    Increment="1"
                                                    Value="{Binding ArticleFontPercent}"
                                                    AutomationId="ArticleFontPercentEntry"/>
-                            <Button Grid.Column="2"
+                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="2"
                                     Text="איפוס"
-                                    FontSize="13"
-                                    Padding="10,4"
                                     Command="{Binding ResetArticleFontPercentCommand}"
                                     AutomationId="ResetArticleFontPercentButton"/>
                         </Grid>

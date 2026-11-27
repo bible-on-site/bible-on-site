@@ -7,13 +7,13 @@ namespace BibleOnSite.Services;
 /// </summary>
 public enum AppDialogActionRole
 {
-	/// <summary>Dismissal that keeps the current state (ביטול, המשך ללמוד). Theme-blue text.</summary>
+	/// <summary>Dismissal that keeps the current state (ביטול, המשך ללמוד). Secondary action.</summary>
 	Cancel,
 
-	/// <summary>The single action of an information/error alert (אישור). Theme-blue text.</summary>
+	/// <summary>The single action of an information/error alert (אישור). Primary action.</summary>
 	Acknowledge,
 
-	/// <summary>Affirmative, non-destructive action (עבור ל…). Theme-blue text.</summary>
+	/// <summary>Affirmative, non-destructive action (עבור ל…). Primary action.</summary>
 	Confirm,
 
 	/// <summary>Affirmative, destructive action (הסרה, צא מהישומון). Red text.</summary>
@@ -147,14 +147,16 @@ public static class AppDialogPolicy
 		role is AppDialogActionRole.Confirm or AppDialogActionRole.Destructive;
 
 	/// <summary>
-	/// Action text colors by role, as keys in the popup's resource dictionary:
-	/// theme blue for safe/non-destructive actions, red for destructive ones —
-	/// foreground text color, never colored button backgrounds (#2460).
+	/// Action styles by role: filled blue confirmation, white dismissal and
+	/// outlined red destructive actions share the application button styles.
 	/// </summary>
 	public static string StyleKeyFor(AppDialogActionRole role) =>
-		role == AppDialogActionRole.Destructive
-			? "AppDialogDestructiveAction"
-			: "AppDialogAction";
+		role switch
+        {
+            AppDialogActionRole.Cancel => "AppDialogCancelAction",
+            AppDialogActionRole.Destructive => "AppDialogDestructiveAction",
+            _ => "AppDialogAction",
+        };
 }
 
 /// <summary>

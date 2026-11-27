@@ -25,6 +25,72 @@ namespace BibleOnSite.Tests.Helpers;
 [Collection("Application state")]
 public class ReaderChromeTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PreviewNavigationUsesThePickerWithoutChangingTheReadingMode(bool articles)
+    {
+        BibleOnSite.Config.HomeUxPreview.TestEnabled = true;
+        try
+        {
+            var rig = new Rig();
+            var opens = 0;
+            var chrome = rig.CreateChrome(openNavigation: () => { opens++; return Task.CompletedTask; });
+            if (articles) { rig.BottomBar.RaiseArticles(); }
+
+            rig.BottomBar.RaiseTextMode();
+
+            opens.Should().Be(1);
+            chrome.IsShowingArticles.Should().Be(articles);
+            rig.BottomBar.IsArticlesActive.Should().Be(articles);
+        }
+        finally { BibleOnSite.Config.HomeUxPreview.TestEnabled = null; }
+    }
+
+    [Fact]
+    public void PreviewArticlesActionReturnsToTheChapterAndCanOpenArticlesAgain()
+    {
+        BibleOnSite.Config.HomeUxPreview.TestEnabled = true;
+        try
+        {
+            var rig = new Rig();
+            var chrome = rig.CreateChrome();
+            rig.BottomBar.RaiseArticles();
+            chrome.IsShowingArticles.Should().BeTrue();
+
+            rig.BottomBar.RaiseArticles();
+
+            chrome.IsShowingArticles.Should().BeFalse();
+            rig.Content.IsVisible.Should().BeTrue();
+            rig.Articles.IsVisible.Should().BeFalse();
+            rig.BottomBar.IsArticlesActive.Should().BeFalse();
+            rig.Selections.Last().Should().BeNull();
+            rig.BottomBar.RaiseArticles();
+            chrome.IsShowingArticles.Should().BeTrue();
+            rig.ReloadCount.Should().Be(2);
+        }
+        finally { BibleOnSite.Config.HomeUxPreview.TestEnabled = null; }
+    }
+
+    [Fact]
+    public void PreviewHidesTheLegacyFanWhenTheReadingDockIsCreated()
+    {
+        BibleOnSite.Config.HomeUxPreview.TestEnabled = true;
+        try
+        {
+            var rig = new Rig();
+            rig.Fan.IsVisible = true;
+            _ = rig.CreateChrome();
+
+            rig.Fan.IsVisible.Should().BeFalse();
+            rig.BottomBar.IsVisible.Should().BeTrue();
+        }
+        finally
+        {
+            BibleOnSite.Config.HomeUxPreview.TestEnabled = null;
+        }
+    }
+
     [Fact]
     public void TextReselect_UsesTheExplicitNonCarouselScrollAction()
     {
@@ -265,7 +331,8 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true, Action<bool>? articlesVisibilityChanged = null)
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null,
+            bool includeProgressIndicator = true, Func<Task>? openNavigation = null, Action<bool>? articlesVisibilityChanged = null)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -289,6 +356,7 @@ public class ReaderChromeTests
                     ReloadArticlesAsync = () => { ReloadCount++; return Task.CompletedTask; },
                     CurrentUnit = () => Unit,
                     ScrollReadingToStart = scrollReadingToStart,
+                    OpenNavigationAsync = openNavigation,
                     SelectArticle = id => Selections.Add(id),
                     CanGoPrevious = () => CanPrev,
                     CanGoNext = () => CanNext,

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>על הפרק - ניווט, פירושים ומאמרים</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f5f7fb; color:#102648; font-family:system-ui,sans-serif; }
+    header { padding:18px 24px 8px; text-align:center; }
+    h1 { margin:0 0 6px; font-size:26px; }
+    p { margin:0; }
+    a { color:#2866e7; }
+    main { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; max-width:1050px; margin:14px auto; padding:0 22px; }
+    figure { margin:0; text-align:center; }
+    figcaption { margin-bottom:10px; font-size:17px; font-weight:700; }
+    img { display:block; height:520px; max-height:calc(100vh - 172px); max-width:100%; width:auto; margin:auto; border:1px solid #d7e1f2; border-radius:20px; }
+    @media(max-width:640px) { main { grid-template-columns:1fr; } img { height:auto; max-height:none; width:min(100%,300px); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ניווט קבוע. המאמרים מחליפים את הפעולה שלהם.</h1>
+    <p>חלונית הפירושים מכסה את הסרגל בציר Z. <a href="current.html">הבית המעודכן</a> · <a href="buttons.html">סגנונות הכפתורים</a> · <a href="index.html">לפני ואחרי מול master</a></p>
+  </header>
+  <main>
+    <figure><figcaption>ניווט בתנ"ך</figcaption><img src="assets/after/reader.png" width="1080" height="2400" alt="הסרגל עם ניווט בתנ&quot;ך, בחירת פירושים ומאמרי הפרק"></figure>
+    <figure><figcaption>פירושים מכסים את הסרגל</figcaption><img src="assets/after/commentary.png" width="1080" height="2400" alt="חלונית הפירושים נמצאת לפני הסרגל ומכסה אותו"></figure>
+    <figure><figcaption>מאמרי הפרק מתחלף לחזרה לפרק</figcaption><img src="assets/after/articles.png" width="1080" height="2400" alt="ניווט נשאר קבוע; הפעולה של מאמרי הפרק הופכת לחזרה לפרק"></figure>
+  </main>
+</body>
+</html>

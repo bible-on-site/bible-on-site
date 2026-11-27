@@ -61,6 +61,11 @@ public sealed class ShellAppNavigator : IAppNavigator
     private static async Task NavigateAndSettleAsync(string route, bool animate,
         IDictionary<string, object>? parameters)
     {
+        // Finish the native activation event before Shell synchronously creates
+        // a cold page. Calendar XAML realization in Debug can otherwise hold an
+        // Android MotionEvent open past its input-dispatch deadline. The gate
+        // remains held across this yield, preserving navigation serialization.
+        await Task.Yield();
         var shell = Shell.Current;
         var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnNavigated(object? sender, ShellNavigatedEventArgs e) => settled.TrySetResult();

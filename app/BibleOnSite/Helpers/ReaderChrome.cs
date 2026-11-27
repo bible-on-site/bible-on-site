@@ -126,6 +126,9 @@ public sealed class ReaderChromeActions
     /// <summary>Explicit scroll target for a reader without a unit carousel.</summary>
     public Func<bool>? ScrollReadingToStart { get; init; }
 
+    /// <summary>Opens the reader's existing navigation picker or catalogue.</summary>
+    public Func<Task>? OpenNavigationAsync { get; init; }
+
     /// <summary>Marks (or clears, on null) the selected article id on the view model.</summary>
     public required Action<int?> SelectArticle { get; init; }
 
@@ -177,6 +180,7 @@ public sealed class ReaderChrome
     {
         _ui = surfaces;
         _actions = actions;
+        if (Config.HomeUxPreview.Enabled) { _ui.FanMenu.IsVisible = false; }
 
         _ui.BottomBar.PerushimToggleRequested += OnPerushimToggleRequested;
         _ui.BottomBar.TextModeRequested += OnTextModeRequested;
@@ -246,7 +250,7 @@ public sealed class ReaderChrome
         _ui.ExitFullscreenButton.IsVisible = false;
         _ui.Toolbar.IsVisible = true;
         _ui.BottomBar.IsVisible = true;
-        _ui.FanMenu.IsVisible = true;
+        _ui.FanMenu.IsVisible = !Config.HomeUxPreview.Enabled;
         _actions.FullscreenStateChanged?.Invoke(false);
     }
 
@@ -291,11 +295,16 @@ public sealed class ReaderChrome
     private void OnFanMenuOpening(object? sender, EventArgs e) => RefreshPrevNext();
 
     /// <summary>
-    /// Text button — returns to the reading view from articles, else animates
-    /// the visible unit's vertical content back to its start (#2624).
+    /// The preview's navigation action opens the reader picker in either mode.
+    /// The regular text action returns from articles or scrolls to the start.
     /// </summary>
-    private void OnTextModeRequested(object? sender, EventArgs e)
+    private async void OnTextModeRequested(object? sender, EventArgs e)
     {
+        if (Config.HomeUxPreview.Enabled && _actions.OpenNavigationAsync is { } navigate)
+        {
+            await navigate();
+            return;
+        }
         if (IsShowingArticles)
         {
             ShowTextView();
@@ -320,6 +329,7 @@ public sealed class ReaderChrome
         {
             if (IsShowingArticles)
             {
+                if (Config.HomeUxPreview.Enabled) { ShowTextView(); }
                 return;
             }
 

@@ -1,0 +1,124 @@
+# Native home UX preview
+
+This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
+mark it ready, or enable auto-merge without Dorad's explicit instruction.
+
+Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
+or open [the static HTML gallery](review/index.html) locally. Both contain seventeen
+screen comparisons against the actual default branch (`master`), plus a
+before/after continuous-scroll recording. Before is always on the right and
+After on the left, including the GitHub-rendered Markdown tables.
+Keep the baseline images fixed and update the same `assets/after/` filenames in
+each iteration so GitHub can compare images between commits. Never use a prior
+UX iteration as the Before baseline. The default-branch commit is documented in
+`review/comparisons.json`. Update descriptions there and run
+`python review/generate.py` from this directory to rebuild both review formats.
+The daily chapter card remains the home centerpiece. Parasha and holiday cards
+also span both columns, interspersed with pairs of single-column destinations.
+All destinations open directly from home; there is no separate library page.
+
+This is an opt-in Debug build for design iterations in the real MAUI app. Normal
+Debug builds and every Release build keep the existing reader startup.
+
+From `app/`, using the repository's pinned .NET SDK and MAUI Android workload:
+
+```powershell
+dotnet build BibleOnSite/BibleOnSite.csproj -f net10.0-android -c Debug `
+  -p:TargetFrameworks=net10.0-android -p:RuntimeIdentifier=android-x64 `
+  -p:RuntimeIdentifiers=android-x64 `
+  -p:EmbedAssembliesIntoApk=true -p:HomeUxPreview=true
+```
+
+Install the signed APK from `BibleOnSite/bin/Debug/net10.0-android/android-x64/`
+with `adb -s <emulator-serial> install -r <apk>`, then launch
+`com.tanah.daily929`. Scope every ADB command to the intended emulator.
+For live article counters, point the app at the production API with the Mono
+env override (Debug builds honor `DebugApiUrl`):
+
+```powershell
+adb -s <emulator-serial> shell setprop debug.mono.env "DebugApiUrl=https://api.xn--febl3a.com"
+```
+
+Without it the existing Debug local API setting
+(`http://10.0.2.2:3003`) and offline fallback apply; a dead local endpoint makes
+starter fetches wait on timeouts and adds main-thread load.
+
+The home screen uses the packaged scripture and the existing daily schedule.
+Verse counts are loaded from the database; article counters come from the live
+or cached starter response, with an explicit offline label when unavailable.
+The chapter index, calendar, authors, other learning sections and settings reuse
+their existing native screens. No demonstration content is added to the database.
+
+The daily chapter and index open a reader above home. All pages use the same
+large Back and Home controls. The preview disables the side drawer and removes
+the reader fan. Its dock keeps `ניווט בתנ"ך` available in both text and articles,
+opening the reader's existing picker. `בחירת פירושים` opens inline commentary
+selection. `מאמרי הפרק` opens articles with a separate count badge; that same
+action becomes `חזרה לפרק` in articles mode. Its chapter title also opens the picker;
+the tools sheet opens search and other reading options. Secondary destinations
+have full-surface, single-column tiles within the same scrolling home page.
+
+The reading viewport keeps fixed geometry throughout the controls' animations.
+Both bars remain visible on entry and during a drag in any direction. After the
+drag ends and 1.8 seconds pass without activity, the top bar slides out and the
+bottom bar fades away. Another drag immediately brings both back. The cooldown
+is never armed by initial loading. Open tools, commentary, selection and playback
+hold the controls visible. The chapter heading scrolls with the text.
+Selection, recitation, playback and search keep their action bar available.
+Chapter swipes remain active.
+
+Iteration checks: launch to home, inspect short labels and highlighted actions,
+open the daily chapter, scroll down and slightly up, swipe between chapters,
+return home, choose a chapter in the index, visit the calendar and a content
+destination, then return. Repeat with large text and both appearance modes.
+
+The editorial home uses blue for primary actions, oversized Hebrew typography
+and cool neutral surfaces. Home surfaces use white, navy (`#102648`) and blue
+(`#2866E7`). The wide learning cards use oversized type and faint background glyphs. Small tiles for
+Tanahpedia, traditional masora, authors, the bulletin, contact and donations
+alternate between the wide cards. Search stays fixed above home content
+and uses the existing `FloatingSearchBar` and `SearchViewModel`. Its `מה לחפש`
+selector now includes `מסך`, with local screen matches in the same result list as
+scripture and articles. Screen search is available offline and independent of
+the book filter. The shared search kind is available in regular builds as well;
+only the home/startup and chrome redesign are Debug opt-ins. The Bible picker is
+labelled `ניווט בתנ"ך`; the masora subtitle is `חלוקה מסורתית`.
+
+After the first installation, iterate with `-t:Install`,
+`-p:EmbedAssembliesIntoApk=false` and `-p:Device=<emulator-serial>` to deploy
+updated assemblies to that emulator. Restart the app after deploying.
+
+Run the native smoke checks against the installed preview (Python, defusedxml
+and ADB):
+
+```powershell
+python -m pip install -r BibleOnSite.Tests.E2E/Android/requirements-home-ux.txt
+python BibleOnSite.Tests.E2E/Android/home_ux_preview.py `
+  --serial emulator-5564 --artifacts <output-directory>
+```
+
+`--checks a,b` reruns only the named scenarios (each run anchors at the home
+screen). No concurrency: do not run `dotnet build` or other heavy host work
+while the harness measures gestures.
+
+The checks exercise real native controls, record screenshots, and verify toolbar
+visibility, chapter swipes, system Back, index selection, populated calendar,
+destination returns, navigation search, content-result navigation, articles after
+a hidden text toolbar, and app links with two reader instances. An app ANR
+during an interactive scenario fails the run immediately and records its
+screen; a startup ANR while the app cold-starts on a loaded emulator is
+dismissed and counted in `startup_anrs_waited` in `results.json`. The reading-options check
+also verifies the dock's navigation picker in text and article modes, commentary
+explanation and coverage of the dock in Z order, Screen filter and result navigation,
+Bible navigation selection, and return through the articles action. The explicit fullscreen
+action is absent from the preview. Title surfaces and buttons share a 52dp height;
+hidden trailing actions do not reserve horizontal space.
+Keep that emulator free of manual input during the run.
+
+Latest run (2026-11-16, emulator-5554, production API): all eleven scenarios
+except `check_scroll_and_swipe` passed. Its toolbar-hide and fixed-viewport
+assertions passed, but the scroll-advance assertion was environment-blocked:
+the host's sustained skipped-frame and GC storms cancelled the injected drag,
+while identical manual swipes in quiet windows behaved correctly. Validated on
+a degraded emulator; needs one clean-CI/quiet-host run. See
+`review/verification.json` → `latest_native_run` for the full record.

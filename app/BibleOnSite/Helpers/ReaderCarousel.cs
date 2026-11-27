@@ -69,6 +69,9 @@ public sealed class ReaderCarouselActions
     /// the dispatched event then stays unsubscribed entirely.
     /// </summary>
     public Action<float, float>? ArmUnreceivedPress { get; init; }
+
+    /// <summary>Physical drag start/end, for controls that remain visible throughout the gesture.</summary>
+    public Action<bool>? ReadingDragChanged { get; init; }
 }
 
 /// <summary>
@@ -342,6 +345,7 @@ public sealed class ReaderCarousel
 
 #if ANDROID
     private readonly SwipeNavigationTracker _swipe = new();
+    private bool _readingDrag;
 #endif
 
     /// <summary>
@@ -377,6 +381,7 @@ public sealed class ReaderCarousel
         MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
         _swipe.Cancel();
+        _readingDrag = false;
         LongPressBehavior.CancelAllPending();
 #endif
     }
@@ -388,6 +393,8 @@ public sealed class ReaderCarousel
 
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
+        if (_readingDrag) { _actions.ReadingDragChanged?.Invoke(false); }
+        _readingDrag = false;
         _swipe.Cancel();
         if (SwipeBlocked || !ContainsTouch(_ui.Carousel, position) || Excluded(_ui.SwipeExcluded, position))
         {
@@ -434,13 +441,22 @@ public sealed class ReaderCarousel
             ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
             : 12;
         _swipe.Move(position, slop);
+        if (!_readingDrag && _swipe.IsDragging)
+        {
+            _readingDrag = true;
+            _actions.ReadingDragChanged?.Invoke(true);
+        }
     }
 
     // Releases and native cancels/interruptions both arrive here: a cancel
     // mid-swipe can strand the carousel mid-offset just like a release, so
     // it settles the same way (#2469).
-    private void OnTouchReleased(object? sender, TouchPosition position) =>
+    private void OnTouchReleased(object? sender, TouchPosition position)
+    {
+        if (_readingDrag) { _actions.ReadingDragChanged?.Invoke(false); }
+        _readingDrag = false;
         SettleSwipe(_swipe.Last ?? position);
+    }
 
     private void SettleSwipe(TouchPosition position)
     {

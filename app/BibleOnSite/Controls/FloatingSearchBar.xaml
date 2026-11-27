@@ -7,13 +7,7 @@
  x:Class="BibleOnSite.Controls.FloatingSearchBar" x:DataType="viewmodels:SearchViewModel" FlowDirection="RightToLeft">
  <ContentView.Resources>
   <converters:SearchSnippetConverter x:Key="SearchSnippet"/>
-  <Style x:Key="SearchIconButton" TargetType="Button">
-   <Setter Property="FontFamily" Value="FluentIcons"/><Setter Property="FontSize" Value="24"/>
-   <Setter Property="WidthRequest" Value="44"/><Setter Property="HeightRequest" Value="44"/>
-   <Setter Property="Padding" Value="10"/><Setter Property="BorderWidth" Value="0"/>
-   <Setter Property="BackgroundColor" Value="Transparent"/>
-   <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-  </Style>
+  <Style x:Key="SearchIconButton" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.CompactIcon}"/>
   <Style x:Key="FilterChip" TargetType="Border">
    <Setter Property="StrokeShape" Value="RoundRectangle 10"/><Setter Property="Padding" Value="10,6"/>
    <Setter Property="MinimumHeightRequest" Value="36"/>
@@ -38,10 +32,12 @@
     <Button x:Name="NavigationButton" Style="{StaticResource SearchIconButton}"
      Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" AutomationId="SearchNavigationButton"
      SemanticProperties.Description="סגירת החיפוש" Clicked="OnNavigationClicked"/>
-    <controls:SearchEntry Grid.Column="1" x:Name="SearchInput" AutomationId="PerekSearchInput"
+    <Border Grid.Column="1" x:Name="SearchInputSurface" StrokeThickness="0" StrokeShape="RoundRectangle 16" Padding="10,0">
+    <controls:SearchEntry x:Name="SearchInput" AutomationId="PerekSearchInput"
      Text="{Binding SearchPhrase, Mode=TwoWay}" Placeholder="חיפוש" FontSize="17" VerticalOptions="Center" HeightRequest="48"
      TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}" PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
      TextChanged="OnSearchTextChanged" Focused="OnSearchFocused" Completed="OnSearchSubmitted"/>
+    </Border>
     <Button Grid.Column="2" x:Name="ClearButton" Style="{StaticResource SearchIconButton}" IsVisible="False"
      Text="{x:Static fonts:FluentUI.dismiss_24_regular}" AutomationId="ClearSearchButton"
      SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked"/>
@@ -62,7 +58,7 @@
      <On Platform="Windows" Value="Center"/>
     </OnPlatform>
    </Grid.HorizontalOptions>
-   <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="SearchFilterChips">
+   <ScrollView x:Name="FilterChips" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="SearchFilterChips">
     <HorizontalStackLayout Padding="16,8" Spacing="8">
      <controls:TappableView AutomationId="SearchKindsTab" Activated="OnKindsTabClicked">
       <Border Style="{StaticResource FilterChip}">
@@ -177,5 +173,6 @@
     </Border>
    </Grid>
   </Grid>
+  <controls:PerekPickerPopup x:Name="NavigationPicker" Grid.RowSpan="2" ZIndex="100" PerekSelected="OnNavigationPerekSelected"/>
  </Grid>
 </ContentView>

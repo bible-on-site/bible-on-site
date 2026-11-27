@@ -29,6 +29,24 @@ public abstract class SearchResult
 }
 
 /// <summary>
+/// Search result for a local app screen, using the existing result list and kind filter.
+/// </summary>
+public sealed class ScreenSearchResult : SearchResult
+{
+    public NavigationSearchItem Destination { get; }
+    public override SearchFilter ResultType => SearchFilter.Screen;
+
+    public ScreenSearchResult(NavigationSearchItem destination, string searchPhrase)
+    {
+        Destination = destination;
+        SearchPhrase = searchPhrase;
+        Title = destination.Title;
+        SubtitleHtml = System.Net.WebUtility.HtmlEncode(destination.Subtitle);
+        Score = 100_000;
+    }
+}
+
+/// <summary>
 /// Search result for an author match.
 /// </summary>
 public class AuthorSearchResult : SearchResult

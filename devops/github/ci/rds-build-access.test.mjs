@@ -555,13 +555,15 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(dump.includes("--single-transaction"));
+	const databaseArgument = dump.indexOf("--databases");
+	assert.notEqual(databaseArgument, -1);
+	assert.equal(dump[databaseArgument + 1], "fixture");
 	assert.ok(dump.includes("--loose-skip-masking-policies"));
 	const maskCheck = f.args(f.env.MASK_CHECK_ARGS);
 	assert.ok(maskCheck.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(maskCheck.includes("--database=fixture"));
 	// SSG needs the catalogs and existing note chapters together to preserve
 	// production commentary IDs and chapters absent from the incoming pack.
-	assert.ok(dump.includes("--databases"));
 	assert.equal(dump.at(-1), "fixture");
 	assert.ok(
 		!dump.some((option) => option.startsWith("--ignore-table")),

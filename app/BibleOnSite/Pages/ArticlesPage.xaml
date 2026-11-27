@@ -46,17 +46,10 @@
                             </controls:ToolbarPill>
                      </controls:SharedTopBar.CenterContent>
                      <controls:SharedTopBar.TrailingContent>
-                            <Button x:Name="ClearSearchButton"
+                            <Button Style="{x:Static controls:AppButtonStyles.Icon}" x:Name="ClearSearchButton"
                                     IsVisible="False"
                                     Text="{x:Static fonts:FluentUI.dismiss_24_regular}"
-                                    FontFamily="FluentIcons"
                                     FontSize="24"
-                                    WidthRequest="48"
-                                    HeightRequest="44"
-                                    Padding="0"
-                                    BorderWidth="0"
-                                    BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                     VerticalOptions="Center"
                                     SemanticProperties.Description="ניקוי החיפוש"
                                     AutomationId="ClearArticlesSearchButton"

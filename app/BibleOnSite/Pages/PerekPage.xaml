@@ -33,25 +33,24 @@
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
-                    <Grid>
-                <Button x:Name="NormalNavigationTitle"
+                    <Grid ColumnDefinitions="Auto,*">
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="HomePreviewButton" AutomationId="ReaderHomeButton" Text="בית" IsVisible="False"
+                        FontSize="15" FontAttributes="Bold" Padding="12,0"
+                        Clicked="OnHomePreviewClicked"/>
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="NormalNavigationTitle"
+                   Grid.Column="1"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
                    Padding="12,0"
-                   HeightRequest="40"
-                   CornerRadius="14"
-                   BorderWidth="0"
                    IsVisible="True"
-                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    ToolTipProperties.Text="חיפוש (Ctrl+F)"
                    Clicked="OnPerekSourceClicked"/>
-                <controls:TappableView x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
+                <controls:TappableView x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
                         Activated="OnPerekSourceClicked"
                         SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                         ToolTipProperties.Text="חיפוש (Ctrl+F)">
@@ -64,10 +63,8 @@
                     </Grid>
                 </controls:SharedTopBar.CenterContent>
                 <controls:SharedTopBar.TrailingContent>
-                <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
-                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
-                        WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                <Button Style="{x:Static controls:AppButtonStyles.Icon}" x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
+                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontSize="20"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
                 </controls:SharedTopBar.TrailingContent>
@@ -208,16 +205,10 @@
                                      recitation. Without installed audio the tap downloads
                                      the sefer's pack in place (#3704) — the spinner takes
                                      the button's slot until the recording plays. -->
-                                <Button x:Name="HeaderPlayButton"
+                                <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
                                         Text="{x:Static fonts:FluentUI.headphones_24_regular}"
-                                        FontFamily="FluentIcons"
                                         FontSize="20"
-                                        WidthRequest="40"
-                                        HeightRequest="40"
-                                        Padding="0"
-                                        BackgroundColor="Transparent"
-                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"

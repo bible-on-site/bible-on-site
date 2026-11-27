@@ -55,6 +55,12 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 		Routing.RegisterRoute(AppRoutes.Moadim, typeof(MoadimListPage));
 		Routing.RegisterRoute(AppRoutes.Moed, typeof(MoedPage));
+		if (HomeUxPreview.Enabled)
+		{
+			Routing.RegisterRoute(nameof(HomeSearchPage), typeof(HomeSearchPage));
+			FlyoutBehavior = FlyoutBehavior.Disabled;
+			ConfigureHomeUxLinks();
+		}
 
 		// One styled presenter for every blocking dialog — alerts, confirmations
 		// and the exit/stay prompt — so colors, order, radius and typography
@@ -189,6 +195,12 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 
 	private void ApplyNavPane(DesktopNavPaneState state, bool presented)
 	{
+		if (HomeUxPreview.Enabled)
+		{
+			FlyoutBehavior = FlyoutBehavior.Disabled;
+			FlyoutIsPresented = false;
+			return;
+		}
 		var pinChanged = state.PanePinned != _navPane.PanePinned;
 		_navPane = state;
 		FlyoutBehavior = state.Locked ? FlyoutBehavior.Locked : FlyoutBehavior.Flyout;
@@ -244,8 +256,15 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 
 	internal void CompleteStartup()
 	{
-		if (ReaderContent.Content is PerekPage)
+		if (ReaderContent.Content is PerekPage or HomePage)
 		{
+			return;
+		}
+
+        if (HomeUxPreview.Enabled)
+		{
+			ReaderContent.ContentTemplate = null;
+			ReaderContent.Content = new HomePage();
 			return;
 		}
 

@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:controls="clr-namespace:BibleOnSite.Controls"
       xmlns:fonts="clr-namespace:Fonts"
       x:Class="BibleOnSite.Controls.ReaderSelectionBar"
       AutomationId="SelectionBar"
       IsVisible="False"
       BackgroundColor="{StaticResource Primary}"
-      Padding="4,5"
+      Padding="4,2"
       ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
     <Grid.HeightRequest>
         <OnPlatform x:TypeArguments="x:Double" Default="48">
@@ -14,7 +15,7 @@
         </OnPlatform>
     </Grid.HeightRequest>
     <!-- Back button -->
-    <Button Grid.Column="0"
+    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" Grid.Column="0"
             x:Name="BackButton"
             AutomationId="SelectionBackButton"
             SemanticProperties.Description="ביטול הבחירה"
@@ -22,11 +23,7 @@
             Text="{x:Static fonts:FluentUI.arrow_right_24_regular}"
             FontFamily="FluentIcons"
             FontSize="20"
-            WidthRequest="36"
-            HeightRequest="36"
             Padding="0"
-            BackgroundColor="Transparent"
-            TextColor="White"
             Clicked="OnBackClicked"/>
     <!-- Badge with count -->
     <Border Grid.Column="1"
@@ -51,15 +48,13 @@
     <!-- Spacer (transparent) -->
     <ContentView Grid.Column="2"/>
     <!-- Recitation button -->
-    <Button Grid.Column="3"
+    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" Grid.Column="3"
             x:Name="RecitationButton"
             AutomationId="SelectionRecitationButton"
             SemanticProperties.Description="השמעת הבחירה"
             ToolTipProperties.Text="השמעת הבחירה"
             Text="{x:Static fonts:FluentUI.headphones_24_regular}"
-            FontFamily="FluentIcons" FontSize="20"
-            WidthRequest="40" HeightRequest="36" Padding="0"
-            BackgroundColor="Transparent" TextColor="White"
+            FontFamily="FluentIcons" FontSize="20" Padding="0"
             IsVisible="False" Clicked="OnRecitationClicked"/>
     <!-- Download→play spinner (#3704): takes the recitation button's cell
          while its sefer pack downloads. -->
@@ -70,7 +65,7 @@
             WidthRequest="22" HeightRequest="22"
             IsVisible="False" IsRunning="False"/>
     <!-- Share button -->
-    <Button Grid.Column="4"
+    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" Grid.Column="4"
             x:Name="ShareButton"
             AutomationId="SelectionShareButton"
             SemanticProperties.Description="שיתוף הבחירה"
@@ -78,14 +73,10 @@
             Text="{x:Static fonts:FluentUI.share_24_regular}"
             FontFamily="FluentIcons"
             FontSize="20"
-            WidthRequest="36"
-            HeightRequest="36"
             Padding="0"
-            BackgroundColor="Transparent"
-            TextColor="White"
             Clicked="OnShareClicked"/>
     <!-- Copy button -->
-    <Button Grid.Column="5"
+    <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" Grid.Column="5"
             x:Name="CopyButton"
             AutomationId="SelectionCopyButton"
             SemanticProperties.Description="העתקת הבחירה"
@@ -93,10 +84,6 @@
             Text="{x:Static fonts:FluentUI.copy_20_regular}"
             FontFamily="FluentIcons"
             FontSize="20"
-            WidthRequest="36"
-            HeightRequest="36"
             Padding="0"
-            BackgroundColor="Transparent"
-            TextColor="White"
             Clicked="OnCopyClicked"/>
 </Grid>

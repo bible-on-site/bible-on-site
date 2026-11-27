@@ -20,7 +20,7 @@
         </BoxView>
 
         <!-- Picker container: from below perek header to above satellite buttons -->
-        <Border Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+        <Border x:Name="PickerCard" Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
                 Padding="0"
@@ -35,10 +35,10 @@
 
             <Grid RowDefinitions="Auto,*,Auto">
                 <!-- Header -->
-                <Border Grid.Row="0"
+                <Border x:Name="PickerHeader" Grid.Row="0"
                         BackgroundColor="{StaticResource Primary}"
                         Padding="16,12">
-                    <Label Text="בחירת פרק"
+                    <Label x:Name="PickerHeading" Text="בחירת פרק"
                            FontSize="18"
                            FontAttributes="Bold"
                            TextColor="White"
@@ -116,11 +116,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding Name}"
+                                        <Label x:Name="ItemText" Text="{Binding Name}"
                                                FontSize="16"
                                                AutomationId="PickerGroupItem"
                                                HorizontalTextAlignment="Center"
@@ -185,11 +186,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding DisplayName}"
+                                        <Label x:Name="ItemText" Text="{Binding DisplayName}"
                                                FontSize="14"
                                                AutomationId="PickerSeferItem"
                                                HorizontalTextAlignment="Center"
@@ -254,11 +256,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding DisplayText}"
+                                        <Label x:Name="ItemText" Text="{Binding DisplayText}"
                                                FontSize="14"
                                                AutomationId="PickerPerekItem"
                                                HorizontalTextAlignment="Center"
@@ -286,22 +289,14 @@
                       ColumnDefinitions="*,*"
                       Padding="12"
                       ColumnSpacing="12">
-                    <Button Grid.Column="0"
+                    <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="0"
                             Text="בטל"
                             AutomationId="PerekPickerCancel"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                            BorderColor="{StaticResource Gray400}"
-                            BorderWidth="1"
-                            CornerRadius="8"
                             Clicked="OnCancelClicked"/>
-                    <Button Grid.Column="1"
+                    <Button Style="{x:Static controls:AppButtonStyles.Primary}" Grid.Column="1"
                             x:Name="ConfirmButton"
                             Text="בחר"
                             AutomationId="PerekPickerConfirm"
-                            BackgroundColor="{StaticResource Primary}"
-                            TextColor="White"
-                            CornerRadius="8"
                             IsEnabled="False"
                             Clicked="OnConfirmClicked"/>
                 </Grid>

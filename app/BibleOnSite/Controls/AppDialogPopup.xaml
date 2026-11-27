@@ -4,6 +4,7 @@
                xmlns:system="clr-namespace:System;assembly=mscorlib"
                xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
                xmlns:services="clr-namespace:BibleOnSite.Services"
+               xmlns:controls="clr-namespace:BibleOnSite.Controls"
                x:Class="BibleOnSite.Controls.AppDialogPopup"
                x:TypeArguments="services:AppDialogAction"
                Padding="0" Margin="24" HorizontalOptions="Center">
@@ -16,15 +17,14 @@
         last) renders mirrored the same way native Hebrew alerts do.
     -->
     <toolkit:Popup.Resources>
-        <Style x:Key="AppDialogAction" TargetType="Button">
-            <Setter Property="BackgroundColor" Value="Transparent"/>
-            <Setter Property="FontSize" Value="16"/>
+        <Style x:Key="AppDialogAction" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.Primary}">
             <Setter Property="LineBreakMode" Value="WordWrap"/>
-            <Setter Property="Padding" Value="0,10"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
         </Style>
-        <Style x:Key="AppDialogDestructiveAction" TargetType="Button" BasedOn="{StaticResource AppDialogAction}">
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"/>
+        <Style x:Key="AppDialogCancelAction" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.Secondary}">
+            <Setter Property="LineBreakMode" Value="WordWrap"/>
+        </Style>
+        <Style x:Key="AppDialogDestructiveAction" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.Destructive}">
+            <Setter Property="LineBreakMode" Value="WordWrap"/>
         </Style>
     </toolkit:Popup.Resources>
     <Border x:Name="Card"

@@ -1,0 +1,360 @@
+{
+  "screen_kind_present": true,
+  "authors_search_bounds": [
+    70,
+    200,
+    718,
+    261
+  ],
+  "home_button_bounds": [
+    769,
+    162,
+    906,
+    299
+  ],
+  "commentary_bounds": [
+    33,
+    1006,
+    1045,
+    2030
+  ],
+  "dock_button_bounds": [
+    711,
+    2072,
+    1024,
+    2294
+  ],
+  "viewport_before": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "viewport_after": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "passed": [
+    "shared search Screen kind",
+    "Screen result navigation category",
+    "full-width equal-height header",
+    "no explicit fullscreen action",
+    "initial controls visible",
+    "both controls hidden after cooldown",
+    "second drag and repeated cooldown",
+    "constant viewport",
+    "commentary overlays and covers dock in Z order"
+  ],
+  "baseline_branch": "master",
+  "baseline_commit": "95c202eb5276e285e870b0187129daba9a732a54",
+  "cooldown_ms": 1800,
+  "viewport_before_recording": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "viewport_after_recording": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "native_smoke": [
+    "check_home_and_daily",
+    "check_index",
+    "check_scroll_and_swipe",
+    "check_stacked_reader_links",
+    "check_destinations",
+    "check_home_tile_fills",
+    "check_global_search",
+    "check_search_layout",
+    "check_screen_navigation",
+    "check_reading_options",
+    "check_shared_button_styles"
+  ],
+  "latest_native_run": {
+    "date": "2026-11-16",
+    "serial": "emulator-5554",
+    "api_mode": "production API (debug.mono.env DebugApiUrl override); 68 authors loaded live",
+    "passed": [
+      "check_home_and_daily",
+      "check_index",
+      "check_stacked_reader_links",
+      "check_destinations",
+      "check_home_tile_fills",
+      "check_global_search",
+      "check_search_layout",
+      "check_screen_navigation",
+      "check_reading_options",
+      "check_shared_button_styles"
+    ],
+    "scroll_and_swipe": {
+      "status": "environment-blocked",
+      "passed_assertions": [
+        "controls hidden after release + 1.8s cooldown",
+        "constant viewport bounds"
+      ],
+      "blocked_assertion": "first injected drag scrolls past pasuk א",
+      "reason": "emulator/host degraded: sustained Choreographer skipped-frame storms (45-387 frames) and explicit concurrent mark compact GC bursts starve the main thread; injected 600ms swipes are coalesced/cancelled, and one window showed an input-dispatch ANR (KeyEvent BACK waited 5001ms). Identical manual swipes succeed in quiet settled states.",
+      "toolbar_logic_verified": "repeated manual swipes hide/reveal both bars with unchanged viewport in quiet host windows"
+    },
+    "limitation": "validated on a degraded emulator; needs one clean-CI/quiet-host run."
+  },
+  "unit_tests_passed": 4299,
+  "host_application_lines_covered": 20246,
+  "host_application_lines_total": 20343,
+  "instrumented_changed_application_lines_covered": 161,
+  "instrumented_changed_application_lines_total": 161,
+  "home_tiles": {
+    "daily_width": 965,
+    "tiles": {
+      "HomeParasha": [
+        57,
+        491,
+        1022,
+        566
+      ],
+      "HomeTanahpedia": [
+        555,
+        491,
+        1022,
+        381
+      ],
+      "HomeMasora": [
+        57,
+        491,
+        523,
+        381
+      ],
+      "HomeMoadim": [
+        57,
+        491,
+        1022,
+        1101
+      ],
+      "HomeAuthors": [
+        555,
+        1154,
+        1022,
+        1585
+      ],
+      "HomeContact": [
+        555,
+        1637,
+        1022,
+        2068
+      ],
+      "HomeDonations": [
+        57,
+        1637,
+        523,
+        2068
+      ]
+    },
+    "destinations": [
+      "HomeParasha",
+      "HomeTanahpedia",
+      "HomeMasora",
+      "HomeMoadim",
+      "HomeAuthors",
+      "HomeContact",
+      "HomeDonations",
+      "HomeIndex",
+      "HomeCalendar"
+    ],
+    "passed": true,
+    "holiday_catalogue_state": "Existing production GraphQL catalogue returned Internal Server Error; native destination navigation verified."
+  },
+  "comparison_count": 17,
+  "rds_contract_tests_passed": 92,
+  "navigation_revision": {
+    "passed": [
+      "home copy and single-column terms tile",
+      "commentary covers dock visually and intercepts its touch area",
+      "fixed navigation in text and articles; articles action returns to chapter",
+      "dock picker navigates to selected book and chapter"
+    ],
+    "date": "2026-11-16",
+    "viewport": [
+      27,
+      128,
+      1059,
+      2337
+    ],
+    "sheet_bounds": [
+      2,
+      1311,
+      1077,
+      2335
+    ],
+    "covered_dock_bounds": [
+      711,
+      2072,
+      1024,
+      2294
+    ]
+  },
+  "white_template_revision": {
+    "passed": [
+      "eight alternating small tile fills",
+      "white reader safe area, band, title and buttons",
+      "white chapter picker heading",
+      "all shared header screenshots refreshed",
+      "holiday calendar uses Hebrew day"
+    ],
+    "date": "2026-11-16",
+    "tile_colors": {
+      "HomeIndex": [
+        255,
+        255,
+        255
+      ],
+      "HomeCalendar": [
+        40,
+        102,
+        231
+      ],
+      "HomeTanahpedia": [
+        40,
+        102,
+        231
+      ],
+      "HomeMasora": [
+        255,
+        255,
+        255
+      ],
+      "HomeAuthors": [
+        255,
+        255,
+        255
+      ],
+      "HomeBulletin": [
+        40,
+        102,
+        231
+      ],
+      "HomeContact": [
+        40,
+        102,
+        231
+      ],
+      "HomeDonations": [
+        255,
+        255,
+        255
+      ]
+    },
+    "white_header_pixels": [
+      [
+        500,
+        60,
+        255,
+        255,
+        255
+      ],
+      [
+        10,
+        200,
+        255,
+        255,
+        255
+      ],
+      [
+        500,
+        166,
+        255,
+        255,
+        255
+      ],
+      [
+        837,
+        166,
+        255,
+        255,
+        255
+      ],
+      [
+        980,
+        166,
+        255,
+        255,
+        255
+      ]
+    ],
+    "unit_tests_passed": 4289,
+    "reader_regressions_passed": [
+      "navigation from text and articles",
+      "articles action returns to chapter",
+      "picker cancellation preserves reading mode",
+      "commentary covers and intercepts dock",
+      "chapter selection navigates correctly",
+      "idle hides both bars without changing viewport"
+    ]
+  },
+  "shared_button_styles": {
+    "passed": [
+      "commentary covers dock visually and intercepts its touch area",
+      "fixed navigation in text and articles; articles action returns to chapter",
+      "dock picker navigates to selected book and chapter"
+    ],
+    "date": "2026-11-16",
+    "toolbar_shadow_removed": true,
+    "toolbar_works_over_scrolled_content": true,
+    "network_mode": "offline with existing production cache",
+    "button_colors": {
+      "display-options:ResetPasukFontPercentButton": [
+        255,
+        255,
+        255
+      ],
+      "support:ExportPerushimLogsButton": [
+        255,
+        255,
+        255
+      ],
+      "support-dark:ExportPerushimLogsButton": [
+        36,
+        60,
+        93
+      ],
+      "extension-packs:DownloadPerushimButton": [
+        21,
+        82,
+        172
+      ],
+      "commentary:GoToPerushimSettingsButton": [
+        21,
+        82,
+        172
+      ],
+      "commentary:ExportPerushimLogsButton": [
+        255,
+        255,
+        255
+      ]
+    },
+    "viewport": [
+      27,
+      128,
+      1059,
+      2337
+    ],
+    "sheet_bounds": [
+      2,
+      1311,
+      1077,
+      2335
+    ],
+    "covered_dock_bounds": [
+      711,
+      2072,
+      1024,
+      2294
+    ],
+    "picker_highlight_uses_readable_white_text": true
+  }
+}

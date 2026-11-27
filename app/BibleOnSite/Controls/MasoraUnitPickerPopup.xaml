@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Controls.MasoraUnitPickerPopup"
@@ -116,11 +117,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding Name}"
+                                        <Label x:Name="ItemText" Text="{Binding Name}"
                                                FontSize="16"
                                                AutomationId="MasoraPickerGroupItem"
                                                HorizontalTextAlignment="Center"
@@ -185,11 +187,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding SeferName}"
+                                        <Label x:Name="ItemText" Text="{Binding SeferName}"
                                                FontSize="14"
                                                AutomationId="MasoraPickerSeferItem"
                                                HorizontalTextAlignment="Center"
@@ -254,11 +257,12 @@
                                                 <VisualState Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                        <Setter TargetName="ItemText" Property="Label.TextColor" Value="White"/>
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
                                         </VisualStateManager.VisualStateGroups>
-                                        <Label Text="{Binding Heading}"
+                                        <Label x:Name="ItemText" Text="{Binding Heading}"
                                                FontSize="13"
                                                LineBreakMode="TailTruncation"
                                                AutomationId="MasoraPickerUnitItem"
@@ -287,22 +291,14 @@
                       ColumnDefinitions="*,*"
                       Padding="12"
                       ColumnSpacing="12">
-                    <Button Grid.Column="0"
+                    <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="0"
                             Text="בטל"
                             AutomationId="MasoraPickerCancel"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                            BorderColor="{StaticResource Gray400}"
-                            BorderWidth="1"
-                            CornerRadius="8"
                             Clicked="OnCancelClicked"/>
-                    <Button Grid.Column="1"
+                    <Button Style="{x:Static controls:AppButtonStyles.Primary}" Grid.Column="1"
                             x:Name="ConfirmButton"
                             Text="בחר"
                             AutomationId="MasoraPickerConfirm"
-                            BackgroundColor="{StaticResource Primary}"
-                            TextColor="White"
-                            CornerRadius="8"
                             IsEnabled="False"
                             Clicked="OnConfirmClicked"/>
                 </Grid>

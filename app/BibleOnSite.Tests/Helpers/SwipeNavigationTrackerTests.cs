@@ -5,6 +5,112 @@ namespace BibleOnSite.Tests.Helpers;
 public class SwipeNavigationTrackerTests
 {
     [Theory]
+    [InlineData(30, 30, true)]
+    [InlineData(-30, -30, true)]
+    [InlineData(30, 0, true)]
+    [InlineData(0, 30, true)]
+    [InlineData(7, 7, false)]
+    public void ReadingDragIncludesDiagonalMotionWithoutChangingChapterAxisRules(float dx, float dy, bool expected)
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500 + dx, 1000 + dy, 1100), 24);
+        swipe.IsDragging.Should().Be(expected);
+        swipe.Cancel();
+        swipe.IsDragging.Should().BeFalse();
+    }
+
+    [Fact]
+    public void VerticalDragPublishesPhysicalDeltasAndStopsAtRelease()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 900, 1100), 24);
+        swipe.VerticalContentDelta.Should().Be(100);
+        swipe.Move(new(500, 880, 1120), 24);
+        swipe.VerticalContentDelta.Should().Be(20);
+        swipe.Move(new(500, 890, 1140), 24);
+        swipe.VerticalContentDelta.Should().Be(-10);
+        swipe.End(new(500, 890, 1150), 1080, 24, 150, true, 929);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(500, 600, 1200), 24);
+        swipe.VerticalContentDelta.Should().BeNull("inertia and layout do not belong to an active finger gesture");
+    }
+
+    [Fact]
+    public void TouchJitterAndHorizontalChapterSwipesDoNotPublishVerticalDeltas()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(502, 990, 1010), 24);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(200, 990, 1100), 24);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(200, 1500, 1200), 24);
+        swipe.VerticalContentDelta.Should().BeNull("a chapter gesture keeps its horizontal ownership");
+    }
+
+    [Fact]
+    public void PhysicalDragCanHideAndRevealHeaderWithoutMovingItsViewport()
+    {
+        var swipe = new SwipeNavigationTracker();
+        var header = new ReaderChromeIdleState();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 900, 1100), 24);
+        swipe.IsDragging.Should().BeTrue();
+        header.DragStarted(1100);
+        header.IsVisible.Should().BeTrue();
+        header.DragEnded(1200);
+        header.Tick(1200 + ReaderChromeIdleState.CooldownMilliseconds, false).Should().BeFalse();
+        swipe.Cancel();
+        swipe.Begin(new(500, 1000, 2000), 19);
+        swipe.Move(new(500, 1030, 2100), 24);
+        swipe.IsDragging.Should().BeTrue();
+        header.DragStarted(4000);
+        header.IsVisible.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0, 25, true)]
+    [InlineData(0, 24, false)]
+    [InlineData(0, -100, false)]
+    [InlineData(15, 25, true)]
+    [InlineData(30, 25, false)]
+    [InlineData(0, 0, false)]
+    public void UpwardContentIntent_RequiresVerticalMotionBeyondTouchSlop(float dx, float dy, bool expected)
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500 + dx, 1000 + dy, 1100), 24);
+
+        swipe.IsUpwardContentDrag(24).Should().Be(expected);
+        swipe.End(new(500 + dx, 1000 + dy, 1100), 1080, 24, 150, true, 929);
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CancelledGesture_DoesNotRevealReaderChrome()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 1100, 1100), 24);
+        swipe.Cancel();
+
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HorizontalGestureTurningVertical_KeepsItsChapterIntent()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(200, 1010, 1100), 24);
+        swipe.Move(new(200, 1600, 1200), 24);
+
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(850, 200, true, 18)]
     [InlineData(200, 850, true, 20)]
     [InlineData(850, 200, false, 20)]
@@ -124,7 +230,9 @@ public class SwipeNavigationTrackerTests
     public void MoveWithoutBegin_IsIgnored()
     {
         var swipe = new SwipeNavigationTracker();
+        swipe.IsDragging.Should().BeFalse();
         swipe.Move(new(600, 1010, 1600), 24);
+        swipe.IsDragging.Should().BeFalse();
         swipe.End(new(200, 1000, 1100), 1080, 24, 150, true, 929).Should().BeNull();
     }
 

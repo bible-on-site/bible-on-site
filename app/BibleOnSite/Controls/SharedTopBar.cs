@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
+using BibleOnSite.Config;
 
 namespace BibleOnSite.Controls;
 
@@ -21,10 +22,10 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class SharedTopBar : ContentView
 {
-    public static double BarHeight => 56;
+    public static double BarHeight => HomeUxPreview.Enabled ? 72 : 56;
     public static double EdgeWidth => 48;
-    public static double PillHeight => 40;
-    public static double PillCornerRadius => 14;
+    public static double PillHeight => HomeUxPreview.Enabled ? 52 : 40;
+    public static double PillCornerRadius => HomeUxPreview.Enabled ? 16 : 14;
 
     /// <summary>
     /// Nav-capsule segment width (#3683): the border's old 2-unit side inset
@@ -93,9 +94,11 @@ public class SharedTopBar : ContentView
     /// </summary>
     public Func<bool>? BackInvoker { get; set; }
 
+    internal IAppNavigator Navigator { get; set; } = ShellAppNavigator.Instance;
+
     public static readonly BindableProperty CenterContentProperty =
         BindableProperty.Create(nameof(CenterContent), typeof(View), typeof(SharedTopBar),
-            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._centerHost.Content = (View?)value);
+            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable).SetCenterContent((View?)value));
     /// <summary>Content placed in the center slot (title pill, search field).</summary>
     public View? CenterContent
     {
@@ -103,9 +106,18 @@ public class SharedTopBar : ContentView
         set => SetValue(CenterContentProperty, value);
     }
 
+    private void SetCenterContent(View? content)
+    {
+        _centerHost.Content = content;
+        if (HomeUxPreview.Enabled && content is Button title)
+        {
+            AppButtonStyles.Apply(title, AppButtonStyles.ToolbarTitle);
+        }
+    }
+
     public static readonly BindableProperty TrailingContentProperty =
         BindableProperty.Create(nameof(TrailingContent), typeof(View), typeof(SharedTopBar),
-            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._trailingHost.Content = (View?)value);
+            propertyChanged: (bindable, previous, value) => ((SharedTopBar)bindable).SetTrailingContent((View?)previous, (View?)value));
     /// <summary>Content placed in the trailing slot (page menu, clear button).</summary>
     public View? TrailingContent
     {
@@ -113,10 +125,36 @@ public class SharedTopBar : ContentView
         set => SetValue(TrailingContentProperty, value);
     }
 
+    private void SetTrailingContent(View? previous, View? content)
+    {
+        if (previous is not null) { previous.PropertyChanged -= OnTrailingContentChanged; }
+        _trailingHost.Content = content;
+        if (content is not null) { content.PropertyChanged += OnTrailingContentChanged; }
+        if (HomeUxPreview.Enabled && content is Button action)
+        {
+            AppButtonStyles.Apply(action, AppButtonStyles.Icon);
+            action.VerticalOptions = LayoutOptions.Center;
+        }
+        UpdatePreviewTrailingWidth();
+    }
+
+    private void OnTrailingContentChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsVisible)) { UpdatePreviewTrailingWidth(); }
+    }
+
+    private void UpdatePreviewTrailingWidth()
+    {
+        if (HomeUxPreview.Enabled)
+        {
+            _band.ColumnDefinitions[2].Width = TrailingContent?.IsVisible == true ? 52 : 0;
+        }
+    }
+
     public static readonly BindableProperty ShowBackProperty =
         BindableProperty.Create(nameof(ShowBack), typeof(bool), typeof(SharedTopBar), CapsuleBackDefault,
             propertyChanged: (bindable, _, value) =>
-                ((SharedTopBar)bindable).BackButton.IsVisible = (bool)value);
+                ((SharedTopBar)bindable).BackButton.IsVisible = HomeUxPreview.Enabled || (bool)value);
     /// <summary>
     /// Whether the capsule reserves its Back slot at all. Driven by
     /// <see cref="BackChrome"/> from the persisted platform preference —
@@ -147,7 +185,7 @@ public class SharedTopBar : ContentView
             propertyChanged: (bindable, _, value) =>
             {
                 // Element.AutomationId may only be assigned once.
-                if (value is string id && id.Length > 0)
+                if (!HomeUxPreview.Enabled && value is string id && id.Length > 0)
                 {
                     ((SharedTopBar)bindable).NavigationButton.AutomationId = id;
                 }
@@ -168,7 +206,11 @@ public class SharedTopBar : ContentView
             FontSize = 24,
             WidthRequest = CapsuleSegmentWidth,
             Padding = 0,
+            // Ghost chrome inside the capsule pill: the shared Secondary
+            // outline and 48dp floor have no surface to ring here (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
+            MinimumHeightRequest = 0,
             VerticalOptions = LayoutOptions.Fill,
         };
         NavigationButton.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
@@ -179,6 +221,7 @@ public class SharedTopBar : ContentView
         ToolTipProperties.SetText(NavigationButton, "תפריט ניווט");
 #endif
         NavigationButton.Clicked += OnBarNavigationClicked;
+        if (HomeUxPreview.Enabled) { NavigationButton.AutomationId = "TopBarBackButton"; }
 
         BackButton = new Button
         {
@@ -187,11 +230,15 @@ public class SharedTopBar : ContentView
             FontSize = 22,
             WidthRequest = CapsuleSegmentWidth,
             Padding = 0,
+            // Ghost chrome inside the capsule pill: the shared Secondary
+            // outline and 48dp floor have no surface to ring here (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
+            MinimumHeightRequest = 0,
             VerticalOptions = LayoutOptions.Fill,
             IsVisible = CapsuleBackDefault,
             IsEnabled = false,
-            AutomationId = "TopBarBackButton",
+            AutomationId = HomeUxPreview.Enabled ? "TopBarHomeButton" : "TopBarBackButton",
         };
         SemanticProperties.SetDescription(BackButton, "חזור");
         ApplyBackEnabledVisual();
@@ -253,7 +300,34 @@ public class SharedTopBar : ContentView
         container.Add(_band);
         container.Add(separator);
         Content = container;
+        if (HomeUxPreview.Enabled)
+        {
+            ConfigurePreviewNavigation();
+        }
         Loaded += (_, _) => RefreshBackState();
+    }
+
+    private void ConfigurePreviewNavigation()
+    {
+        _band.Padding = new Thickness(8, 8);
+        _band.ColumnSpacing = 6;
+        UpdatePreviewTrailingWidth();
+        _capsuleBorder.HeightRequest = 56;
+        _capsuleBorder.Padding = 0;
+        _capsuleBorder.Margin = 0;
+        _capsuleBorder.BackgroundColor = Colors.Transparent;
+        _capsule.Spacing = 6;
+        _band.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
+        foreach (var button in new[] { NavigationButton, BackButton })
+        {
+            AppButtonStyles.Apply(button, AppButtonStyles.Icon);
+        }
+        NavigationButton.Text = BackGlyph(FlowDirection.RightToLeft);
+        SemanticProperties.SetDescription(NavigationButton, "חזרה");
+        BackButton.Text = Fonts.FluentUI.home_24_regular;
+        BackButton.IsVisible = true;
+        BackButton.IsEnabled = true;
+        SemanticProperties.SetDescription(BackButton, "מסך הבית");
     }
 
     /// <summary>
@@ -326,7 +400,11 @@ public class SharedTopBar : ContentView
             PreferencesService.Instance.InAppBackButton);
     }
 
-    private void ApplyBackGlyph() => BackButton.Text = BackGlyph(ResolveFlowDirection());
+    private void ApplyBackGlyph()
+    {
+        if (HomeUxPreview.Enabled) { NavigationButton.Text = BackGlyph(ResolveFlowDirection()); }
+        else { BackButton.Text = BackGlyph(ResolveFlowDirection()); }
+    }
 
     private FlowDirection ResolveFlowDirection()
     {
@@ -360,6 +438,13 @@ public class SharedTopBar : ContentView
     private void ApplyBackEnabledVisual()
     {
         var enabled = BackEnabled;
+        if (HomeUxPreview.Enabled)
+        {
+            NavigationButton.IsEnabled = enabled;
+            NavigationButton.Opacity = enabled ? 1 : 0.35;
+            BackButton.IsEnabled = true;
+            return;
+        }
         BackButton.IsEnabled = enabled;
         BackButton.SetAppThemeColor(Button.TextColorProperty,
             enabled ? Colors.Black : DisabledGlyphLight,
@@ -368,6 +453,11 @@ public class SharedTopBar : ContentView
 
     private void OnBackClicked(object? sender, EventArgs e)
     {
+        if (HomeUxPreview.Enabled)
+        {
+            _ = Navigator.GoToAsync($"//{AppRoutes.Perek}");
+            return;
+        }
         // Never trust the painted state: re-derive from the live coordinator
         // first, so a stale enabled paint can't skip straight to leaving the
         // app — a disabled control must be genuinely non-actionable (#2467).
@@ -387,6 +477,12 @@ public class SharedTopBar : ContentView
 
     private void OnBarNavigationClicked(object? sender, EventArgs e)
     {
+        if (HomeUxPreview.Enabled)
+        {
+            RefreshBackState();
+            if (BackEnabled) { _ = (BackInvoker ?? InvokeSharedBack)(); }
+            return;
+        }
         if (FlyoutOpener is { } opener)
         {
             opener();
@@ -405,6 +501,7 @@ public class SharedTopBar : ContentView
     /// </summary>
     internal static void RequestNavPane(Shell? shell)
     {
+        if (HomeUxPreview.Enabled) { return; }
         if (shell is IAdaptiveNavPane adaptiveNav)
         {
             adaptiveNav.ToggleNavPane();

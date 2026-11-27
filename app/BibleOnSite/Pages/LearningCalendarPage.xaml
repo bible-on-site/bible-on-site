@@ -28,14 +28,7 @@
         </controls:SharedTopBar>
 
     <ContentPage.Resources>
-        <Style x:Key="CalendarNavButton" TargetType="Button">
-            <Setter Property="FontFamily" Value="FluentIcons"/>
-            <Setter Property="FontSize" Value="18"/>
-            <Setter Property="WidthRequest" Value="40"/>
-            <Setter Property="HeightRequest" Value="40"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
-        </Style>
+        <Style x:Key="CalendarNavButton" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.CompactIcon}"/>
         <Style x:Key="CalendarPicker" TargetType="Picker">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
@@ -43,12 +36,9 @@
         </Style>
         <!-- Unselected view-toggle state: quiet surface so the active segment's
              Primary fill reads as the selected option in both themes. -->
-        <Style x:Key="CalendarToggleButton" TargetType="Button">
+        <Style x:Key="CalendarToggleButton" TargetType="Button" BasedOn="{x:Static controls:AppButtonStyles.Secondary}">
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="HeightRequest" Value="38"/>
             <Setter Property="Padding" Value="8,0"/>
-            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
         </Style>
     </ContentPage.Resources>
 
@@ -114,11 +104,10 @@
                     SemanticProperties.Description="חודש קודם"
                     AutomationId="CalendarPrevMonth"
                     Command="{Binding PrevMonthCommand}"/>
-            <Button Grid.Column="1"
+            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="1"
                     Text="היום"
                     FontSize="14"
                     FontFamily="AlHeperekRegular"
-                    HeightRequest="40"
                     Padding="10,0"
                     SemanticProperties.Description="חזרה לחודש הנוכחי"
                     AutomationId="CalendarToday"

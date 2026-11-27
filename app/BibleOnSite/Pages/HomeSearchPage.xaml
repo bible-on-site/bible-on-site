@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             x:Class="BibleOnSite.Pages.HomeSearchPage"
+             Title="חיפוש" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
+             BackgroundColor="{AppThemeBinding Light=#F5F7FB, Dark=#111C2C}">
+    <controls:FloatingSearchBar x:Name="UnifiedSearch" ResultSelected="OnResultSelected"/>
+</ContentPage>

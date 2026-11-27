@@ -42,6 +42,11 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
         DebugLog.Write("[Startup] PerushimSheet InitializeComponent");
         InitializeComponent();
         DebugLog.Write("[Startup] PerushimSheet constructed");
+        if (Config.HomeUxPreview.Enabled)
+        {
+            PerushimHeading.Text = "הפירושים שיופיעו בפרק";
+            PreviewInstructions.IsVisible = true;
+        }
     }
 
     /// <summary>
@@ -59,6 +64,14 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 
         _panelHeight = (hostHeight * 0.33) + 90; // Default: 33% + bottom bar
         _expandedHeight = Math.Max(_panelHeight, maxExpandedHeight);
+        if (Config.HomeUxPreview.Enabled)
+        {
+            ZIndex = 120; // Cover the dock (100), while menus (160) and the navigation picker (200) remain above this sheet.
+            Margin = Thickness.Zero;
+            var available = Math.Max(0, maxExpandedHeight);
+            _panelHeight = Math.Min(_panelHeight, available);
+            _expandedHeight = available;
+        }
 
         if (IsOpen)
         {

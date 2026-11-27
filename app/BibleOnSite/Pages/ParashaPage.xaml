@@ -33,17 +33,12 @@
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
                     <Grid>
-                <Button x:Name="NormalNavigationTitle"
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="NormalNavigationTitle"
                    AutomationId="ParashaSource"
                    Text="{Binding Title}"
                    FontSize="20"
                    Padding="12,0"
-                   HeightRequest="40"
-                   CornerRadius="14"
-                   BorderWidth="0"
                    IsVisible="True"
-                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
@@ -64,10 +59,8 @@
                     </Grid>
                 </controls:SharedTopBar.CenterContent>
                 <controls:SharedTopBar.TrailingContent>
-                <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
-                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
-                        WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                <Button Style="{x:Static controls:AppButtonStyles.Icon}" x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
+                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontSize="20"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
                 </controls:SharedTopBar.TrailingContent>
@@ -179,16 +172,10 @@
                                 </VerticalStackLayout>
                                 <!-- קריינות: plays the whole unit; shown only when the
                                      menu checkbox is checked and the unit has audio -->
-                                <Button x:Name="HeaderPlayButton"
+                                <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
                                         Text="{x:Static fonts:FluentUI.play_24_regular}"
-                                        FontFamily="FluentIcons"
                                         FontSize="20"
-                                        WidthRequest="40"
-                                        HeightRequest="40"
-                                        Padding="0"
-                                        BackgroundColor="Transparent"
-                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"

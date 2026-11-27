@@ -38,6 +38,11 @@ public partial class PerekPage
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
         ReaderMenuOverlay.Close();
+        if (Config.HomeUxPreview.Enabled)
+        {
+            PerekPickerPopup.Show(_viewModel.PerekId);
+            return;
+        }
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();
@@ -236,7 +241,11 @@ public partial class PerekPage
         _preserveSearchOnDisappear = true;
         try
         {
-            if (result is AuthorSearchResult author)
+            if (result is ScreenSearchResult screen)
+            {
+                await ShellAppNavigator.Instance.GoToAsync(screen.Destination.Route);
+            }
+            else if (result is AuthorSearchResult author)
             {
                 await ShellAppNavigator.Instance.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
             }

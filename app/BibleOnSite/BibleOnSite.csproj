@@ -22,6 +22,8 @@
 
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
+		<!-- Opt-in native UX prototype for emulator/design iterations. -->
+		<DefineConstants Condition="'$(Configuration)' == 'Debug' AND '$(HomeUxPreview)' == 'true'">$(DefineConstants);HOME_UX_PREVIEW</DefineConstants>
 
 		<!-- Firebase emulator gating (#3185): CompileMobileE2E passes
 		     -p:FirebaseEmulator=true so FIREBASE_EMULATOR compiles the Auth and
