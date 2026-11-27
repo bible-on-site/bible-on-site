@@ -8,6 +8,7 @@ import type {
 	ContributionEvent,
 	ContributionGeneration,
 } from "~/lib/tanahpedia/contributions";
+import type { ContributionHomeSearch } from "./ContributionWorkspace";
 
 export { latestContributionAgentResponses as latestAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
 
@@ -37,9 +38,13 @@ const TRIGGER: Record<
 export function AgentWorkStatus({
 	item,
 	agents = [],
+	showProposals = true,
+	discussionSearch,
 }: {
 	item: Contribution;
 	agents?: ContributionAgentSummary[];
+	showProposals?: boolean;
+	discussionSearch?: ContributionHomeSearch;
 }) {
 	const job = item.generation;
 	if (!job) return null;
@@ -92,15 +97,25 @@ export function AgentWorkStatus({
 			{Boolean(job.triggerEventIds?.length) && (
 				<p className="contribution-agent-links">
 					הקשר לעבודה:{" "}
-					{job.triggerEventIds?.map((id, index) => (
-						<a
-							className="contribution-link"
-							key={id}
-							href={`#contribution-event-${encodeURIComponent(id)}`}
-						>
-							אירוע {index + 1}
-						</a>
-					))}
+					{job.triggerEventIds?.map((id, index) => {
+						const hash = `contribution-event-${encodeURIComponent(id)}`;
+						const label = `אירוע ${index + 1}`;
+						return discussionSearch ? (
+							<Link
+								className="contribution-link"
+								key={id}
+								to="/"
+								search={discussionSearch}
+								hash={hash}
+							>
+								{label}
+							</Link>
+						) : (
+							<a className="contribution-link" key={id} href={`#${hash}`}>
+								{label}
+							</a>
+						);
+					})}
 				</p>
 			)}
 			{job.result && (
@@ -124,17 +139,18 @@ export function AgentWorkStatus({
 					{job.error}
 				</p>
 			)}
-			{job.prIds.map((id, index) => (
-				<p key={id}>
-					<Link
-						className="contribution-link"
-						to="/pull-requests"
-						search={{ id }}
-					>
-						פתיחת הצעה {index + 1} לסקירה
-					</Link>
-				</p>
-			))}
+			{showProposals &&
+				job.prIds.map((id, index) => (
+					<p key={id}>
+						<Link
+							className="contribution-link"
+							to="/pull-requests"
+							search={{ id }}
+						>
+							פתיחת הצעה {index + 1} לסקירה
+						</Link>
+					</p>
+				))}
 		</section>
 	);
 }

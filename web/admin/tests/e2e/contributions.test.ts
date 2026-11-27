@@ -481,17 +481,21 @@ test.describe("Issues and typed pull requests", () => {
 			await expect(
 				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
+			const generatedProposal = page
+				.getByRole("region", { name: "הצעות השינוי של הפנייה" })
+				.getByRole("link", { name: /ערך לאברם לפי המקור/ });
+			await expect(generatedProposal).toBeVisible();
 			await capture(page, testInfo, "workstation-generation-completed");
-			await page
-				.getByRole("link", { name: "פתיחת הצעה 1 לסקירה", exact: true })
-				.click();
+			await generatedProposal.click();
 			await expect(
 				page.getByText("Local LLM", { exact: true }).first(),
 			).toBeVisible();
 			await expect(
 				page.getByRole("button", { name: "מיזוג PR", exact: true }),
 			).toBeDisabled();
-			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
+			await expect(
+				page.getByRole("tab", { name: "שינויים 1", exact: true }),
+			).toHaveAttribute("aria-selected", "true");
 			await expect(page.getByRole("table")).toContainText("אברם");
 			await capture(page, testInfo, "workstation-model-pr-review-gate");
 			const prId = new URL(page.url()).searchParams.get("id");
@@ -500,7 +504,53 @@ test.describe("Issues and typed pull requests", () => {
 			await page
 				.getByRole("button", { name: "שמירת שיוך והפעלת סוכן", exact: true })
 				.click();
-			await page.getByRole("tab", { name: /^תיאור ודיון/ }).click();
+			await page
+				.getByRole("region", { name: "פעילות הסוכן" })
+				.getByRole("link", { name: "אירוע 1", exact: true })
+				.click();
+			const eventId = new URL(page.url()).hash.slice(1);
+			expect(eventId).toMatch(/^contribution-event-/);
+			await expect(page.locator(`[id="${eventId}"]`)).toContainText(
+				"שינה שיוך",
+			);
+			const coldDiscussion = await page.context().newPage();
+			try {
+				await coldDiscussion.setViewportSize({ width: 390, height: 620 });
+				await coldDiscussion.goto(page.url());
+				const event = coldDiscussion.locator(`[id="${eventId}"]`);
+				await expect(event).toBeInViewport();
+				const anchorScroll = await coldDiscussion.evaluate(
+					() => window.scrollY,
+				);
+				const savedScroll = await coldDiscussion.evaluate(async () => {
+					const bottom =
+						document.documentElement.scrollHeight - window.innerHeight;
+					if (bottom > window.scrollY) {
+						await new Promise<void>((resolve) => {
+							window.addEventListener("scroll", () => resolve(), {
+								once: true,
+							});
+							window.scrollTo(0, bottom);
+						});
+					}
+					return window.scrollY;
+				});
+				expect(savedScroll).toBeGreaterThan(anchorScroll);
+				// Keep the saved scroll while activating the offscreen Changes tab.
+				await coldDiscussion
+					.getByRole("tab", { name: /^שינויים/ })
+					.evaluate((tab) => (tab as HTMLButtonElement).click());
+				await expect(
+					coldDiscussion.getByRole("tabpanel", { name: /^שינויים/ }),
+				).toBeVisible();
+				await coldDiscussion.goBack();
+				await expect(event).toBeVisible();
+				await expect
+					.poll(() => coldDiscussion.evaluate(() => window.scrollY))
+					.toBe(savedScroll);
+			} finally {
+				await coldDiscussion.close();
+			}
 			await page
 				.getByLabel("הוספת תגובה", { exact: true })
 				.fill("יש להסביר שההצעה עוסקת במטא-נתונים בלבד");
