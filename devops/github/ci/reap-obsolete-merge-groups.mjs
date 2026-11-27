@@ -14,7 +14,15 @@ export const POLICY = Object.freeze({
   maxCancellations: 2,
   maxBodyBytes: 2 * 1024 * 1024,
   requestTimeoutMs: 10_000,
+  // Transient 5xx responses get a bounded retry inside the request budget;
+  // the cancel POST is never replayed (its reconcile read covers the race).
+  maxAttempts: 3,
+  retryDelayMs: 1_000,
+  // An inconsistent run listing gets exactly one second read.
+  maxRunPageReads: 2,
+  pageRereadDelayMs: 500,
 });
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const active = new Set(["queued", "in_progress"]);
 const completedWithoutCancellation = new Set(["success", "failure", "neutral", "skipped", "timed_out", "action_required", "stale", "startup_failure"]);
 const states = new Set(["AWAITING_CHECKS", "LOCKED", "MERGEABLE", "QUEUED", "UNMERGEABLE"]);
@@ -95,6 +103,18 @@ export function fullQueue(response) {
   }
   return { heads, bases };
 }
+// A listing can be served inconsistent mid-replication; reread it once rather
+// than going red on a transient shape. A second inconsistency still fails.
+async function fullRunPageRead(api, status, delay) {
+  for (let read = 1; ; read++) {
+    try { return fullRunPage(await api.listRuns(status)); }
+    catch (error) {
+      if (!(error instanceof ReaperError && error.code === "INCOMPLETE_RUN_PAGE")
+        || read >= POLICY.maxRunPageReads) throw error;
+      await delay(POLICY.pageRereadDelayMs);
+    }
+  }
+}
 async function freshProof(api, listed) {
   const run = await api.getRun(listed.id);
   requireValue(sameRun(listed, run), "RUN_CHANGED");
@@ -131,7 +151,7 @@ async function freshProof(api, listed) {
  * Fresh proof is repeated before each normal cancel, but GitHub has no atomic
  * expected-head lease on cancellation: the final-read/POST race remains.
  */
-export async function reap({ eventName, payload, api, dryRun = true, journal }) {
+export async function reap({ eventName, payload, api, dryRun = true, journal, delay = sleep }) {
   const report = { mode: dryRun ? "dry-run" : "apply", complete: false,
     actions: [], cancelRequests: [], mutationConfirmed: 0 };
   try {
@@ -158,7 +178,7 @@ export async function reap({ eventName, payload, api, dryRun = true, journal }) 
     const collected = [];
     // No pagination is silently dropped. Overflow retains manual cleanup.
     for (const status of ["queued", "in_progress"]) {
-      collected.push(...fullRunPage(await api.listRuns(status)));
+      collected.push(...await fullRunPageRead(api, status, delay));
     }
     const candidates = new Map();
     for (const run of collected) {
@@ -237,30 +257,42 @@ export async function reap({ eventName, payload, api, dryRun = true, journal }) 
 }
 
 export class GitHubApi {
-  constructor(token, fetcher = fetch) {
+  constructor(token, fetcher = fetch, delay = sleep) {
     requireValue(typeof token === "string" && token.length > 0, "TOKEN_MISSING");
-    this.token = token; this.fetcher = fetcher; this.requests = 0;
+    this.token = token; this.fetcher = fetcher; this.delay = delay; this.requests = 0;
   }
-  async request(path, { method = "GET", data, missing = false } = {}) {
-    requireValue(++this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
+  async request(path, { method = "GET", data, missing = false, idempotent = true } = {}) {
     requireValue(path === "/repos/" + POLICY.repository || path.startsWith("/repos/" + POLICY.repository + "/") || path === "/graphql",
       "API_PATH");
     const url = new URL(path, "https://api.github.com");
     requireValue(url.origin === "https://api.github.com", "API_ORIGIN");
     requireValue(!url.hash && (url.pathname === "/repos/" + POLICY.repository || url.pathname.startsWith("/repos/" + POLICY.repository + "/")
       || url.pathname === "/graphql"), "API_PATH");
-    const response = await this.fetcher(url, {
-      method, redirect: "error", signal: AbortSignal.timeout(POLICY.requestTimeoutMs),
-      headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
-      body: data === undefined ? undefined : JSON.stringify(data),
-    });
-    if (missing && response.status === 404) {
-      await response.body?.cancel();
-      return { status: 404 };
+    for (let attempt = 1; ; attempt++) {
+      requireValue(++this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
+      const response = await this.fetcher(url, {
+        method, redirect: "error", signal: AbortSignal.timeout(POLICY.requestTimeoutMs),
+        headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
+        body: data === undefined ? undefined : JSON.stringify(data),
+      });
+      // A transient 5xx is retried within the same request budget, never
+      // suppressed: after the last attempt the HTTP_<status> error stands.
+      if (idempotent && response.status >= 500 && attempt < POLICY.maxAttempts) {
+        await response.body?.cancel();
+        await this.delay(POLICY.retryDelayMs);
+        continue;
+      }
+      if (missing && response.status === 404) {
+        await response.body?.cancel();
+        return { status: 404 };
+      }
+      requireValue(response.status === 200 || (method === "POST"
+        && (response.status === 202 || response.status === 204)), "HTTP_" + response.status);
+      return await this.body(response);
     }
-    requireValue(response.status === 200 || (method === "POST"
-      && (response.status === 202 || response.status === 204)), "HTTP_" + response.status);
+  }
+  async body(response) {
     const length = Number(response.headers.get("content-length"));
     requireValue(!Number.isFinite(length) || length <= POLICY.maxBodyBytes, "BODY_LIMIT");
     const reader = response.body?.getReader(), parts = [];
@@ -280,6 +312,10 @@ export class GitHubApi {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     return { status: response.status, data: text ? JSON.parse(text) : null,
       hasNextPage: Boolean(response.headers.get("link")) };
+  }
+  async cancel(id) {
+    return this.request("/repos/" + POLICY.repository + "/actions/runs/" + id + "/cancel",
+      { method: "POST", idempotent: false });
   }
   async getRepository() { return (await this.request("/repos/" + POLICY.repository)).data; }
   async getWorkflow() {
@@ -317,8 +353,7 @@ export class GitHubApi {
   }
   async cancelRun(id) {
     requireValue(positive(id), "RUN_ID");
-    return (await this.request("/repos/" + POLICY.repository + "/actions/runs/" + id + "/cancel",
-      { method: "POST" })).status;
+    return (await this.cancel(id)).status;
   }
 }
 
