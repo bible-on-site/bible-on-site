@@ -48,7 +48,10 @@ function identifiers(value: unknown, result = new Set<string>()): Set<string> {
 }
 function changesAddressSpace(item: Contribution): boolean {
 	return item.changes.some(
-		(c) => c.kind === "entry" || c.kind === "alias_mapping",
+		(c) =>
+			c.kind === "entry" ||
+			c.kind === "alias_mapping" ||
+			(c.kind === "place_profile" && c.after?.entry != null),
 	);
 }
 function affected(

@@ -830,6 +830,8 @@ export async function mergeContribution(
 			places = new Set<string>();
 		for (const change of merged.changes) {
 			if (change.kind === "metadata") entities.add(change.targetId);
+			if (change.kind === "place_profile" && !change.after?.entry)
+				places.add(change.targetId);
 			for (const state of [change.before, change.after]) {
 				for (const key of ["parentId", "childId", "person1Id", "person2Id"])
 					if (typeof state?.[key] === "string") people.add(state[key]);
@@ -848,16 +850,25 @@ export async function mergeContribution(
 			pediaChangesForEntities([...entities]),
 			pediaChangesForEntryIds(
 				merged.changes
-					.filter((change) => change.kind === "entry")
+					.filter(
+						(change) =>
+							change.kind === "entry" ||
+							(change.kind === "place_profile" && change.after?.entry != null),
+					)
 					.map((change) => change.targetId),
 			),
 		]);
 		await revalidateWebsite(
 			merged.changes.some(
 				(c) =>
-					!["parent_child", "union", "place", "metadata", "entry"].includes(
-						c.kind,
-					),
+					![
+						"parent_child",
+						"union",
+						"place",
+						"metadata",
+						"entry",
+						"place_profile",
+					].includes(c.kind),
 			)
 				? pediaInvalidation()
 				: requests.flat(),

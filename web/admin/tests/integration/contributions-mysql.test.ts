@@ -2418,6 +2418,391 @@ async function createPr(changes: unknown[], actor = bot, issueId?: string) {
 		actor,
 	);
 }
+
+describe("word-level place profiles on MySQL", () => {
+	it("requires review and applies an empty entry, exact links and sourced coordinates atomically", async () => {
+		const { searchScriptureOccurrences } = await import(
+			"~/server/tanahpedia/contribution-scripture-occurrences.server"
+		);
+		const words = (
+			await searchScriptureOccurrences({
+				spellings: ["מסה", "מריבה"],
+				book: "שמות",
+			})
+		).items.filter((word) => word.perekId === 67 && word.pasukNumber === 7);
+		expect(words).toHaveLength(2);
+		const occurrences = words.map(
+			({ perekId, pasukNumber, segmentStart, segmentEnd, text }) => ({
+				perekId,
+				pasukNumber,
+				segmentStart,
+				segmentEnd,
+				text,
+			}),
+		);
+		await conn.execute(
+			"INSERT IGNORE INTO tanah_perek(id,perek,pasuk_count) VALUES(67,17,16)",
+		);
+		const uniqueName = `test-place-${randomUUID()}`;
+		const after = {
+			entry: { title: "מקום לבדיקה", uniqueName, displayName: "מקום לבדיקה" },
+			occurrences,
+			identification: {
+				modernName: "אתר בדיקה",
+				latitude: 31.125,
+				longitude: 35.75,
+				basis: "commentary",
+				citation: "מקור בדיקה",
+				coordinateCitation: "מפת בדיקה",
+			},
+		};
+		const draft = await service.createContribution(
+			{
+				kind: "pr",
+				title: "מקום עם שני אזכורים באותו פסוק",
+				description: "בדיקה על בסיס נתוני דמה",
+				evidence: [
+					...evidence,
+					{
+						citation: "מפת בדיקה",
+						quote: "נקודה לבדיקה בלבד",
+						url: null,
+						note: "",
+					},
+				],
+				changes: [{ kind: "place_profile", after }],
+			},
+			bot,
+		);
+		expect(draft.changes[0].before).toBeNull();
+		await expect(
+			service.mergeContribution(
+				{ id: draft.id, version: draft.version },
+				owner,
+			),
+		).rejects.toThrow(/Approval from doradsoft/);
+		const [before] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_entry WHERE unique_name=?",
+			[uniqueName],
+		);
+		expect(before).toEqual([]);
+
+		const approved = await service.updateContribution(
+			{ id: draft.id, version: draft.version, action: "approve" },
+			owner,
+		);
+		const merged = await service.mergeContribution(
+			{ id: approved.id, version: approved.version },
+			owner,
+		);
+		expect(merged.state).toBe("merged");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			`SELECT e.content, p.id AS placeId, s.segment_start AS start, s.segment_end AS end
+			FROM tanahpedia_entry e
+			JOIN tanahpedia_entry_entity ee ON ee.entry_id=e.id
+			JOIN tanahpedia_place p ON p.entity_id=ee.entity_id
+			JOIN tanahpedia_entity_tanah_source s ON s.entity_id=p.entity_id
+			WHERE e.unique_name=? AND s.perek_id=67 AND s.pasuk_number=7 ORDER BY s.segment_start`,
+			[uniqueName],
+		);
+		expect(
+			rows.map(({ content, start, end }) => ({ content, start, end })),
+		).toEqual([
+			{ content: "<p></p>", start: 3, end: 3 },
+			{ content: "<p></p>", start: 4, end: 4 },
+		]);
+		const [sources] = await conn.execute<RowDataPacket[]>(
+			`SELECT CAST(i.latitude AS DOUBLE) AS latitude, CAST(i.longitude AS DOUBLE) AS longitude, s.source_text AS citation
+			FROM tanahpedia_place_identification i
+			JOIN tanahpedia_source_group g ON g.target_table='tanahpedia_place_identification' AND g.target_id=i.id
+			JOIN tanahpedia_non_tanah_source s ON s.source_group_id=g.id WHERE i.place_id=?`,
+			[rows[0].placeId],
+		);
+		expect(sources).toEqual(
+			expect.arrayContaining([
+				{ latitude: 31.125, longitude: 35.75, citation: "מקור בדיקה" },
+				{ latitude: 31.125, longitude: 35.75, citation: "מפת בדיקה" },
+			]),
+		);
+		await expect(
+			createPr([
+				{
+					kind: "place_profile",
+					targetId: rows[0].placeId,
+					after: { entry: null, occurrences, identification: null },
+				},
+			]),
+		).rejects.toThrow(/already present/);
+
+		const extraSource = { ...evidence[0], citation: "מדידה נוספת" };
+		const existing = await service.createContribution(
+			{
+				kind: "pr",
+				title: "מקור נוסף לזיהוי קיים",
+				description: "הנקודה כבר קיימת באותן קואורדינטות",
+				evidence: [...evidence, extraSource],
+				changes: [
+					{
+						kind: "place_profile",
+						targetId: rows[0].placeId,
+						after: {
+							entry: null,
+							occurrences: [],
+							identification: {
+								...after.identification,
+								coordinateCitation: extraSource.citation,
+							},
+						},
+					},
+				],
+			},
+			owner,
+		);
+		expect(existing.changes[0].before?.identification).toEqual({
+			id: expect.any(String),
+			citations: ["מקור בדיקה"],
+		});
+		await service.mergeContribution(
+			{ id: existing.id, version: existing.version },
+			owner,
+		);
+		const [revisedSources] = await conn.execute<RowDataPacket[]>(
+			`SELECT i.id,s.source_text AS citation FROM tanahpedia_place_identification i
+			JOIN tanahpedia_source_group g ON g.target_table='tanahpedia_place_identification' AND g.target_id=i.id
+			JOIN tanahpedia_non_tanah_source s ON s.source_group_id=g.id WHERE i.place_id=?`,
+			[rows[0].placeId],
+		);
+		expect(new Set(revisedSources.map(({ id }) => id)).size).toBe(1);
+		expect(revisedSources.map(({ citation }) => citation).sort()).toEqual(
+			["מקור בדיקה", "מפת בדיקה", extraSource.citation].sort(),
+		);
+	});
+
+	it("requires an entry destination at proposal creation and when applying a reviewed word link", async () => {
+		const after = {
+			entry: null,
+			occurrences: [
+				{
+					perekId: 67,
+					pasukNumber: 7,
+					segmentStart: 3,
+					segmentEnd: 3,
+					text: "מַסָּ֖ה",
+				},
+			],
+			identification: null,
+		};
+		const change = { kind: "place_profile", targetId: ids.place, after };
+		await expect(createPr([change], owner)).rejects.toThrow(
+			/entry destination/,
+		);
+		const linkId = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
+			[linkId, otherEntry, ids.placeEntity],
+		);
+		const draft = await createPr([change]);
+		expect(draft.changes[0].before?.entryAddresses).toEqual([
+			expect.any(String),
+		]);
+		const approval = await service.updateContribution(
+			{ id: draft.id, version: draft.version, action: "approve" },
+			owner,
+		);
+		await conn.execute("DELETE FROM tanahpedia_entry_entity WHERE id=?", [
+			linkId,
+		]);
+		await expect(
+			service.mergeContribution(
+				{ id: approval.id, version: approval.version },
+				owner,
+			),
+		).rejects.toThrow(/entry destination/);
+		const [links] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_entity_tanah_source WHERE entity_id=? AND perek_id=67 AND pasuk_number=7",
+			[ids.placeEntity],
+		);
+		expect(links).toEqual([]);
+	});
+
+	it("rebases an approved entry creation to exact links on the alias destination and requires fresh review", async () => {
+		const canonical = `place-canonical-${randomUUID()}`;
+		const alias = `place-alias-${randomUUID()}`;
+		const entry = await createPr(
+			[
+				{
+					kind: "entry",
+					after: {
+						title: "מקום קיים",
+						displayName: "מקום קיים",
+						uniqueName: canonical,
+						entityType: "PLACE",
+					},
+				},
+			],
+			owner,
+		);
+		await service.mergeContribution(
+			{ id: entry.id, version: entry.version },
+			owner,
+		);
+		const entryId = entry.changes[0].targetId;
+		const [places] = await conn.execute<RowDataPacket[]>(
+			"SELECT p.id FROM tanahpedia_entry_entity ee JOIN tanahpedia_place p ON p.entity_id=ee.entity_id WHERE ee.entry_id=?",
+			[entryId],
+		);
+		const word = {
+			perekId: 67,
+			pasukNumber: 7,
+			segmentStart: 3,
+			segmentEnd: 3,
+			text: "מַסָּ֖ה",
+		};
+		const after = {
+			entry: {
+				title: "מקום מוצע",
+				displayName: "מקום מוצע",
+				uniqueName: alias,
+			},
+			occurrences: [word],
+			identification: null,
+		};
+		const draft = await createPr([{ kind: "place_profile", after }]);
+		const { prepareChanges } = await import(
+			"~/server/tanahpedia/contribution-changes.server"
+		);
+		expect(
+			await store.withContributions((tx) =>
+				prepareChanges(
+					tx,
+					[
+						{
+							kind: "place_profile",
+							targetId: draft.changes[0].targetId,
+							after,
+						},
+					],
+					{ refresh: true },
+				),
+			),
+		).toEqual(draft.changes);
+		const approved = await service.updateContribution(
+			{ id: draft.id, version: draft.version, action: "approve" },
+			owner,
+		);
+		const mapping = await createPr(
+			[
+				{
+					kind: "alias_mapping",
+					after: { name: alias, targets: [{ entryId, label: "" }] },
+				},
+			],
+			owner,
+		);
+		await service.mergeContribution(
+			{ id: mapping.id, version: mapping.version },
+			owner,
+		);
+		const rebased = await fresh(approved);
+		expect(rebased.changes[0]).toMatchObject({
+			kind: "place_profile",
+			targetId: places[0].id,
+			before: {
+				entryAddresses: [canonical],
+				occurrences: [],
+				identification: null,
+			},
+			after: { entry: null, occurrences: [word] },
+		});
+		expect(reviewStatus(rebased)).toBe("required");
+		await expect(
+			service.mergeContribution(
+				{ id: rebased.id, version: rebased.version },
+				owner,
+			),
+		).rejects.toThrow(/Approval from doradsoft/);
+		const reviewed = await service.updateContribution(
+			{ id: rebased.id, version: rebased.version, action: "approve" },
+			owner,
+		);
+		await service.mergeContribution(
+			{ id: reviewed.id, version: reviewed.version },
+			owner,
+		);
+		const [destinations] = await conn.execute<RowDataPacket[]>(
+			`SELECT e.unique_name AS address,e.title,s.segment_start AS start FROM tanahpedia_entry e
+			JOIN tanahpedia_entry_entity ee ON e.id=ee.entry_id
+			JOIN tanahpedia_entity_tanah_source s ON s.entity_id=ee.entity_id
+			WHERE e.id=? AND s.perek_id=67 AND s.pasuk_number=7`,
+			[entryId],
+		);
+		expect(destinations).toEqual([
+			{ address: canonical, title: "מקום קיים", start: 3 },
+		]);
+		await expect(
+			createPr(
+				[
+					{
+						kind: "place_profile",
+						targetId: entryId,
+						after: {
+							...after,
+							entry: {
+								...after.entry,
+								uniqueName: `unused-place-${randomUUID()}`,
+							},
+						},
+					},
+				],
+				owner,
+			),
+		).rejects.toThrow(/proposed entry already exists/);
+
+		await expect(
+			store.withContributions(async (tx) => {
+				await tx.execute("DELETE FROM tanahpedia_place WHERE id=?", [
+					places[0].id,
+				]);
+				return prepareChanges(tx, [{ kind: "place_profile", after }], {
+					refresh: true,
+				});
+			}),
+		).rejects.toThrow(/existing entry must identify one place/);
+	});
+
+	it("does not apply point citations absent from the reviewed evidence or mix places in one proposal", async () => {
+		const after = {
+			entry: null,
+			occurrences: [],
+			identification: {
+				modernName: "אתר בדיקה",
+				latitude: 30.7,
+				longitude: 32.3,
+				basis: "commentary",
+				citation: evidence[0].citation,
+				coordinateCitation: "מקור חסר",
+			},
+		};
+		const change = { kind: "place_profile", targetId: ids.place, after };
+		await expect(createPr([change, metadata("Mixed")], owner)).rejects.toThrow(
+			/one place/,
+		);
+		const draft = await createPr([change], owner);
+		await expect(
+			service.mergeContribution(
+				{ id: draft.id, version: draft.version },
+				owner,
+			),
+		).rejects.toThrow(/reviewed evidence/);
+		await service.updateContribution(
+			{ id: draft.id, version: draft.version, action: "close" },
+			owner,
+		);
+		await expect(
+			createPr([{ ...change, targetId: randomUUID() }], owner),
+		).rejects.toThrow(/existing place no longer exists/);
+	});
+});
 function metadata(name: string) {
 	return {
 		kind: "metadata",

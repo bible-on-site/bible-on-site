@@ -29,9 +29,15 @@ const mocks = vi.hoisted(() => ({
 	article: vi.fn(),
 	perek: vi.fn(),
 }));
-vi.mock("~/server/tanahpedia/contribution-perek-reads.server", () => ({
-	readAgentPerek: mocks.perek,
-}));
+vi.mock(
+	"~/server/tanahpedia/contribution-perek-reads.server",
+	async (importOriginal) => ({
+		...(await importOriginal<
+			typeof import("~/server/tanahpedia/contribution-perek-reads.server")
+		>()),
+		readAgentPerek: mocks.perek,
+	}),
+);
 vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
 	readArticleLinkContext: mocks.article,
 }));
@@ -995,6 +1001,171 @@ describe("assignment-driven leased contribution work", () => {
 		expect(mocks.create).not.toHaveBeenCalled();
 		expect(mocks.revise).not.toHaveBeenCalled();
 	});
+	it.each([
+		[
+			"scripture_occurrences",
+			{ spellings: ["מצרים"], book: "שמות", limit: 100 },
+		],
+		["scripture_chapter", { perekId: 51, cursor: 2, limit: 25 }],
+		["place_profile_words", { id, cursor: 1, limit: 50 }],
+	])(
+		"dispatches declared %s reads and emits an exact replay receipt",
+		async (name, args) => {
+			const input = await claim();
+			const result = {
+				data: { items: [{ text: "מִצְרָיְמָה" }], total: 1, nextCursor: null },
+				catalogue: empty,
+			};
+			mocks.tool.mockResolvedValueOnce(result);
+			const read = await readContributionWorkerContext({
+				...input,
+				name,
+				arguments: args,
+			});
+			expect(mocks.tool).toHaveBeenCalledWith(
+				expect.anything(),
+				current(),
+				name,
+				args,
+			);
+			expect(read).toMatchObject({
+				data: result.data,
+				receipt: {
+					name,
+					arguments: args,
+					hash: createHash("sha256")
+						.update(canonicalJson(result))
+						.digest("hex"),
+				},
+			});
+		},
+	);
+	it.each(["שמואל", "מלכים", "דברי הימים"])(
+		"reads both volumes of %s and accepts an exact volume through the worker",
+		async (book) => {
+			const context = await vi.importActual<
+				typeof import("~/server/tanahpedia/contribution-agent-context.server")
+			>("~/server/tanahpedia/contribution-agent-context.server");
+			mocks.tool.mockImplementation(context.readContributionAgentTool);
+			const input = await claim(),
+				name = "scripture_occurrences",
+				args = { spellings: ["מצרים"], book, limit: 100 };
+			const firstVolume = expect.objectContaining({
+				citation: expect.stringMatching(`^${book} א `),
+			});
+			const secondVolume = expect.objectContaining({
+				citation: expect.stringMatching(`^${book} ב `),
+			});
+			const both = await readContributionWorkerContext({
+				...input,
+				name,
+				arguments: args,
+			});
+			expect(both).toMatchObject({
+				data: { items: expect.arrayContaining([firstVolume, secondVolume]) },
+				receipt: { arguments: args },
+			});
+			if (!both.receipt) throw new Error("Expected a scripture read receipt");
+			const volume = await readContributionWorkerContext({
+				...input,
+				receipts: [both.receipt],
+				name,
+				arguments: { ...args, book: `${book} ב` },
+			});
+			expect(volume).toMatchObject({
+				data: { items: expect.arrayContaining([secondVolume]) },
+				receipt: { arguments: { book: `${book} ב` } },
+			});
+			expect(volume.data).not.toMatchObject({
+				items: expect.arrayContaining([firstVolume]),
+			});
+		},
+	);
+
+	it.each([
+		{ perekId: 842, expected: "עזרא", other: "נחמיה" },
+		{ perekId: 852, expected: "נחמיה", other: "עזרא" },
+	])(
+		"reads the exact $expected filter from the Perek and excludes $other",
+		async ({ perekId, expected, other }) => {
+			const context = await vi.importActual<
+				typeof import("~/server/tanahpedia/contribution-agent-context.server")
+			>("~/server/tanahpedia/contribution-agent-context.server");
+			mocks.tool.mockImplementation(context.readContributionAgentTool);
+			const input = await claim();
+			const perek = await readContributionWorkerContext({
+				...input,
+				name: "scripture_chapter",
+				arguments: { perekId, limit: 1 },
+			});
+			expect(perek.data).toMatchObject({
+				book: expected,
+				citation: `${expected} א`,
+			});
+			if (!perek.receipt) throw new Error("Expected a Perek read receipt");
+			const book = (perek.data as { book: string }).book;
+			const occurrences = await readContributionWorkerContext({
+				...input,
+				receipts: [perek.receipt],
+				name: "scripture_occurrences",
+				arguments: { book, spellings: ["ירושלם", "ירושלים"], limit: 100 },
+			});
+			expect(occurrences).toMatchObject({
+				data: {
+					items: expect.arrayContaining([
+						expect.objectContaining({ citation: `${expected} א ב` }),
+					]),
+					nextCursor: null,
+				},
+				receipt: { arguments: { book: expected } },
+			});
+			expect(occurrences.data).not.toMatchObject({
+				items: expect.arrayContaining([
+					expect.objectContaining({
+						citation: expect.stringMatching(`^${other} `),
+					}),
+				]),
+			});
+		},
+	);
+
+	it("returns compatible current-call feedback for an unknown Sefer and preserves replay and corpus failures", async () => {
+		const context = await vi.importActual<
+			typeof import("~/server/tanahpedia/contribution-agent-context.server")
+		>("~/server/tanahpedia/contribution-agent-context.server");
+		mocks.tool.mockImplementation(context.readContributionAgentTool);
+		const input = await claim(),
+			name = "scripture_occurrences",
+			args = { spellings: ["מצרים"], book: "שמואל ג" };
+		expect(
+			await readContributionWorkerContext({ ...input, name, arguments: args }),
+		).toEqual({
+			error: {
+				type: "invalid_tool_arguments",
+				code: "invalid_arguments",
+				message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_arguments,
+			},
+		});
+		await expect(
+			readContributionWorkerContext({
+				...input,
+				name,
+				arguments: { ...args, book: "שמואל" },
+				receipts: [{ name, arguments: args, hash: "a".repeat(64) }],
+			}),
+		).rejects.toBeInstanceOf(ContributionAgentToolInputError);
+		const brokenCorpus = new SyntaxError("Cannot load canonical scripture");
+		mocks.tool.mockRejectedValueOnce(brokenCorpus);
+		await expect(
+			readContributionWorkerContext({
+				...input,
+				name,
+				arguments: { ...args, book: "שמואל" },
+			}),
+		).rejects.toBe(brokenCorpus);
+		expect(current().generation?.status).toBe("running");
+	});
+
 	it("does not turn lease, stale context or prior-receipt rejection into recoverable input feedback", async () => {
 		const input = await claim(),
 			request = {
@@ -1146,10 +1317,10 @@ describe("assignment-driven leased contribution work", () => {
 			mocks.tool.mock.invocationCallOrder[lockedReads[0].index],
 		);
 	});
-	it("uses API six article read receipts to resolve the same PR with known nested identities", async () => {
+	it("uses current API article read receipts to resolve the same PR with known nested identities", async () => {
 		const input = await claim();
-		expect(input.apiVersion).toBe(6);
-		expect(agent().installedVersion).toBe("tanahpedia-agents-v14");
+		expect(input.apiVersion).toBe(7);
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v15");
 		mocks.tool.mockResolvedValue({
 			data: {
 				kind: "target:article_links",

@@ -17,6 +17,13 @@ import {
 export function currentContributionApiContract(conn: PoolConnection) {
 	const adapters: AsyncApiVersionAdapter<unknown>[] = [
 		{
+			from: 6,
+			to: 7,
+			id: "place-word-occurrence-profiles",
+			// Additive vocabulary. Existing operations and approvals are preserved.
+			convert: (payload) => payload,
+		},
+		{
 			from: 5,
 			to: 6,
 			id: "person-place-text-alternatives",

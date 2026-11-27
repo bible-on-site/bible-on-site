@@ -68,6 +68,47 @@ it("rejects mixed article aggregates, extra base fields and a non-null new-entry
 		]),
 	).toThrow("null base");
 });
+it("validates place snapshot shape and separate place sequences before applying API v7 operations", () => {
+	const occurrence = {
+		perekId: 67,
+		pasukNumber: 7,
+		segmentStart: 3,
+		segmentEnd: 3,
+		text: "מַסָּ֖ה",
+	};
+	const before = {
+		entryAddresses: ["מסה"],
+		occurrences: [],
+		identification: { id: nameId, citations: ["שמות יז ז"] },
+	};
+	const profile = {
+		kind: "place_profile",
+		targetId: id,
+		labels: {},
+		before,
+		after: { entry: null, occurrences: [occurrence], identification: null },
+	};
+	expect(validateApiSequence([profile])).toEqual([profile]);
+	expect(() => validateApiSequence([profile, profile])).toThrow("one place");
+	expect(() =>
+		validateApiSequence([
+			{ ...profile, before: { ...before, unexpectedField: true } },
+		]),
+	).toThrow("Noncanonical place profile base");
+	const created = {
+		...profile,
+		before: null,
+		after: {
+			...profile.after,
+			entry: { title: "מסה", uniqueName: "מסה", displayName: "מסה" },
+		},
+	};
+	expect(validateApiSequence([created])).toEqual([created]);
+	expect(() => validateApiSequence([{ ...created, before }])).toThrow(
+		"null base",
+	);
+});
+
 it("adds API5 through an explicit identity4→5 adapter without content reads", async () => {
 	const contract = currentContributionApiContract({} as never);
 	const operation = {
@@ -116,6 +157,7 @@ it("fills the v6 place-text alternative into legacy birthplace states", async ()
 	);
 	expect(result.steps).toEqual([
 		{ from: 5, to: 6, id: "person-place-text-alternatives" },
+		{ from: 6, to: 7, id: "place-word-occurrence-profiles" },
 	]);
 	expect(result.payload).toEqual([
 		{

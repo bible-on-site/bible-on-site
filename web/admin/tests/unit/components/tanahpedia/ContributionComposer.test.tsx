@@ -107,6 +107,178 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it("round-trips a place proposal and removes only the selected word anchor", async () => {
+		const occurrence = {
+			perekId: 67,
+			pasukNumber: 7,
+			segmentStart: 3,
+			segmentEnd: 3,
+			text: "מַסָּ֖ה",
+		};
+		const other = {
+			...occurrence,
+			segmentStart: 4,
+			segmentEnd: 4,
+			text: "וּמְרִיבָ֑ה",
+		};
+		const after = {
+			entry: {
+				title: "מסה ומריבה",
+				uniqueName: "מסה ומריבה",
+				displayName: "מסה ומריבה",
+			},
+			occurrences: [occurrence, other],
+			identification: {
+				modernName: "אתר לבדיקה",
+				basis: "commentary",
+				latitude: 30.1,
+				longitude: 32.2,
+				citation: "זיהוי מהפירוש",
+				coordinateCitation: "מפת מדידה",
+			},
+		};
+		const initial = {
+			kind: "pr",
+			title: "מופעים במקרא",
+			description: "תיאור",
+			assignee: { kind: "unassigned" },
+			evidence: [],
+			issueId: OTHER,
+			closeIssue: true,
+			changes: [
+				{
+					kind: "place_profile",
+					targetId: ID,
+					before: null,
+					after,
+					labels: { "67:7:3:3": "שמות יז ז", "67:7:4:4": "שמות יז ז" },
+				},
+			],
+		} as unknown as Contribution;
+		const { submit } = setup("pr", { initial });
+		expect(screen.getByLabelText("סוג שינוי")).toHaveValue("place_profile");
+		expect(
+			screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג"),
+		).toBeChecked();
+		expect(screen.getByLabelText("כותרת הערך")).toHaveValue("מסה ומריבה");
+		expect(screen.getByLabelText("בסיס הזיהוי")).toHaveValue("commentary");
+		expect(screen.getByLabelText("מקור לקואורדינטות")).toHaveValue("מפת מדידה");
+		expect(
+			screen.getByRole("button", { name: "+ הוספת שינוי" }),
+		).toBeDisabled();
+		fireEvent.click(screen.getByText("1. מַסָּ֖ה - שמות יז ז"));
+		fireEvent.click(screen.getByText("הסרת מופע 1"));
+		fireEvent.change(screen.getByLabelText("קו אורך"), {
+			target: { value: "32.25" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					issueId: OTHER,
+					closeIssue: true,
+					changes: [
+						{
+							kind: "place_profile",
+							targetId: ID,
+							after: {
+								...after,
+								occurrences: [other],
+								identification: { ...after.identification, longitude: 32.25 },
+							},
+						},
+					],
+				}),
+			),
+		);
+	});
+
+	it("defaults a place PR from a free-form issue to staying open and keeps an explicit choice", () => {
+		const linkedIssue = {
+			id: OTHER,
+			kind: "issue",
+			evidence: [],
+		} as unknown as Contribution;
+		setup("pr", { linkedIssue });
+		const changeKind = screen.getByLabelText("סוג שינוי");
+		const closeIssue = screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג");
+
+		expect(closeIssue).toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+		expect(closeIssue).not.toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		expect(closeIssue).toBeChecked();
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+
+		fireEvent.click(closeIssue);
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		fireEvent.change(changeKind, { target: { value: "place_profile" } });
+		expect(closeIssue).toBeChecked();
+
+		fireEvent.click(closeIssue);
+		fireEvent.change(changeKind, { target: { value: "family" } });
+		expect(closeIssue).not.toBeChecked();
+	});
+
+	it("starts a linked place PR in place mode without closing its discovery issue", async () => {
+		const linkedIssue = {
+			id: OTHER,
+			kind: "issue",
+			scope: { kind: "place_profile" },
+			evidence: [],
+		} as unknown as Contribution;
+		const { submit } = setup("pr", { linkedIssue });
+		description();
+		expect(screen.getByLabelText("סוג שינוי")).toHaveValue("place_profile");
+		expect(
+			screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג"),
+		).not.toBeChecked();
+		fireEvent.change(screen.getByLabelText("יעד ההצעה"), {
+			target: { value: "existing" },
+		});
+		fireEvent.change(screen.getByLabelText("מקום קיים"), {
+			target: { value: ID },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "+ הוספת מופע" }));
+		for (const [label, value] of [
+			["מזהה פרק", "67"],
+			["מספר פסוק", "7"],
+			["קטע ראשון", "0"],
+			["קטע אחרון", "1"],
+			["מילה או צירוף מהמקרא", "צירוף מדויק"],
+		]) {
+			fireEvent.change(screen.getByLabelText(label), { target: { value } });
+		}
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					issueId: OTHER,
+					closeIssue: false,
+					changes: [
+						{
+							kind: "place_profile",
+							targetId: ID,
+							after: {
+								entry: null,
+								occurrences: [
+									{
+										perekId: 67,
+										pasukNumber: 7,
+										segmentStart: 0,
+										segmentEnd: 1,
+										text: "צירוף מדויק",
+									},
+								],
+								identification: null,
+							},
+						},
+					],
+				}),
+			),
+		);
+	});
+
 	it("submits optional article scope separately from the issue's free text", async () => {
 		const { submit } = setup();
 		description();
@@ -574,12 +746,15 @@ describe("contribution composer", () => {
 			),
 		);
 	});
-	it("builds a new family operation with a numeric birth order", async () => {
+	it("builds a maternal relationship with a numeric birth order", async () => {
 		const { submit } = setup("pr");
 		description();
 		fireEvent.change(screen.getByLabelText("הורה"), { target: { value: ID } });
 		fireEvent.change(screen.getByLabelText("ילד"), {
 			target: { value: OTHER },
+		});
+		fireEvent.change(screen.getByLabelText("תפקיד ההורה"), {
+			target: { value: "MOTHER" },
 		});
 		fireEvent.change(screen.getByLabelText("סדר לידה"), {
 			target: { value: "2" },
@@ -595,6 +770,7 @@ describe("contribution composer", () => {
 								birthOrder: 2,
 								parentId: ID,
 								childId: OTHER,
+								parentRole: "MOTHER",
 							}),
 						}),
 					],

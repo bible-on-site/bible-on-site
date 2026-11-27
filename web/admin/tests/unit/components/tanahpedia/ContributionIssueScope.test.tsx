@@ -46,6 +46,17 @@ function show(initial?: IssueScope, disabled = false) {
 }
 
 describe("optional issue scope", () => {
+	it("sets a multi-place discovery scope without carrying a stale target", () => {
+		const changed = show({ kind: "metadata", targetId: id });
+		fireEvent.change(screen.getByLabelText("סוג השינוי המבוקש"), {
+			target: { value: "place_profile" },
+		});
+		expect(changed).toHaveBeenLastCalledWith({ kind: "place_profile" });
+		expect(
+			screen.queryByLabelText("יעד השינוי (רשות)"),
+		).not.toBeInTheDocument();
+		expect(screen.getByText(/לכל מקום ייפתח PR נפרד/)).toBeVisible();
+	});
 	it("keeps free-form issues as the collapsed default", () => {
 		show();
 		expect(

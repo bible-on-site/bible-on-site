@@ -16,7 +16,7 @@ public sealed class AndroidBackNavigationTests
         // success for a key the shell consumed inside its settle window.
         var executor = new BackExecutor();
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
-        new AndroidPlatformAdapter().GoBack(driver);
+        new AndroidPlatformAdapter(executor.Clock, executor.Clock.Advance).GoBack(driver);
         Assert.Equal(1, executor.Presses);
         // The press waits out a full quiet window on the starting page, and
         // the helper must not return on the first rewrite: the pop counts
@@ -32,7 +32,7 @@ public sealed class AndroidBackNavigationTests
     {
         var executor = new BackExecutor(swallowFirstPress: true);
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
-        new AndroidPlatformAdapter().GoBack(driver);
+        new AndroidPlatformAdapter(executor.Clock, executor.Clock.Advance).GoBack(driver);
         Assert.Equal(2, executor.Presses);
     }
 
@@ -41,7 +41,7 @@ public sealed class AndroidBackNavigationTests
     {
         var executor = new BackExecutor(swallowFirstPress: true, swallowEveryPress: true);
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
-        new AndroidPlatformAdapter().GoBack(driver);
+        new AndroidPlatformAdapter(executor.Clock, executor.Clock.Advance).GoBack(driver);
         Assert.Equal(2, executor.Presses);
     }
 
@@ -58,10 +58,20 @@ public sealed class AndroidBackNavigationTests
             "<push-mid/>", "<push-mid/>", "<push-mid/>", "<push-late/>", "<settings/>"
         });
         using var driver = new AndroidDriver(executor, new AppiumOptions { PlatformName = "Android" });
-        new AndroidPlatformAdapter().GoBack(driver);
+        new AndroidPlatformAdapter(executor.Clock, executor.Clock.Advance).GoBack(driver);
         Assert.Equal(1, executor.Presses);
         Assert.Equal(1, executor.AcceptedPresses);
         Assert.Equal(new[] { "<reader/>", "<reader/>" }, executor.Served.TakeLast(2));
+    }
+
+    // The fake tree advances on queries, so its quiet windows must use the same
+    // virtual clock. Host scheduling cannot advance the window while leaving
+    // an in-flight push's queued frames frozen.
+    private sealed class BackClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan duration) => _now += duration;
     }
 
     /// <summary>
@@ -76,6 +86,7 @@ public sealed class AndroidBackNavigationTests
         bool swallowEveryPress = false,
         IReadOnlyList<string>? pushFrames = null) : ICommandExecutor
     {
+        public BackClock Clock { get; } = new();
         public int Presses { get; private set; }
         public int AcceptedPresses { get; private set; }
         public List<string> Served { get; } = new();
@@ -101,7 +112,7 @@ public sealed class AndroidBackNavigationTests
                 {
                     _source = _frames.Dequeue();
                 }
-                FirstSampleAt ??= DateTime.UtcNow;
+                FirstSampleAt ??= Clock.GetUtcNow().UtcDateTime;
                 Served.Add(_source);
                 value = _source;
             }
@@ -109,7 +120,7 @@ public sealed class AndroidBackNavigationTests
             {
                 var swallow = swallowEveryPress || (swallowFirstPress && Presses == 0);
                 Presses++;
-                PressedAt ??= DateTime.UtcNow;
+                PressedAt ??= Clock.GetUtcNow().UtcDateTime;
                 // The settle window owns every press while the tree is still
                 // rewriting itself; such a press never reaches the stack.
                 if (!swallow && _frames.Count == 0)

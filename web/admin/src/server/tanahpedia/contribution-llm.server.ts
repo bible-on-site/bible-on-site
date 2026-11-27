@@ -6,6 +6,7 @@ import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
 import type { ArticleLiteralGrounding } from "~/lib/tanahpedia/contribution-article-grounding";
 import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
+import type { ScriptureOccurrencePage } from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionField,
@@ -34,6 +35,12 @@ import {
 	agentArticleLinkVariant,
 	assertAgentArticleLinkReferences,
 } from "./contribution-agent-article-links.server";
+import {
+	agentPlaceProfileVariants,
+	assertAgentPlaceEvidence,
+	assertAgentPlaceReferences,
+	materializeAgentPlaceChanges,
+} from "./contribution-agent-place-profiles.server";
 import { appendAgentArticleEvidence } from "./contribution-article-evidence.server";
 import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import { contributionCatalogue } from "./contribution-changes.server";
@@ -58,6 +65,7 @@ const PROMPT_VERSION = "tanahpedia-issues-v4";
 
 export interface ModelCatalogue {
 	articleGroundings?: ArticleLiteralGrounding[];
+	scriptureOccurrencePages?: ScriptureOccurrencePage[];
 	references?: Record<
 		string,
 		{ id: string | number; name: string; ownerId?: string }[]
@@ -82,6 +90,10 @@ export function assertGeneratedReferences(
 	const places = new Set(catalogue.places.map((place) => place.id));
 	const entities = new Set(catalogue.entities.map((entity) => entity.id));
 	for (const change of changes) {
+		if (change.kind === "place_profile") {
+			assertAgentPlaceReferences(change, catalogue, preservedChanges);
+			continue;
+		}
 		if (change.kind === "article_links") {
 			assertAgentArticleLinkReferences(change, catalogue, preservedChanges);
 			continue;
@@ -455,36 +467,43 @@ export function contributionOutputSchema(
 		}
 	}
 	const scope = validateIssueScope(issueScope);
-	const scopedVariants = scope
-		? variants.flatMap((variant) => {
-				const properties = variant.properties as Record<
-					string,
-					{ const?: string; enum?: string[] }
-				>;
-				if (properties.kind.const !== scope.kind) return [];
-				if (scope.kind === "entry") {
-					const { targetId: _targetId, ...creation } = properties;
-					return [{ ...variant, properties: creation }];
-				}
-				const desiredTarget = scope.targetId;
-				if (desiredTarget === undefined) return [variant];
-				const target = properties.targetId?.enum?.find(
-					(id) =>
-						contributionIdentifierKey(id) ===
-						contributionIdentifierKey(desiredTarget),
-				);
-				if (!target) return [];
-				return [
-					{
-						...variant,
-						required: [
-							...new Set([...(variant.required as string[]), "targetId"]),
-						],
-						properties: { ...properties, targetId: { enum: [target] } },
-					},
-				];
-			})
-		: variants;
+	const placeVariants = agentPlaceProfileVariants(
+		catalogue,
+		scope,
+		preservedChanges,
+	);
+	const scopedVariants =
+		placeVariants ??
+		(scope
+			? variants.flatMap((variant) => {
+					const properties = variant.properties as Record<
+						string,
+						{ const?: string; enum?: string[] }
+					>;
+					if (properties.kind.const !== scope.kind) return [];
+					if (scope.kind === "entry") {
+						const { targetId: _targetId, ...creation } = properties;
+						return [{ ...variant, properties: creation }];
+					}
+					const desiredTarget = scope.targetId;
+					if (desiredTarget === undefined) return [variant];
+					const target = properties.targetId?.enum?.find(
+						(id) =>
+							contributionIdentifierKey(id) ===
+							contributionIdentifierKey(desiredTarget),
+					);
+					if (!target) return [];
+					return [
+						{
+							...variant,
+							required: [
+								...new Set([...(variant.required as string[]), "targetId"]),
+							],
+							properties: { ...properties, targetId: { enum: [target] } },
+						},
+					];
+				})
+			: variants);
 	return {
 		type: "object",
 		additionalProperties: false,
@@ -513,7 +532,7 @@ export function contributionOutputSchema(
 						changes: {
 							type: "array",
 							minItems: 1,
-							maxItems: 40,
+							maxItems: placeVariants ? 1 : 40,
 							items: {
 								oneOf: scopedVariants.length ? scopedVariants : [{ not: {} }],
 							},
@@ -944,7 +963,13 @@ export async function createGeneratedContributionPrs(
 			)
 		)
 			throw new Error("The model cited evidence that is not in the issue");
-		const changes = validateChanges(draft.changes);
+		const changes = validateChanges(
+			materializeAgentPlaceChanges(
+				draft.changes,
+				context.issue,
+				modelCatalogue,
+			),
+		);
 		assertIssueScopeChanges(changes, context.issue.scope);
 		assertGeneratedReferences(changes, modelCatalogue);
 		const allowedCitations = new Set(
@@ -967,6 +992,10 @@ export async function createGeneratedContributionPrs(
 			}
 		}
 		const evidenceIndexes = draft.evidenceIndexes as number[];
+		const evidence = context.issue.evidence.filter((_source, index) =>
+			evidenceIndexes.includes(index),
+		);
+		assertAgentPlaceEvidence(changes, evidence);
 		return {
 			kind: "pr",
 			issueId: id,
@@ -974,14 +1003,25 @@ export async function createGeneratedContributionPrs(
 			description: textField(draft.description, "description", 20000),
 			changes,
 			// Keep selected sources in the issue's order and include each once.
-			evidence: context.issue.evidence.filter((_source, index) =>
-				evidenceIndexes.includes(index),
-			),
+			evidence,
 			assignee: { kind: "human", id: "doradsoft", name: "doradsoft" },
 			closeIssue:
-				output.pullRequests && (output.pullRequests as unknown[]).length === 1,
+				context.issue.scope?.kind !== "place_profile" &&
+				(output.pullRequests as unknown[]).length === 1,
 		};
 	});
+	const placeProfiles = drafts
+		.flatMap((draft) => draft.changes)
+		.flatMap((change) =>
+			change.kind === "place_profile"
+				? [
+						change.targetId ??
+							contributionIdentifierKey(change.after.entry?.uniqueName ?? ""),
+					]
+				: [],
+		);
+	if (new Set(placeProfiles).size !== placeProfiles.length)
+		throw new Error("Generate at most one PR for each place");
 	return withContributions(async (conn) => {
 		const issue = await readContribution(conn, id, true);
 		assertVersion(issue, context.issue.version);

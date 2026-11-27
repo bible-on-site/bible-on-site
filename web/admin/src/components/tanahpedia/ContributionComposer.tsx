@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
+import type { PlaceProfileChange } from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -33,6 +34,12 @@ import {
 } from "./ContributionArticleLinks";
 import { ContributionIssueScopeFields } from "./ContributionIssueScope";
 import {
+	ContributionPlaceProfileFields,
+	type PlaceProfileDraft,
+	placeProfileDraft,
+	placeProfileDraftValue,
+} from "./ContributionPlaceProfile";
+import {
 	ContributionRecordFields,
 	draftField,
 	HebrewDateField,
@@ -42,7 +49,7 @@ import {
 export interface ContributionCatalogue {
 	references?: Record<string, { id: string | number; name: string }[]>;
 	people: { id: string; name: string }[];
-	places: { id: string; name: string }[];
+	places: { id: string; name: string; hasEntry?: number }[];
 	entities: { id: string; name: string; entityType: string }[];
 	targets: {
 		kind: string;
@@ -145,6 +152,7 @@ type DraftChange = {
 	targetId: string;
 	deleting: boolean;
 	fields: Record<string, string>;
+	placeProfile?: PlaceProfileDraft;
 };
 const NUMBERS = new Set([
 	"latitude",
@@ -156,6 +164,7 @@ const NUMBERS = new Set([
 ]);
 const DEFAULTS: Record<ChangeInput["kind"], Record<string, string>> = {
 	article_links: { commands: "[]" },
+	place_profile: {},
 	...(Object.fromEntries(
 		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
 			kind,
@@ -241,10 +250,24 @@ function newChange(kind: ChangeInput["kind"] = "parent_child"): DraftChange {
 		targetId: "",
 		deleting: false,
 		fields: { ...DEFAULTS[kind] },
+		...(kind === "place_profile" ? { placeProfile: placeProfileDraft() } : {}),
 	};
 }
 
 function fromReviewed(change: Contribution["changes"][number]): DraftChange {
+	if (change.kind === "place_profile") {
+		return {
+			key: crypto.randomUUID(),
+			kind: change.kind,
+			targetId: change.targetId,
+			deleting: false,
+			fields: {},
+			placeProfile: placeProfileDraft(
+				change.after as unknown as PlaceProfileChange,
+				change.labels,
+			),
+		};
+	}
 	return {
 		key: crypto.randomUUID(),
 		kind: change.kind,
@@ -266,7 +289,7 @@ function ChangeFields({
 	searchArticles,
 	discoverLinks,
 	openPr,
-	allowArticleLinks,
+	allowSingleChange,
 }: {
 	value: DraftChange;
 	onChange: (value: DraftChange) => void;
@@ -275,7 +298,7 @@ function ChangeFields({
 	searchArticles?: SearchContributionArticles;
 	discoverLinks?: DiscoverContributionArticleLinks;
 	openPr?: (id: string) => unknown;
-	allowArticleLinks: boolean;
+	allowSingleChange: boolean;
 }) {
 	const targets = catalogue.targets.filter(
 		(target) => target.kind === value.kind,
@@ -317,7 +340,10 @@ function ChangeFields({
 							<option
 								key={key}
 								value={key}
-								disabled={key === "article_links" && !allowArticleLinks}
+								disabled={
+									(key === "article_links" || key === "place_profile") &&
+									!allowSingleChange
+								}
 							>
 								{label}
 							</option>
@@ -394,7 +420,19 @@ function ChangeFields({
 					}
 				/>
 			)}
-			{!["metadata", "entry", "article_links"].includes(value.kind) && (
+			{value.kind === "place_profile" && value.placeProfile && (
+				<ContributionPlaceProfileFields
+					value={value.placeProfile}
+					targetId={value.targetId}
+					places={catalogue.places}
+					onChange={(placeProfile, targetId) =>
+						onChange({ ...value, placeProfile, targetId })
+					}
+				/>
+			)}
+			{!["metadata", "entry", "article_links", "place_profile"].includes(
+				value.kind,
+			) && (
 				<>
 					<label>
 						{structured ? "רשומה קיימת" : "קשר או זיהוי קיים"}
@@ -483,95 +521,102 @@ function ChangeFields({
 					catalogue={catalogue}
 				/>
 			)}
-			{!value.deleting && !structured && value.kind !== "article_links" && (
-				<div className="contribution-form-grid">
-					{Object.entries(value.fields)
-						.filter(
-							([field]) =>
-								field !== "relationshipType" && field !== "unionType",
-						)
-						.map(([field, current]) => {
-							const choices = [
-								"parentId",
-								"childId",
-								"person1Id",
-								"person2Id",
-							].includes(field)
-								? catalogue.people
-								: field === "placeId"
-									? catalogue.places
-									: null;
-							const update = (next: string) =>
-								onChange({
-									...value,
-									fields: { ...value.fields, [field]: next },
-								});
-							if (field === "startDate" || field === "endDate")
-								return (
-									<HebrewDateField
-										key={field}
-										label={FIELD_LABELS[field]}
-										value={current}
-										onChange={update}
-									/>
-								);
-							return (
-								<label key={field} htmlFor={`${value.key}-${field}`}>
-									{FIELD_LABELS[field] ?? field}
-									{choices ? (
-										<select
-											id={`${value.key}-${field}`}
-											className="contribution-input"
-											required
+			{!value.deleting &&
+				!structured &&
+				value.kind !== "article_links" &&
+				value.kind !== "place_profile" && (
+					<div className="contribution-form-grid">
+						{Object.entries(value.fields)
+							.filter(
+								([field]) =>
+									field !== "relationshipType" && field !== "unionType",
+							)
+							.map(([field, current]) => {
+								const choices = [
+									"parentId",
+									"childId",
+									"person1Id",
+									"person2Id",
+								].includes(field)
+									? catalogue.people
+									: field === "placeId"
+										? catalogue.places
+										: null;
+								const update = (next: string) =>
+									onChange({
+										...value,
+										fields: { ...value.fields, [field]: next },
+									});
+								if (field === "startDate" || field === "endDate")
+									return (
+										<HebrewDateField
+											key={field}
+											label={FIELD_LABELS[field]}
 											value={current}
-											onChange={(event) => update(event.target.value)}
-										>
-											<option value="">בחירה</option>
-											{choices.map((choice) => (
-												<option key={choice.id} value={choice.id}>
-													{choice.name}
-												</option>
-											))}
-										</select>
-									) : OPTIONS[field] ? (
-										<select
-											id={`${value.key}-${field}`}
-											className="contribution-input"
-											value={current}
-											onChange={(event) => update(event.target.value)}
-										>
-											{OPTIONS[field].map((option) => (
-												<option key={option} value={option}>
-													{OPTION_LABELS[option] ?? (option || "ללא")}
-												</option>
-											))}
-										</select>
-									) : (
-										<input
-											id={`${value.key}-${field}`}
-											className="contribution-input"
-											value={current}
-											type={NUMBERS.has(field) ? "number" : "text"}
-											step={
-												["latitude", "longitude"].includes(field) ? "any" : "1"
-											}
-											maxLength={
-												field === "sourceCitation" ||
-												field === "personSourceCitation"
-													? 400
-													: 255
-											}
-											required={["displayName", "title", "uniqueName"].includes(
-												field,
-											)}
-											onChange={(event) => update(event.target.value)}
+											onChange={update}
 										/>
-									)}
-								</label>
-							);
-						})}
-				</div>
-			)}
+									);
+								return (
+									<label key={field} htmlFor={`${value.key}-${field}`}>
+										{FIELD_LABELS[field] ?? field}
+										{choices ? (
+											<select
+												id={`${value.key}-${field}`}
+												className="contribution-input"
+												required
+												value={current}
+												onChange={(event) => update(event.target.value)}
+											>
+												<option value="">בחירה</option>
+												{choices.map((choice) => (
+													<option key={choice.id} value={choice.id}>
+														{choice.name}
+													</option>
+												))}
+											</select>
+										) : OPTIONS[field] ? (
+											<select
+												id={`${value.key}-${field}`}
+												className="contribution-input"
+												value={current}
+												onChange={(event) => update(event.target.value)}
+											>
+												{OPTIONS[field].map((option) => (
+													<option key={option} value={option}>
+														{OPTION_LABELS[option] ?? (option || "ללא")}
+													</option>
+												))}
+											</select>
+										) : (
+											<input
+												id={`${value.key}-${field}`}
+												className="contribution-input"
+												value={current}
+												type={NUMBERS.has(field) ? "number" : "text"}
+												step={
+													["latitude", "longitude"].includes(field)
+														? "any"
+														: "1"
+												}
+												maxLength={
+													field === "sourceCitation" ||
+													field === "personSourceCitation"
+														? 400
+														: 255
+												}
+												required={[
+													"displayName",
+													"title",
+													"uniqueName",
+												].includes(field)}
+												onChange={(event) => update(event.target.value)}
+											/>
+										)}
+									</label>
+								);
+							})}
+					</div>
+				)}
 			{value.kind === "entry" && (
 				<p className="contribution-muted">
 					הערך ייווצר ללא טקסט חופשי, עם יישות מקושרת לפי הסוג שנבחר.
@@ -638,9 +683,20 @@ export function ContributionComposer({
 		})),
 	);
 	const [changes, setChanges] = useState<DraftChange[]>(
-		() => initial?.changes.map(fromReviewed) ?? [newChange()],
+		() =>
+			initial?.changes.map(fromReviewed) ?? [
+				newChange(
+					linkedIssue?.scope?.kind === "place_profile"
+						? "place_profile"
+						: undefined,
+				),
+			],
 	);
-	const [closeIssue, setCloseIssue] = useState(initial?.closeIssue ?? true);
+	const [closeIssueChoice, setCloseIssueChoice] = useState(initial?.closeIssue);
+	const closeIssue =
+		closeIssueChoice ??
+		(linkedIssue?.scope?.kind !== "place_profile" &&
+			!changes.some((change) => change.kind === "place_profile"));
 	const [error, setError] = useState("");
 	return (
 		<form
@@ -665,22 +721,24 @@ export function ContributionComposer({
 											? null
 											: change.kind === "article_links"
 												? { commands: JSON.parse(change.fields.commands) }
-												: Object.fromEntries(
-														Object.entries(change.fields).map(
-															([key, value]) => [
-																key,
-																isContributionRecordKind(change.kind) ||
-																change.kind === "alias_mapping" ||
-																change.kind === "source_reference"
-																	? recordFieldValue(change.kind, key, value)
-																	: NUMBERS.has(key)
-																		? value === ""
-																			? null
-																			: Number(value)
-																		: value,
-															],
+												: change.placeProfile
+													? placeProfileDraftValue(change.placeProfile)
+													: Object.fromEntries(
+															Object.entries(change.fields).map(
+																([key, value]) => [
+																	key,
+																	isContributionRecordKind(change.kind) ||
+																	change.kind === "alias_mapping" ||
+																	change.kind === "source_reference"
+																		? recordFieldValue(change.kind, key, value)
+																		: NUMBERS.has(key)
+																			? value === ""
+																				? null
+																				: Number(value)
+																			: value,
+																],
+															),
 														),
-													),
 									})),
 								)
 							: [];
@@ -873,7 +931,7 @@ export function ContributionComposer({
 									searchArticles={searchArticles}
 									discoverLinks={discoverLinks}
 									openPr={openPr}
-									allowArticleLinks={changes.length === 1}
+									allowSingleChange={changes.length === 1}
 									onChange={(next) =>
 										setChanges(
 											changes.map((item) =>
@@ -903,7 +961,11 @@ export function ContributionComposer({
 							type="button"
 							disabled={
 								changes.length >= 40 ||
-								changes.some((change) => change.kind === "article_links")
+								changes.some(
+									(change) =>
+										change.kind === "article_links" ||
+										change.kind === "place_profile",
+								)
 							}
 							onClick={() => setChanges([...changes, newChange()])}
 						>
@@ -918,7 +980,7 @@ export function ContributionComposer({
 						<input
 							type="checkbox"
 							checked={closeIssue}
-							onChange={(event) => setCloseIssue(event.target.checked)}
+							onChange={(event) => setCloseIssueChoice(event.target.checked)}
 						/>{" "}
 						סגירת הפנייה המקושרת לאחר מיזוג
 					</span>

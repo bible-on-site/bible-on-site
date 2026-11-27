@@ -14,6 +14,8 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy the main app and shared dependencies (maintaining ../shared import structure)
 COPY admin/ ./
 COPY shared/ ../shared/
+COPY bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json /tmp/admin-canonical-tanakh.json
+RUN bun scripts/prepare-scripture-occurrences.mts /tmp/admin-canonical-tanakh.json /app/scripture-occurrences.json
 
 ENV NODE_ENV=production
 # Public website origin for browser-facing links — inlined into the bundle.
@@ -46,6 +48,7 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 adminjs
 
 COPY --from=builder --chown=adminjs:nodejs /app/admin/.output ./.output
+COPY --from=builder --chown=adminjs:nodejs /app/scripture-occurrences.json ./scripture-occurrences.json
 
 USER 1001
 

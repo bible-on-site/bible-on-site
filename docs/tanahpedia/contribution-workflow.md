@@ -89,6 +89,7 @@ contract has 48 operation kinds; family choices use the nine existing API types.
 | Article links | Primary chapter, verse coverage, dedication assignments with UTC expiry, and existing moed links |
 | Assets | Existing 3D asset key, format and label; no upload or access-policy change |
 | New entries | Empty entry and linked subtype for all 13 creatable entity types |
+| Place profiles | One new empty place entry or an existing place, exact scripture word occurrences, and an optional sourced identification |
 
 No operation edits article or saying prose. Hebrew dates use the existing
 uniform month numbering, with zero for unknown components and the death-date
@@ -104,6 +105,35 @@ removal operations, applied before their parent. Roles and war sides retain thei
 owner when edited. Competing facts can share an alternative-group identifier and
 carry separate evidence. Moving one source preserves other citations sharing its
 old source group.
+
+## Place profiles and scripture words
+
+A place profile is one reviewable operation for one place. The Changes tab
+shows the exact pointed text and the original segment range in its verse.
+The merge writes the same curated occurrence rows used by the existing Moses
+and Jerusalem entries. Separate occurrences in the same verse keep separate
+rows. An existing profile adds missing facts, and a new profile creates the
+empty entry, its place entity, and its links in one transaction after approval.
+
+The agent can page through canonical chapters to discover names, then search
+spellings throughout the Tanakh. Search results are candidates. The agent
+selects anchors after checking their context and can use ordinal ranges to
+reference whole-Bible search pages that the server can replay. Results keep
+unresolved or excluded candidates in the review discussion. Agents can work
+through a large discovery issue in batches and keep one PR per place. Place PR
+merges leave the linked issue open by default.
+
+Coordinate claims carry separate identification and coordinate citations.
+Choose the consensus basis for an agreed identification, or the commentary
+basis when a named ancient source identifies the place with a reliably mapped
+site. Leave coordinates empty when either step is unresolved. Both citations
+must be part of the reviewed PR evidence before merge.
+
+API v7 adds the place profile operation with an identity adapter for v6
+sequences, so the upgrade preserves prior reviews. A content merge that
+changes an overlapping word link or resolves a proposed new address refreshes
+the comparison and requires fresh review. Bundle v15 exposes the scripture
+reads and place profile vocabulary over the existing worker protocol.
 
 ## Article links
 

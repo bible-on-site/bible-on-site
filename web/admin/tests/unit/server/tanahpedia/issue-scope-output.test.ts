@@ -93,28 +93,27 @@ function issue(): Contribution {
 		provenance: null,
 	} as unknown as Contribution;
 }
-it.each(CONTRIBUTION_ISSUE_SCOPE_KINDS)(
-	"narrows the decoder to %s and its exact existing target",
-	(kind) => {
-		const targetId = kind === "article_links" ? "27" : id;
-		const schema = contributionOutputSchema(catalogue, 1, {
-			kind,
-			...(kind === "entry" ? {} : { targetId }),
-		});
-		const variants =
-			schema.properties.pullRequests.items.properties.changes.items.oneOf;
-		expect(variants.length).toBeGreaterThan(0);
-		for (const variant of variants) {
-			const p = variant.properties as Record<string, unknown>;
-			expect(p.kind).toEqual({ const: kind });
-			if (kind === "entry") expect(p.targetId).toBeUndefined();
-			else {
-				expect(p.targetId).toEqual({ enum: [targetId] });
-				expect(variant.required).toContain("targetId");
-			}
+it.each(
+	CONTRIBUTION_ISSUE_SCOPE_KINDS.filter((kind) => kind !== "place_profile"),
+)("narrows the decoder to %s and its exact existing target", (kind) => {
+	const targetId = kind === "article_links" ? "27" : id;
+	const schema = contributionOutputSchema(catalogue, 1, {
+		kind,
+		...(kind === "entry" ? {} : { targetId }),
+	});
+	const variants =
+		schema.properties.pullRequests.items.properties.changes.items.oneOf;
+	expect(variants.length).toBeGreaterThan(0);
+	for (const variant of variants) {
+		const p = variant.properties as Record<string, unknown>;
+		expect(p.kind).toEqual({ const: kind });
+		if (kind === "entry") expect(p.targetId).toBeUndefined();
+		else {
+			expect(p.targetId).toEqual({ enum: [targetId] });
+			expect(variant.required).toContain("targetId");
 		}
-	},
-);
+	}
+});
 it("keeps clarification available when the scoped target or required references have not been read", () => {
 	const current = issue();
 	current.scope = { kind: "parent_child", targetId: id };

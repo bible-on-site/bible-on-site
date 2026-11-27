@@ -32,6 +32,13 @@ import {
 	contributionRecordId,
 } from "./contribution-identifiers";
 import {
+	type PlaceProfileBase,
+	type PlaceProfileChange,
+	type PlaceProfileInput,
+	placeProfileHasEffect,
+	validatePlaceProfile,
+} from "./contribution-place-profile";
+import {
 	CONTRIBUTION_RECORDS,
 	type ContributionRecordInput,
 	isContributionRecordKind,
@@ -130,6 +137,7 @@ export type ChangeInput =
 	| ContributionRecordInput
 	| SpecialChangeInput
 	| ArticleLinkChangeInput
+	| PlaceProfileInput
 	| { kind: "parent_child"; targetId?: string; after: ParentChildChange | null }
 	| { kind: "union"; targetId?: string; after: UnionChange | null }
 	| { kind: "place"; targetId?: string; after: PlaceChange | null }
@@ -143,6 +151,7 @@ export interface IssueScope {
 
 export const CONTRIBUTION_ISSUE_SCOPE_KINDS: readonly ChangeInput["kind"][] = [
 	...CONTRIBUTION_AGENT_TARGET_KINDS,
+	"place_profile",
 ];
 
 export function validateIssueScope(value: unknown): IssueScope | undefined {
@@ -151,8 +160,12 @@ export function validateIssueScope(value: unknown): IssueScope | undefined {
 	rejectUnknown(input, ["kind", "targetId"]);
 	const kind = oneOf(input.kind, CONTRIBUTION_ISSUE_SCOPE_KINDS, "scope.kind");
 	if (input.targetId === undefined) return { kind };
-	if (kind === "entry")
-		throw new Error("Entry creation cannot select an existing target");
+	if (kind === "entry" || kind === "place_profile")
+		throw new Error(
+			kind === "entry"
+				? "Entry creation cannot select an existing target"
+				: "Choose a place in each proposed profile",
+		);
 	const targetId =
 		kind === "article_links"
 			? contributionArticleId(input.targetId)
@@ -418,6 +431,7 @@ export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
 	metadata: "מטא-נתונים",
 	entry: "ערך חדש",
 	article_links: "קישורי מאמר",
+	place_profile: "מקום ומופעים במקרא",
 };
 
 /** Proper names and the canonical migration status requested for both queues. */
@@ -532,7 +546,10 @@ function coordinate(
 	return Math.round(value * 1e8) / 1e8;
 }
 
-function rejectUnknown(input: Record<string, unknown>, fields: string[]): void {
+export function rejectUnknown(
+	input: Record<string, unknown>,
+	fields: string[],
+): void {
 	for (const key of Object.keys(input))
 		if (!fields.includes(key)) throw new Error(`Unsupported field: ${key}`);
 }
@@ -619,6 +636,7 @@ export function validateChange(value: unknown): ChangeInput {
 	const input = record(value, "change");
 	rejectUnknown(input, ["kind", "targetId", "after"]);
 	if (input.kind === "article_links") return validateArticleLinkChange(input);
+	if (input.kind === "place_profile") return validatePlaceProfile(input);
 	if (isContributionRecordKind(input.kind))
 		return validateContributionRecord(input);
 	if (input.kind === "alias_mapping" || input.kind === "source_reference")
@@ -784,6 +802,11 @@ export function validateChanges(value: unknown): ChangeInput[] {
 		throw new Error(
 			"An article-link PR contains one article aggregate; create separate PRs for other targets",
 		);
+	if (
+		changes.length !== 1 &&
+		changes.some((change) => change.kind === "place_profile")
+	)
+		throw new Error("A place profile PR covers one place");
 	const targets = changes
 		.filter((c) => c.targetId)
 		.map((c) => `${c.kind}:${contributionIdentifierKey(c.targetId as string)}`);
@@ -840,6 +863,22 @@ export function assertMergeAllowed(pr: Contribution): void {
 		throw new Error("A PR requires changes and evidence");
 	if (!["exempt", "approved"].includes(reviewStatus(pr)))
 		throw new Error("Approval from doradsoft is required for this revision");
+	for (const change of pr.changes) {
+		if (change.kind !== "place_profile") continue;
+		const point = validatePlaceProfile(
+			change as unknown as Record<string, unknown>,
+		).after.identification;
+		if (
+			point &&
+			[point.citation, point.coordinateCitation].some(
+				(citation) =>
+					!pr.evidence.some((evidence) => evidence.citation === citation),
+			)
+		)
+			throw new Error(
+				"Every place identification and coordinate citation must be in the reviewed evidence",
+			);
+	}
 }
 
 export function sameState(a: unknown, b: unknown): boolean {
@@ -850,6 +889,11 @@ export function contributionHasEffect(change: ReviewedChange): boolean {
 		return articleLinksHaveEffect(
 			validateArticleLinkState(change.before),
 			change.after as unknown as ArticleLinkChange,
+		);
+	if (change.kind === "place_profile")
+		return placeProfileHasEffect(
+			change.before as unknown as PlaceProfileBase | null,
+			change.after as unknown as PlaceProfileChange,
 		);
 	return (
 		!sameState(change.before, change.after) ||

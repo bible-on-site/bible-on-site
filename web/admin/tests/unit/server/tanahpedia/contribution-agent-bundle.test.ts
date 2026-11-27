@@ -18,7 +18,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
-		expect(bundle.version).toBe("tanahpedia-agents-v14");
+		expect(bundle.version).toBe("tanahpedia-agents-v15");
 	});
 	it("closes search and record vocabulary without discarding the other parameter constraints", () => {
 		const original = buildContributionAgentBundle();
@@ -59,6 +59,9 @@ describe("versioned contribution agent declarations", () => {
 			"search",
 			"record",
 			"article_text",
+			"scripture_occurrences",
+			"scripture_chapter",
+			"place_profile_words",
 		]);
 		expect(
 			bundle.operationGuide.some((guide) => guide.startsWith("entry_title ")),
@@ -90,6 +93,25 @@ describe("versioned contribution agent declarations", () => {
 			},
 		});
 		expect(bundle.system).toContain("returned integer perekId/pasuk/pasukTo");
+	});
+	it("guides occurrence searches to the exact Sefer or Additional returned by the Perek reader", () => {
+		const { tools } = buildContributionAgentBundle();
+		const tool = tools.find((tool) => tool.name === "scripture_occurrences");
+		expect(tool?.description).toContain(
+			"copy the book field from a scripture_chapter result",
+		);
+		expect(tool?.inputSchema).toMatchObject({
+			properties: {
+				book: {
+					description: expect.stringContaining(
+						"שמואל, מלכים, and דברי הימים each search both Additionals. Search עזרא and נחמיה separately",
+					),
+				},
+			},
+		});
+		expect(
+			tools.find((tool) => tool.name === "scripture_chapter")?.description,
+		).toContain("Pesukim in a Perek");
 	});
 	it("permits only declared tool action shapes and the supplied final decoder schema", () => {
 		const bundle = buildContributionAgentBundle(),

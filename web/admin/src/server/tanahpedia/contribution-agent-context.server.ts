@@ -18,6 +18,7 @@ import {
 	contributionArticleId,
 } from "~/lib/tanahpedia/contribution-article-links";
 import { contributionRecordId } from "~/lib/tanahpedia/contribution-identifiers";
+import type { ScriptureOccurrencePage } from "~/lib/tanahpedia/contribution-place-profile";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -46,11 +47,16 @@ import {
 	type ContributionReference,
 	REFERENCE_SELECTS,
 } from "./contribution-records.server";
+import {
+	readScriptureChapter,
+	searchScriptureOccurrences,
+} from "./contribution-scripture-occurrences.server";
 import { readContributionSourceFact } from "./contribution-specials.server";
 import { readContribution } from "./contribution-store.server";
 
 export interface AgentCatalogue {
 	articleGroundings?: ArticleLiteralGrounding[];
+	scriptureOccurrencePages?: ScriptureOccurrencePage[];
 	people: { id: string; name: string }[];
 	places: { id: string; name: string }[];
 	entities: { id: string; name: string }[];
@@ -164,12 +170,16 @@ export function mergeAgentCatalogues(
 	const families = new Set(
 		catalogues.flatMap((catalogue) => Object.keys(catalogue.references)),
 	);
+	const scriptureOccurrencePages = catalogues.flatMap(
+		(catalogue) => catalogue.scriptureOccurrencePages ?? [],
+	);
 	const articleGroundings = latest(
 		catalogues.flatMap((catalogue) => catalogue.articleGroundings ?? []),
 		canonicalJson,
 	);
 	return {
 		...(articleGroundings.length ? { articleGroundings } : {}),
+		...(scriptureOccurrencePages.length ? { scriptureOccurrencePages } : {}),
 		people: latest(
 			catalogues.flatMap((catalogue) => catalogue.people),
 			key,
@@ -315,6 +325,9 @@ function argumentsFor(name: string, raw: unknown): Record<string, unknown> {
 		record: ["kind", "id"],
 		related: ["cursor", "limit", "id", "section"],
 		article_text: ["id", "cursor", "limit", "citationCursor", "citationLimit"],
+		scripture_occurrences: ["spellings", "book", "cursor", "limit"],
+		scripture_chapter: ["perekId", "cursor", "limit"],
+		place_profile_words: ["id", "cursor", "limit"],
 	};
 	if (!Object.hasOwn(fields, name))
 		throw new Error("Unsupported contribution agent tool");
@@ -683,6 +696,22 @@ async function linkedIssue(
 			: null;
 }
 
+async function readRelatedProposal(
+	conn: PoolConnection,
+	current: Contribution,
+	id: string,
+): Promise<Contribution> {
+	const owner = current.kind === "issue" ? current.id : current.issueId;
+	if (!owner) throw new Error("Proposal is not linked to this issue");
+	const proposal = await readContribution(conn, id);
+	if (
+		proposal.kind !== "pr" ||
+		proposal.issueId?.toLowerCase() !== owner.toLowerCase()
+	)
+		throw new Error("Proposal is not linked to this issue");
+	return proposal;
+}
+
 function orderedEvents(item: Contribution) {
 	return [...item.events].sort(
 		(a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id),
@@ -765,6 +794,83 @@ export async function readContributionAgentTool(
 		current.issueId ?? current.id,
 		lockReferences,
 	);
+	if (name === "scripture_chapter") {
+		if (
+			typeof args.perekId !== "number" ||
+			(args.cursor !== undefined && typeof args.cursor !== "number") ||
+			(args.limit !== undefined && typeof args.limit !== "number")
+		)
+			throw new Error("Invalid scripture chapter arguments");
+		return {
+			data: await readScriptureChapter(args.perekId, args.cursor, args.limit),
+			catalogue: reader.catalogue,
+		};
+	}
+	if (name === "place_profile_words") {
+		const id =
+			args.id === undefined ? current.id : contributionRecordId(args.id, "id");
+		const proposal =
+			id.toLowerCase() === current.id.toLowerCase()
+				? current
+				: await readRelatedProposal(conn, current, id);
+		const change = proposal.changes.find(
+			(candidate) => candidate.kind === "place_profile",
+		);
+		if (proposal.kind !== "pr" || !Array.isArray(change?.after?.occurrences))
+			throw new Error("This proposal has no place profile");
+		const { cursor, limit } = pageArguments(args);
+		return {
+			data: {
+				proposalId: proposal.id,
+				...page(change.after.occurrences, cursor, limit),
+			},
+			catalogue: reader.catalogue,
+		};
+	}
+	if (name === "scripture_occurrences") {
+		if (
+			!Array.isArray(args.spellings) ||
+			!args.spellings.every((spelling) => typeof spelling === "string") ||
+			(args.book !== undefined && typeof args.book !== "string") ||
+			(args.cursor !== undefined && typeof args.cursor !== "number") ||
+			(args.limit !== undefined && typeof args.limit !== "number")
+		)
+			throw new Error("Invalid scripture occurrence search arguments");
+		const data = await searchScriptureOccurrences({
+			spellings: args.spellings,
+			book: args.book,
+			cursor: args.cursor,
+			limit: args.limit,
+		});
+		const cursor = args.cursor ?? 0;
+		reader.catalogue.scriptureOccurrencePages = [
+			{
+				spellings: args.spellings,
+				...(args.book === undefined ? {} : { book: args.book }),
+				cursor,
+				total: data.total,
+				items: data.items.map(
+					({ perekId, pasukNumber, segmentStart, segmentEnd, text }) => ({
+						perekId,
+						pasukNumber,
+						segmentStart,
+						segmentEnd,
+						text,
+					}),
+				),
+			},
+		];
+		return {
+			data: {
+				...data,
+				items: data.items.map((item, index) => ({
+					...item,
+					ordinal: cursor + index,
+				})),
+			},
+			catalogue: reader.catalogue,
+		};
+	}
 	if (name === "related") {
 		const { cursor, limit } = pageArguments(args);
 		const section = args.section ?? "items";
@@ -787,14 +893,7 @@ export async function readContributionAgentTool(
 			};
 		}
 		const id = contributionRecordId(args.id, "id");
-		const owner = current.kind === "issue" ? current.id : current.issueId;
-		if (!owner) throw new Error("Proposal is not linked to this issue");
-		const proposal = await readContribution(conn, id);
-		if (
-			proposal.kind !== "pr" ||
-			proposal.issueId?.toLowerCase() !== owner.toLowerCase()
-		)
-			throw new Error("Proposal is not linked to this issue");
+		const proposal = await readRelatedProposal(conn, current, id);
 		return {
 			data:
 				section === "discussion"
@@ -1061,7 +1160,25 @@ function summary(item: Contribution) {
 		assignee: item.assignee,
 		...(item.kind === "issue" && item.scope ? { scope: item.scope } : {}),
 		evidence: item.evidence,
-		changes: item.changes,
+		changes: item.changes.map((change) => {
+			if (
+				change.kind !== "place_profile" ||
+				!Array.isArray(change.after?.occurrences)
+			)
+				return change;
+			const { occurrences, ...after } = change.after;
+			return {
+				kind: change.kind,
+				targetId: change.targetId,
+				place: change.labels.place,
+				after,
+				occurrenceCount: occurrences.length,
+				occurrenceReadLocator: {
+					tool: "place_profile_words",
+					arguments: { id: item.id, cursor: 0, limit: 25 },
+				},
+			};
+		}),
 		apiVersion: item.apiVersion ?? 1,
 		apiMigration: item.apiMigration ?? null,
 		apiMigrationHistory: item.apiMigrationHistory ?? [],

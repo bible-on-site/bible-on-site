@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
 	names: vi.fn(),
 	source: vi.fn(),
 	article: vi.fn(),
+	scriptureChapter: vi.fn(),
+	scriptureOccurrences: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({
 	txQueryOne: mocks.one,
@@ -54,6 +56,13 @@ vi.mock("~/server/tanahpedia/contribution-specials.server", () => ({
 vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
 	readArticleLinkContext: mocks.article,
 }));
+vi.mock(
+	"~/server/tanahpedia/contribution-scripture-occurrences.server",
+	() => ({
+		searchScriptureOccurrences: mocks.scriptureOccurrences,
+		readScriptureChapter: mocks.scriptureChapter,
+	}),
+);
 vi.mock("~/server/tanahpedia/revisions", () => ({
 	saveEntryTitleRevisioned: vi.fn(),
 }));
@@ -116,6 +125,119 @@ function snapshot(revision: number): ContributionRevisionSnapshot {
 function emptyCatalogue(): AgentCatalogue {
 	return { people: [], places: [], entities: [], targets: [], references: {} };
 }
+
+it("grounds a book-filtered Scripture search in the same exact occurrence coordinates", async () => {
+	const anchor = {
+		perekId: 51,
+		pasukNumber: 1,
+		segmentStart: 5,
+		segmentEnd: 5,
+		text: "מִצְרָ֑יְמָה",
+	};
+	const match = { ...anchor, citation: "שמות א א", verseText: anchor.text };
+	mocks.scriptureOccurrences.mockResolvedValueOnce({
+		items: [match],
+		total: 3,
+		nextCursor: 2,
+	});
+	const args = { spellings: ["מצרימה"], book: "שמות", cursor: 1, limit: 1 };
+	const result = await readContributionAgentTool(
+		conn,
+		item,
+		"scripture_occurrences",
+		args,
+	);
+	expect(mocks.scriptureOccurrences).toHaveBeenCalledWith(args);
+	expect(result.data).toEqual({
+		items: [{ ...match, ordinal: 1 }],
+		total: 3,
+		nextCursor: 2,
+	});
+	expect(result.catalogue.scriptureOccurrencePages).toEqual([
+		{
+			spellings: args.spellings,
+			book: "שמות",
+			cursor: 1,
+			total: 3,
+			items: [anchor],
+		},
+	]);
+});
+
+it("merges whole-Tanah search receipts while preserving the absence of a Sefer filter", async () => {
+	const spellings = ["פתם"];
+	const word = {
+		perekId: 51,
+		pasukNumber: 11,
+		segmentStart: 12,
+		segmentEnd: 12,
+		text: "פִּתֹ֖ם",
+	};
+	const match = { ...word, citation: "שמות א יא", verseText: word.text };
+	mocks.scriptureOccurrences.mockResolvedValue({
+		items: [match],
+		total: 1,
+		nextCursor: null,
+	});
+	const filtered = await readContributionAgentTool(
+		conn,
+		item,
+		"scripture_occurrences",
+		{
+			spellings,
+			book: "שמות",
+		},
+	);
+	const whole = await readContributionAgentTool(
+		conn,
+		item,
+		"scripture_occurrences",
+		{
+			spellings,
+		},
+	);
+	const page = { spellings, cursor: 0, total: 1, items: [word] };
+	const empty = { ...emptyCatalogue(), scriptureOccurrencePages: [] };
+	expect(mergeAgentCatalogues(empty).scriptureOccurrencePages).toBeUndefined();
+	expect(
+		mergeAgentCatalogues(empty, filtered.catalogue, whole.catalogue)
+			.scriptureOccurrencePages,
+	).toEqual([{ ...page, book: "שמות" }, page]);
+	expect(whole.data).toEqual({
+		items: [{ ...match, ordinal: 0 }],
+		total: 1,
+		nextCursor: null,
+	});
+});
+
+it.each([
+	["scripture_chapter", { perekId: "51" }, "chapter"],
+	["scripture_chapter", { perekId: 51, cursor: "0" }, "chapter"],
+	["scripture_chapter", { perekId: 51, limit: null }, "chapter"],
+	["scripture_occurrences", { spellings: "מצרים" }, "occurrence search"],
+	["scripture_occurrences", { spellings: [51] }, "occurrence search"],
+	[
+		"scripture_occurrences",
+		{ spellings: ["מצרים"], book: 51 },
+		"occurrence search",
+	],
+	[
+		"scripture_occurrences",
+		{ spellings: ["מצרים"], cursor: "0" },
+		"occurrence search",
+	],
+	[
+		"scripture_occurrences",
+		{ spellings: ["מצרים"], limit: null },
+		"occurrence search",
+	],
+])("rejects malformed replay arguments for %s", async (name, args, error) => {
+	await expect(
+		readContributionAgentTool(conn, item, name, args),
+	).rejects.toThrow(`Invalid scripture ${error} arguments`);
+	expect(mocks.scriptureChapter).not.toHaveBeenCalled();
+	expect(mocks.scriptureOccurrences).not.toHaveBeenCalled();
+});
 
 function relatedFixture(count: number) {
 	item.kind = "issue";
@@ -418,7 +540,10 @@ describe("complete contribution agent context", () => {
 	});
 	it.each(
 		CONTRIBUTION_ISSUE_SCOPE_KINDS.filter(
-			(kind) => kind !== "entry" && kind !== "article_links",
+			(kind) =>
+				kind !== "entry" &&
+				kind !== "article_links" &&
+				kind !== "place_profile",
 		),
 	)(
 		"preloads the exact %s scope target without name inference",
@@ -1157,6 +1282,127 @@ describe("complete contribution agent context", () => {
 				section: "discussion",
 			}),
 		).rejects.toThrow("not linked");
+	});
+
+	it("refuses word reads for an issue or an ordinary related PR", async () => {
+		const [ordinary] = relatedFixture(1);
+		for (const args of [{}, { id: ordinary.id }])
+			await expect(
+				readContributionAgentTool(conn, item, "place_profile_words", args),
+			).rejects.toThrow("This proposal has no place profile");
+	});
+
+	it("follows the occurrence locator from an issue to its specific related place PR", async () => {
+		const [proposal] = relatedFixture(1);
+		const first = {
+			perekId: 51,
+			pasukNumber: 1,
+			segmentStart: 5,
+			segmentEnd: 5,
+			text: "מִצְרָיְמָה",
+		};
+		const other = { ...first, pasukNumber: 7 };
+		proposal.changes = [
+			{
+				kind: "place_profile",
+				targetId: entityId,
+				before: null,
+				after: {
+					entry: null,
+					identification: null,
+					occurrences: [first, other],
+				},
+				labels: {},
+			},
+		];
+		const related = await readContributionAgentTool(conn, item, "related", {});
+		const readLocator = {
+			tool: "place_profile_words",
+			arguments: { id: proposal.id, cursor: 0, limit: 25 },
+		};
+		expect(related.data).toMatchObject({
+			items: [
+				{
+					id: proposal.id,
+					changes: [{ occurrenceCount: 2, occurrenceReadLocator: readLocator }],
+				},
+			],
+		});
+		const { data } = await readContributionAgentTool(
+			conn,
+			item,
+			readLocator.tool,
+			{
+				...readLocator.arguments,
+				limit: 1,
+			},
+		);
+		expect(data).toEqual({
+			proposalId: proposal.id,
+			items: [first],
+			total: 2,
+			nextCursor: 1,
+		});
+	});
+
+	it("reads word spans from a sibling PR on the same issue and denies another issue's PR", async () => {
+		const [assigned, sibling] = relatedFixture(2);
+		const own = {
+			perekId: 51,
+			pasukNumber: 1,
+			segmentStart: 5,
+			segmentEnd: 5,
+			text: "מִצְרָיְמָה",
+		};
+		const other = { ...own, perekId: 64, pasukNumber: 2, text: "פִּי הַחִירֹת" };
+		for (const [proposal, word] of [
+			[assigned, own],
+			[sibling, other],
+		] as const)
+			proposal.changes = [
+				{
+					kind: "place_profile",
+					targetId: entityId,
+					before: null,
+					after: { entry: null, identification: null, occurrences: [word] },
+					labels: {},
+				},
+			];
+		expect(
+			(
+				await readContributionAgentTool(conn, assigned, "place_profile_words", {
+					id: sibling.id,
+				})
+			).data,
+		).toEqual({
+			proposalId: sibling.id,
+			items: [other],
+			total: 1,
+			nextCursor: null,
+		});
+		sibling.issueId = issueId;
+		await expect(
+			readContributionAgentTool(conn, assigned, "place_profile_words", {
+				id: sibling.id,
+			}),
+		).rejects.toThrow("not linked");
+		assigned.issueId = null;
+		for (const args of [{}, { id: assigned.id }])
+			expect(
+				(
+					await readContributionAgentTool(
+						conn,
+						assigned,
+						"place_profile_words",
+						args,
+					)
+				).data,
+			).toEqual({
+				proposalId: assigned.id,
+				items: [own],
+				total: 1,
+				nextCursor: null,
+			});
 	});
 
 	it("searches SQL beyond the old 4000-record catalogue and binds escaped text", async () => {

@@ -413,19 +413,15 @@ export async function readContributionWorkerContext(raw: unknown) {
 		if (!prepared.agent.bundle.tools.some((tool) => tool.name === name))
 			throw new ContributionWorkerConflict("Unsupported agent tool");
 		let args: Record<string, unknown>;
+		let result: Awaited<ReturnType<typeof readContributionAgentTool>>;
 		try {
 			args = validateContributionAgentToolArguments(name, input.arguments);
+			result = await readContributionAgentTool(conn, prepared.item, name, args);
 		} catch (error) {
 			if (error instanceof ContributionAgentToolInputError)
 				return contributionAgentToolErrorResult(error);
 			throw error;
 		}
-		const result = await readContributionAgentTool(
-			conn,
-			prepared.item,
-			name,
-			args,
-		);
 		const receipt = { name, arguments: args, hash: receiptHash(result) };
 		const catalogue = mergeAgentCatalogues(
 			prepared.catalogue,
@@ -513,6 +509,7 @@ export async function completeContributionAgentWork(
 				schema: contributionOutputSchema(
 					context.catalogue,
 					context.item.evidence.length,
+					context.item.scope,
 				),
 				system: context.agent.bundle.system,
 				user: "",
