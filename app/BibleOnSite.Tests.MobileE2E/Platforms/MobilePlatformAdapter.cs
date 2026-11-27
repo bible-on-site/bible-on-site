@@ -77,6 +77,13 @@ public abstract class MobilePlatformAdapter
     // label on iOS; drivers reject an unknown attribute instead of returning
     // null, so each platform asks for only its own name.
     public abstract string? SemanticDescription(AppiumElement element);
+    /// <summary>
+    /// The element's widget type ("android.widget.EditText",
+    /// "XCUIElementTypeSearchField"). <c>TagName</c> cannot serve cross-platform:
+    /// UiAutomator2's /name endpoint answers content-desc, and since server 11.6
+    /// it returns null there, which the Selenium client rejects.
+    /// </summary>
+    public abstract string? ElementType(AppiumElement element);
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
 
     public static (System.Drawing.Point Location, System.Drawing.Size Size) ReadFrame(AppiumElement element)
@@ -440,6 +447,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("content-desc");
+    public override string? ElementType(AppiumElement element) => element.GetAttribute("className");
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     protected override By LocateAutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
     protected override By LocateAnyOfAutomationIds(string[] ids) =>
@@ -742,6 +750,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("label");
+    public override string? ElementType(AppiumElement element) => element.TagName;
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
     // WDA re-snapshots every match to build a findElements response, so a
     // lookup costs matches x tree size; filter natively to return only targets.
