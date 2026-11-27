@@ -61,9 +61,12 @@ export default async function TanahpediaLandingPage() {
 
 	// A failed load zeroes every count; only a real zero means "coming soon".
 	const isComingSoon = (key: CategoryKey) => !loadError && counts[key] === 0;
+	const categoryGroups = [...CATEGORY_HIERARCHY].sort(
+		(a, b) => Number(isComingSoon(a.type)) - Number(isComingSoon(b.type)),
+	);
 
 	return (
-		<main className={styles.tanahpediaPage}>
+		<main className={`${styles.tanahpediaPage} ${styles.landingPage}`}>
 			<JsonLd data={buildLandingGraph()} />
 			<h1 className={styles.pageTitle}>תנכפדיה</h1>
 			<p className={styles.pageSubtitle}>
@@ -132,7 +135,7 @@ export default async function TanahpediaLandingPage() {
 			<section>
 				<h2 className={styles.sectionTitle}>קטגוריות</h2>
 				<div className={styles.categoryGrid}>
-					{CATEGORY_HIERARCHY.map((cat) => (
+					{categoryGroups.map((cat) => (
 						<div key={cat.type} className={styles.categoryGroup}>
 							<Link
 								href={categoryHref(cat.type)}

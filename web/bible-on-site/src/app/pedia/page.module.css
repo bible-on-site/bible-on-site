@@ -9,6 +9,11 @@
 	direction: rtl;
 }
 
+.landingPage {
+	max-width: 72rem;
+	margin-inline: auto;
+}
+
 .pageTitle {
 	font-size: 1.75rem;
 	font-weight: 700;
