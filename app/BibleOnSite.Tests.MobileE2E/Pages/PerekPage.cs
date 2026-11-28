@@ -446,6 +446,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     // resource-id/text sequence — identical while parked at an edge however
     // the bounds jitter, different as soon as a scroll moved real content
     // (run 46019602214 parked downward forever on unequal raw sources).
+    // Android identifies nodes by resource-id/text, iOS by type/name/label.
     internal static string ScrollSurfaceSignature(string surface)
     {
         var signature = new StringBuilder(surface.Length / 8);
@@ -457,7 +458,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     }
 
     private static readonly Regex SurfaceNodePattern =
-        new("(?:resource-id|text)=\"([^\"]*)\"", RegexOptions.Compiled);
+        new("(?:resource-id|text|type|name|label)=\"([^\"]*)\"", RegexOptions.Compiled);
 
     internal static bool SeekScrollsDown(bool scrollingDown, string? previousSurface, string surface) =>
         surface == previousSurface ? !scrollingDown : scrollingDown;

@@ -163,6 +163,25 @@ public sealed class PageGestureBandTests
             PerekPage.ScrollSurfaceSignature(after)));
     }
 
+    // WebDriverAgent sources identify nodes by type/name/label, not
+    // resource-id/text — an Android-only signature reads empty on iOS and
+    // reverses the seek after every drag.
+    [Fact]
+    public void SurfaceSignatureTracksIosNodeIdentities()
+    {
+        var before = """
+            <XCUIElementTypeCell name="Row1" label="א" x="0" y="0" width="540" height="80" visible="true" />
+            <XCUIElementTypeCell name="Row2" label="ב" x="0" y="80" width="540" height="80" visible="true" />
+            """;
+        var after = """
+            <XCUIElementTypeCell name="Row2" label="ב" x="0" y="0" width="540" height="80" visible="true" />
+            <XCUIElementTypeCell name="Row3" label="ג" x="0" y="80" width="540" height="80" visible="true" />
+            """;
+        Assert.NotEqual(string.Empty, PerekPage.ScrollSurfaceSignature(before));
+        Assert.NotEqual(PerekPage.ScrollSurfaceSignature(before),
+            PerekPage.ScrollSurfaceSignature(after));
+    }
+
     [Fact]
     public void ScrollBoundsClipsTheSurfaceToTheBand()
     {
