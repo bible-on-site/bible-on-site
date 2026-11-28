@@ -121,6 +121,67 @@ public sealed class PageGestureBandTests
     public void SeekKeepsDirectionOnTheFirstObservation() =>
         Assert.True(PerekPage.SeekScrollsDown(true, null, "surface"));
 
+    // Run 46019602214: the seek parked at the page's bottom edge scrolled down
+    // on all 12 attempts because raw page sources never compared equal — a
+    // bounce read shifts bounds and a11y flags even when nothing moved. The
+    // signature ignores geometry, so the reversal still fires.
+    [Fact]
+    public void SurfaceSignatureIgnoresGeometryAndStateFlags()
+    {
+        var first = """
+            <node resource-id="id/Scroll" bounds="[0,0][540,960]" focused="false">
+              <node resource-id="id/Row" bounds="[0,10][540,90]" text="א" />
+            </node>
+            """;
+        var bounced = """
+            <node resource-id="id/Scroll" bounds="[0,32][540,992]" focused="true">
+              <node resource-id="id/Row" bounds="[0,42][540,122]" text="א" />
+            </node>
+            """;
+        Assert.Equal(PerekPage.ScrollSurfaceSignature(first),
+            PerekPage.ScrollSurfaceSignature(bounced));
+        Assert.False(PerekPage.SeekScrollsDown(true,
+            PerekPage.ScrollSurfaceSignature(first),
+            PerekPage.ScrollSurfaceSignature(bounced)));
+    }
+
+    [Fact]
+    public void SurfaceSignatureChangesWhenAScrollMovedContent()
+    {
+        var before = """
+            <node resource-id="id/Row1" bounds="[0,0][540,80]" text="א" />
+            <node resource-id="id/Row2" bounds="[0,80][540,160]" text="ב" />
+            """;
+        var after = """
+            <node resource-id="id/Row2" bounds="[0,0][540,80]" text="ב" />
+            <node resource-id="id/Row3" bounds="[0,80][540,160]" text="ג" />
+            """;
+        Assert.NotEqual(PerekPage.ScrollSurfaceSignature(before),
+            PerekPage.ScrollSurfaceSignature(after));
+        Assert.True(PerekPage.SeekScrollsDown(true,
+            PerekPage.ScrollSurfaceSignature(before),
+            PerekPage.ScrollSurfaceSignature(after)));
+    }
+
+    // WebDriverAgent sources identify nodes by type/name/label, not
+    // resource-id/text — an Android-only signature reads empty on iOS and
+    // reverses the seek after every drag.
+    [Fact]
+    public void SurfaceSignatureTracksIosNodeIdentities()
+    {
+        var before = """
+            <XCUIElementTypeCell name="Row1" label="א" x="0" y="0" width="540" height="80" visible="true" />
+            <XCUIElementTypeCell name="Row2" label="ב" x="0" y="80" width="540" height="80" visible="true" />
+            """;
+        var after = """
+            <XCUIElementTypeCell name="Row2" label="ב" x="0" y="0" width="540" height="80" visible="true" />
+            <XCUIElementTypeCell name="Row3" label="ג" x="0" y="80" width="540" height="80" visible="true" />
+            """;
+        Assert.NotEqual(string.Empty, PerekPage.ScrollSurfaceSignature(before));
+        Assert.NotEqual(PerekPage.ScrollSurfaceSignature(before),
+            PerekPage.ScrollSurfaceSignature(after));
+    }
+
     [Fact]
     public void ScrollBoundsClipsTheSurfaceToTheBand()
     {
