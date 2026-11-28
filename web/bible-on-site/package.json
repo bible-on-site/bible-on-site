@@ -54,17 +54,17 @@
 		"node": ">=26.10.0 <27"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1176.0",
+		"@aws-sdk/client-lambda": "3.1178.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.123",
-		"isomorphic-dompurify": "4.8.0",
+		"isomorphic-dompurify": "4.9.0",
 		"jsdom": "31.0.1",
 		"leaflet": "1.9.4",
-		"mapbox-gl": "3.35.2",
+		"mapbox-gl": "3.36.0",
 		"moment-timezone": "0.6.6",
-		"monocart-coverage-reports": "3.3.0",
+		"monocart-coverage-reports": "3.3.1",
 		"mpg123-decoder": "1.0.3",
 		"mysql2": "3.24.6",
 		"next": "16.4.6",
@@ -79,8 +79,8 @@
 		"web-push": "4.0.0"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-s3": "3.1176.0",
-		"@biomejs/biome": "2.6.8",
+		"@aws-sdk/client-s3": "3.1178.0",
+		"@biomejs/biome": "2.6.9",
 		"@playwright/test": "1.65.1",
 		"@swc/core": "1.16.22",
 		"@swc/jest": "0.2.39",
@@ -88,9 +88,9 @@
 		"@testing-library/jest-dom": "8.0.0",
 		"@testing-library/react": "16.3.3",
 		"@types/jest": "30.0.0",
-		"@types/leaflet": "1.9.22",
-		"@types/node": "26.6.6",
-		"@types/react": "19.3.0",
+		"@types/leaflet": "1.9.23",
+		"@types/node": "26.6.11",
+		"@types/react": "19.3.3",
 		"@types/react-dom": "19.3.0",
 		"@types/web-push": "3.6.4",
 		"ajv": "8.20.0",
@@ -118,7 +118,7 @@
 	"optionalDependencies": {
 		"@emnapi/core": "1.11.3",
 		"@emnapi/runtime": "1.11.3",
-		"@emnapi/wasi-threads": "2.2.0",
+		"@emnapi/wasi-threads": "2.3.0",
 		"@napi-rs/wasm-runtime": "1.2.7",
 		"@tybys/wasm-util": "0.10.5"
 	},
@@ -126,7 +126,7 @@
 	"overrides": {
 		"brace-expansion": "5.1.0",
 		"deepmerge-ts": "8.0.2",
-		"postcss": "8.5.33",
+		"postcss": "8.5.34",
 		"sharp": "0.35.5",
 		"@istanbuljs/load-nyc-config": {
 			"js-yaml": "^5.4.3"

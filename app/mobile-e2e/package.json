@@ -22,9 +22,9 @@
 	},
 	"_driverSecurityIssue": "https://github.com/bible-on-site/bible-on-site/issues/1995",
 	"devDependencies": {
-		"appium": "4.0.1",
-		"appium-uiautomator2-driver": "10.1.0",
-		"appium-xcuitest-driver": "13.7.0"
+		"appium": "4.0.2",
+		"appium-uiautomator2-driver": "10.4.1",
+		"appium-xcuitest-driver": "13.8.1"
 	},
 	"packageManager": "bun@1.4.5",
 	"overrides": {
