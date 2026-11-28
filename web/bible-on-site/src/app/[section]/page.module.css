@@ -61,15 +61,43 @@
 
 .alHaperekHeadlines h2 a {
 	color: white;
-	display: contents;
-	line-height: 1.875em;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-width: min(100%, 15rem);
+	padding: 1rem 1.25rem;
+	border: 1px solid rgba(255, 255, 255, 0.55);
+	border-radius: var(--radius-lg);
+	background: rgba(255, 255, 255, 0.08);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+	line-height: 1.2;
 	text-decoration: none;
+	transition:
+		background 0.2s ease,
+		transform 0.2s ease;
+}
+
+@media (hover: hover) {
+	.alHaperekHeadlines h2 a:hover {
+		background: rgba(255, 255, 255, 0.16);
+		transform: translateY(-2px);
+	}
+}
+
+.alHaperekHeadlines h2 a:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 3px;
 }
 .alHaperekHeadlines h2 i {
 	font-size: 2em;
 }
 .alHaperekHeadlines p {
+	max-width: 32rem;
+	margin-inline: auto;
 	letter-spacing: normal;
+	text-align: right;
 }
 .alHaperekHeadlines .icon {
 	max-height: 2em;
@@ -115,6 +143,21 @@
 	font-weight: bold;
 	/* match the UA margin the h1 had at this sectioning depth (article in nested sections) */
 	margin-block: 1.33em;
+}
+
+@media (max-width: 767px) {
+	.headlinesGrid {
+		gap: 1rem;
+		margin-top: 1.25rem;
+	}
+
+	.headlineArticle {
+		padding: 0.75rem;
+	}
+
+	.headlineTitle {
+		margin-block: 0.75em;
+	}
 }
 
 /* AlHaperek bottom divider */
