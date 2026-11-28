@@ -450,7 +450,7 @@
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
-		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.200" />
+		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.201" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
