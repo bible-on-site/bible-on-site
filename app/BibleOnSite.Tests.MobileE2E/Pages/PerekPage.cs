@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Text;
+using System.Text.RegularExpressions;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
@@ -412,7 +414,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 {
                     return visible.Element;
                 }
-                var surface = driver.PageSource;
+                var surface = ScrollSurfaceSignature(driver.PageSource);
                 scrollingDown = SeekScrollsDown(scrollingDown, lastSurface, surface);
                 lastSurface = surface;
                 scroll(scrollingDown);
@@ -439,7 +441,24 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     // is absent from the source tree, so a downward-only seek never recovers
     // an overshot element (#3746's merge-queue ejection). A scroll that
     // leaves the page untouched reached its edge, so the sweep reverses
-    // there.
+    // there. The comparison cannot use the raw source: an edge bounce or a
+    // mid-gesture read shifts geometry, so the signature is the ordered
+    // resource-id/text sequence — identical while parked at an edge however
+    // the bounds jitter, different as soon as a scroll moved real content
+    // (run 46019602214 parked downward forever on unequal raw sources).
+    internal static string ScrollSurfaceSignature(string surface)
+    {
+        var signature = new StringBuilder(surface.Length / 8);
+        foreach (Match match in SurfaceNodePattern.Matches(surface))
+        {
+            signature.Append(match.Groups[1].Value).Append('|');
+        }
+        return signature.ToString();
+    }
+
+    private static readonly Regex SurfaceNodePattern =
+        new("(?:resource-id|text)=\"([^\"]*)\"", RegexOptions.Compiled);
+
     internal static bool SeekScrollsDown(bool scrollingDown, string? previousSurface, string surface) =>
         surface == previousSurface ? !scrollingDown : scrollingDown;
 
